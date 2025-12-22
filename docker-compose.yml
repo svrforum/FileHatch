@@ -1,0 +1,103 @@
+services:
+  # 1. Main Backend (Go)
+  api:
+    container_name: scv-api
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=scv_user
+      - DB_PASS=scv_password
+      - DB_NAME=scv_main
+      - VALKEY_HOST=valkey
+      - VALKEY_PORT=6379
+    volumes:
+      - ./data:/data
+      - ./config:/etc/scv
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      valkey:
+        condition: service_started
+
+  # 2. Frontend (React + Express)
+  ui:
+    container_name: scv-ui
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3080:3000"
+    environment:
+      - API_URL=http://api:8080
+    depends_on:
+      - api
+
+  # 3. SMB Service (Sidecar)
+  samba:
+    container_name: scv-samba
+    build:
+      context: ./samba
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - TZ=Asia/Seoul
+      - WORKGROUP=WORKGROUP
+    volumes:
+      - ./data:/data
+      - ./config:/etc/scv
+      - ./config/smb.conf:/etc/samba/smb.conf:ro
+    command: -n -r
+
+  # 4. Database (PostgreSQL)
+  db:
+    container_name: scv-db
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=scv_user
+      - POSTGRES_PASSWORD=scv_password
+      - POSTGRES_DB=scv_main
+    volumes:
+      - ./database:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scv_user -d scv_main"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 5. Cache & Queue (Valkey)
+  valkey:
+    container_name: scv-valkey
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+
+  # 6. OnlyOffice Document Server (Optional - use: docker compose --profile office up -d)
+  onlyoffice:
+    container_name: scv-onlyoffice
+    image: onlyoffice/documentserver:latest
+    restart: unless-stopped
+    profiles:
+      - office
+    environment:
+      - JWT_ENABLED=true
+      - JWT_SECRET=scv_onlyoffice_secret_key_2024
+    volumes:
+      - onlyoffice_data:/var/www/onlyoffice/Data
+      - onlyoffice_log:/var/log/onlyoffice
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  onlyoffice_data:
+  onlyoffice_log:

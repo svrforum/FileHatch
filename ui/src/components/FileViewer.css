@@ -1,0 +1,304 @@
+.file-viewer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-lg);
+}
+
+.file-viewer-container {
+  width: 100%;
+  height: 100%;
+  max-width: 1400px;
+  max-height: 95vh;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.file-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.file-viewer-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.file-viewer-title svg {
+  color: var(--text-secondary);
+}
+
+.file-viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.zoom-controls,
+.page-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+}
+
+.zoom-controls button,
+.page-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.zoom-controls button:hover:not(:disabled),
+.page-controls button:hover:not(:disabled) {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.zoom-controls button:disabled,
+.page-controls button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.zoom-level,
+.page-info {
+  min-width: 60px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.close-btn:hover {
+  background: rgba(244, 67, 54, 0.15);
+  color: var(--color-error);
+}
+
+.file-viewer-content {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  position: relative;
+}
+
+/* File counter badge */
+.file-counter {
+  padding: 2px 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: var(--spacing-sm);
+}
+
+/* Navigation arrows */
+.nav-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  z-index: 10;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.nav-arrow:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.7);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.nav-arrow:disabled,
+.nav-arrow.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.nav-prev {
+  left: var(--spacing-lg);
+}
+
+.nav-next {
+  right: var(--spacing-lg);
+}
+
+.viewer-loading,
+.viewer-error,
+.viewer-unsupported {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  padding: var(--spacing-xl);
+}
+
+.viewer-loading .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-light);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: var(--spacing-md);
+}
+
+.viewer-error svg,
+.viewer-unsupported svg {
+  color: var(--text-tertiary);
+  margin-bottom: var(--spacing-md);
+}
+
+.viewer-error p,
+.viewer-unsupported p {
+  font-size: 14px;
+}
+
+/* Image Viewer */
+.image-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-lg);
+  transition: transform 0.2s ease;
+  transform-origin: center center;
+}
+
+.image-container img {
+  max-width: 100%;
+  max-height: calc(95vh - 80px);
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* PDF Viewer */
+.pdf-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-lg);
+  overflow: auto;
+  width: 100%;
+}
+
+.pdf-container .react-pdf__Document {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pdf-container .react-pdf__Page {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.pdf-container .react-pdf__Page canvas {
+  display: block;
+}
+
+/* Video Viewer */
+.video-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-lg);
+  width: 100%;
+  height: 100%;
+}
+
+.video-container video {
+  max-width: 100%;
+  max-height: calc(95vh - 100px);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Audio Viewer */
+.audio-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  gap: var(--spacing-lg);
+}
+
+.audio-icon {
+  width: 120px;
+  height: 120px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.audio-filename {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.audio-container audio {
+  width: 100%;
+  max-width: 400px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

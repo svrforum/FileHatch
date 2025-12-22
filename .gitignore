@@ -1,0 +1,42 @@
+# Development Guidelines (Private)
+CLAUDE.MD
+
+# Runtime Data
+data/
+database/
+config/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build Outputs
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Temporary
+tmp/
+*.tmp

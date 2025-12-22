@@ -1,0 +1,207 @@
+.text-editor-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-lg);
+}
+
+.text-editor-container {
+  width: 100%;
+  height: 100%;
+  max-width: 1400px;
+  max-height: 90vh;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.text-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.text-editor-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.text-editor-title svg {
+  color: var(--text-secondary);
+}
+
+.file-name {
+  font-size: 14px;
+}
+
+.dirty-indicator {
+  color: var(--color-warning);
+  font-size: 18px;
+  font-weight: bold;
+  margin-left: 4px;
+}
+
+.text-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.editor-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.theme-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.theme-btn:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.save-btn {
+  background: var(--color-primary);
+  color: white;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+}
+
+.save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.saving-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.close-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: 8px;
+}
+
+.close-btn:hover {
+  background: rgba(244, 67, 54, 0.15);
+  color: var(--color-error);
+}
+
+.text-editor-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+.editor-loading,
+.editor-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+}
+
+.editor-loading .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-light);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: var(--spacing-md);
+}
+
+.editor-error svg {
+  color: var(--color-error);
+  margin-bottom: var(--spacing-md);
+}
+
+.editor-error p {
+  margin-bottom: var(--spacing-md);
+  font-size: 14px;
+}
+
+.editor-error button {
+  padding: 8px 16px;
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+
+.editor-error button:hover {
+  background: var(--color-primary-dark);
+}
+
+.text-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-light);
+}
+
+.footer-left,
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.language-badge {
+  padding: 2px 8px;
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.shortcut-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Monaco Editor Customizations */
+.monaco-editor {
+  padding-top: var(--spacing-sm);
+}
