@@ -181,10 +181,12 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
       setEditingFile(file)
     } else if (isViewableFile(file)) {
       setViewingFile(file)
+    } else if (onlyOfficeAvailable && isOnlyOfficeSupported(file.extension)) {
+      handleOnlyOfficeEdit(file)
     } else {
       downloadFileWithProgress(file.path, file.size, downloadStore)
     }
-  }, [onNavigate, downloadStore, isEditableFile, isViewableFile])
+  }, [onNavigate, downloadStore, isEditableFile, isViewableFile, onlyOfficeAvailable, handleOnlyOfficeEdit])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, file: FileInfo) => {
     e.preventDefault()
