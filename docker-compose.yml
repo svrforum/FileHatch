@@ -86,8 +86,14 @@ services:
     restart: unless-stopped
     profiles:
       - office
+    ports:
+      - "8088:80"
     environment:
       - JWT_ENABLED=false
+      - ALLOW_PRIVATE_IP_ADDRESS=true
+      - ALLOW_META_IP_ADDRESS=true
+      - USE_UNAUTHORIZED_STORAGE=true
+      - WOPI_ENABLED=false
     volumes:
       - onlyoffice_data:/var/www/onlyoffice/Data
       - onlyoffice_log:/var/log/onlyoffice

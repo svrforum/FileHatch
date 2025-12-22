@@ -111,14 +111,17 @@ function OnlyOfficeEditor({ config, onClose, onError }: OnlyOfficeEditorProps) {
       }
     }
 
+    // Get OnlyOffice server URL from current host
+    const onlyOfficeUrl = `${window.location.protocol}//${window.location.hostname}:8088`
+
     if (!script) {
       script = document.createElement('script')
       script.id = scriptId
-      script.src = '/onlyoffice/web-apps/apps/api/documents/api.js'
+      script.src = `${onlyOfficeUrl}/web-apps/apps/api/documents/api.js`
       script.async = true
       script.onload = initEditor
       script.onerror = () => {
-        setError('OnlyOffice\uac00 \uc124\uce58\ub418\uc5b4 \uc788\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4. docker compose --profile office up -d \ub85c \uc2dc\uc791\ud558\uc138\uc694.')
+        setError('OnlyOffice가 설치되어 있지 않습니다. docker compose --profile office up -d 로 시작하세요.')
         setIsLoading(false)
       }
       document.head.appendChild(script)
