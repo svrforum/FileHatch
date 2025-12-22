@@ -590,6 +590,53 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
       )
     }
 
+    // Word documents
+    const wordExts = ['doc', 'docx', 'odt', 'rtf']
+    if (wordExts.includes(ext || '')) {
+      return (
+        <svg className="file-icon word" width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" fill="#2B579A" stroke="#2B579A" strokeWidth="1"/>
+          <path d="M14 2V8H20" stroke="#1A3A6B" strokeWidth="1"/>
+          <text x="12" y="17" textAnchor="middle" fontSize="7" fill="white" fontWeight="bold">W</text>
+        </svg>
+      )
+    }
+
+    // Excel spreadsheets
+    const excelExts = ['xls', 'xlsx', 'ods', 'csv']
+    if (excelExts.includes(ext || '')) {
+      return (
+        <svg className="file-icon excel" width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" fill="#217346" stroke="#217346" strokeWidth="1"/>
+          <path d="M14 2V8H20" stroke="#165232" strokeWidth="1"/>
+          <text x="12" y="17" textAnchor="middle" fontSize="7" fill="white" fontWeight="bold">X</text>
+        </svg>
+      )
+    }
+
+    // PowerPoint presentations
+    const pptExts = ['ppt', 'pptx', 'odp']
+    if (pptExts.includes(ext || '')) {
+      return (
+        <svg className="file-icon powerpoint" width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" fill="#D24726" stroke="#D24726" strokeWidth="1"/>
+          <path d="M14 2V8H20" stroke="#A33B1E" strokeWidth="1"/>
+          <text x="12" y="17" textAnchor="middle" fontSize="7" fill="white" fontWeight="bold">P</text>
+        </svg>
+      )
+    }
+
+    // PDF files
+    if (ext === 'pdf') {
+      return (
+        <svg className="file-icon pdf" width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" fill="#E53935" stroke="#E53935" strokeWidth="1"/>
+          <path d="M14 2V8H20" stroke="#B71C1C" strokeWidth="1"/>
+          <text x="12" y="17" textAnchor="middle" fontSize="5" fill="white" fontWeight="bold">PDF</text>
+        </svg>
+      )
+    }
+
     return (
       <svg className="file-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
         <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

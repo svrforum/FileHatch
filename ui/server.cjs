@@ -88,10 +88,11 @@ const apiProxy = createProxyMiddleware({
   }
 });
 
-// OnlyOffice proxy (optional service)
+// OnlyOffice proxy (optional service) - with WebSocket support
 const onlyofficeProxy = createProxyMiddleware({
   target: ONLYOFFICE_URL,
   changeOrigin: true,
+  ws: true,
   pathRewrite: {
     '^/onlyoffice': ''
   },
@@ -99,9 +100,12 @@ const onlyofficeProxy = createProxyMiddleware({
     proxyReq: (proxyReq, req, res) => {
       console.log(`[OnlyOffice] ${req.method} ${req.originalUrl}`);
     },
+    proxyReqWs: (proxyReq, req, socket, options, head) => {
+      console.log('[OnlyOffice] WebSocket upgrade request');
+    },
     error: (err, req, res) => {
       console.error('[OnlyOffice] Error:', err.message);
-      if (!res.headersSent) {
+      if (!res.headersSent && res.status) {
         res.status(503).json({ error: 'OnlyOffice not available', message: err.message });
       }
     }
@@ -161,6 +165,9 @@ server.on('upgrade', (req, socket, head) => {
   if (req.url && req.url.startsWith('/api/ws')) {
     console.log('[WSProxy] Handling WebSocket upgrade');
     wsProxy.upgrade(req, socket, head);
+  } else if (req.url && req.url.startsWith('/onlyoffice')) {
+    console.log('[OnlyOffice] Handling WebSocket upgrade');
+    onlyofficeProxy.upgrade(req, socket, head);
   } else {
     socket.destroy();
   }
