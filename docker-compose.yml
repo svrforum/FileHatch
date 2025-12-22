@@ -87,8 +87,7 @@ services:
     profiles:
       - office
     environment:
-      - JWT_ENABLED=true
-      - JWT_SECRET=scv_onlyoffice_secret_key_2024
+      - JWT_ENABLED=false
     volumes:
       - onlyoffice_data:/var/www/onlyoffice/Data
       - onlyoffice_log:/var/log/onlyoffice

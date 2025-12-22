@@ -151,13 +151,17 @@ func (h *Handler) GetOnlyOfficeConfig(c echo.Context) error {
 	// Generate unique key for this document (path + modtime for version control)
 	documentKey := encodeOnlyOfficePath("/"+requestPath) + "_" + fmt.Sprintf("%d", info.ModTime().Unix())
 
-	// Build the host URL from request
+	// Build the host URL - use internal Docker network address for OnlyOffice to access
+	// OnlyOffice container needs to reach API via Docker internal network
+	internalBaseURL := "http://api:8080"
+
+	// Also build external URL for browser access (callback display only)
 	scheme := "http"
 	if c.Request().TLS != nil {
 		scheme = "https"
 	}
 	host := c.Request().Host
-	baseURL := fmt.Sprintf("%s://%s", scheme, host)
+	_ = fmt.Sprintf("%s://%s", scheme, host) // external URL not used currently
 
 	// Generate a token for OnlyOffice to access the document
 	token, err := GenerateJWT(claims.UserID, claims.Username, claims.IsAdmin)
@@ -173,10 +177,10 @@ func (h *Handler) GetOnlyOfficeConfig(c echo.Context) error {
 			"fileType": strings.TrimPrefix(ext, "."),
 			"key":      documentKey,
 			"title":    info.Name(),
-			"url":      fmt.Sprintf("%s/api/files/%s?token=%s", baseURL, requestPath, token),
+			"url":      fmt.Sprintf("%s/api/files/%s?token=%s", internalBaseURL, requestPath, token),
 		},
 		"editorConfig": map[string]interface{}{
-			"callbackUrl": fmt.Sprintf("%s/api/onlyoffice/callback?token=%s", baseURL, token),
+			"callbackUrl": fmt.Sprintf("%s/api/onlyoffice/callback?token=%s", internalBaseURL, token),
 			"user": map[string]interface{}{
 				"id":   claims.UserID,
 				"name": claims.Username,
