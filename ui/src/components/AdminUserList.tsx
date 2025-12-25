@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { listUsers, createUser, updateUser, deleteUser, User } from '../api/auth'
+import { listUsers, updateUser, deleteUser, User } from '../api/auth'
+import CreateUserModal from './CreateUserModal'
 import './AdminUserList.css'
 
 function AdminUserList() {
@@ -8,14 +9,8 @@ function AdminUserList() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
-
-  // Create form state
-  const [newUsername, setNewUsername] = useState('')
-  const [newEmail, setNewEmail] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [newIsAdmin, setNewIsAdmin] = useState(false)
 
   // Edit form state
   const [editPassword, setEditPassword] = useState('')
@@ -47,32 +42,6 @@ function AdminUserList() {
       setUsers(data.users)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!token) return
-
-    setLoading(true)
-    setError(null)
-    try {
-      await createUser(token, {
-        username: newUsername,
-        email: newEmail || undefined,
-        password: newPassword,
-        isAdmin: newIsAdmin,
-      })
-      setShowCreateForm(false)
-      setNewUsername('')
-      setNewEmail('')
-      setNewPassword('')
-      setNewIsAdmin(false)
-      loadUsers()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create user')
     } finally {
       setLoading(false)
     }
@@ -143,8 +112,8 @@ function AdminUserList() {
         <div className="admin-toolbar">
           <button
             className="btn-create"
-            onClick={() => setShowCreateForm(true)}
-            disabled={showCreateForm || editingUser !== null}
+            onClick={() => setShowCreateModal(true)}
+            disabled={editingUser !== null}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -160,67 +129,6 @@ function AdminUserList() {
             새로고침
           </button>
         </div>
-
-        {showCreateForm && (
-          <div className="admin-card">
-            <form onSubmit={handleCreateUser} className="admin-form">
-              <h3>새 사용자</h3>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>사용자명 *</label>
-                  <input
-                    type="text"
-                    value={newUsername}
-                    onChange={(e) => setNewUsername(e.target.value)}
-                    placeholder="사용자명"
-                    required
-                    minLength={3}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>이메일</label>
-                  <input
-                    type="email"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    placeholder="이메일 (선택)"
-                  />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>비밀번호 *</label>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="비밀번호 (8자 이상)"
-                    required
-                    minLength={8}
-                  />
-                </div>
-                <div className="form-group checkbox-group">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={newIsAdmin}
-                      onChange={(e) => setNewIsAdmin(e.target.checked)}
-                    />
-                    관리자 권한
-                  </label>
-                </div>
-              </div>
-              <div className="form-actions">
-                <button type="button" className="btn-cancel" onClick={() => setShowCreateForm(false)}>
-                  취소
-                </button>
-                <button type="submit" className="btn-submit" disabled={loading}>
-                  {loading ? '생성 중...' : '생성'}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
 
         {editingUser && (
           <div className="admin-card">
@@ -357,7 +265,7 @@ function AdminUserList() {
                       <button
                         className="btn-edit"
                         onClick={() => startEdit(user)}
-                        disabled={editingUser !== null || showCreateForm}
+                        disabled={editingUser !== null}
                       >
                         수정
                       </button>
@@ -378,6 +286,14 @@ function AdminUserList() {
           )}
         </div>
       </div>
+
+      <CreateUserModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreated={() => {
+          loadUsers()
+        }}
+      />
     </div>
   )
 }
