@@ -1,0 +1,555 @@
+.share-access-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.share-access-card {
+  background: white;
+  border-radius: 24px;
+  padding: 48px 40px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.05),
+    0 10px 20px -2px rgba(0, 0, 0, 0.04),
+    0 20px 40px -4px rgba(0, 0, 0, 0.03);
+  text-align: center;
+  animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Loading State */
+.share-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.share-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e9ecef;
+  border-top-color: #228be6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.share-loading p {
+  color: #868e96;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* Error State */
+.share-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.share-error-icon {
+  width: 64px;
+  height: 64px;
+  color: #fa5252;
+}
+
+.share-error h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #212529;
+  margin: 0;
+}
+
+.share-error p {
+  font-size: 15px;
+  color: #868e96;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Lock Icon */
+.share-lock-icon {
+  width: 64px;
+  height: 64px;
+  color: #228be6;
+  margin-bottom: 8px;
+}
+
+/* Login Required State */
+.share-login-required {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.share-login-required h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #212529;
+  margin: 0;
+}
+
+.share-login-required p {
+  font-size: 15px;
+  color: #868e96;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Password Form */
+.share-password-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.share-password-form h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #212529;
+  margin: 0;
+}
+
+.share-password-form p {
+  font-size: 15px;
+  color: #868e96;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.share-password-form form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.share-password-input {
+  width: 100%;
+  padding: 16px 20px;
+  font-size: 16px;
+  border: 2px solid #e9ecef;
+  border-radius: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+  text-align: center;
+  font-weight: 500;
+  letter-spacing: 2px;
+}
+
+.share-password-input:focus {
+  border-color: #228be6;
+  box-shadow: 0 0 0 4px rgba(34, 139, 230, 0.1);
+}
+
+.share-password-input::placeholder {
+  letter-spacing: normal;
+  color: #adb5bd;
+}
+
+.share-password-error {
+  color: #fa5252;
+  font-size: 14px;
+  margin: 0;
+}
+
+/* Buttons */
+.share-btn-primary {
+  width: 100%;
+  padding: 16px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #228be6 0%, #1c7ed6 100%);
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.share-btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(34, 139, 230, 0.3);
+}
+
+.share-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.share-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.share-btn-secondary {
+  padding: 14px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #495057;
+  background: #f1f3f4;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+}
+
+.share-btn-secondary:hover {
+  background: #e9ecef;
+}
+
+/* Success State */
+.share-success {
+  padding: 40px;
+}
+
+.share-file-preview {
+  width: 100px;
+  height: 100px;
+  background: linear-gradient(135deg, #f1f3f4 0%, #e9ecef 100%);
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+}
+
+.share-file-icon {
+  width: 56px;
+  height: 56px;
+}
+
+.share-file-icon.folder {
+  color: #fab005;
+}
+
+.share-file-icon.file {
+  color: #228be6;
+}
+
+.share-file-info {
+  margin-bottom: 24px;
+}
+
+.share-file-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #212529;
+  margin: 0 0 8px;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.share-file-meta {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.share-file-size,
+.share-file-type {
+  font-size: 14px;
+  color: #868e96;
+  font-weight: 500;
+}
+
+.share-download-btn {
+  margin-bottom: 16px;
+}
+
+.share-download-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.share-btn-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.share-expiry {
+  font-size: 13px;
+  color: #adb5bd;
+  margin: 0;
+}
+
+.share-branding {
+  margin-top: 32px;
+  font-size: 13px;
+  color: #adb5bd;
+  font-weight: 500;
+}
+
+/* Action Buttons */
+.share-action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.share-btn-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.share-preview-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.share-download-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+/* File Icon Types */
+.share-file-icon.video {
+  color: #fa5252;
+}
+
+.share-file-icon.image {
+  color: #40c057;
+}
+
+.share-file-icon.audio {
+  color: #9969e5;
+}
+
+/* Preview Overlay */
+.share-preview-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.share-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.share-preview-title {
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  margin-right: 16px;
+}
+
+.share-preview-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.share-preview-action-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.share-preview-action-btn svg {
+  width: 20px;
+  height: 20px;
+  color: white;
+}
+
+.share-preview-action-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.share-preview-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow: auto;
+}
+
+/* Video Player */
+.share-video-player {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  background: black;
+}
+
+/* Image Viewer */
+.share-image-viewer {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+/* Audio Player */
+.share-audio-player-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  padding: 40px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 24px;
+}
+
+.share-audio-icon {
+  width: 120px;
+  height: 120px;
+  background: linear-gradient(135deg, #9969e5 0%, #7c4dff 100%);
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.share-audio-icon svg {
+  width: 60px;
+  height: 60px;
+  color: white;
+}
+
+.share-audio-player {
+  width: 100%;
+  max-width: 400px;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .share-access-card {
+    padding: 32px 24px;
+    border-radius: 20px;
+  }
+
+  .share-file-preview {
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+  }
+
+  .share-file-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .share-file-name {
+    font-size: 18px;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .share-access-page {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  }
+
+  .share-access-card {
+    background: #1f1f1f;
+  }
+
+  .share-error h2,
+  .share-login-required h2,
+  .share-password-form h2,
+  .share-file-name {
+    color: #f8f9fa;
+  }
+
+  .share-error p,
+  .share-login-required p,
+  .share-password-form p,
+  .share-loading p {
+    color: #adb5bd;
+  }
+
+  .share-password-input {
+    background: #2d2d2d;
+    border-color: #3d3d3d;
+    color: #f8f9fa;
+  }
+
+  .share-password-input:focus {
+    border-color: #228be6;
+  }
+
+  .share-btn-secondary {
+    background: #2d2d2d;
+    color: #f8f9fa;
+  }
+
+  .share-btn-secondary:hover {
+    background: #3d3d3d;
+  }
+
+  .share-file-preview {
+    background: linear-gradient(135deg, #2d2d2d 0%, #3d3d3d 100%);
+  }
+
+  .share-spinner {
+    border-color: #3d3d3d;
+    border-top-color: #228be6;
+  }
+}

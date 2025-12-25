@@ -16,6 +16,7 @@ import AdminSettings from './components/AdminSettings'
 import AdminLogs from './components/AdminLogs'
 import AdminSharedFolders from './components/AdminSharedFolders'
 import LoginPage from './components/LoginPage'
+import ShareAccessPage from './components/ShareAccessPage'
 import './styles/app.css'
 
 function App() {
@@ -45,6 +46,11 @@ function App() {
   useEffect(() => {
     refreshProfile()
   }, [refreshProfile])
+
+  // Handle share access page (public route, no auth required)
+  if (location.pathname.startsWith('/s/')) {
+    return <ShareAccessPage />
+  }
 
   // Show login page if not authenticated
   if (!token) {

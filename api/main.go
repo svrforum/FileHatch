@@ -197,10 +197,10 @@ func main() {
 	authApi.GET("/shares", shareHandler.ListShares)
 	authApi.DELETE("/shares/:id", shareHandler.DeleteShare)
 
-	// Share access (public)
-	api.GET("/s/:token", shareHandler.AccessShare)
-	api.POST("/s/:token", shareHandler.AccessShare)
-	api.GET("/s/:token/download", shareHandler.DownloadShare)
+	// Share access (public, with optional auth for require_login check)
+	api.GET("/s/:token", shareHandler.AccessShare, authHandler.OptionalJWTMiddleware)
+	api.POST("/s/:token", shareHandler.AccessShare, authHandler.OptionalJWTMiddleware)
+	api.GET("/s/:token/download", shareHandler.DownloadShare, authHandler.OptionalJWTMiddleware)
 
 	// Shared Folders API (user - protected)
 	authApi.GET("/shared-folders", sharedFolderHandler.ListMySharedFolders)
