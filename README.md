@@ -62,21 +62,35 @@ SimpleCloudVault는 기업 환경에서 사용할 수 있는 안전하고 기능
   - PowerPoint 프레젠테이션 (ppt, pptx, odp)
   - PDF 뷰어
 
-### 공유 기능
-- [x] 공유 링크 생성
+### 공유 드라이브 (팀 폴더)
+- [x] 공유 드라이브 생성/관리
+- [x] 멤버 추가/제거
+- [x] 권한 관리 (읽기 전용, 읽기/쓰기)
+- [x] 사용자 생성 시 공유 드라이브 권한 할당
+- [x] 공유 드라이브 검색 (5개 이상일 때)
+
+### 파일/폴더 공유
+- [x] 사용자 간 파일/폴더 공유
+- [x] 공유 권한 설정 (읽기, 읽기+쓰기)
+- [x] 공유받은 파일 목록 조회
+- [x] 공유 링크 생성 (외부 공유)
 - [x] 링크 만료 설정
 - [x] 비밀번호 보호 공유
-- [x] 공유 링크를 통한 다운로드
+- [x] 접근 횟수 제한
+- [x] 공유 링크 자동 복사
 
 ### 스토리지
 - [x] 사용자별 홈 폴더 (`/home`)
-- [x] 공유 폴더 (`/shared`)
+- [x] 공유 드라이브 (`/shared-drives`)
+- [x] 공유받은 파일 (`/shared-with-me`)
 - [x] 실시간 스토리지 사용량 표시
 - [x] SMB/CIFS 네트워크 드라이브 접근
 - [x] SMB 사용자 자동 동기화
+- [x] SMB 감사 로깅 (파일 작업 추적)
 
 ### 사용자 경험
 - [x] 드래그 앤 드롭 업로드 (업로드 모달 및 파일 목록에서)
+- [x] 폴더 드래그 앤 드롭 업로드 (폴더 구조 유지)
 - [x] 파일 탐색기에서 웹으로 직접 드래그 업로드
 - [x] 다중 파일 선택 (Ctrl+클릭, Shift+클릭)
 - [x] 일괄 삭제 (휴지통으로 이동)
@@ -86,12 +100,16 @@ SimpleCloudVault는 기업 환경에서 사용할 수 있는 안전하고 기능
 - [x] 컨텍스트 메뉴 (우클릭)
 - [x] 파일 상세 정보 패널
 - [x] 토스트 알림
+- [x] 실시간 파일 변경 알림 (WebSocket)
 
 ### 관리자 기능
-- [x] 사용자 CRUD
+- [x] 사용자 CRUD (생성 모달 UI)
 - [x] 사용자 활성화/비활성화
-- [x] SMB 설정 관리
-- [x] 감사 로그
+- [x] 사용자 생성 시 공유 드라이브 권한 설정
+- [x] SMB 비밀번호 관리
+- [x] 공유 드라이브 관리
+- [x] 감사 로그 (파일 작업, 로그인, SMB 작업)
+- [x] SMB 감사 로그 동기화
 
 ## 디렉토리 구조
 
@@ -101,9 +119,13 @@ SimpleCloudVault/
 │   ├── handlers/           # HTTP 핸들러
 │   │   ├── handler.go      # 파일/폴더 핸들러
 │   │   ├── auth.go         # 인증 핸들러
+│   │   ├── share.go        # 공유 드라이브/파일 공유
+│   │   ├── file_share_handler.go  # 사용자 간 파일 공유
 │   │   ├── onlyoffice.go   # OnlyOffice 통합
 │   │   ├── operations.go   # 파일 작업 (이동, 복사, 검색)
 │   │   ├── trash.go        # 휴지통 핸들러
+│   │   ├── smb_audit_handler.go   # SMB 감사 로그
+│   │   ├── websocket.go    # 실시간 알림
 │   │   └── utils.go        # 유틸리티 함수
 │   ├── database/           # DB 연결
 │   ├── main.go             # 엔트리포인트
@@ -116,9 +138,10 @@ SimpleCloudVault/
 │   │   └── styles/         # 글로벌 스타일
 │   ├── server.cjs          # Express 서버
 │   └── Dockerfile
-├── samba/                  # Samba 설정
-│   ├── entrypoint.sh       # 사용자 동기화 스크립트
-│   └── Dockerfile
+├── samba/                  # Samba 설정 (SMB/CIFS)
+│   ├── smb.conf.template   # Samba 설정 템플릿
+│   ├── entrypoint.sh       # 사용자 동기화 + 감사 로깅
+│   └── Dockerfile          # ghcr.io/servercontainers/samba 기반
 ├── db/                     # 데이터베이스 초기화
 │   └── init.sql
 ├── config/                 # 설정 파일
@@ -206,15 +229,37 @@ OnlyOffice가 활성화되면 컨텍스트 메뉴에 "Office 편집" 옵션이 �
 - `PATCH /api/upload/*` - 청크 업로드
 - `HEAD /api/upload/*` - 업로드 상태
 
-### 공유
+### 공유 링크
 - `POST /api/shares` - 공유 링크 생성
 - `GET /api/shares` - 공유 목록
 - `DELETE /api/shares/:id` - 공유 삭제
 - `GET /api/s/:token` - 공유 접근
 - `GET /api/s/:token/download` - 공유 다운로드
 
+### 파일 공유 (사용자 간)
+- `POST /api/file-shares` - 파일을 사용자에게 공유
+- `GET /api/file-shares/shared-by-me` - 내가 공유한 파일
+- `GET /api/file-shares/shared-with-me` - 나에게 공유된 파일
+- `PUT /api/file-shares/:id` - 공유 권한 수정
+- `DELETE /api/file-shares/:id` - 공유 취소
+
+### 공유 드라이브
+- `GET /api/shared-folders` - 공유 드라이브 목록
+- `POST /api/shared-folders` - 공유 드라이브 생성
+- `PUT /api/shared-folders/:id` - 공유 드라이브 수정
+- `DELETE /api/shared-folders/:id` - 공유 드라이브 삭제
+- `POST /api/shared-folders/:id/members` - 멤버 추가
+- `DELETE /api/shared-folders/:id/members/:userId` - 멤버 제거
+
 ### 스토리지
 - `GET /api/storage/usage` - 사용량 조회
+
+### SMB 감사
+- `GET /api/smb/audit` - SMB 감사 로그 조회
+- `POST /api/smb/audit/sync` - SMB 로그 동기화
+
+### WebSocket
+- `WS /api/ws` - 실시간 파일 변경 알림
 
 ### 휴지통
 - `GET /api/trash` - 휴지통 목록
