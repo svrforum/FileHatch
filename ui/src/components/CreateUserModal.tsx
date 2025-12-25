@@ -38,6 +38,7 @@ function CreateUserModal({ isOpen, onClose, onCreated }: CreateUserModalProps) {
   const [sharedFolders, setSharedFolders] = useState<SharedFolder[]>([])
   const [folderPermissions, setFolderPermissions] = useState<FolderPermission[]>([])
   const [loadingFolders, setLoadingFolders] = useState(false)
+  const [folderSearch, setFolderSearch] = useState('')
 
   // Load shared folders when modal opens
   useEffect(() => {
@@ -54,7 +55,13 @@ function CreateUserModal({ isOpen, onClose, onCreated }: CreateUserModalProps) {
     setConfirmPassword('')
     setIsAdmin(false)
     setError(null)
+    setFolderSearch('')
   }
+
+  // Filter folders based on search
+  const filteredFolderPermissions = folderPermissions.filter(fp =>
+    fp.folderName.toLowerCase().includes(folderSearch.toLowerCase())
+  )
 
   const loadSharedFolders = async () => {
     setLoadingFolders(true)
@@ -227,41 +234,60 @@ function CreateUserModal({ isOpen, onClose, onCreated }: CreateUserModalProps) {
                   <p>생성된 공유 드라이브가 없습니다.</p>
                 </div>
               ) : (
-                <div className="folder-permissions-list">
-                  {folderPermissions.map(fp => (
-                    <div key={fp.folderId} className="folder-permission-item">
-                      <div className="folder-info">
-                        <svg className="folder-icon" viewBox="0 0 24 24" fill="none">
-                          <path d="M3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V9C21 7.89543 20.1046 7 19 7H12L10 5H5C3.89543 5 3 5.89543 3 7Z" fill="currentColor"/>
-                        </svg>
-                        <span className="folder-name">{fp.folderName}</span>
-                      </div>
-                      <div className="permission-buttons">
-                        <button
-                          type="button"
-                          className={`perm-btn ${fp.permission === 0 ? 'active none' : ''}`}
-                          onClick={() => handlePermissionChange(fp.folderId, 0)}
-                        >
-                          접근 불가
-                        </button>
-                        <button
-                          type="button"
-                          className={`perm-btn ${fp.permission === PERMISSION_READ_ONLY ? 'active readonly' : ''}`}
-                          onClick={() => handlePermissionChange(fp.folderId, PERMISSION_READ_ONLY)}
-                        >
-                          읽기 전용
-                        </button>
-                        <button
-                          type="button"
-                          className={`perm-btn ${fp.permission === PERMISSION_READ_WRITE ? 'active readwrite' : ''}`}
-                          onClick={() => handlePermissionChange(fp.folderId, PERMISSION_READ_WRITE)}
-                        >
-                          읽기/쓰기
-                        </button>
-                      </div>
+                <>
+                  {sharedFolders.length > 5 && (
+                    <div className="form-group folder-search-group">
+                      <input
+                        type="search"
+                        value={folderSearch}
+                        onChange={e => setFolderSearch(e.target.value)}
+                        placeholder="드라이브 검색..."
+                        className="folder-search-input"
+                      />
                     </div>
-                  ))}
-                </div>
+                  )}
+                  <div className="folder-permissions-list">
+                    {filteredFolderPermissions.length === 0 ? (
+                      <div className="no-folders">
+                        <p>검색 결과가 없습니다.</p>
+                      </div>
+                    ) : (
+                      filteredFolderPermissions.map(fp => (
+                        <div key={fp.folderId} className="folder-permission-item">
+                          <div className="folder-info">
+                            <svg className="folder-icon" viewBox="0 0 24 24" fill="none">
+                              <path d="M3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V9C21 7.89543 20.1046 7 19 7H12L10 5H5C3.89543 5 3 5.89543 3 7Z" fill="currentColor"/>
+                            </svg>
+                            <span className="folder-name">{fp.folderName}</span>
+                          </div>
+                          <div className="permission-buttons">
+                            <button
+                              type="button"
+                              className={`perm-btn ${fp.permission === 0 ? 'active none' : ''}`}
+                              onClick={() => handlePermissionChange(fp.folderId, 0)}
+                            >
+                              접근 불가
+                            </button>
+                            <button
+                              type="button"
+                              className={`perm-btn ${fp.permission === PERMISSION_READ_ONLY ? 'active readonly' : ''}`}
+                              onClick={() => handlePermissionChange(fp.folderId, PERMISSION_READ_ONLY)}
+                            >
+                              읽기 전용
+                            </button>
+                            <button
+                              type="button"
+                              className={`perm-btn ${fp.permission === PERMISSION_READ_WRITE ? 'active readwrite' : ''}`}
+                              onClick={() => handlePermissionChange(fp.folderId, PERMISSION_READ_WRITE)}
+                            >
+                              읽기/쓰기
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
               )}
             </div>
 

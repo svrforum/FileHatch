@@ -7,6 +7,12 @@ AUDIT_LOG="/etc/scv/smb_audit.log"
 
 echo "[SCV-Samba] Starting user sync service..."
 
+# Copy default smb.conf if not exists
+if [ ! -f "/etc/samba/smb.conf" ] && [ -f "/smb.conf.template" ]; then
+    echo "[SCV-Samba] Installing default smb.conf..."
+    cp /smb.conf.template /etc/samba/smb.conf
+fi
+
 # Create users group if not exists
 groupadd -f users 2>/dev/null || true
 

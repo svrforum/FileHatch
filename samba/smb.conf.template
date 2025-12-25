@@ -1,0 +1,67 @@
+[global]
+   workgroup = WORKGROUP
+   server string = SimpleCloudVault SMB Server
+   security = user
+   map to guest = Never
+   passdb backend = tdbsam
+   log level = 2
+   log file = /var/log/samba/%m.log
+   max log size = 50
+
+   # Require authentication for share listing
+   restrict anonymous = 2
+
+   # SMB protocol settings
+   server min protocol = SMB2
+   server max protocol = SMB3
+
+   # Disable NetBIOS
+   disable netbios = no
+
+   # Authentication settings
+   client lanman auth = no
+   client ntlmv2 auth = yes
+   ntlm auth = ntlmv2-only
+
+   # Browsing settings
+   load printers = no
+   printing = bsd
+   printcap name = /dev/null
+   disable spoolss = yes
+
+# Shared drives - team folders accessible by all authenticated users
+[shared]
+   path = /data/shared
+   comment = Shared Drives
+   browseable = yes
+   read only = no
+   guest ok = no
+   create mask = 0664
+   directory mask = 0775
+   valid users = @users
+   force group = users
+   # Audit logging for file operations
+   vfs objects = full_audit
+   full_audit:prefix = SMB_AUDIT|%u|%I|%m|%S
+   full_audit:success = mkdir rmdir write rename unlink
+   full_audit:failure = none
+   full_audit:facility = local7
+   full_audit:priority = notice
+
+# User home directories - automatically creates share with username
+# When user 'admin' connects, they see 'admin' share pointing to /data/users/admin
+[homes]
+   comment = Home Directory (%U)
+   browseable = yes
+   read only = no
+   valid users = %S
+   create mask = 0644
+   directory mask = 0755
+   path = /data/users/%U
+   # Audit logging for file operations
+   vfs objects = full_audit
+   full_audit:prefix = SMB_AUDIT|%u|%I|%m|%S
+   full_audit:success = mkdir rmdir write rename unlink
+   full_audit:failure = none
+   full_audit:facility = local7
+   full_audit:priority = notice
