@@ -31,6 +31,7 @@ function LinkShareModal({ isOpen, onClose, itemPath, itemName, isFolder }: LinkS
   const [expiryHours, setExpiryHours] = useState(24)
   const [useMaxAccess, setUseMaxAccess] = useState(false)
   const [maxAccess, setMaxAccess] = useState(10)
+  const [requireLogin, setRequireLogin] = useState(false)
 
   // Created link
   const [createdLink, setCreatedLink] = useState<string | null>(null)
@@ -64,6 +65,7 @@ function LinkShareModal({ isOpen, onClose, itemPath, itemName, isFolder }: LinkS
       setExpiryHours(24)
       setUseMaxAccess(false)
       setMaxAccess(10)
+      setRequireLogin(false)
     }
   }, [isOpen, loadLinks])
 
@@ -77,6 +79,7 @@ function LinkShareModal({ isOpen, onClose, itemPath, itemName, isFolder }: LinkS
         password: usePassword && password ? password : undefined,
         expiresIn: useExpiry ? expiryHours : undefined,
         maxAccess: useMaxAccess ? maxAccess : undefined,
+        requireLogin: requireLogin,
       })
 
       const fullUrl = `${window.location.origin}${result.url}`
@@ -240,6 +243,20 @@ function LinkShareModal({ isOpen, onClose, itemPath, itemName, isFolder }: LinkS
                   min={1}
                   className="option-input small"
                 />
+              )}
+            </div>
+
+            <div className="option-row">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={requireLogin}
+                  onChange={(e) => setRequireLogin(e.target.checked)}
+                />
+                <span>로그인 필요</span>
+              </label>
+              {requireLogin && (
+                <span className="option-hint">로그인한 사용자만 접근 가능</span>
               )}
             </div>
 

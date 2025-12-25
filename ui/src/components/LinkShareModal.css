@@ -122,6 +122,12 @@
   border-color: var(--color-primary);
 }
 
+.option-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-left: var(--spacing-sm);
+}
+
 .create-link-btn {
   width: 100%;
   padding: 12px;

@@ -198,6 +198,7 @@ export interface LinkShare {
   accessCount: number
   maxAccess?: number
   isActive: boolean
+  requireLogin: boolean
 }
 
 /**
@@ -208,6 +209,7 @@ export async function createShareLink(data: {
   password?: string
   expiresIn?: number // hours, 0 = never
   maxAccess?: number // 0 = unlimited
+  requireLogin?: boolean // if true, only authenticated users can access
 }): Promise<{ id: string; token: string; url: string }> {
   const response = await fetch(`${API_BASE}/shares`, {
     method: 'POST',

@@ -27,24 +27,26 @@ func NewShareHandler(db *sql.DB, dataRoot string) *ShareHandler {
 
 // Share represents a shared link
 type Share struct {
-	ID          string     `json:"id"`
-	Token       string     `json:"token"`
-	Path        string     `json:"path"`
-	CreatedBy   string     `json:"createdBy"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
-	HasPassword bool       `json:"hasPassword"`
-	AccessCount int        `json:"accessCount"`
-	MaxAccess   *int       `json:"maxAccess,omitempty"`
-	IsActive    bool       `json:"isActive"`
+	ID           string     `json:"id"`
+	Token        string     `json:"token"`
+	Path         string     `json:"path"`
+	CreatedBy    string     `json:"createdBy"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
+	HasPassword  bool       `json:"hasPassword"`
+	AccessCount  int        `json:"accessCount"`
+	MaxAccess    *int       `json:"maxAccess,omitempty"`
+	IsActive     bool       `json:"isActive"`
+	RequireLogin bool       `json:"requireLogin"`
 }
 
 // CreateShareRequest represents share creation request
 type CreateShareRequest struct {
-	Path      string `json:"path"`
-	Password  string `json:"password,omitempty"`
-	ExpiresIn int    `json:"expiresIn,omitempty"` // hours, 0 = never
-	MaxAccess int    `json:"maxAccess,omitempty"` // 0 = unlimited
+	Path         string `json:"path"`
+	Password     string `json:"password,omitempty"`
+	ExpiresIn    int    `json:"expiresIn,omitempty"` // hours, 0 = never
+	MaxAccess    int    `json:"maxAccess,omitempty"` // 0 = unlimited
+	RequireLogin bool   `json:"requireLogin"`        // If true, only authenticated users can access
 }
 
 // AccessShareRequest represents share access request
@@ -147,10 +149,10 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 	// Insert share
 	var shareID string
 	err = h.db.QueryRow(`
-		INSERT INTO shares (token, path, created_by, password_hash, expires_at, max_access)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO shares (token, path, created_by, password_hash, expires_at, max_access, require_login)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id
-	`, token, storedPath, claims.UserID, passwordHash, expiresAt, maxAccess).Scan(&shareID)
+	`, token, storedPath, claims.UserID, passwordHash, expiresAt, maxAccess, req.RequireLogin).Scan(&shareID)
 
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -161,12 +163,13 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 	shareURL := fmt.Sprintf("/s/%s", token)
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
-		"success":   true,
-		"id":        shareID,
-		"token":     token,
-		"url":       shareURL,
-		"path":      storedPath,
-		"expiresAt": expiresAt,
+		"success":      true,
+		"id":           shareID,
+		"token":        token,
+		"url":          shareURL,
+		"path":         storedPath,
+		"expiresAt":    expiresAt,
+		"requireLogin": req.RequireLogin,
 	})
 }
 
@@ -177,7 +180,7 @@ func (h *ShareHandler) ListShares(c echo.Context) error {
 	rows, err := h.db.Query(`
 		SELECT id, token, path, created_at, expires_at,
 		       CASE WHEN password_hash IS NOT NULL THEN true ELSE false END as has_password,
-		       access_count, max_access, is_active
+		       access_count, max_access, is_active, require_login
 		FROM shares
 		WHERE created_by = $1
 		ORDER BY created_at DESC
@@ -197,7 +200,7 @@ func (h *ShareHandler) ListShares(c echo.Context) error {
 		var maxAccess sql.NullInt32
 
 		err := rows.Scan(&share.ID, &share.Token, &share.Path, &share.CreatedAt,
-			&expiresAt, &share.HasPassword, &share.AccessCount, &maxAccess, &share.IsActive)
+			&expiresAt, &share.HasPassword, &share.AccessCount, &maxAccess, &share.IsActive, &share.RequireLogin)
 		if err != nil {
 			continue
 		}
@@ -259,12 +262,12 @@ func (h *ShareHandler) AccessShare(c echo.Context) error {
 
 	err := h.db.QueryRow(`
 		SELECT id, token, path, created_by, created_at, expires_at,
-		       password_hash, access_count, max_access, is_active
+		       password_hash, access_count, max_access, is_active, require_login
 		FROM shares
 		WHERE token = $1
 	`, token).Scan(&share.ID, &share.Token, &share.Path, &share.CreatedBy,
 		&share.CreatedAt, &expiresAt, &passwordHash, &share.AccessCount,
-		&maxAccess, &share.IsActive)
+		&maxAccess, &share.IsActive, &share.RequireLogin)
 
 	if err == sql.ErrNoRows {
 		return c.JSON(http.StatusNotFound, map[string]string{
@@ -296,6 +299,18 @@ func (h *ShareHandler) AccessShare(c echo.Context) error {
 		return c.JSON(http.StatusGone, map[string]string{
 			"error": "Share access limit reached",
 		})
+	}
+
+	// Check if login is required
+	if share.RequireLogin {
+		// Try to get user claims from context (may be nil if not authenticated)
+		claims, _ := c.Get("user").(*JWTClaims)
+		if claims == nil {
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"requiresLogin": true,
+				"path":          share.Path,
+			})
+		}
 	}
 
 	share.HasPassword = passwordHash.Valid
@@ -358,11 +373,12 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 	var maxAccess sql.NullInt32
 	var accessCount int
 	var isActive bool
+	var requireLogin bool
 
 	err := h.db.QueryRow(`
-		SELECT path, password_hash, expires_at, access_count, max_access, is_active
+		SELECT path, password_hash, expires_at, access_count, max_access, is_active, require_login
 		FROM shares WHERE token = $1
-	`, token).Scan(&path, &passwordHash, &expiresAt, &accessCount, &maxAccess, &isActive)
+	`, token).Scan(&path, &passwordHash, &expiresAt, &accessCount, &maxAccess, &isActive, &requireLogin)
 
 	if err == sql.ErrNoRows {
 		return c.JSON(http.StatusNotFound, map[string]string{
@@ -384,6 +400,14 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 	}
 	if maxAccess.Valid && accessCount >= int(maxAccess.Int32) {
 		return c.JSON(http.StatusGone, map[string]string{"error": "Access limit reached"})
+	}
+
+	// Check if login is required
+	if requireLogin {
+		claims, _ := c.Get("user").(*JWTClaims)
+		if claims == nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Login required"})
+		}
 	}
 
 	// Check password if required

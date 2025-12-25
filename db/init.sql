@@ -64,7 +64,8 @@ CREATE TABLE IF NOT EXISTS shares (
     password_hash VARCHAR(255),
     access_count INT DEFAULT 0,
     max_access INT,
-    is_active BOOLEAN DEFAULT TRUE
+    is_active BOOLEAN DEFAULT TRUE,
+    require_login BOOLEAN DEFAULT FALSE  -- If true, only authenticated users can access
 );
 
 CREATE INDEX IF NOT EXISTS idx_shares_token ON shares(token);
