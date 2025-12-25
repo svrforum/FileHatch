@@ -84,7 +84,26 @@ function LinkShareModal({ isOpen, onClose, itemPath, itemName, isFolder }: LinkS
 
       const fullUrl = `${window.location.origin}${result.url}`
       setCreatedLink(fullUrl)
-      setSuccess('공유 링크가 생성되었습니다')
+
+      // Auto-copy to clipboard
+      try {
+        await navigator.clipboard.writeText(fullUrl)
+        setCopied(true)
+        setSuccess('공유 링크가 생성되어 클립보드에 복사되었습니다')
+        setTimeout(() => setCopied(false), 2000)
+      } catch {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea')
+        textArea.value = fullUrl
+        document.body.appendChild(textArea)
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+        setCopied(true)
+        setSuccess('공유 링크가 생성되어 클립보드에 복사되었습니다')
+        setTimeout(() => setCopied(false), 2000)
+      }
+
       loadLinks()
     } catch (err) {
       setError(err instanceof Error ? err.message : '링크 생성에 실패했습니다')
