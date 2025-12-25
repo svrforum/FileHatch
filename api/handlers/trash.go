@@ -326,3 +326,168 @@ func (h *Handler) EmptyTrash(c echo.Context) error {
 		"success": true,
 	})
 }
+
+// TrashAutoCleanupConfig holds configuration for automatic trash cleanup
+type TrashAutoCleanupConfig struct {
+	RetentionDays int           // Number of days to keep items in trash (default: 30)
+	CleanupPeriod time.Duration // How often to run cleanup (default: 24 hours)
+}
+
+// DefaultTrashCleanupConfig returns the default cleanup configuration
+func DefaultTrashCleanupConfig() TrashAutoCleanupConfig {
+	retentionDays := 30
+	if sh := GetGlobalSettingsHandler(); sh != nil {
+		retentionDays = sh.GetTrashRetentionDays()
+	}
+	return TrashAutoCleanupConfig{
+		RetentionDays: retentionDays,
+		CleanupPeriod: 24 * time.Hour,
+	}
+}
+
+// StartTrashAutoCleanup starts the automatic trash cleanup background task
+func (h *Handler) StartTrashAutoCleanup(config TrashAutoCleanupConfig) {
+	go func() {
+		// Get retention days from settings (may have been updated)
+		retentionDays := config.RetentionDays
+		if sh := GetGlobalSettingsHandler(); sh != nil {
+			retentionDays = sh.GetTrashRetentionDays()
+		}
+
+		// Run immediately on startup
+		h.runTrashCleanup(retentionDays)
+
+		// Then run periodically
+		ticker := time.NewTicker(config.CleanupPeriod)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			// Reload retention days from settings on each run
+			currentRetention := config.RetentionDays
+			if sh := GetGlobalSettingsHandler(); sh != nil {
+				currentRetention = sh.GetTrashRetentionDays()
+			}
+			h.runTrashCleanup(currentRetention)
+		}
+	}()
+
+	fmt.Printf("[Trash] Auto-cleanup started: items older than %d days will be deleted every %v\n",
+		config.RetentionDays, config.CleanupPeriod)
+}
+
+// runTrashCleanup performs the actual cleanup of old trash items
+func (h *Handler) runTrashCleanup(retentionDays int) {
+	cutoffTime := time.Now().AddDate(0, 0, -retentionDays)
+
+	// Get all users with trash folders
+	trashRoot := filepath.Join(h.dataRoot, "trash")
+	userDirs, err := os.ReadDir(trashRoot)
+	if err != nil {
+		// Trash directory might not exist yet, that's fine
+		return
+	}
+
+	var totalCleaned int
+	var totalSize int64
+
+	for _, userDir := range userDirs {
+		if !userDir.IsDir() {
+			continue
+		}
+
+		username := userDir.Name()
+		meta, err := h.loadTrashMeta(username)
+		if err != nil {
+			continue
+		}
+
+		var toDelete []string
+		for trashID, item := range meta {
+			if item.DeletedAt.Before(cutoffTime) {
+				toDelete = append(toDelete, trashID)
+				totalSize += item.Size
+			}
+		}
+
+		// Delete expired items
+		for _, trashID := range toDelete {
+			trashItemPath := filepath.Join(h.getTrashPath(username), trashID)
+			if err := os.RemoveAll(trashItemPath); err != nil {
+				fmt.Printf("[Trash] Failed to delete expired item %s for user %s: %v\n",
+					trashID, username, err)
+				continue
+			}
+			delete(meta, trashID)
+			totalCleaned++
+		}
+
+		// Save updated metadata
+		if len(toDelete) > 0 {
+			h.saveTrashMeta(username, meta)
+		}
+	}
+
+	if totalCleaned > 0 {
+		fmt.Printf("[Trash] Auto-cleanup completed: deleted %d items (%.2f MB) older than %d days\n",
+			totalCleaned, float64(totalSize)/(1024*1024), retentionDays)
+	}
+}
+
+// GetTrashStats returns statistics about trash usage
+func (h *Handler) GetTrashStats(c echo.Context) error {
+	claims, ok := c.Get("user").(*JWTClaims)
+	if !ok || claims == nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{
+			"error": "Authentication required",
+		})
+	}
+
+	meta, err := h.loadTrashMeta(claims.Username)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to load trash",
+		})
+	}
+
+	var totalSize int64
+	var oldestItem *time.Time
+	var newestItem *time.Time
+
+	for _, item := range meta {
+		totalSize += item.Size
+		if oldestItem == nil || item.DeletedAt.Before(*oldestItem) {
+			oldestItem = &item.DeletedAt
+		}
+		if newestItem == nil || item.DeletedAt.After(*newestItem) {
+			newestItem = &item.DeletedAt
+		}
+	}
+
+	// Get retention days from settings
+	retentionDays := 30
+	if sh := GetGlobalSettingsHandler(); sh != nil {
+		retentionDays = sh.GetTrashRetentionDays()
+	}
+
+	stats := map[string]interface{}{
+		"itemCount":     len(meta),
+		"totalSize":     totalSize,
+		"retentionDays": retentionDays,
+	}
+
+	if oldestItem != nil {
+		stats["oldestItem"] = oldestItem
+		// Calculate days until auto-deletion for oldest item
+		daysLeft := retentionDays - int(time.Since(*oldestItem).Hours()/24)
+		if daysLeft < 0 {
+			daysLeft = 0
+		}
+		stats["oldestItemDaysLeft"] = daysLeft
+	}
+
+	if newestItem != nil {
+		stats["newestItem"] = newestItem
+	}
+
+	return c.JSON(http.StatusOK, stats)
+}

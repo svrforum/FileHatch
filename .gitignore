@@ -40,3 +40,4 @@ logs/
 # Temporary
 tmp/
 *.tmp
+.serena/

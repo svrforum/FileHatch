@@ -118,6 +118,25 @@ CREATE INDEX IF NOT EXISTS idx_file_shares_owner ON file_shares(owner_id);
 CREATE INDEX IF NOT EXISTS idx_file_shares_shared_with ON file_shares(shared_with_id);
 CREATE INDEX IF NOT EXISTS idx_file_shares_path ON file_shares(item_path);
 
+-- 8. System Settings (Key-Value Store)
+CREATE TABLE IF NOT EXISTS system_settings (
+    key VARCHAR(100) PRIMARY KEY,
+    value TEXT NOT NULL,
+    description TEXT,
+    updated_by UUID REFERENCES users(id),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Insert default settings
+INSERT INTO system_settings (key, value, description) VALUES
+    ('trash_retention_days', '30', '휴지통 자동 삭제 일수 (기본: 30일)'),
+    ('default_storage_quota', '10737418240', '기본 저장 공간 할당량 (바이트, 기본: 10GB)'),
+    ('max_file_size', '10737418240', '최대 파일 크기 (바이트, 기본: 10GB)'),
+    ('session_timeout_hours', '24', '세션 만료 시간 (시간, 기본: 24)')
+ON CONFLICT (key) DO NOTHING;
+
+CREATE INDEX IF NOT EXISTS idx_system_settings_key ON system_settings(key);
+
 -- Comments
 COMMENT ON TABLE users IS 'User accounts for web and SMB authentication';
 COMMENT ON TABLE acl IS 'Access Control List for file/folder permissions';
@@ -126,3 +145,4 @@ COMMENT ON TABLE shares IS 'Public share links with optional password and expiry
 COMMENT ON TABLE shared_folders IS 'Team shared drives with storage quotas';
 COMMENT ON TABLE shared_folder_members IS 'User access permissions for shared drives';
 COMMENT ON TABLE file_shares IS 'User-to-user file/folder sharing with RO/RW permissions';
+COMMENT ON TABLE system_settings IS 'System-wide configuration settings';

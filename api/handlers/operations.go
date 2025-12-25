@@ -1,15 +1,18 @@
 package handlers
 
 import (
+	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/labstack/echo/v4"
+	lop "github.com/samber/lo/parallel"
 )
 
 // RenameRequest is the request body for renaming files or folders
@@ -481,20 +484,14 @@ func (h *Handler) SearchFiles(c echo.Context) error {
 	}
 
 	query = strings.ToLower(query)
-	results := make([]SearchResult, 0)
 	maxResults := 100
+
+	var results []SearchResult
 
 	// Search in both home and shared if root
 	if searchPath == "/" {
-		// Search in shared
-		sharedPath := filepath.Join(h.dataRoot, "shared")
-		h.searchInDir(sharedPath, "/shared", query, &results, maxResults)
-
-		// Search in home if authenticated
-		if claims != nil {
-			homePath := filepath.Join(h.dataRoot, "users", claims.Username)
-			h.searchInDir(homePath, "/home", query, &results, maxResults)
-		}
+		// Parallel search in shared and home
+		results = h.parallelSearch(query, claims, maxResults)
 	} else {
 		// Search in specific path
 		realPath, storageType, displayPath, err := h.resolvePath(searchPath, claims)
@@ -510,7 +507,7 @@ func (h *Handler) SearchFiles(c echo.Context) error {
 			})
 		}
 
-		h.searchInDir(realPath, displayPath, query, &results, maxResults)
+		results = h.searchInDirParallel(realPath, displayPath, query, maxResults)
 	}
 
 	return c.JSON(http.StatusOK, SearchResponse{
@@ -520,54 +517,194 @@ func (h *Handler) SearchFiles(c echo.Context) error {
 	})
 }
 
-// searchInDir recursively searches for files in a directory
-func (h *Handler) searchInDir(realPath, displayPath, query string, results *[]SearchResult, maxResults int) {
-	if len(*results) >= maxResults {
-		return
+// searchTarget represents a directory to search
+type searchTarget struct {
+	RealPath    string
+	DisplayPath string
+}
+
+// parallelSearch searches in multiple directories in parallel
+func (h *Handler) parallelSearch(query string, claims *JWTClaims, maxResults int) []SearchResult {
+	// Collect search targets
+	targets := []searchTarget{
+		{
+			RealPath:    filepath.Join(h.dataRoot, "shared"),
+			DisplayPath: "/shared",
+		},
 	}
 
-	filepath.Walk(realPath, func(path string, info os.FileInfo, err error) error {
+	if claims != nil {
+		targets = append(targets, searchTarget{
+			RealPath:    filepath.Join(h.dataRoot, "users", claims.Username),
+			DisplayPath: "/home",
+		})
+	}
+
+	// Search all targets in parallel
+	allResults := lop.Map(targets, func(target searchTarget, _ int) []SearchResult {
+		return h.searchInDirParallel(target.RealPath, target.DisplayPath, query, maxResults)
+	})
+
+	// Merge results
+	var merged []SearchResult
+	for _, results := range allResults {
+		merged = append(merged, results...)
+		if len(merged) >= maxResults {
+			merged = merged[:maxResults]
+			break
+		}
+	}
+
+	return merged
+}
+
+// searchInDirParallel searches for files in a directory using parallel processing
+func (h *Handler) searchInDirParallel(realPath, displayPath, query string, maxResults int) []SearchResult {
+	// First, collect top-level directories for parallel processing
+	entries, err := os.ReadDir(realPath)
+	if err != nil {
+		return nil
+	}
+
+	// Filter out hidden entries and separate files from directories
+	var files []os.DirEntry
+	var dirs []os.DirEntry
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		if entry.IsDir() {
+			dirs = append(dirs, entry)
+		} else {
+			files = append(files, entry)
+		}
+	}
+
+	// Results collector with mutex for thread safety
+	var mu sync.Mutex
+	var results []SearchResult
+
+	// Helper to add result safely
+	addResult := func(result SearchResult) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(results) >= maxResults {
+			return false
+		}
+		results = append(results, result)
+		return true
+	}
+
+	// Process top-level files first (quick)
+	for _, file := range files {
+		info, err := file.Info()
 		if err != nil {
-			return nil
+			continue
 		}
-
-		if len(*results) >= maxResults {
-			return filepath.SkipAll
-		}
-
-		// Skip hidden files
-		if strings.HasPrefix(info.Name(), ".") {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Check if name contains query
-		if strings.Contains(strings.ToLower(info.Name()), query) {
-			relPath, _ := filepath.Rel(realPath, path)
-			itemDisplayPath := filepath.Join(displayPath, relPath)
-
-			ext := ""
-			mimeType := ""
-			if !info.IsDir() {
-				ext = strings.ToLower(strings.TrimPrefix(filepath.Ext(info.Name()), "."))
-				mimeType = getMimeType(ext)
-			}
-
-			*results = append(*results, SearchResult{
-				Name:      info.Name(),
-				Path:      itemDisplayPath,
+		if strings.Contains(strings.ToLower(file.Name()), query) {
+			ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(file.Name()), "."))
+			addResult(SearchResult{
+				Name:      file.Name(),
+				Path:      filepath.Join(displayPath, file.Name()),
 				Size:      info.Size(),
-				IsDir:     info.IsDir(),
+				IsDir:     false,
 				ModTime:   info.ModTime(),
 				Extension: ext,
-				MimeType:  mimeType,
+				MimeType:  getMimeType(ext),
 			})
 		}
+	}
 
-		return nil
-	})
+	// Process directories in parallel
+	if len(dirs) > 0 {
+		lop.ForEach(dirs, func(dir os.DirEntry, _ int) {
+			// Check if we've reached max results
+			mu.Lock()
+			if len(results) >= maxResults {
+				mu.Unlock()
+				return
+			}
+			mu.Unlock()
+
+			dirPath := filepath.Join(realPath, dir.Name())
+			dirDisplayPath := filepath.Join(displayPath, dir.Name())
+
+			// Check if directory name matches
+			info, err := dir.Info()
+			if err == nil && strings.Contains(strings.ToLower(dir.Name()), query) {
+				addResult(SearchResult{
+					Name:    dir.Name(),
+					Path:    dirDisplayPath,
+					Size:    0,
+					IsDir:   true,
+					ModTime: info.ModTime(),
+				})
+			}
+
+			// Search inside directory
+			filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return nil
+				}
+
+				// Check limit
+				mu.Lock()
+				if len(results) >= maxResults {
+					mu.Unlock()
+					return filepath.SkipAll
+				}
+				mu.Unlock()
+
+				// Skip the root of this walk (already handled above)
+				if path == dirPath {
+					return nil
+				}
+
+				// Skip hidden files
+				if strings.HasPrefix(info.Name(), ".") {
+					if info.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+
+				// Check if name contains query
+				if strings.Contains(strings.ToLower(info.Name()), query) {
+					relPath, _ := filepath.Rel(realPath, path)
+					itemDisplayPath := filepath.Join(displayPath, relPath)
+
+					ext := ""
+					mimeType := ""
+					if !info.IsDir() {
+						ext = strings.ToLower(strings.TrimPrefix(filepath.Ext(info.Name()), "."))
+						mimeType = getMimeType(ext)
+					}
+
+					if !addResult(SearchResult{
+						Name:      info.Name(),
+						Path:      itemDisplayPath,
+						Size:      info.Size(),
+						IsDir:     info.IsDir(),
+						ModTime:   info.ModTime(),
+						Extension: ext,
+						MimeType:  mimeType,
+					}) {
+						return filepath.SkipAll
+					}
+				}
+
+				return nil
+			})
+		})
+	}
+
+	return results
+}
+
+// searchInDir recursively searches for files in a directory (legacy, for compatibility)
+func (h *Handler) searchInDir(realPath, displayPath, query string, results *[]SearchResult, maxResults int) {
+	parallelResults := h.searchInDirParallel(realPath, displayPath, query, maxResults-len(*results))
+	*results = append(*results, parallelResults...)
 }
 
 // StorageUsage represents storage usage information
@@ -577,6 +714,7 @@ type StorageUsage struct {
 }
 
 // GetStorageUsage returns storage usage for the current user
+// Uses in-memory caching to avoid expensive filesystem traversal on every request
 func (h *Handler) GetStorageUsage(c echo.Context) error {
 	// Get user claims
 	var claims *JWTClaims
@@ -584,30 +722,81 @@ func (h *Handler) GetStorageUsage(c echo.Context) error {
 		claims = user
 	}
 
-	var totalUsed int64
+	username := "anonymous"
+	if claims != nil {
+		username = claims.Username
+	}
 
-	// Calculate shared folder usage
+	// Check for force refresh parameter
+	forceRefresh := c.QueryParam("refresh") == "true"
+
+	// Try to get from cache first
+	cache := GetStorageCache()
+	if !forceRefresh {
+		if cached, ok := cache.GetUserUsage(username); ok {
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"homeUsed":   cached.HomeUsed,
+				"sharedUsed": cached.SharedUsed,
+				"totalUsed":  cached.TotalUsed,
+				"quota":      cached.Quota,
+				"cached":     true,
+				"cachedAt":   cached.CachedAt,
+			})
+		}
+	}
+
+	// Calculate storage usage (cache miss or force refresh)
+	var sharedSize, homeSize int64
+
+	// Calculate shared folder usage in background-friendly way
 	sharedPath := filepath.Join(h.dataRoot, "shared")
-	sharedSize, _ := h.calculateDirSize(sharedPath)
+	sharedSize, _ = h.calculateDirSize(sharedPath)
 
 	// Calculate home folder usage if authenticated
-	var homeSize int64
 	if claims != nil {
 		homePath := filepath.Join(h.dataRoot, "users", claims.Username)
 		homeSize, _ = h.calculateDirSize(homePath)
 	}
 
-	totalUsed = sharedSize + homeSize
+	totalUsed := sharedSize + homeSize
 
-	// For now, set a default quota of 10GB (can be made configurable later)
-	totalQuota := int64(10 * 1024 * 1024 * 1024) // 10GB
+	// Get user quota from database or use default
+	totalQuota := int64(10 * 1024 * 1024 * 1024) // Default 10GB
+	if claims != nil {
+		var dbQuota sql.NullInt64
+		err := h.db.QueryRow(`SELECT storage_quota FROM users WHERE id = $1`, claims.UserID).Scan(&dbQuota)
+		if err == nil && dbQuota.Valid && dbQuota.Int64 > 0 {
+			totalQuota = dbQuota.Int64
+		}
+	}
+
+	// Cache the result
+	usageData := &StorageUsageData{
+		HomeUsed:   homeSize,
+		SharedUsed: sharedSize,
+		TotalUsed:  totalUsed,
+		Quota:      totalQuota,
+	}
+	cache.SetUserUsage(username, usageData)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"homeUsed":   homeSize,
 		"sharedUsed": sharedSize,
 		"totalUsed":  totalUsed,
 		"quota":      totalQuota,
+		"cached":     false,
 	})
+}
+
+// InvalidateStorageCache invalidates storage cache for a user
+// Call this after file operations that change storage usage
+func InvalidateStorageCache(username string) {
+	cache := GetStorageCache()
+	if username != "" {
+		cache.InvalidateUserUsage(username)
+	}
+	// Also invalidate shared storage since it affects all users
+	cache.InvalidateAllUsage()
 }
 
 // calculateDirSize calculates the total size of a directory

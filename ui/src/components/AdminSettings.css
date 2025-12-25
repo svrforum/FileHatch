@@ -46,14 +46,24 @@
 
 .setting-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: var(--spacing-sm);
 }
 
 .setting-item label {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
+  min-width: 120px;
+}
+
+.setting-description {
+  width: 100%;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
 }
 
 .setting-value {
@@ -115,8 +125,36 @@
   transition: all var(--transition-fast);
 }
 
-.btn-save:hover {
+.btn-save:hover:not(:disabled) {
   background: var(--color-primary-dark);
+}
+
+.btn-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.setting-unit {
+  font-size: 14px;
+  color: var(--text-secondary);
+  min-width: 30px;
+}
+
+.setting-readonly {
+  font-size: 14px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+}
+
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  color: var(--text-secondary);
+  font-size: 14px;
 }
 
 /* Toast */

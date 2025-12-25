@@ -77,15 +77,73 @@ type ListFilesResponse struct {
 	TotalSize   int64      `json:"totalSize"`
 }
 
+// validateAndCleanPath validates a path component and returns cleaned version
+// Returns error if path contains dangerous patterns
+func validateAndCleanPath(path string) (string, error) {
+	// Clean the path first
+	cleanPath := filepath.Clean(path)
+
+	// Check for path traversal attempts after cleaning
+	if strings.Contains(cleanPath, "..") {
+		return "", fmt.Errorf("path traversal not allowed")
+	}
+
+	// Check for null bytes (can bypass some checks)
+	if strings.ContainsRune(path, '\x00') {
+		return "", fmt.Errorf("invalid path: contains null byte")
+	}
+
+	// Check for other dangerous patterns
+	dangerousPatterns := []string{
+		"..\\", // Windows-style traversal
+		"..%",  // URL-encoded traversal attempts
+		"%2e",  // URL-encoded dot
+		"%2f",  // URL-encoded slash
+		"%5c",  // URL-encoded backslash
+	}
+	lowerPath := strings.ToLower(path)
+	for _, pattern := range dangerousPatterns {
+		if strings.Contains(lowerPath, pattern) {
+			return "", fmt.Errorf("invalid path: contains dangerous pattern")
+		}
+	}
+
+	return cleanPath, nil
+}
+
+// isPathWithinRoot checks if the resolved path is within the allowed root directory
+// This prevents symlink-based escapes and other path manipulation attacks
+func isPathWithinRoot(resolvedPath, allowedRoot string) bool {
+	// Get absolute paths
+	absResolved, err := filepath.Abs(resolvedPath)
+	if err != nil {
+		return false
+	}
+	absRoot, err := filepath.Abs(allowedRoot)
+	if err != nil {
+		return false
+	}
+
+	// Ensure the resolved path starts with the allowed root
+	// Add trailing separator to prevent matching partial directory names
+	// e.g., /data/users vs /data/users_evil
+	if !strings.HasPrefix(absResolved, absRoot+string(filepath.Separator)) && absResolved != absRoot {
+		return false
+	}
+
+	return true
+}
+
 // resolvePath converts a virtual path to a real filesystem path
 // Virtual paths:
 //   - /home/... -> /data/users/{username}/...
 //   - /shared/... -> /data/shared/...
 //   - / -> shows available storage roots
 func (h *Handler) resolvePath(virtualPath string, claims *JWTClaims) (realPath string, storageType string, displayPath string, err error) {
-	cleanPath := filepath.Clean(virtualPath)
-	if strings.Contains(cleanPath, "..") {
-		return "", "", "", fmt.Errorf("invalid path")
+	// Validate and clean the path
+	cleanPath, err := validateAndCleanPath(virtualPath)
+	if err != nil {
+		return "", "", "", err
 	}
 
 	// Remove leading slash for easier parsing
@@ -101,19 +159,30 @@ func (h *Handler) resolvePath(virtualPath string, claims *JWTClaims) (realPath s
 		subPath = filepath.Join(pathParts[1:]...)
 	}
 
+	// Validate subPath components individually
+	if subPath != "" {
+		if _, err := validateAndCleanPath(subPath); err != nil {
+			return "", "", "", err
+		}
+	}
+
+	var allowedRoot string
+
 	switch root {
 	case "home":
 		if claims == nil {
 			return "", "", "", fmt.Errorf("authentication required for home folder")
 		}
-		realPath = filepath.Join(h.dataRoot, "users", claims.Username, subPath)
+		allowedRoot = filepath.Join(h.dataRoot, "users", claims.Username)
+		realPath = filepath.Join(allowedRoot, subPath)
 		storageType = StorageHome
 		displayPath = "/" + filepath.Join("home", subPath)
 	case "shared":
 		if claims == nil {
 			return "", "", "", fmt.Errorf("authentication required for shared drives")
 		}
-		realPath = filepath.Join(h.dataRoot, "shared", subPath)
+		allowedRoot = filepath.Join(h.dataRoot, "shared")
+		realPath = filepath.Join(allowedRoot, subPath)
 		storageType = StorageShared
 		displayPath = "/" + filepath.Join("shared", subPath)
 	case "shared-with-me":
@@ -125,8 +194,14 @@ func (h *Handler) resolvePath(virtualPath string, claims *JWTClaims) (realPath s
 		realPath = ""
 		storageType = StorageSharedWithMe
 		displayPath = "/shared-with-me"
+		return realPath, storageType, displayPath, nil
 	default:
 		return "", "", "", fmt.Errorf("invalid storage type: %s", root)
+	}
+
+	// Final security check: ensure resolved path is within allowed root
+	if realPath != "" && !isPathWithinRoot(realPath, allowedRoot) {
+		return "", "", "", fmt.Errorf("access denied: path escapes allowed directory")
 	}
 
 	return realPath, storageType, displayPath, nil

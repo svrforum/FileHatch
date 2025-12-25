@@ -12,9 +12,23 @@ import (
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 )
 
+// Default storage quota per user (10GB)
+const DefaultUserQuota = 10 * 1024 * 1024 * 1024
+
+// UploadError represents an upload validation error
+type UploadError struct {
+	Code    int
+	Message string
+}
+
+func (e UploadError) Error() string {
+	return e.Message
+}
+
 type UploadHandler struct {
 	tusHandler   *tusd.UnroutedHandler
 	dataRoot     string
+	db           *sql.DB
 	auditHandler *AuditHandler
 }
 
@@ -32,21 +46,25 @@ func NewUploadHandler(dataRoot string, db *sql.DB) (*UploadHandler, error) {
 	composer := tusd.NewStoreComposer()
 	store.UseIn(composer)
 
+	h := &UploadHandler{
+		dataRoot:     dataRoot,
+		db:           db,
+		auditHandler: NewAuditHandler(db),
+	}
+
+	// Create TUS handler with pre-upload validation
 	handler, err := tusd.NewUnroutedHandler(tusd.Config{
 		BasePath:                "/",
 		StoreComposer:           composer,
 		NotifyCompleteUploads:   true,
 		RespectForwardedHeaders: true,
+		PreUploadCreateCallback: h.preUploadCreateCallback,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tus handler: %w", err)
 	}
 
-	h := &UploadHandler{
-		tusHandler:   handler,
-		dataRoot:     dataRoot,
-		auditHandler: NewAuditHandler(db),
-	}
+	h.tusHandler = handler
 
 	// Start goroutine to handle completed uploads
 	go h.handleCompletedUploads()
@@ -54,14 +72,197 @@ func NewUploadHandler(dataRoot string, db *sql.DB) (*UploadHandler, error) {
 	return h, nil
 }
 
+// preUploadCreateCallback validates uploads before they start
+// Checks: file path security, storage quota, file type restrictions
+func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPResponse, tusd.FileInfoChanges, error) {
+	resp := tusd.HTTPResponse{}
+	changes := tusd.FileInfoChanges{}
+
+	// Get metadata
+	destPath := hook.Upload.MetaData["path"]
+	filename := hook.Upload.MetaData["filename"]
+	username := hook.Upload.MetaData["username"]
+	uploadSize := hook.Upload.Size
+
+	// Validate required metadata
+	if filename == "" {
+		resp.StatusCode = 400
+		resp.Body = `{"error":"Filename is required"}`
+		return resp, changes, tusd.ErrUploadRejectedByServer
+	}
+
+	if destPath == "" {
+		destPath = "/shared"
+	}
+
+	// Validate path security
+	_, err := h.resolveVirtualPath(destPath, username)
+	if err != nil {
+		resp.StatusCode = 400
+		resp.Body = fmt.Sprintf(`{"error":"Invalid upload path: %s"}`, err.Error())
+		return resp, changes, tusd.ErrUploadRejectedByServer
+	}
+
+	// Check storage quota
+	if username != "" && uploadSize > 0 {
+		quotaOk, remaining, err := h.checkUserQuota(username, uploadSize)
+		if err != nil {
+			fmt.Printf("Quota check error for user %s: %v\n", username, err)
+			// Allow upload on quota check error (fail-open for now)
+		} else if !quotaOk {
+			resp.StatusCode = 413
+			resp.Body = fmt.Sprintf(`{"error":"Storage quota exceeded","remaining":%d,"required":%d}`, remaining, uploadSize)
+			return resp, changes, tusd.ErrUploadRejectedByServer
+		}
+	}
+
+	// Check for shared drive quota if uploading to shared drive
+	if strings.HasPrefix(destPath, "/shared/") {
+		allowed, quota, used := h.checkSharedDriveQuota(destPath, uploadSize)
+		if !allowed && quota > 0 { // quota > 0 means quota is set (not unlimited)
+			resp.StatusCode = 413
+			resp.Body = fmt.Sprintf(`{"error":"Shared drive quota exceeded","quota":%d,"used":%d,"required":%d}`, quota, used, uploadSize)
+			return resp, changes, tusd.ErrUploadRejectedByServer
+		}
+	}
+
+	// Validate filename (prevent dangerous filenames)
+	if err := validateFilename(filename); err != nil {
+		resp.StatusCode = 400
+		resp.Body = fmt.Sprintf(`{"error":"%s"}`, err.Error())
+		return resp, changes, tusd.ErrUploadRejectedByServer
+	}
+
+	// Log successful pre-upload validation
+	fmt.Printf("Pre-upload validation passed: user=%s, path=%s, filename=%s, size=%d\n",
+		username, destPath, filename, uploadSize)
+
+	return resp, changes, nil
+}
+
+// checkUserQuota checks if user has enough storage quota for the upload
+func (h *UploadHandler) checkUserQuota(username string, uploadSize int64) (bool, int64, error) {
+	// Get user quota from database (or use default)
+	var quota int64 = DefaultUserQuota
+	err := h.db.QueryRow(`
+		SELECT COALESCE(storage_quota, $1) FROM users WHERE username = $2
+	`, DefaultUserQuota, username).Scan(&quota)
+	if err != nil && err != sql.ErrNoRows {
+		return true, 0, err // Fail-open on error
+	}
+
+	// quota of 0 means unlimited
+	if quota == 0 {
+		return true, -1, nil
+	}
+
+	// Calculate current usage
+	userPath := filepath.Join(h.dataRoot, "users", username)
+	var currentUsage int64
+	filepath.Walk(userPath, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			currentUsage += info.Size()
+		}
+		return nil
+	})
+
+	remaining := quota - currentUsage
+	if uploadSize > remaining {
+		return false, remaining, nil
+	}
+
+	return true, remaining, nil
+}
+
+// checkSharedDriveQuota checks quota for shared drive
+func (h *UploadHandler) checkSharedDriveQuota(path string, uploadSize int64) (allowed bool, quota int64, used int64) {
+	folderName := ExtractSharedDriveFolderName(path)
+	if folderName == "" {
+		return true, 0, 0 // No folder name means root shared, allow
+	}
+
+	// Get quota from database
+	err := h.db.QueryRow(`
+		SELECT storage_quota FROM shared_folders WHERE name = $1 AND is_active = TRUE
+	`, folderName).Scan(&quota)
+	if err != nil {
+		return true, 0, 0 // Allow on error
+	}
+
+	// 0 = unlimited
+	if quota == 0 {
+		return true, 0, 0
+	}
+
+	// Calculate current usage
+	folderPath := filepath.Join(h.dataRoot, "shared", folderName)
+	filepath.Walk(folderPath, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			used += info.Size()
+		}
+		return nil
+	})
+
+	return (used + uploadSize) <= quota, quota, used
+}
+
+// validateFilename checks for dangerous filename patterns
+func validateFilename(filename string) error {
+	// Check for empty filename
+	if filename == "" {
+		return fmt.Errorf("filename cannot be empty")
+	}
+
+	// Check for dangerous characters
+	dangerousChars := []string{"/", "\\", "\x00", ":", "*", "?", "\"", "<", ">", "|"}
+	for _, char := range dangerousChars {
+		if strings.Contains(filename, char) {
+			return fmt.Errorf("filename contains invalid character")
+		}
+	}
+
+	// Check for hidden files (starts with .)
+	if strings.HasPrefix(filename, ".") {
+		return fmt.Errorf("hidden files are not allowed")
+	}
+
+	// Check filename length
+	if len(filename) > 255 {
+		return fmt.Errorf("filename too long (max 255 characters)")
+	}
+
+	// Check for dangerous extensions
+	dangerousExts := []string{".exe", ".bat", ".cmd", ".sh", ".ps1", ".vbs", ".js"}
+	lowerName := strings.ToLower(filename)
+	for _, ext := range dangerousExts {
+		if strings.HasSuffix(lowerName, ext) {
+			return fmt.Errorf("file type not allowed: %s", ext)
+		}
+	}
+
+	return nil
+}
+
+// GetDB returns the database connection for use in handlers
+func (h *UploadHandler) GetDB() *sql.DB {
+	return h.db
+}
+
 // resolveVirtualPath converts a virtual path to a real filesystem path for uploads
 // Virtual paths:
 //   - /home/... -> /data/users/{username}/...
 //   - /shared/... -> /data/shared/...
 func (h *UploadHandler) resolveVirtualPath(virtualPath string, username string) (string, error) {
-	cleanPath := filepath.Clean(virtualPath)
-	if strings.Contains(cleanPath, "..") {
-		return "", fmt.Errorf("invalid path")
+	// Use the shared validation function from handler.go
+	cleanPath, err := validateAndCleanPath(virtualPath)
+	if err != nil {
+		return "", err
 	}
 
 	// Parse path parts
@@ -76,18 +277,37 @@ func (h *UploadHandler) resolveVirtualPath(virtualPath string, username string) 
 		subPath = filepath.Join(pathParts[1:]...)
 	}
 
+	// Validate subPath as well
+	if subPath != "" {
+		if _, err := validateAndCleanPath(subPath); err != nil {
+			return "", err
+		}
+	}
+
+	var realPath string
+	var allowedRoot string
+
 	switch root {
 	case "home":
 		if username == "" {
 			return "", fmt.Errorf("username required for home folder")
 		}
-		return filepath.Join(h.dataRoot, "users", username, subPath), nil
+		allowedRoot = filepath.Join(h.dataRoot, "users", username)
+		realPath = filepath.Join(allowedRoot, subPath)
 	case "shared":
 		// shared uses folder name as subdirectory
-		return filepath.Join(h.dataRoot, "shared", subPath), nil
+		allowedRoot = filepath.Join(h.dataRoot, "shared")
+		realPath = filepath.Join(allowedRoot, subPath)
 	default:
 		return "", fmt.Errorf("invalid storage type: %s", root)
 	}
+
+	// Final security check: ensure resolved path is within allowed root
+	if !isPathWithinRoot(realPath, allowedRoot) {
+		return "", fmt.Errorf("access denied: path escapes allowed directory")
+	}
+
+	return realPath, nil
 }
 
 func (h *UploadHandler) handleCompletedUploads() {

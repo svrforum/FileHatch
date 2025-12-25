@@ -127,6 +127,10 @@ func main() {
 	// Create File Share handler
 	fileShareHandler := handlers.NewFileShareHandler(db)
 
+	// Create Settings handler and set as global
+	settingsHandler := handlers.NewSettingsHandler(db)
+	handlers.SetGlobalSettingsHandler(settingsHandler)
+
 	// Routes
 	e.GET("/health", h.HealthCheck)
 	e.GET("/api/health", h.HealthCheck)
@@ -173,6 +177,7 @@ func main() {
 	// Trash API routes
 	api.POST("/trash/*", h.MoveToTrash, authHandler.OptionalJWTMiddleware)
 	api.GET("/trash", h.ListTrash, authHandler.OptionalJWTMiddleware)
+	api.GET("/trash/stats", h.GetTrashStats, authHandler.OptionalJWTMiddleware)
 	api.POST("/trash/restore/:id", h.RestoreFromTrash, authHandler.OptionalJWTMiddleware)
 	api.DELETE("/trash/:id", h.DeleteFromTrash, authHandler.OptionalJWTMiddleware)
 	api.DELETE("/trash", h.EmptyTrash, authHandler.OptionalJWTMiddleware)
@@ -223,6 +228,10 @@ func main() {
 	adminApi.POST("/admin/shared-folders/:id/members", sharedFolderHandler.AddMember)
 	adminApi.PUT("/admin/shared-folders/:id/members/:userId", sharedFolderHandler.UpdateMemberPermission)
 	adminApi.DELETE("/admin/shared-folders/:id/members/:userId", sharedFolderHandler.RemoveMember)
+
+	// System Settings API (admin only)
+	adminApi.GET("/admin/settings", settingsHandler.GetAllSettings)
+	adminApi.PUT("/admin/settings", settingsHandler.UpdateSettings)
 
 	// File Share API (user-to-user sharing - protected)
 	authApi.POST("/file-shares", fileShareHandler.CreateFileShare)
@@ -335,6 +344,9 @@ func main() {
 	// Start web upload tracker cleanup routines
 	handlers.GetWebUploadTracker().StartCleanupRoutine()
 	handlers.GetTusIPTracker().StartCleanupRoutine()
+
+	// Start trash auto-cleanup (runs every 24 hours)
+	h.StartTrashAutoCleanup(handlers.DefaultTrashCleanupConfig())
 
 	// Start file watcher for real-time updates and SMB audit logging
 	fileWatcher, err := handlers.NewFileWatcher(dataRoot, db)
