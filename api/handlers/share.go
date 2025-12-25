@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -54,6 +52,38 @@ type AccessShareRequest struct {
 	Password string `json:"password,omitempty"`
 }
 
+// resolvePath converts a virtual path to a real filesystem path for sharing
+func (h *ShareHandler) resolvePath(virtualPath string, username string) (realPath string, storedPath string, err error) {
+	cleanPath := filepath.Clean(virtualPath)
+	if strings.Contains(cleanPath, "..") {
+		return "", "", fmt.Errorf("invalid path")
+	}
+
+	parts := strings.Split(strings.TrimPrefix(cleanPath, "/"), "/")
+	if len(parts) == 0 || (len(parts) == 1 && parts[0] == "") {
+		return "", "", fmt.Errorf("path required")
+	}
+
+	root := parts[0]
+	subPath := ""
+	if len(parts) > 1 {
+		subPath = filepath.Join(parts[1:]...)
+	}
+
+	switch root {
+	case "home":
+		realPath = filepath.Join(h.dataRoot, "users", username, subPath)
+		storedPath = filepath.Join("users", username, subPath)
+	case "shared":
+		realPath = filepath.Join(h.dataRoot, "shared", subPath)
+		storedPath = filepath.Join("shared", subPath)
+	default:
+		return "", "", fmt.Errorf("invalid storage type: %s", root)
+	}
+
+	return realPath, storedPath, nil
+}
+
 // CreateShare creates a new share link
 func (h *ShareHandler) CreateShare(c echo.Context) error {
 	claims := c.Get("user").(*JWTClaims)
@@ -71,15 +101,14 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 		})
 	}
 
-	// Validate path exists
-	cleanPath := filepath.Clean(req.Path)
-	if strings.Contains(cleanPath, "..") {
+	// Resolve virtual path to real filesystem path
+	fullPath, storedPath, err := h.resolvePath(req.Path, claims.Username)
+	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid path",
+			"error": err.Error(),
 		})
 	}
 
-	fullPath := filepath.Join(h.dataRoot, cleanPath)
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 		return c.JSON(http.StatusNotFound, map[string]string{
 			"error": "Path not found",
@@ -117,11 +146,11 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 
 	// Insert share
 	var shareID string
-	err := h.db.QueryRow(`
+	err = h.db.QueryRow(`
 		INSERT INTO shares (token, path, created_by, password_hash, expires_at, max_access)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
-	`, token, cleanPath, claims.UserID, passwordHash, expiresAt, maxAccess).Scan(&shareID)
+	`, token, storedPath, claims.UserID, passwordHash, expiresAt, maxAccess).Scan(&shareID)
 
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -132,11 +161,11 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 	shareURL := fmt.Sprintf("/s/%s", token)
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
-		"success":  true,
-		"id":       shareID,
-		"token":    token,
-		"url":      shareURL,
-		"path":     cleanPath,
+		"success":   true,
+		"id":        shareID,
+		"token":     token,
+		"url":       shareURL,
+		"path":      storedPath,
 		"expiresAt": expiresAt,
 	})
 }
@@ -382,9 +411,12 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 	return c.File(fullPath)
 }
 
-// generateShareToken generates a unique share token
+// generateShareToken generates a unique share token using crypto-secure random
 func generateShareToken() string {
-	bytes := make([]byte, 16)
-	rand.Read(bytes)
-	return hex.EncodeToString(bytes)
+	token, err := GenerateSecureToken(16)
+	if err != nil {
+		// Fallback should never happen in normal operation
+		return MustGenerateSecureToken(16)
+	}
+	return token
 }

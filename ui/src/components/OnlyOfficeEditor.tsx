@@ -49,11 +49,12 @@ interface OnlyOfficeEditorConfig {
 
 interface OnlyOfficeEditorProps {
   config: OnlyOfficeConfig
+  publicUrl?: string | null
   onClose: () => void
   onError?: (error: string) => void
 }
 
-function OnlyOfficeEditor({ config, onClose, onError }: OnlyOfficeEditorProps) {
+function OnlyOfficeEditor({ config, publicUrl, onClose, onError }: OnlyOfficeEditorProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const editorRef = useRef<OnlyOfficeDocEditor | null>(null)
@@ -111,8 +112,8 @@ function OnlyOfficeEditor({ config, onClose, onError }: OnlyOfficeEditorProps) {
       }
     }
 
-    // Get OnlyOffice server URL from current host
-    const onlyOfficeUrl = `${window.location.protocol}//${window.location.hostname}:8088`
+    // Get OnlyOffice server URL - use publicUrl if configured, otherwise default to current host:8088
+    const onlyOfficeUrl = publicUrl || `${window.location.protocol}//${window.location.hostname}:8088`
 
     if (!script) {
       script = document.createElement('script')
@@ -141,7 +142,7 @@ function OnlyOfficeEditor({ config, onClose, onError }: OnlyOfficeEditorProps) {
         editorRef.current = null
       }
     }
-  }, [config, onClose, onError])
+  }, [config, publicUrl, onClose, onError])
 
   return (
     <div className="onlyoffice-overlay">

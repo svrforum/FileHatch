@@ -1,21 +1,32 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { searchFiles, FileInfo, formatFileSize } from '../api/files'
+import { getMySharedFolders, SharedFolderWithPermission } from '../api/sharedFolders'
 import './Header.css'
 
 interface HeaderProps {
   onProfileClick: () => void
   onNavigate?: (path: string) => void
+  currentPath?: string
 }
 
-function Header({ onProfileClick, onNavigate }: HeaderProps) {
+function Header({ onProfileClick, onNavigate, currentPath = '/' }: HeaderProps) {
   const { user } = useAuthStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<FileInfo[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [showResults, setShowResults] = useState(false)
+  const [sharedFolders, setSharedFolders] = useState<SharedFolderWithPermission[]>([])
   const searchRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Fetch shared folders for breadcrumb display
+  useEffect(() => {
+    if (!user) return
+    getMySharedFolders()
+      .then(setSharedFolders)
+      .catch(() => {})
+  }, [user])
 
   // Handle search
   const handleSearch = useCallback(async (query: string) => {
@@ -77,6 +88,41 @@ function Header({ onProfileClick, onNavigate }: HeaderProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Build breadcrumb items
+  const getBreadcrumbs = useCallback(() => {
+    if (!currentPath || currentPath === '/') return []
+
+    const parts = currentPath.split('/').filter(Boolean)
+    const items: { label: string; path: string }[] = []
+
+    let accumulatedPath = ''
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]
+      accumulatedPath += '/' + part
+      let label = part
+
+      if (accumulatedPath === '/home') {
+        label = '내 파일'
+      } else if (accumulatedPath === '/shared') {
+        label = '공유 드라이브'
+      } else if (accumulatedPath === '/shared-with-me') {
+        label = '공유받은 파일'
+      } else if (parts[0] === 'shared' && i === 1) {
+        // This is a shared drive folder - check if it's a known folder
+        const folder = sharedFolders.find(f => f.name === part)
+        if (folder) {
+          label = folder.name
+        }
+      }
+
+      items.push({ label, path: accumulatedPath })
+    }
+
+    return items
+  }, [currentPath, sharedFolders])
+
+  const breadcrumbs = getBreadcrumbs()
+
   return (
     <header className="header">
       <div className="header-left">
@@ -87,6 +133,24 @@ function Header({ onProfileClick, onNavigate }: HeaderProps) {
           </svg>
           <span className="logo-text">SimpleCloudVault</span>
         </div>
+        {breadcrumbs.length > 0 && (
+          <nav className="header-breadcrumb">
+            <span className="breadcrumb-separator">/</span>
+            {breadcrumbs.map((item, index) => (
+              <span key={item.path} className="breadcrumb-item-wrapper">
+                <button
+                  className={`breadcrumb-link ${index === breadcrumbs.length - 1 ? 'current' : ''}`}
+                  onClick={() => onNavigate?.(item.path)}
+                >
+                  {item.label}
+                </button>
+                {index < breadcrumbs.length - 1 && (
+                  <span className="breadcrumb-separator">/</span>
+                )}
+              </span>
+            ))}
+          </nav>
+        )}
       </div>
       <div className="header-center" ref={searchRef}>
         <div className="search-box">

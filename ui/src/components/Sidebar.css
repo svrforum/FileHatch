@@ -401,3 +401,75 @@
 .admin-btn.exit-admin:hover svg {
   color: var(--text-primary);
 }
+
+/* Shared Drives Section */
+.shared-section {
+  margin-top: var(--spacing-md);
+}
+
+.shared-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.shared-header:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.shared-header .chevron {
+  margin-left: auto;
+  transition: transform var(--transition-fast);
+}
+
+.shared-header .chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.shared-list {
+  margin-left: var(--spacing-md);
+  margin-top: 2px;
+  padding-left: var(--spacing-md);
+  border-left: 1px solid var(--border-light);
+}
+
+.shared-drive-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.shared-drive-item .drive-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.permission-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.permission-badge.r {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10B981;
+}
+
+.permission-badge.rw {
+  background: rgba(49, 130, 246, 0.15);
+  color: #3182F6;
+}

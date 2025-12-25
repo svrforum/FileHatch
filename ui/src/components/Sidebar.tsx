@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom'
 import { useUploadStore } from '../stores/uploadStore'
 import { useAuthStore } from '../stores/authStore'
 import { getStorageUsage, formatFileSize } from '../api/files'
+import { getMySharedFolders, SharedFolderWithPermission, PERMISSION_READ_WRITE } from '../api/sharedFolders'
 import './Sidebar.css'
 
-export type AdminView = 'users' | 'settings' | 'logs'
+export type AdminView = 'users' | 'shared-folders' | 'settings' | 'logs'
 
 interface SidebarProps {
   currentPath: string
@@ -67,12 +68,34 @@ const icons: Record<string, JSX.Element> = {
       <path d="M19 12H5M12 19L5 12L12 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   ),
+  sharedDrive: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H9L11 6H20C20.5304 6 21.0391 6.21071 21.4142 6.58579C21.7893 6.96086 22 7.46957 22 8V19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx="12" cy="14" r="2" stroke="currentColor" strokeWidth="2"/>
+      <path d="M12 12V10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  ),
+  sharedDrivesAdmin: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H9L11 6H20C20.5304 6 21.0391 6.21071 21.4142 6.58579C21.7893 6.96086 22 7.46957 22 8V19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M12 11V17M9 14H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  ),
+  sharedWithMe: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M4 12V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M16 6L12 2L8 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M12 2V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
 }
 
 function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onAdminClick, isTrashView, isAdminMode, adminView, onExitAdminMode }: SidebarProps) {
   const { items, downloads, togglePanel, isPanelOpen, clearCompleted, clearCompletedDownloads } = useUploadStore()
   const { user } = useAuthStore()
   const [storageUsage, setStorageUsage] = useState({ totalUsed: 0, quota: 10 * 1024 * 1024 * 1024 })
+  const [sharedFolders, setSharedFolders] = useState<SharedFolderWithPermission[]>([])
+  const [sharedDrivesExpanded, setSharedDrivesExpanded] = useState(true)
 
   // Fetch storage usage
   useEffect(() => {
@@ -89,6 +112,20 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
     const interval = setInterval(fetchUsage, 30000)
     return () => clearInterval(interval)
   }, [])
+
+  // Fetch shared folders
+  useEffect(() => {
+    if (!user) return
+    const fetchSharedFolders = async () => {
+      try {
+        const folders = await getMySharedFolders()
+        setSharedFolders(folders)
+      } catch {
+        // Ignore errors
+      }
+    }
+    fetchSharedFolders()
+  }, [user])
 
   const activeUploads = items.filter(i => i.status === 'uploading' || i.status === 'pending')
   const activeDownloads = downloads.filter(d => d.status === 'downloading')
@@ -149,14 +186,57 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                 <span>내 파일</span>
               </Link>
             )}
-            <Link
-              to="/files"
-              className={`nav-item ${isActive('/shared') ? 'active' : ''}`}
-              onClick={() => onNavigate('/shared')}
-            >
-              {icons.shared}
-              <span>공유 폴더</span>
-            </Link>
+
+            {/* Shared Drives Section */}
+            {user && sharedFolders.length > 0 && (
+              <div className="shared-section">
+                <div
+                  className="shared-header"
+                  onClick={() => setSharedDrivesExpanded(!sharedDrivesExpanded)}
+                >
+                  {icons.sharedDrive}
+                  <span>공유 드라이브</span>
+                  <svg
+                    className={`chevron ${sharedDrivesExpanded ? 'expanded' : ''}`}
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                {sharedDrivesExpanded && (
+                  <div className="shared-list">
+                    {sharedFolders.map(folder => (
+                      <Link
+                        key={folder.id}
+                        to="/files"
+                        className={`nav-item shared-drive-item ${isActive(`/shared/${folder.name}`) ? 'active' : ''}`}
+                        onClick={() => onNavigate(`/shared/${folder.name}`)}
+                      >
+                        <span className="drive-name">{folder.name}</span>
+                        <span className={`permission-badge ${folder.permissionLevel === PERMISSION_READ_WRITE ? 'rw' : 'r'}`}>
+                          {folder.permissionLevel === PERMISSION_READ_WRITE ? 'RW' : 'R'}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {user && (
+              <Link
+                to="/files"
+                className={`nav-item ${isActive('/shared-with-me') ? 'active' : ''}`}
+                onClick={() => onNavigate('/shared-with-me')}
+              >
+                {icons.sharedWithMe}
+                <span>공유받은 파일</span>
+              </Link>
+            )}
+
             {user && (
               <Link
                 to="/trash"
@@ -187,6 +267,13 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
             >
               {icons.users}
               <span>사용자 관리</span>
+            </Link>
+            <Link
+              to="/scvadmin/shared-folders"
+              className={`nav-item ${adminView === 'shared-folders' ? 'active' : ''}`}
+            >
+              {icons.sharedDrivesAdmin}
+              <span>공유 드라이브</span>
             </Link>
             <Link
               to="/scvadmin/settings"

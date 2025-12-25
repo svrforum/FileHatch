@@ -778,3 +778,136 @@
   color: var(--text-primary);
   margin: 0;
 }
+
+/* Grid View */
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  flex: 1;
+  align-content: flex-start;
+}
+
+.file-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 2px solid transparent;
+}
+
+.file-card:hover {
+  background: var(--bg-tertiary);
+}
+
+.file-card.selected {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+}
+
+.file-card.focused {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.file-card-icon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.file-card-icon svg {
+  width: 48px;
+  height: 48px;
+}
+
+.file-card-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.file-card-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+/* Focus state for list view */
+.file-row.focused {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+/* Empty state quick actions */
+.empty-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+}
+
+.empty-action-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
+}
+
+.empty-action-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.empty-action-btn.primary {
+  background: var(--color-primary);
+  color: white;
+}
+
+.empty-action-btn.primary:hover {
+  background: var(--color-primary-dark);
+}
+
+/* Responsive grid */
+@media (max-width: 768px) {
+  .file-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+  }
+
+  .file-card-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .file-card-icon svg {
+    width: 36px;
+    height: 36px;
+  }
+
+  .file-card-name {
+    font-size: 12px;
+  }
+
+  .empty-actions {
+    flex-direction: column;
+  }
+}

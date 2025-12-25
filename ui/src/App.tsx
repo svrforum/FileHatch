@@ -14,6 +14,7 @@ import UserProfile from './components/UserProfile'
 import AdminUserList from './components/AdminUserList'
 import AdminSettings from './components/AdminSettings'
 import AdminLogs from './components/AdminLogs'
+import AdminSharedFolders from './components/AdminSharedFolders'
 import LoginPage from './components/LoginPage'
 import './styles/app.css'
 
@@ -33,6 +34,7 @@ function App() {
 
   // Get admin view from URL
   const getAdminView = (): AdminView => {
+    if (location.pathname === '/scvadmin/shared-folders') return 'shared-folders'
     if (location.pathname === '/scvadmin/settings') return 'settings'
     if (location.pathname === '/scvadmin/logs') return 'logs'
     return 'users'
@@ -76,6 +78,7 @@ function App() {
       <Header
         onProfileClick={() => setProfileOpen(true)}
         onNavigate={handleNavigate}
+        currentPath={currentPath}
       />
       <div className="app-container">
         <Sidebar
@@ -111,6 +114,7 @@ function App() {
               <Trash onNavigate={handleNavigate} />
             } />
             <Route path="/scvadmin/users" element={<AdminUserList />} />
+            <Route path="/scvadmin/shared-folders" element={<AdminSharedFolders />} />
             <Route path="/scvadmin/settings" element={<AdminSettings />} />
             <Route path="/scvadmin/logs" element={<AdminLogs />} />
             <Route path="/scvadmin" element={<AdminUserList />} />

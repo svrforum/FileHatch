@@ -14,6 +14,8 @@ services:
       - DB_NAME=scv_main
       - VALKEY_HOST=valkey
       - VALKEY_PORT=6379
+      - ONLYOFFICE_INTERNAL_URL=http://onlyoffice
+      - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}
     volumes:
       - ./data:/data
       - ./config:/etc/scv
@@ -35,6 +37,8 @@ services:
       - "3080:3000"
     environment:
       - API_URL=http://api:8080
+      - ONLYOFFICE_URL=http://onlyoffice
+      - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}
     depends_on:
       - api
 

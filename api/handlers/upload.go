@@ -83,6 +83,7 @@ func (h *UploadHandler) resolveVirtualPath(virtualPath string, username string) 
 		}
 		return filepath.Join(h.dataRoot, "users", username, subPath), nil
 	case "shared":
+		// shared uses folder name as subdirectory
 		return filepath.Join(h.dataRoot, "shared", subPath), nil
 	default:
 		return "", fmt.Errorf("invalid storage type: %s", root)

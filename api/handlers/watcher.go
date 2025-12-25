@@ -153,10 +153,30 @@ type debounceEntry struct {
 func (fw *FileWatcher) eventLoop() {
 	// Debounce map to avoid duplicate events
 	debounce := make(map[string]*debounceEntry)
+	debounceMu := &sync.Mutex{} // Protect debounce map
 	debounceInterval := 2 * time.Second // Longer interval to catch related events
+
+	// Cleanup old entries every 30 seconds to prevent memory leak
+	cleanupTicker := time.NewTicker(30 * time.Second)
+	defer cleanupTicker.Stop()
+
+	// Cleanup function removes entries older than 1 minute
+	cleanupDebounce := func() {
+		debounceMu.Lock()
+		defer debounceMu.Unlock()
+		cutoff := time.Now().Add(-1 * time.Minute)
+		for path, entry := range debounce {
+			if entry.lastTime.Before(cutoff) {
+				delete(debounce, path)
+			}
+		}
+	}
 
 	for {
 		select {
+		case <-cleanupTicker.C:
+			cleanupDebounce()
+
 		case event, ok := <-fw.watcher.Events:
 			if !ok {
 				return
@@ -208,18 +228,20 @@ func (fw *FileWatcher) eventLoop() {
 			// Smart debounce logic:
 			// 1. Skip WRITE events if we recently saw CREATE for same file
 			// 2. Skip duplicate events of same type within debounce interval
+			debounceMu.Lock()
 			entry, exists := debounce[event.Name]
+			shouldSkip := false
 			if exists {
 				timeSinceLastEvent := now.Sub(entry.lastTime)
 
 				// Skip WRITE if we just saw CREATE (file is still being written)
 				if eventType == "write" && entry.lastEvent == "create" && timeSinceLastEvent < debounceInterval {
-					continue
+					shouldSkip = true
 				}
 
 				// Skip duplicate same-type events within short interval
 				if entry.lastEvent == eventType && timeSinceLastEvent < 500*time.Millisecond {
-					continue
+					shouldSkip = true
 				}
 			}
 
@@ -227,6 +249,11 @@ func (fw *FileWatcher) eventLoop() {
 			debounce[event.Name] = &debounceEntry{
 				lastTime:  now,
 				lastEvent: eventType,
+			}
+			debounceMu.Unlock()
+
+			if shouldSkip {
+				continue
 			}
 
 			// Extract username from path for audit logging

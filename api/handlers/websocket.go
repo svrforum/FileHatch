@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,11 +15,71 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// getAllowedOrigins returns the list of allowed origins for WebSocket connections
+func getAllowedOrigins() []string {
+	origins := os.Getenv("ALLOWED_ORIGINS")
+	if origins == "" {
+		// Development defaults - allow common local development ports
+		return []string{
+			"http://localhost:3000",
+			"http://localhost:3080",
+			"http://localhost:5173",
+			"http://127.0.0.1:3000",
+			"http://127.0.0.1:3080",
+			"http://127.0.0.1:5173",
+		}
+	}
+	return strings.Split(origins, ",")
+}
+
+// isOriginAllowed checks if the origin is in the allowed list
+func isOriginAllowed(origin string) bool {
+	if origin == "" {
+		// Allow same-origin requests (no Origin header)
+		return true
+	}
+
+	allowedOrigins := getAllowedOrigins()
+
+	// Parse origin to normalize it
+	parsedOrigin, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+
+	normalizedOrigin := parsedOrigin.Scheme + "://" + parsedOrigin.Host
+
+	for _, allowed := range allowedOrigins {
+		allowed = strings.TrimSpace(allowed)
+		// Check exact match
+		if normalizedOrigin == allowed {
+			return true
+		}
+		// Check wildcard match (e.g., "*.example.com")
+		if strings.HasPrefix(allowed, "*.") {
+			suffix := allowed[1:] // ".example.com"
+			if strings.HasSuffix(parsedOrigin.Host, suffix) {
+				return true
+			}
+		}
+	}
+
+	// In development mode, be more permissive
+	if os.Getenv("SCV_ENV") != "production" {
+		log.Printf("WARNING: WebSocket connection from non-allowed origin: %s (allowed in development)", origin)
+		return true
+	}
+
+	log.Printf("SECURITY: Rejected WebSocket connection from origin: %s", origin)
+	return false
+}
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for now
+		origin := r.Header.Get("Origin")
+		return isOriginAllowed(origin)
 	},
 }
 

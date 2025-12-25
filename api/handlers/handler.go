@@ -3,9 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,12 +13,14 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// Handler is the main handler struct for file operations
 type Handler struct {
 	db           *sql.DB
 	dataRoot     string
 	auditHandler *AuditHandler
 }
 
+// NewHandler creates a new Handler instance
 func NewHandler(db *sql.DB) *Handler {
 	return &Handler{
 		db:           db,
@@ -31,16 +31,19 @@ func NewHandler(db *sql.DB) *Handler {
 
 // Storage types
 const (
-	StorageHome   = "home"   // Personal home folder
-	StorageShared = "shared" // Shared folder for all users
+	StorageHome         = "home"           // Personal home folder
+	StorageShared       = "shared"         // Team shared drives
+	StorageSharedWithMe = "shared-with-me" // Files shared with user (virtual)
 )
 
+// HealthResponse represents the health check response
 type HealthResponse struct {
 	Status    string `json:"status"`
 	Timestamp string `json:"timestamp"`
 	Database  string `json:"database"`
 }
 
+// HealthCheck handles health check requests
 func (h *Handler) HealthCheck(c echo.Context) error {
 	dbStatus := "connected"
 	if err := h.db.Ping(); err != nil {
@@ -54,6 +57,7 @@ func (h *Handler) HealthCheck(c echo.Context) error {
 	})
 }
 
+// FileInfo represents file metadata
 type FileInfo struct {
 	Name      string    `json:"name"`
 	Path      string    `json:"path"`
@@ -64,6 +68,7 @@ type FileInfo struct {
 	MimeType  string    `json:"mimeType,omitempty"`
 }
 
+// ListFilesResponse represents the response for listing files
 type ListFilesResponse struct {
 	Path        string     `json:"path"`
 	StorageType string     `json:"storageType"`
@@ -105,9 +110,21 @@ func (h *Handler) resolvePath(virtualPath string, claims *JWTClaims) (realPath s
 		storageType = StorageHome
 		displayPath = "/" + filepath.Join("home", subPath)
 	case "shared":
+		if claims == nil {
+			return "", "", "", fmt.Errorf("authentication required for shared drives")
+		}
 		realPath = filepath.Join(h.dataRoot, "shared", subPath)
 		storageType = StorageShared
 		displayPath = "/" + filepath.Join("shared", subPath)
+	case "shared-with-me":
+		if claims == nil {
+			return "", "", "", fmt.Errorf("authentication required for shared files")
+		}
+		// shared-with-me is a virtual path, doesn't map to a real directory
+		// The actual files are accessed via their original paths
+		realPath = ""
+		storageType = StorageSharedWithMe
+		displayPath = "/shared-with-me"
 	default:
 		return "", "", "", fmt.Errorf("invalid storage type: %s", root)
 	}
@@ -141,6 +158,7 @@ func (h *Handler) InitializeStorage() error {
 	return nil
 }
 
+// ListFiles handles directory listing requests
 func (h *Handler) ListFiles(c echo.Context) error {
 	requestPath := c.QueryParam("path")
 	if requestPath == "" {
@@ -182,16 +200,24 @@ func (h *Handler) ListFiles(c echo.Context) error {
 			},
 		}
 
-		// Add home folder if user is authenticated
+		// Add home folder and shared-with-me if user is authenticated
 		if claims != nil {
 			// Ensure home dir exists
 			h.EnsureUserHomeDir(claims.Username)
-			roots = append([]FileInfo{{
-				Name:    "home",
-				Path:    "/home",
-				IsDir:   true,
-				ModTime: time.Now(),
-			}}, roots...)
+			roots = append([]FileInfo{
+				{
+					Name:    "home",
+					Path:    "/home",
+					IsDir:   true,
+					ModTime: time.Now(),
+				},
+				{
+					Name:    "shared-with-me",
+					Path:    "/shared-with-me",
+					IsDir:   true,
+					ModTime: time.Now(),
+				},
+			}, roots...)
 		}
 
 		return c.JSON(http.StatusOK, ListFilesResponse{
@@ -203,11 +229,30 @@ func (h *Handler) ListFiles(c echo.Context) error {
 		})
 	}
 
+	// Handle shared-with-me virtual listing
+	if storageType == StorageSharedWithMe {
+		return h.listSharedWithMe(c, claims)
+	}
+
 	// Ensure directory exists
 	if storageType == StorageHome && claims != nil {
 		h.EnsureUserHomeDir(claims.Username)
 	} else if storageType == StorageShared {
 		h.EnsureSharedDir()
+	}
+
+	// Check shared drive read permission (skip for root /shared listing)
+	if storageType == StorageShared && requestPath != "/shared" {
+		if claims == nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{
+				"error": "Authentication required",
+			})
+		}
+		if !h.CanReadSharedDrive(claims.UserID, requestPath) {
+			return c.JSON(http.StatusForbidden, map[string]string{
+				"error": "No permission to access this shared drive",
+			})
+		}
 	}
 
 	// Check if directory exists
@@ -281,6 +326,7 @@ func (h *Handler) ListFiles(c echo.Context) error {
 	})
 }
 
+// sortFiles sorts a slice of FileInfo
 func sortFiles(files []FileInfo, sortBy, order string) {
 	sort.Slice(files, func(i, j int) bool {
 		// Directories always come first
@@ -307,6 +353,85 @@ func sortFiles(files []FileInfo, sortBy, order string) {
 	})
 }
 
+// ExtractSharedDriveFolderName extracts the folder name from a shared path
+// Path format: /shared/{folder-name}/...
+func ExtractSharedDriveFolderName(path string) string {
+	cleanPath := filepath.Clean(path)
+	parts := strings.Split(strings.TrimPrefix(cleanPath, "/"), "/")
+	if len(parts) >= 2 && parts[0] == "shared" {
+		return parts[1]
+	}
+	return ""
+}
+
+// CheckSharedDrivePermission checks if user has required permission level for a shared drive path
+func (h *Handler) CheckSharedDrivePermission(userID, path string, requiredLevel int) bool {
+	folderName := ExtractSharedDriveFolderName(path)
+	if folderName == "" {
+		return false
+	}
+
+	var permissionLevel int
+	err := h.db.QueryRow(`
+		SELECT sfm.permission_level
+		FROM shared_folder_members sfm
+		INNER JOIN shared_folders sf ON sf.id = sfm.shared_folder_id
+		WHERE sf.name = $1 AND sfm.user_id = $2 AND sf.is_active = TRUE
+	`, folderName, userID).Scan(&permissionLevel)
+
+	if err != nil {
+		return false
+	}
+
+	return permissionLevel >= requiredLevel
+}
+
+// CanReadSharedDrive checks if user can read from a shared drive path
+func (h *Handler) CanReadSharedDrive(userID, path string) bool {
+	return h.CheckSharedDrivePermission(userID, path, 1) // 1 = read-only
+}
+
+// CanWriteSharedDrive checks if user can write to a shared drive path
+func (h *Handler) CanWriteSharedDrive(userID, path string) bool {
+	return h.CheckSharedDrivePermission(userID, path, 2) // 2 = read-write
+}
+
+// CheckSharedDriveQuota checks if upload would exceed storage quota
+func (h *Handler) CheckSharedDriveQuota(path string, uploadSize int64) (allowed bool, quota int64, used int64) {
+	folderName := ExtractSharedDriveFolderName(path)
+	if folderName == "" {
+		return false, 0, 0
+	}
+
+	// Get quota
+	err := h.db.QueryRow(`
+		SELECT storage_quota FROM shared_folders WHERE name = $1 AND is_active = TRUE
+	`, folderName).Scan(&quota)
+	if err != nil {
+		return false, 0, 0
+	}
+
+	// 0 = unlimited
+	if quota == 0 {
+		return true, 0, 0
+	}
+
+	// Calculate current usage
+	folderPath := filepath.Join(h.dataRoot, "shared", folderName)
+	filepath.Walk(folderPath, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			used += info.Size()
+		}
+		return nil
+	})
+
+	return (used + uploadSize) <= quota, quota, used
+}
+
+// getMimeType returns the MIME type for a file extension
 func getMimeType(ext string) string {
 	mimeTypes := map[string]string{
 		// Images
@@ -342,1074 +467,218 @@ func getMimeType(ext string) string {
 	return "application/octet-stream"
 }
 
-func (h *Handler) GetFile(c echo.Context) error {
-	requestPath := c.Param("*")
-	if requestPath == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "File path required",
-		})
-	}
-
-	// URL decode the path for proper handling of special characters
-	decodedPath, err := url.PathUnescape(requestPath)
-	if err != nil {
-		decodedPath = requestPath // fallback to original if decode fails
-	}
-
-	// Get user claims if available
-	var claims *JWTClaims
-	if user, ok := c.Get("user").(*JWTClaims); ok {
-		claims = user
-	}
-
-	// Resolve path
-	realPath, _, _, err := h.resolvePath("/"+decodedPath, claims)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
-	}
-
-	info, err := os.Stat(realPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "File not found",
-			})
-		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to access file",
-		})
-	}
-
-	if info.IsDir() {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Path is a directory",
-		})
-	}
-
-	// Check if download is requested
-	if c.QueryParam("download") == "true" {
-		c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, info.Name()))
-	}
-
-	return c.File(realPath)
+// SharedFileInfo extends FileInfo with share-specific metadata
+type SharedFileInfo struct {
+	FileInfo
+	SharedBy        string    `json:"sharedBy"`
+	PermissionLevel int       `json:"permissionLevel"`
+	SharedAt        time.Time `json:"sharedAt"`
+	OriginalPath    string    `json:"originalPath"`
 }
 
-// GetSubtitle finds and returns subtitle for a video file in WebVTT format
-func (h *Handler) GetSubtitle(c echo.Context) error {
-	requestPath := c.Param("*")
-	if requestPath == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "File path required",
-		})
-	}
-
-	// URL decode the path
-	decodedPath, err := url.PathUnescape(requestPath)
-	if err != nil {
-		decodedPath = requestPath
-	}
-
-	// Get user claims if available
-	var claims *JWTClaims
-	if user, ok := c.Get("user").(*JWTClaims); ok {
-		claims = user
-	}
-
-	// Resolve path to get the video file directory
-	realPath, _, _, err := h.resolvePath("/"+decodedPath, claims)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
-	}
-
-	// Get base name without extension
-	dir := filepath.Dir(realPath)
-	baseName := strings.TrimSuffix(filepath.Base(realPath), filepath.Ext(realPath))
-
-	// Look for subtitle files (.srt, .smi, .vtt)
-	subtitleExts := []string{".srt", ".smi", ".sami", ".vtt"}
-	var subtitlePath string
-	var subtitleExt string
-
-	for _, ext := range subtitleExts {
-		path := filepath.Join(dir, baseName+ext)
-		if _, err := os.Stat(path); err == nil {
-			subtitlePath = path
-			subtitleExt = ext
-			break
-		}
-		// Also check uppercase extensions
-		path = filepath.Join(dir, baseName+strings.ToUpper(ext))
-		if _, err := os.Stat(path); err == nil {
-			subtitlePath = path
-			subtitleExt = strings.ToLower(ext)
-			break
-		}
-	}
-
-	if subtitlePath == "" {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "No subtitle found",
-		})
-	}
-
-	// Read subtitle file
-	content, err := os.ReadFile(subtitlePath)
+// listSharedWithMe returns files shared with the current user
+func (h *Handler) listSharedWithMe(c echo.Context, claims *JWTClaims) error {
+	rows, err := h.db.Query(`
+		SELECT
+			fs.id, fs.item_path, fs.item_name, fs.is_folder,
+			fs.permission_level, fs.created_at, u.username
+		FROM file_shares fs
+		INNER JOIN users u ON u.id = fs.owner_id
+		WHERE fs.shared_with_id = $1
+		ORDER BY fs.created_at DESC
+	`, claims.UserID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to read subtitle file",
+			"error": "Failed to fetch shared files",
 		})
 	}
+	defer rows.Close()
 
-	// Convert to WebVTT if needed
-	var vttContent string
-	switch subtitleExt {
-	case ".vtt":
-		vttContent = string(content)
-	case ".srt":
-		vttContent = convertSRTtoVTT(string(content))
-	case ".smi", ".sami":
-		vttContent = convertSMItoVTT(string(content))
-	default:
-		vttContent = string(content)
-	}
+	files := make([]SharedFileInfo, 0)
+	for rows.Next() {
+		var id int64
+		var itemPath, itemName, sharedBy string
+		var isFolder bool
+		var permissionLevel int
+		var createdAt time.Time
 
-	c.Response().Header().Set("Content-Type", "text/vtt; charset=utf-8")
-	return c.String(http.StatusOK, vttContent)
-}
-
-// convertSRTtoVTT converts SRT subtitle format to WebVTT
-func convertSRTtoVTT(srt string) string {
-	// Replace CRLF with LF
-	srt = strings.ReplaceAll(srt, "\r\n", "\n")
-
-	var result strings.Builder
-	result.WriteString("WEBVTT\n\n")
-
-	lines := strings.Split(srt, "\n")
-	for i := 0; i < len(lines); i++ {
-		line := strings.TrimSpace(lines[i])
-
-		// Skip empty lines and sequence numbers
-		if line == "" {
-			result.WriteString("\n")
+		if err := rows.Scan(&id, &itemPath, &itemName, &isFolder, &permissionLevel, &createdAt, &sharedBy); err != nil {
 			continue
 		}
 
-		// Check if this is a timestamp line (contains " --> ")
-		if strings.Contains(line, " --> ") {
-			// Convert comma to period in timestamps (SRT uses comma, VTT uses period)
-			line = strings.ReplaceAll(line, ",", ".")
-			result.WriteString(line + "\n")
-		} else if _, err := fmt.Sscanf(line, "%d", new(int)); err == nil && !strings.Contains(line, " ") {
-			// This is a sequence number, skip it
+		ext := ""
+		mimeType := ""
+		var size int64 = 0
+
+		if !isFolder {
+			ext = strings.ToLower(strings.TrimPrefix(filepath.Ext(itemName), "."))
+			mimeType = getMimeType(ext)
+			// Try to get actual file size from the filesystem
+			if realPath := h.resolveOriginalPath(itemPath); realPath != "" {
+				if info, err := os.Stat(realPath); err == nil {
+					size = info.Size()
+				}
+			}
+		}
+
+		files = append(files, SharedFileInfo{
+			FileInfo: FileInfo{
+				Name:      itemName,
+				Path:      itemPath,
+				Size:      size,
+				IsDir:     isFolder,
+				ModTime:   createdAt,
+				Extension: ext,
+				MimeType:  mimeType,
+			},
+			SharedBy:        sharedBy,
+			PermissionLevel: permissionLevel,
+			SharedAt:        createdAt,
+			OriginalPath:    itemPath,
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"path":        "/shared-with-me",
+		"storageType": StorageSharedWithMe,
+		"files":       files,
+		"total":       len(files),
+		"totalSize":   0,
+	})
+}
+
+// resolveOriginalPath resolves a virtual path to real filesystem path without claims
+func (h *Handler) resolveOriginalPath(virtualPath string) string {
+	cleanPath := filepath.Clean(virtualPath)
+	parts := strings.Split(strings.TrimPrefix(cleanPath, "/"), "/")
+	if len(parts) == 0 {
+		return ""
+	}
+
+	switch parts[0] {
+	case "home":
+		if len(parts) >= 2 {
+			// For home paths, we need the username from the path
+			// Path format: /home/username/... (but home folder shows as /home/...)
+			// The original owner's username should be determined from the share
+			return ""
+		}
+		return ""
+	case "shared":
+		subPath := ""
+		if len(parts) > 1 {
+			subPath = filepath.Join(parts[1:]...)
+		}
+		return filepath.Join(h.dataRoot, "shared", subPath)
+	}
+	return ""
+}
+
+// CheckFileSharePermission checks if user has required permission for a shared file
+func (h *Handler) CheckFileSharePermission(userID, virtualPath string, requiredLevel int) bool {
+	// Check exact path match
+	var permissionLevel int
+	err := h.db.QueryRow(`
+		SELECT permission_level FROM file_shares
+		WHERE shared_with_id = $1 AND item_path = $2
+	`, userID, virtualPath).Scan(&permissionLevel)
+	if err == nil && permissionLevel >= requiredLevel {
+		return true
+	}
+
+	// Check if this is a subpath of a shared folder
+	rows, err := h.db.Query(`
+		SELECT item_path, permission_level FROM file_shares
+		WHERE shared_with_id = $1 AND is_folder = TRUE
+	`, userID)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var folderPath string
+		var level int
+		if err := rows.Scan(&folderPath, &level); err != nil {
 			continue
-		} else {
-			// This is subtitle text
-			result.WriteString(line + "\n")
+		}
+		// Check if virtualPath is under this shared folder
+		if strings.HasPrefix(virtualPath, folderPath+"/") && level >= requiredLevel {
+			return true
 		}
 	}
 
-	return result.String()
+	return false
 }
 
-// convertSMItoVTT converts SMI/SAMI subtitle format to WebVTT
-func convertSMItoVTT(smi string) string {
-	var result strings.Builder
-	result.WriteString("WEBVTT\n\n")
+// CanReadSharedFile checks if user can read a shared file
+func (h *Handler) CanReadSharedFile(userID, virtualPath string) bool {
+	return h.CheckFileSharePermission(userID, virtualPath, 1) // 1 = read-only
+}
 
-	// Replace CRLF with LF
-	smi = strings.ReplaceAll(smi, "\r\n", "\n")
+// CanWriteSharedFile checks if user can write to a shared file
+func (h *Handler) CanWriteSharedFile(userID, virtualPath string) bool {
+	return h.CheckFileSharePermission(userID, virtualPath, 2) // 2 = read-write
+}
 
-	// Find all SYNC tags with timestamps and content
-	type syncBlock struct {
-		startMs int
-		text    string
+// GetSharedFileOwnerPath resolves a shared file's original owner path
+func (h *Handler) GetSharedFileOwnerPath(userID, virtualPath string) (realPath string, ownerUsername string, err error) {
+	// First check exact path match
+	var itemPath string
+	err = h.db.QueryRow(`
+		SELECT fs.item_path, u.username
+		FROM file_shares fs
+		INNER JOIN users u ON u.id = fs.owner_id
+		WHERE fs.shared_with_id = $1 AND fs.item_path = $2
+	`, userID, virtualPath).Scan(&itemPath, &ownerUsername)
+
+	if err == nil {
+		// Found exact match - resolve the real path
+		cleanPath := filepath.Clean(itemPath)
+		parts := strings.Split(strings.TrimPrefix(cleanPath, "/"), "/")
+		if len(parts) >= 1 && parts[0] == "home" {
+			subPath := ""
+			if len(parts) > 1 {
+				subPath = filepath.Join(parts[1:]...)
+			}
+			realPath = filepath.Join(h.dataRoot, "users", ownerUsername, subPath)
+			return realPath, ownerUsername, nil
+		}
 	}
-	var blocks []syncBlock
 
-	lines := strings.Split(smi, "\n")
-	var currentText strings.Builder
-	currentStart := -1
+	// Check if this is a subpath of a shared folder
+	rows, err := h.db.Query(`
+		SELECT fs.item_path, u.username, fs.is_folder
+		FROM file_shares fs
+		INNER JOIN users u ON u.id = fs.owner_id
+		WHERE fs.shared_with_id = $1 AND fs.is_folder = TRUE
+	`, userID)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to check shared folders")
+	}
+	defer rows.Close()
 
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		upperLine := strings.ToUpper(line)
-
-		// Check for SYNC tag
-		if strings.Contains(upperLine, "<SYNC") {
-			// Save previous block if exists
-			if currentStart >= 0 {
-				text := strings.TrimSpace(currentText.String())
-				text = stripHTMLTags(text)
-				text = strings.ReplaceAll(text, "&nbsp;", " ")
-				if text != "" && text != " " {
-					blocks = append(blocks, syncBlock{startMs: currentStart, text: text})
+	for rows.Next() {
+		var folderPath, username string
+		var isFolder bool
+		if err := rows.Scan(&folderPath, &username, &isFolder); err != nil {
+			continue
+		}
+		// Check if virtualPath is under this shared folder
+		if strings.HasPrefix(virtualPath, folderPath+"/") {
+			// Found parent folder - resolve the subpath
+			cleanPath := filepath.Clean(virtualPath)
+			parts := strings.Split(strings.TrimPrefix(cleanPath, "/"), "/")
+			if len(parts) >= 1 && parts[0] == "home" {
+				subPath := ""
+				if len(parts) > 1 {
+					subPath = filepath.Join(parts[1:]...)
 				}
+				realPath = filepath.Join(h.dataRoot, "users", username, subPath)
+				return realPath, username, nil
 			}
-
-			// Parse new timestamp
-			startIdx := strings.Index(upperLine, "START=")
-			if startIdx != -1 {
-				var ms int
-				remaining := line[startIdx+6:]
-				// Handle both START=1234 and START="1234"
-				remaining = strings.TrimPrefix(remaining, "\"")
-				fmt.Sscanf(remaining, "%d", &ms)
-				currentStart = ms
-				currentText.Reset()
-
-				// Get content after the > if on same line
-				closeIdx := strings.Index(line, ">")
-				if closeIdx != -1 && closeIdx+1 < len(line) {
-					currentText.WriteString(line[closeIdx+1:])
-				}
-			}
-		} else if currentStart >= 0 && !strings.HasPrefix(upperLine, "<BODY") && !strings.HasPrefix(upperLine, "</BODY") && !strings.HasPrefix(upperLine, "<SAMI") && !strings.HasPrefix(upperLine, "</SAMI") {
-			currentText.WriteString(line + " ")
 		}
 	}
 
-	// Save last block
-	if currentStart >= 0 {
-		text := strings.TrimSpace(currentText.String())
-		text = stripHTMLTags(text)
-		text = strings.ReplaceAll(text, "&nbsp;", " ")
-		if text != "" && text != " " {
-			blocks = append(blocks, syncBlock{startMs: currentStart, text: text})
-		}
-	}
-
-	// Convert blocks to VTT cues
-	for i := 0; i < len(blocks); i++ {
-		startTime := formatVTTTime(blocks[i].startMs)
-		var endTime string
-		if i+1 < len(blocks) {
-			endTime = formatVTTTime(blocks[i+1].startMs)
-		} else {
-			endTime = formatVTTTime(blocks[i].startMs + 5000) // Default 5 second duration
-		}
-
-		if blocks[i].text != "" {
-			result.WriteString(fmt.Sprintf("%s --> %s\n%s\n\n", startTime, endTime, blocks[i].text))
-		}
-	}
-
-	return result.String()
-}
-
-// stripHTMLTags removes HTML tags from a string
-func stripHTMLTags(s string) string {
-	var result strings.Builder
-	inTag := false
-	for _, r := range s {
-		if r == '<' {
-			inTag = true
-		} else if r == '>' {
-			inTag = false
-		} else if !inTag {
-			result.WriteRune(r)
-		}
-	}
-	return result.String()
-}
-
-// formatVTTTime formats milliseconds to VTT timestamp format (HH:MM:SS.mmm)
-func formatVTTTime(ms int) string {
-	hours := ms / 3600000
-	ms %= 3600000
-	minutes := ms / 60000
-	ms %= 60000
-	seconds := ms / 1000
-	millis := ms % 1000
-	return fmt.Sprintf("%02d:%02d:%02d.%03d", hours, minutes, seconds, millis)
-}
-
-// SaveFileContent saves text content to a file
-func (h *Handler) SaveFileContent(c echo.Context) error {
-	requestPath := c.Param("*")
-	if requestPath == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "File path required",
-		})
-	}
-
-	// Get user claims
-	var claims *JWTClaims
-	if user, ok := c.Get("user").(*JWTClaims); ok {
-		claims = user
-	}
-
-	// Resolve path
-	realPath, storageType, _, err := h.resolvePath("/"+requestPath, claims)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
-	}
-
-	// Check if file exists
-	info, err := os.Stat(realPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "File not found",
-			})
-		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to access file",
-		})
-	}
-
-	if info.IsDir() {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Path is a directory",
-		})
-	}
-
-	// Read request body
-	body, err := io.ReadAll(c.Request().Body)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Failed to read request body",
-		})
-	}
-
-	// Write to file
-	if err := os.WriteFile(realPath, body, 0644); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to save file",
-		})
-	}
-
-	// Log the action
-	var userID *string
-	if claims != nil {
-		userID = &claims.UserID
-	}
-	clientIP := c.RealIP()
-	h.auditHandler.LogEvent(userID, clientIP, EventFileEdit, "/"+requestPath, map[string]interface{}{
-		"size":        len(body),
-		"storageType": storageType,
-	})
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "File saved successfully",
-		"size":    len(body),
-	})
-}
-
-func (h *Handler) DeleteFile(c echo.Context) error {
-	requestPath := c.Param("*")
-	if requestPath == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "File path required",
-		})
-	}
-
-	// Get user claims
-	var claims *JWTClaims
-	if user, ok := c.Get("user").(*JWTClaims); ok {
-		claims = user
-	}
-
-	// Resolve path
-	realPath, storageType, displayPath, err := h.resolvePath("/"+requestPath, claims)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
-	}
-
-	// Check permissions for home folder
-	if storageType == StorageHome && claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
-	}
-
-	info, err := os.Stat(realPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "File not found",
-			})
-		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to access file",
-		})
-	}
-
-	if info.IsDir() {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Path is a directory, use DELETE /api/folders instead",
-		})
-	}
-
-	if err := os.Remove(realPath); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to delete file",
-		})
-	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"path":    displayPath,
-	})
-}
-
-type CreateFolderRequest struct {
-	Path string `json:"path"`
-	Name string `json:"name"`
-}
-
-func (h *Handler) CreateFolder(c echo.Context) error {
-	var req CreateFolderRequest
-	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request",
-		})
-	}
-
-	if req.Name == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Folder name required",
-		})
-	}
-
-	// Validate folder name
-	if strings.ContainsAny(req.Name, `/\:*?"<>|`) {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid folder name",
-		})
-	}
-
-	parentPath := req.Path
-	if parentPath == "" {
-		parentPath = "/"
-	}
-
-	// Get user claims
-	var claims *JWTClaims
-	if user, ok := c.Get("user").(*JWTClaims); ok {
-		claims = user
-	}
-
-	// Resolve parent path
-	realParentPath, storageType, displayPath, err := h.resolvePath(parentPath, claims)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
-	}
-
-	// Cannot create folder at root
-	if storageType == "root" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Cannot create folder at root level",
-		})
-	}
-
-	// Check permissions for home folder
-	if storageType == StorageHome && claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
-	}
-
-	folderPath := filepath.Join(realParentPath, req.Name)
-
-	// Check if already exists
-	if _, err := os.Stat(folderPath); err == nil {
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error": "Folder already exists",
-		})
-	}
-
-	if err := os.MkdirAll(folderPath, 0755); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create folder",
-		})
-	}
-
-	return c.JSON(http.StatusCreated, map[string]interface{}{
-		"success": true,
-		"path":    filepath.Join(displayPath, req.Name),
-		"name":    req.Name,
-	})
-}
-
-func (h *Handler) DeleteFolder(c echo.Context) error {
-	requestPath := c.Param("*")
-	if requestPath == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Folder path required",
-		})
-	}
-
-	// Get user claims
-	var claims *JWTClaims
-	if user, ok := c.Get("user").(*JWTClaims); ok {
-		claims = user
-	}
-
-	// Resolve path
-	realPath, storageType, displayPath, err := h.resolvePath("/"+requestPath, claims)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
-	}
-
-	// Cannot delete root storage types
-	if storageType == "root" || displayPath == "/home" || displayPath == "/shared" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Cannot delete root folders",
-		})
-	}
-
-	// Check permissions for home folder
-	if storageType == StorageHome && claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
-	}
-
-	info, err := os.Stat(realPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "Folder not found",
-			})
-		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to access folder",
-		})
-	}
-
-	if !info.IsDir() {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Path is not a directory",
-		})
-	}
-
-	// Check if force delete is requested
-	force := c.QueryParam("force") == "true"
-
-	if force {
-		if err := os.RemoveAll(realPath); err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to delete folder",
-			})
-		}
-	} else {
-		// Only delete if empty
-		entries, err := os.ReadDir(realPath)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to read folder",
-			})
-		}
-
-		if len(entries) > 0 {
-			return c.JSON(http.StatusConflict, map[string]string{
-				"error": "Folder is not empty. Use ?force=true to delete anyway",
-			})
-		}
-
-		if err := os.Remove(realPath); err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to delete folder",
-			})
-		}
-	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"path":    displayPath,
-	})
-}
-
-// FolderStats represents statistics for a folder
-type FolderStats struct {
-	Path        string `json:"path"`
-	FileCount   int    `json:"fileCount"`
-	FolderCount int    `json:"folderCount"`
-	TotalSize   int64  `json:"totalSize"`
-}
-
-// GetFolderStats returns statistics for a folder (recursive file/folder count and total size)
-func (h *Handler) GetFolderStats(c echo.Context) error {
-	requestPath := c.Param("*")
-	if requestPath == "" {
-		requestPath = "/"
-	}
-
-	// Get user claims
-	var claims *JWTClaims
-	if user, ok := c.Get("user").(*JWTClaims); ok {
-		claims = user
-	}
-
-	// Resolve path
-	realPath, storageType, displayPath, err := h.resolvePath("/"+requestPath, claims)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
-	}
-
-	if storageType == "root" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Cannot get stats for root",
-		})
-	}
-
-	info, err := os.Stat(realPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "Path not found",
-			})
-		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to access path",
-		})
-	}
-
-	if !info.IsDir() {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Path is not a directory",
-		})
-	}
-
-	var fileCount, folderCount int
-	var totalSize int64
-
-	err = filepath.Walk(realPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Skip errors
-		}
-
-		// Skip hidden files
-		if strings.HasPrefix(info.Name(), ".") {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Don't count the root folder itself
-		if path == realPath {
-			return nil
-		}
-
-		if info.IsDir() {
-			folderCount++
-		} else {
-			fileCount++
-			totalSize += info.Size()
-		}
-		return nil
-	})
-
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to calculate folder stats",
-		})
-	}
-
-	return c.JSON(http.StatusOK, FolderStats{
-		Path:        displayPath,
-		FileCount:   fileCount,
-		FolderCount: folderCount,
-		TotalSize:   totalSize,
-	})
-}
-
-// CheckFileExists checks if a file exists at the given path
-func (h *Handler) CheckFileExists(c echo.Context) error {
-	requestPath := c.QueryParam("path")
-	filename := c.QueryParam("filename")
-
-	if filename == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Filename required",
-		})
-	}
-
-	if requestPath == "" {
-		requestPath = "/"
-	}
-
-	// Get user claims
-	var claims *JWTClaims
-	if user, ok := c.Get("user").(*JWTClaims); ok {
-		claims = user
-	}
-
-	// Resolve path
-	realPath, storageType, displayPath, err := h.resolvePath(requestPath, claims)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
-	}
-
-	if storageType == "root" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Cannot check file at root",
-		})
-	}
-
-	fullPath := filepath.Join(realPath, filename)
-
-	_, err = os.Stat(fullPath)
-	exists := !os.IsNotExist(err)
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"exists":   exists,
-		"path":     filepath.Join(displayPath, filename),
-		"filename": filename,
-	})
-}
-
-func (h *Handler) GetPreview(c echo.Context) error {
-	requestPath := c.Param("*")
-	if requestPath == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "File path required",
-		})
-	}
-
-	// Get user claims
-	var claims *JWTClaims
-	if user, ok := c.Get("user").(*JWTClaims); ok {
-		claims = user
-	}
-
-	// Resolve path
-	realPath, _, displayPath, err := h.resolvePath("/"+requestPath, claims)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
-	}
-
-	info, err := os.Stat(realPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "File not found",
-			})
-		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to access file",
-		})
-	}
-
-	if info.IsDir() {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Path is a directory",
-		})
-	}
-
-	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(info.Name()), "."))
-	mimeType := getMimeType(ext)
-
-	// For images, return the file directly
-	if strings.HasPrefix(mimeType, "image/") {
-		return c.File(realPath)
-	}
-
-	// For text files, return content
-	if strings.HasPrefix(mimeType, "text/") || ext == "json" || ext == "md" {
-		file, err := os.Open(realPath)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to open file",
-			})
-		}
-		defer file.Close()
-
-		// Limit preview to first 100KB
-		content := make([]byte, 100*1024)
-		n, err := file.Read(content)
-		if err != nil && err != io.EOF {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to read file",
-			})
-		}
-
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"type":      "text",
-			"mimeType":  mimeType,
-			"content":   string(content[:n]),
-			"truncated": n == 100*1024,
-		})
-	}
-
-	// For videos and audio, return file info for streaming
-	if strings.HasPrefix(mimeType, "video/") || strings.HasPrefix(mimeType, "audio/") {
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"type":     strings.Split(mimeType, "/")[0],
-			"mimeType": mimeType,
-			"url":      fmt.Sprintf("/api/files/%s", strings.TrimPrefix(displayPath, "/")),
-			"size":     info.Size(),
-		})
-	}
-
-	// For PDFs
-	if mimeType == "application/pdf" {
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"type":     "pdf",
-			"mimeType": mimeType,
-			"url":      fmt.Sprintf("/api/files/%s", strings.TrimPrefix(displayPath, "/")),
-			"size":     info.Size(),
-		})
-	}
-
-	// For unsupported types
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"type":     "unsupported",
-		"mimeType": mimeType,
-		"size":     info.Size(),
-	})
-}
-
-// CreateFileRequest is the request body for creating new files
-type CreateFileRequest struct {
-	Path     string `json:"path"`
-	Filename string `json:"filename"`
-	FileType string `json:"fileType"` // text, docx, xlsx, pptx
-}
-
-// CreateFile creates a new empty file
-func (h *Handler) CreateFile(c echo.Context) error {
-	var req CreateFileRequest
-	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request",
-		})
-	}
-
-	if req.Filename == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Filename required",
-		})
-	}
-
-	// Validate filename
-	if strings.ContainsAny(req.Filename, `/\:*?"<>|`) {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid filename",
-		})
-	}
-
-	// Get user claims
-	var claims *JWTClaims
-	if user, ok := c.Get("user").(*JWTClaims); ok {
-		claims = user
-	}
-
-	// Resolve path
-	targetPath := req.Path
-	if targetPath == "" {
-		targetPath = "/shared"
-	}
-
-	realPath, storageType, _, err := h.resolvePath(targetPath, claims)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
-	}
-
-	if storageType == "root" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Cannot create file in root",
-		})
-	}
-
-	// Check permissions for home folder
-	if storageType == StorageHome && claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
-	}
-
-	// Ensure target directory exists
-	if err := os.MkdirAll(realPath, 0755); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create target directory",
-		})
-	}
-
-	// Build full file path
-	filePath := filepath.Join(realPath, req.Filename)
-
-	// Check if file already exists
-	if _, err := os.Stat(filePath); err == nil {
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error": "File already exists",
-		})
-	}
-
-	// Get template content based on file type
-	content := getTemplateContent(req.FileType)
-
-	// Create the file
-	if err := os.WriteFile(filePath, content, 0644); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create file",
-		})
-	}
-
-	// Log audit event
-	var userID *string
-	if claims != nil {
-		userID = &claims.UserID
-	}
-	h.auditHandler.LogEvent(userID, c.RealIP(), EventFileUpload, targetPath+"/"+req.Filename, map[string]interface{}{
-		"fileName": req.Filename,
-		"fileType": req.FileType,
-		"source":   "create",
-	})
-
-	return c.JSON(http.StatusCreated, map[string]interface{}{
-		"success":  true,
-		"filename": req.Filename,
-		"path":     targetPath + "/" + req.Filename,
-	})
-}
-
-// getTemplateContent returns template content for different file types
-func getTemplateContent(fileType string) []byte {
-	switch fileType {
-	case "text":
-		return []byte("")
-	case "html":
-		return []byte(`<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>New Document</title>
-</head>
-<body>
-
-</body>
-</html>`)
-	case "json":
-		return []byte("{\n  \n}")
-	case "md":
-		return []byte("# New Document\n\n")
-	default:
-		return []byte("")
-	}
-}
-
-// SimpleUpload handles simple non-resumable uploads
-func (h *Handler) SimpleUpload(c echo.Context) error {
-	// Get the file from the request
-	file, err := c.FormFile("file")
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "No file uploaded",
-		})
-	}
-
-	targetPath := c.FormValue("path")
-	if targetPath == "" {
-		targetPath = "/shared"
-	}
-
-	// Get user claims
-	var claims *JWTClaims
-	if user, ok := c.Get("user").(*JWTClaims); ok {
-		claims = user
-	}
-
-	// Resolve path
-	realPath, storageType, _, err := h.resolvePath(targetPath, claims)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
-	}
-
-	if storageType == "root" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Cannot upload to root",
-		})
-	}
-
-	// Check permissions for home folder
-	if storageType == StorageHome && claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
-	}
-
-	// Ensure target directory exists
-	if err := os.MkdirAll(realPath, 0755); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create target directory",
-		})
-	}
-
-	// Open the uploaded file
-	src, err := file.Open()
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to open uploaded file",
-		})
-	}
-	defer src.Close()
-
-	// Create the destination file
-	destPath := filepath.Join(realPath, file.Filename)
-
-	// Mark this as a web upload to prevent SMB audit logging
-	tracker := GetWebUploadTracker()
-	tracker.MarkUploading(destPath)
-
-	dst, err := os.Create(destPath)
-	if err != nil {
-		tracker.UnmarkUploading(destPath)
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create destination file",
-		})
-	}
-	defer dst.Close()
-
-	// Copy the file
-	if _, err = io.Copy(dst, src); err != nil {
-		tracker.UnmarkUploading(destPath)
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to save file",
-		})
-	}
-
-	// Keep the mark for 10 seconds then remove it
-	go func() {
-		time.Sleep(10 * time.Second)
-		tracker.UnmarkUploading(destPath)
-	}()
-
-	// Log audit event for file upload
-	h.auditHandler.LogEventFromContext(c, EventFileUpload, targetPath+"/"+file.Filename, map[string]interface{}{
-		"fileName": file.Filename,
-		"size":     file.Size,
-		"source":   "web",
-	})
-
-	return c.JSON(http.StatusCreated, map[string]interface{}{
-		"success":  true,
-		"filename": file.Filename,
-		"size":     file.Size,
-	})
+	return "", "", fmt.Errorf("shared file not found")
 }

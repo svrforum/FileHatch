@@ -542,16 +542,21 @@ export function getFileTypeIcon(file: FileInfo): string {
 
 // OnlyOffice related functions
 
+export interface OnlyOfficeStatus {
+  available: boolean
+  publicUrl: string | null
+}
+
 // Check if OnlyOffice is available
-export async function checkOnlyOfficeStatus(): Promise<{ available: boolean }> {
+export async function checkOnlyOfficeStatus(): Promise<OnlyOfficeStatus> {
   try {
     const response = await fetch(`${API_BASE}/onlyoffice/status`)
     if (!response.ok) {
-      return { available: false }
+      return { available: false, publicUrl: null }
     }
     return response.json()
   } catch {
-    return { available: false }
+    return { available: false, publicUrl: null }
   }
 }
 

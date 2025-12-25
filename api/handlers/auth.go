@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -26,9 +28,19 @@ var sharedJWTSecret []byte
 
 func NewAuthHandler(db *sql.DB) *AuthHandler {
 	secret := os.Getenv("JWT_SECRET")
+	env := os.Getenv("SCV_ENV")
+
 	if secret == "" {
-		secret = "scv-default-secret-change-in-production"
+		if env == "production" {
+			log.Fatal("FATAL: JWT_SECRET environment variable is required in production mode")
+		}
+		// Development fallback with warning
+		log.Println("WARNING: JWT_SECRET not set. Using default secret. Set JWT_SECRET in production!")
+		secret = "scv-dev-secret-not-for-production-use"
+	} else if len(secret) < 32 {
+		log.Println("WARNING: JWT_SECRET should be at least 32 characters for security")
 	}
+
 	sharedJWTSecret = []byte(secret) // Set the shared secret
 	return &AuthHandler{
 		db:           db,
@@ -385,7 +397,7 @@ func (h *AuthHandler) UpdateProfile(c echo.Context) error {
 	argCount := 1
 
 	if req.Email != "" {
-		updates = append(updates, "email = $"+string(rune('0'+argCount)))
+		updates = append(updates, fmt.Sprintf("email = $%d", argCount))
 		args = append(args, req.Email)
 		argCount++
 	}
@@ -420,7 +432,7 @@ func (h *AuthHandler) UpdateProfile(c echo.Context) error {
 			})
 		}
 
-		updates = append(updates, "password_hash = $"+string(rune('0'+argCount)))
+		updates = append(updates, fmt.Sprintf("password_hash = $%d", argCount))
 		args = append(args, string(newHash))
 		argCount++
 	}
@@ -434,7 +446,7 @@ func (h *AuthHandler) UpdateProfile(c echo.Context) error {
 	updates = append(updates, "updated_at = NOW()")
 	args = append(args, claims.UserID)
 
-	query := "UPDATE users SET " + strings.Join(updates, ", ") + " WHERE id = $" + string(rune('0'+argCount))
+	query := "UPDATE users SET " + strings.Join(updates, ", ") + fmt.Sprintf(" WHERE id = $%d", argCount)
 
 	_, err := h.db.Exec(query, args...)
 	if err != nil {
@@ -507,15 +519,20 @@ func (h *AuthHandler) SetMySMBPassword(c echo.Context) error {
 	}
 
 	// Update SMB sync file with password
+	var warnings []string
 	if err := h.updateSMBUserPassword(claims.Username, req.Password); err != nil {
-		// Log but don't fail
-		_ = err
+		log.Printf("WARNING: Failed to update SMB sync file for user %s: %v", claims.Username, err)
+		warnings = append(warnings, "SMB sync file update failed - password may need manual sync")
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	response := map[string]interface{}{
 		"success": true,
 		"message": "SMB password set successfully.",
-	})
+	}
+	if len(warnings) > 0 {
+		response["warnings"] = warnings
+	}
+	return c.JSON(http.StatusOK, response)
 }
 
 // updateSMBUserPassword adds or updates a user's password in the sync file
@@ -551,20 +568,9 @@ func (h *AuthHandler) updateSMBUserPassword(username, password string) error {
 }
 
 // generateToken generates a JWT token for a user
+// This is a wrapper around GenerateJWT for backward compatibility
 func (h *AuthHandler) generateToken(userID, username string, isAdmin bool) (string, error) {
-	claims := &JWTClaims{
-		UserID:   userID,
-		Username: username,
-		IsAdmin:  isAdmin,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "simplecloudvault",
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(h.jwtSecret)
+	return GenerateJWT(userID, username, isAdmin)
 }
 
 // JWTMiddleware validates JWT tokens
@@ -787,17 +793,21 @@ func (h *AuthHandler) CreateUser(c echo.Context) error {
 	}
 
 	// Create user's home directory
+	var warnings []string
 	if err := h.ensureUserHomeDir(req.Username); err != nil {
-		// Log error but don't fail - home dir will be created on first access
-		// This is a non-critical error
-		_ = err
+		log.Printf("WARNING: Failed to create home directory for user %s: %v", req.Username, err)
+		warnings = append(warnings, "Home directory creation failed - will be created on first access")
 	}
 
-	return c.JSON(http.StatusCreated, map[string]interface{}{
+	response := map[string]interface{}{
 		"success": true,
 		"id":      userID,
 		"message": "User created successfully",
-	})
+	}
+	if len(warnings) > 0 {
+		response["warnings"] = warnings
+	}
+	return c.JSON(http.StatusCreated, response)
 }
 
 // UpdateUserRequest represents admin user update request
@@ -826,7 +836,7 @@ func (h *AuthHandler) UpdateUser(c echo.Context) error {
 	argCount := 3
 
 	if req.Email != "" {
-		updates = append(updates, "email = $"+string(rune('0'+argCount)))
+		updates = append(updates, fmt.Sprintf("email = $%d", argCount))
 		args = append(args, req.Email)
 		argCount++
 	}
@@ -843,19 +853,19 @@ func (h *AuthHandler) UpdateUser(c echo.Context) error {
 				"error": "Failed to hash password",
 			})
 		}
-		updates = append(updates, "password_hash = $"+string(rune('0'+argCount)))
+		updates = append(updates, fmt.Sprintf("password_hash = $%d", argCount))
 		args = append(args, string(passwordHash))
 		argCount++
 	}
 
 	if req.StorageQuota != nil {
-		updates = append(updates, "storage_quota = $"+string(rune('0'+argCount)))
+		updates = append(updates, fmt.Sprintf("storage_quota = $%d", argCount))
 		args = append(args, *req.StorageQuota)
 		argCount++
 	}
 
 	args = append(args, userID)
-	query := "UPDATE users SET " + strings.Join(updates, ", ") + " WHERE id = $" + string(rune('0'+argCount))
+	query := "UPDATE users SET " + strings.Join(updates, ", ") + fmt.Sprintf(" WHERE id = $%d", argCount)
 
 	result, err := h.db.Exec(query, args...)
 	if err != nil {

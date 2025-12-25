@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -19,13 +17,30 @@ import (
 type SMBHandler struct {
 	db         *sql.DB
 	configPath string
+	crypto     *SMBCrypto
 }
 
 func NewSMBHandler(db *sql.DB, configPath string) *SMBHandler {
-	return &SMBHandler{
+	crypto, err := NewSMBCrypto(configPath)
+	if err != nil {
+		fmt.Printf("Warning: Failed to initialize SMB encryption: %v\n", err)
+		// Continue without encryption in non-production
+	}
+
+	handler := &SMBHandler{
 		db:         db,
 		configPath: configPath,
+		crypto:     crypto,
 	}
+
+	// Migrate existing plaintext passwords if crypto is available
+	if crypto != nil {
+		if err := crypto.MigrateFromPlaintext(); err != nil {
+			fmt.Printf("Warning: Failed to migrate SMB passwords: %v\n", err)
+		}
+	}
+
+	return handler
 }
 
 // SMBUser represents an SMB user
@@ -350,8 +365,13 @@ func (h *SMBHandler) writeSMBUsersFile() error {
 	return nil
 }
 
-// updateSMBUserPassword adds or updates a user's password in the sync file
+// updateSMBUserPassword adds or updates a user's password using encrypted storage
 func (h *SMBHandler) updateSMBUserPassword(username, password string) error {
+	if h.crypto != nil {
+		return h.crypto.SaveUser(username, password)
+	}
+
+	// Fallback to plaintext file if encryption is not available (non-production)
 	usersFile := filepath.Join(h.configPath, "smb_users.txt")
 
 	// Read existing entries
@@ -382,8 +402,13 @@ func (h *SMBHandler) updateSMBUserPassword(username, password string) error {
 	return os.WriteFile(usersFile, []byte(strings.Join(lines, "\n")+"\n"), 0600)
 }
 
-// removeSMBUser removes a user from the sync file
+// removeSMBUser removes a user from the encrypted storage
 func (h *SMBHandler) removeSMBUser(username string) error {
+	if h.crypto != nil {
+		return h.crypto.RemoveUser(username)
+	}
+
+	// Fallback to plaintext file if encryption is not available (non-production)
 	usersFile := filepath.Join(h.configPath, "smb_users.txt")
 
 	// Read existing entries
@@ -411,9 +436,12 @@ func (h *SMBHandler) removeSMBUser(username string) error {
 	return os.WriteFile(usersFile, []byte(strings.Join(lines, "\n")+"\n"), 0600)
 }
 
-// generateSMBMarker generates a unique marker for SMB password tracking
+// generateSMBMarker generates a unique marker for SMB password tracking using crypto-secure random
 func generateSMBMarker() string {
-	bytes := make([]byte, 16)
-	rand.Read(bytes)
-	return hex.EncodeToString(bytes)
+	token, err := GenerateSecureToken(16)
+	if err != nil {
+		// Fallback should never happen in normal operation
+		return MustGenerateSecureToken(16)
+	}
+	return token
 }

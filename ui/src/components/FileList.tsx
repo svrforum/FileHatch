@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchFiles, downloadFileWithProgress, formatFileSize, getFolderStats, renameItem, copyItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions } from '../api/files'
+import { getMySharedFolders, SharedFolderWithPermission } from '../api/sharedFolders'
 import { useUploadStore } from '../stores/uploadStore'
 import { useFileWatcher } from '../hooks/useFileWatcher'
 import ConfirmModal from './ConfirmModal'
@@ -8,6 +9,8 @@ import Toast from './Toast'
 import TextEditor from './TextEditor'
 import FileViewer from './FileViewer'
 import OnlyOfficeEditor from './OnlyOfficeEditor'
+import ShareModal from './ShareModal'
+import LinkShareModal from './LinkShareModal'
 import './FileList.css'
 
 interface FileListProps {
@@ -19,6 +22,7 @@ interface FileListProps {
 
 type SortField = 'name' | 'size' | 'date'
 type SortOrder = 'asc' | 'desc'
+type ViewMode = 'list' | 'grid'
 
 type ContextMenuType =
   | { type: 'file'; x: number; y: number; file: FileInfo }
@@ -28,6 +32,12 @@ type ContextMenuType =
 function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: FileListProps) {
   const [sortBy, setSortBy] = useState<SortField>('name')
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    // Persist view mode preference
+    const saved = localStorage.getItem('fileViewMode')
+    return (saved === 'grid' ? 'grid' : 'list') as ViewMode
+  })
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1)
   const [contextMenu, setContextMenu] = useState<ContextMenuType>(null)
   const [deleteTarget, setDeleteTarget] = useState<FileInfo | null>(null)
   const [renameTarget, setRenameTarget] = useState<FileInfo | null>(null)
@@ -43,16 +53,27 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
   const [viewingFile, setViewingFile] = useState<FileInfo | null>(null)
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
   const [onlyOfficeAvailable, setOnlyOfficeAvailable] = useState(false)
+  const [onlyOfficePublicUrl, setOnlyOfficePublicUrl] = useState<string | null>(null)
   const [onlyOfficeFile, setOnlyOfficeFile] = useState<FileInfo | null>(null)
   const [onlyOfficeConfig, setOnlyOfficeConfig] = useState<OnlyOfficeConfig | null>(null)
   const [showNewFileModal, setShowNewFileModal] = useState(false)
   const [newFileType, setNewFileType] = useState('')
   const [newFileName, setNewFileName] = useState('')
   const [showNewFileSubmenu, setShowNewFileSubmenu] = useState(false)
+  const [shareTarget, setShareTarget] = useState<FileInfo | null>(null)
+  const [linkShareTarget, setLinkShareTarget] = useState<FileInfo | null>(null)
+  const [sharedFolders, setSharedFolders] = useState<SharedFolderWithPermission[]>([])
   const queryClient = useQueryClient()
   const containerRef = useRef<HTMLDivElement>(null)
   const uploadStore = useUploadStore()
   const downloadStore = uploadStore
+
+  // Fetch shared folders for name resolution
+  useEffect(() => {
+    getMySharedFolders()
+      .then(setSharedFolders)
+      .catch(() => {})
+  }, [])
 
   // Real-time file change notifications via WebSocket
   // Watch paths are stable to avoid reconnection loops
@@ -74,8 +95,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
 
   // Check OnlyOffice availability on mount
   useEffect(() => {
-    checkOnlyOfficeStatus().then(({ available }) => {
+    checkOnlyOfficeStatus().then(({ available, publicUrl }) => {
       setOnlyOfficeAvailable(available)
+      setOnlyOfficePublicUrl(publicUrl)
     })
   }, [])
 
@@ -369,10 +391,103 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
     }
   }, [selectedFiles, data, currentPath, queryClient])
 
+  // Check if we can go back (not at root level of home/shared)
+  const canGoBack = useCallback(() => {
+    // Root paths where back button should not appear
+    const rootPaths = ['/', '/home', '/shared']
+    return !rootPaths.includes(currentPath)
+  }, [currentPath])
+
   const goBack = useCallback(() => {
-    const parentPath = currentPath.split('/').slice(0, -1).join('/') || '/'
+    const parts = currentPath.split('/').filter(Boolean)
+    if (parts.length <= 1) {
+      // Already at root level, go to parent storage root
+      if (currentPath.startsWith('/home')) {
+        onNavigate('/home')
+      } else if (currentPath.startsWith('/shared')) {
+        onNavigate('/shared')
+      }
+      return
+    }
+    const parentPath = '/' + parts.slice(0, -1).join('/')
     onNavigate(parentPath)
   }, [currentPath, onNavigate])
+
+  // Toggle view mode and persist
+  const toggleViewMode = useCallback((mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem('fileViewMode', mode)
+  }, [])
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      const files = data?.files || []
+      if (files.length === 0) return
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          setFocusedIndex(prev => {
+            const next = prev < files.length - 1 ? prev + 1 : prev
+            setSelectedFile(files[next])
+            setSelectedFiles(new Set([files[next].path]))
+            return next
+          })
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          setFocusedIndex(prev => {
+            const next = prev > 0 ? prev - 1 : 0
+            setSelectedFile(files[next])
+            setSelectedFiles(new Set([files[next].path]))
+            return next
+          })
+          break
+        case 'Enter':
+          e.preventDefault()
+          if (focusedIndex >= 0 && focusedIndex < files.length) {
+            handleItemDoubleClick(files[focusedIndex])
+          }
+          break
+        case 'Delete':
+        case 'Backspace':
+          if (e.key === 'Delete' || (e.key === 'Backspace' && e.metaKey)) {
+            e.preventDefault()
+            if (selectedFiles.size > 0) {
+              const filesToDelete = files.filter(f => selectedFiles.has(f.path))
+              if (filesToDelete.length === 1) {
+                setDeleteTarget(filesToDelete[0])
+              } else if (filesToDelete.length > 1) {
+                handleBulkDelete()
+              }
+            } else if (selectedFile) {
+              setDeleteTarget(selectedFile)
+            }
+          }
+          break
+        case 'Escape':
+          setSelectedFile(null)
+          setSelectedFiles(new Set())
+          setFocusedIndex(-1)
+          break
+        case 'a':
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            setSelectedFiles(new Set(files.map(f => f.path)))
+          }
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [data, focusedIndex, selectedFile, selectedFiles, handleItemDoubleClick, handleBulkDelete])
 
   // Drag and drop handlers for file upload
   const handleFileDragOver = useCallback((e: React.DragEvent) => {
@@ -654,9 +769,25 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
   const getPathDisplayName = (path: string): string => {
     if (path === '/') return '홈'
     if (path === '/home') return '내 파일'
-    if (path === '/shared') return '공유 폴더'
-    // Get last segment for nested paths
+    if (path === '/shared') return '공유 드라이브'
+
+    // Handle shared folder paths
     const parts = path.split('/').filter(Boolean)
+    if (parts[0] === 'shared' && parts.length >= 2) {
+      // parts[1] is the folder name - check if it's a shared drive
+      const folderName = parts[1]
+      const folder = sharedFolders.find(f => f.name === folderName)
+      if (folder) {
+        // If we're at the shared folder root, show folder name
+        if (parts.length === 2) {
+          return folder.name
+        }
+        // If we're in a subfolder, show the subfolder name
+        return parts[parts.length - 1]
+      }
+    }
+
+    // Get last segment for nested paths
     return parts[parts.length - 1] || '홈'
   }
 
@@ -686,8 +817,8 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
       )}
       <div className="file-list-header">
         <div className="breadcrumb">
-          {currentPath !== '/' && (
-            <button className="back-btn" onClick={goBack}>
+          {canGoBack() && (
+            <button className="back-btn" onClick={goBack} title="상위 폴더로 이동">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                 <path d="M19 12H5M12 19L5 12L12 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
@@ -697,7 +828,12 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
             {getPathDisplayName(currentPath)}
           </h2>
           {data && (
-            <span className="file-count">{data.total}개 항목 · {formatFileSize(data.totalSize)}</span>
+            <span className="file-count">
+              {selectedFiles.size > 1
+                ? `${selectedFiles.size}개 선택됨`
+                : `${data.total}개 항목 · ${formatFileSize(data.totalSize)}`
+              }
+            </span>
           )}
         </div>
         <div className="view-options">
@@ -712,12 +848,20 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
               <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10M23 14L18.36 18.36A9 9 0 0 1 3.51 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
-          <button className="view-btn active">
+          <button
+            className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
+            onClick={() => toggleViewMode('list')}
+            title="리스트 보기"
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <path d="M8 6H21M8 12H21M8 18H21M3 6H3.01M3 12H3.01M3 18H3.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
-          <button className="view-btn">
+          <button
+            className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
+            onClick={() => toggleViewMode('grid')}
+            title="그리드 보기"
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/>
               <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/>
@@ -750,12 +894,38 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
           <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
             <path d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H9L11 6H20C20.5304 6 21.0391 6.21071 21.4142 6.58579C21.7893 6.96086 22 7.46957 22 8V19Z" stroke="currentColor" strokeWidth="2"/>
           </svg>
-          <h3>폴더가 비어있습니다</h3>
-          <p>파일을 업로드하거나 새 폴더를 만들어보세요</p>
+          {currentPath.startsWith('/shared-with-me') ? (
+            <>
+              <h3>공유받은 파일이 없습니다</h3>
+              <p>다른 사용자가 파일을 공유하면 여기에 표시됩니다</p>
+            </>
+          ) : (
+            <>
+              <h3>폴더가 비어있습니다</h3>
+              <p>파일을 업로드하거나 새 폴더를 만들어보세요</p>
+              <div className="empty-actions">
+                <button className="empty-action-btn primary" onClick={onUploadClick}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M17 8L12 3L7 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M12 3V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  파일 업로드
+                </button>
+                <button className="empty-action-btn" onClick={onNewFolderClick}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H9L11 6H20C20.5304 6 21.0391 6.21071 21.4142 6.58579C21.7893 6.96086 22 7.46957 22 8V19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M12 11V17M9 14H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  새 폴더
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
-      {data && data.files.length > 0 && (
+      {data && data.files.length > 0 && viewMode === 'list' && (
         <div className="file-table">
           <div className="file-table-header">
             <div className="col-name sortable" onClick={() => handleSort('name')}>
@@ -770,11 +940,11 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
             <div className="col-actions"></div>
           </div>
           <div className="file-table-body">
-            {data.files.map((file) => (
+            {data.files.map((file, index) => (
               <div
                 key={file.path}
-                className={`file-row ${selectedFiles.has(file.path) || selectedFile?.path === file.path ? 'selected' : ''}`}
-                onClick={(e) => handleSelectFile(file, e)}
+                className={`file-row ${selectedFiles.has(file.path) || selectedFile?.path === file.path ? 'selected' : ''} ${focusedIndex === index ? 'focused' : ''}`}
+                onClick={(e) => { handleSelectFile(file, e); setFocusedIndex(index); }}
                 onDoubleClick={() => handleItemDoubleClick(file)}
                 onContextMenu={(e) => handleContextMenu(e, file)}
               >
@@ -796,6 +966,30 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {data && data.files.length > 0 && viewMode === 'grid' && (
+        <div className="file-grid">
+          {data.files.map((file, index) => (
+            <div
+              key={file.path}
+              className={`file-card ${selectedFiles.has(file.path) || selectedFile?.path === file.path ? 'selected' : ''} ${focusedIndex === index ? 'focused' : ''}`}
+              onClick={(e) => { handleSelectFile(file, e); setFocusedIndex(index); }}
+              onDoubleClick={() => handleItemDoubleClick(file)}
+              onContextMenu={(e) => handleContextMenu(e, file)}
+            >
+              <div className="file-card-icon">
+                {getFileIcon(file)}
+              </div>
+              <div className="file-card-name" title={file.name}>
+                {file.name}
+              </div>
+              <div className="file-card-meta">
+                {file.isDir ? '폴더' : formatFileSize(file.size)}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -881,6 +1075,27 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
                 다운로드
               </button>
             )}
+            {!currentPath.startsWith('/shared-with-me') && (
+              <>
+                <button className="btn-detail-action" onClick={() => setShareTarget(selectedFile)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="2"/>
+                    <circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+                    <circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M8.59 13.51L15.42 17.49" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    <path d="M15.41 6.51L8.59 10.49" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  공유
+                </button>
+                <button className="btn-detail-action" onClick={() => setLinkShareTarget(selectedFile)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  링크 공유
+                </button>
+              </>
+            )}
             <button className="btn-detail-action danger" onClick={() => setDeleteTarget(selectedFile)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M3 6H5H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -899,6 +1114,11 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
           onClick={(e) => e.stopPropagation()}
         >
           {contextMenu.type === 'background' ? (
+            currentPath.startsWith('/shared-with-me') ? (
+              <div className="context-menu-item disabled">
+                공유받은 파일에서는 작업을 할 수 없습니다
+              </div>
+            ) : (
             <>
               <button className="context-menu-item" onClick={() => { closeContextMenu(); onUploadClick(); }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -995,6 +1215,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
                 )}
               </div>
             </>
+            )
           ) : (
             <>
               {!contextMenu.file.isDir && isEditableFile(contextMenu.file) && (
@@ -1048,6 +1269,23 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
                   <path d="M5 15H4C2.89543 15 2 14.1046 2 13V4C2 2.89543 2.89543 2 4 2H13C14.1046 2 15 2.89543 15 4V5" stroke="currentColor" strokeWidth="2"/>
                 </svg>
                 복사
+              </button>
+              <div className="context-menu-divider" />
+              <button className="context-menu-item" onClick={() => { setShareTarget(contextMenu.file); closeContextMenu(); }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="2"/>
+                  <circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+                  <circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="2"/>
+                  <path d="M8.59 13.51L15.42 17.49M15.41 6.51L8.59 10.49" stroke="currentColor" strokeWidth="2"/>
+                </svg>
+                사용자에게 공유
+              </button>
+              <button className="context-menu-item" onClick={() => { setLinkShareTarget(contextMenu.file); closeContextMenu(); }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                링크로 공유
               </button>
               <div className="context-menu-divider" />
               <button className="context-menu-item danger" onClick={() => handleDeleteClick(contextMenu.file)}>
@@ -1171,6 +1409,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
       {onlyOfficeConfig && onlyOfficeFile && (
         <OnlyOfficeEditor
           config={onlyOfficeConfig}
+          publicUrl={onlyOfficePublicUrl}
           onClose={() => {
             setOnlyOfficeConfig(null)
             setOnlyOfficeFile(null)
@@ -1220,6 +1459,28 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
             </div>
           </div>
         </div>
+      )}
+
+      {/* Share Modal */}
+      {shareTarget && (
+        <ShareModal
+          isOpen={!!shareTarget}
+          onClose={() => setShareTarget(null)}
+          itemPath={shareTarget.path}
+          itemName={shareTarget.name}
+          isFolder={shareTarget.isDir}
+        />
+      )}
+
+      {/* Link Share Modal */}
+      {linkShareTarget && (
+        <LinkShareModal
+          isOpen={!!linkShareTarget}
+          onClose={() => setLinkShareTarget(null)}
+          itemPath={linkShareTarget.path}
+          itemName={linkShareTarget.name}
+          isFolder={linkShareTarget.isDir}
+        />
       )}
     </div>
   )

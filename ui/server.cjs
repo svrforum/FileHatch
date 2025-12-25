@@ -7,10 +7,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const API_URL = process.env.API_URL || 'http://localhost:8080';
 const ONLYOFFICE_URL = process.env.ONLYOFFICE_URL || 'http://onlyoffice';
+const ONLYOFFICE_PUBLIC_URL = process.env.ONLYOFFICE_PUBLIC_URL || '';
 
 console.log('Starting server...');
 console.log('API_URL:', API_URL);
 console.log('ONLYOFFICE_URL:', ONLYOFFICE_URL);
+console.log('ONLYOFFICE_PUBLIC_URL:', ONLYOFFICE_PUBLIC_URL || '(not set, will use default)');
 
 // Tus upload proxy - needs special handling for Location header
 const tusProxy = createProxyMiddleware({
@@ -120,12 +122,15 @@ app.get('/api/onlyoffice/status', async (req, res) => {
     const response = await fetch(`${ONLYOFFICE_URL}/healthcheck`, { signal: controller.signal });
     clearTimeout(timeout);
     if (response.ok) {
-      res.json({ available: true });
+      res.json({
+        available: true,
+        publicUrl: ONLYOFFICE_PUBLIC_URL || null
+      });
     } else {
-      res.json({ available: false });
+      res.json({ available: false, publicUrl: null });
     }
   } catch (err) {
-    res.json({ available: false });
+    res.json({ available: false, publicUrl: null });
   }
 });
 

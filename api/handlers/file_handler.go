@@ -1,0 +1,359 @@
+package handlers
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+
+	"github.com/labstack/echo/v4"
+)
+
+// GetFile handles file download requests
+func (h *Handler) GetFile(c echo.Context) error {
+	requestPath := c.Param("*")
+	if requestPath == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "File path required",
+		})
+	}
+
+	// URL decode the path for proper handling of special characters
+	decodedPath, err := url.PathUnescape(requestPath)
+	if err != nil {
+		decodedPath = requestPath // fallback to original if decode fails
+	}
+
+	// Get user claims if available
+	var claims *JWTClaims
+	if user, ok := c.Get("user").(*JWTClaims); ok {
+		claims = user
+	}
+
+	// Resolve path
+	virtualPath := "/" + decodedPath
+	realPath, storageType, _, err := h.resolvePath(virtualPath, claims)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": err.Error(),
+		})
+	}
+
+	// Check shared permission
+	if storageType == StorageShared {
+		if claims == nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{
+				"error": "Authentication required",
+			})
+		}
+		if !h.CanReadSharedDrive(claims.UserID, virtualPath) {
+			return c.JSON(http.StatusForbidden, map[string]string{
+				"error": "No permission to access this file",
+			})
+		}
+	}
+
+	// For home folder files, check if it's the owner or a shared file
+	if storageType == StorageHome && claims != nil {
+		// Check if this is someone else's home folder being accessed via share
+		// The path format for shared files would be /home/filename (owner's perspective)
+		// But when accessed by another user, we need to resolve through file_shares
+		// This check happens after resolvePath, so realPath already points to current user's home
+	}
+
+	// If realPath doesn't exist but user is authenticated, check if it's a shared file
+	if realPath == "" || (storageType == StorageSharedWithMe && claims != nil) {
+		// Handle shared-with-me file access
+		sharedRealPath, _, err := h.GetSharedFileOwnerPath(claims.UserID, virtualPath)
+		if err == nil && h.CanReadSharedFile(claims.UserID, virtualPath) {
+			realPath = sharedRealPath
+		}
+	}
+
+	info, err := os.Stat(realPath)
+	if err != nil {
+		// File not found in direct path - check if it's a shared file
+		if claims != nil && os.IsNotExist(err) {
+			sharedRealPath, _, shareErr := h.GetSharedFileOwnerPath(claims.UserID, virtualPath)
+			if shareErr == nil && h.CanReadSharedFile(claims.UserID, virtualPath) {
+				realPath = sharedRealPath
+				info, err = os.Stat(realPath)
+			}
+		}
+		if err != nil {
+			if os.IsNotExist(err) {
+				return c.JSON(http.StatusNotFound, map[string]string{
+					"error": "File not found",
+				})
+			}
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to access file",
+			})
+		}
+	}
+
+	if info.IsDir() {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Path is a directory",
+		})
+	}
+
+	// Check if download is requested
+	if c.QueryParam("download") == "true" {
+		c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, info.Name()))
+	}
+
+	return c.File(realPath)
+}
+
+// DeleteFile handles file deletion requests
+func (h *Handler) DeleteFile(c echo.Context) error {
+	requestPath := c.Param("*")
+	if requestPath == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "File path required",
+		})
+	}
+
+	// Get user claims
+	var claims *JWTClaims
+	if user, ok := c.Get("user").(*JWTClaims); ok {
+		claims = user
+	}
+
+	// Resolve path
+	realPath, storageType, displayPath, err := h.resolvePath("/"+requestPath, claims)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": err.Error(),
+		})
+	}
+
+	// Check permissions for home folder
+	if storageType == StorageHome && claims == nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{
+			"error": "Authentication required",
+		})
+	}
+
+	// Check shared write permission
+	virtualPath := "/" + requestPath
+	if storageType == StorageShared {
+		if claims == nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{
+				"error": "Authentication required",
+			})
+		}
+		if !h.CanWriteSharedDrive(claims.UserID, virtualPath) {
+			return c.JSON(http.StatusForbidden, map[string]string{
+				"error": "No permission to delete files in this folder",
+			})
+		}
+	}
+
+	info, err := os.Stat(realPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return c.JSON(http.StatusNotFound, map[string]string{
+				"error": "File not found",
+			})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to access file",
+		})
+	}
+
+	if info.IsDir() {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Path is a directory, use DELETE /api/folders instead",
+		})
+	}
+
+	if err := os.Remove(realPath); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to delete file",
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"path":    displayPath,
+	})
+}
+
+// SaveFileContent saves text content to a file
+func (h *Handler) SaveFileContent(c echo.Context) error {
+	requestPath := c.Param("*")
+	if requestPath == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "File path required",
+		})
+	}
+
+	// Get user claims
+	var claims *JWTClaims
+	if user, ok := c.Get("user").(*JWTClaims); ok {
+		claims = user
+	}
+
+	// Resolve path
+	virtualPath := "/" + requestPath
+	realPath, storageType, _, err := h.resolvePath(virtualPath, claims)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": err.Error(),
+		})
+	}
+
+	// Check shared write permission
+	if storageType == StorageShared {
+		if claims == nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{
+				"error": "Authentication required",
+			})
+		}
+		if !h.CanWriteSharedDrive(claims.UserID, virtualPath) {
+			return c.JSON(http.StatusForbidden, map[string]string{
+				"error": "No permission to edit files in this folder",
+			})
+		}
+	}
+
+	// Handle shared file editing
+	isSharedFile := false
+	if realPath == "" || storageType == StorageSharedWithMe {
+		if claims == nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{
+				"error": "Authentication required",
+			})
+		}
+		// Check if user has write permission for this shared file
+		if !h.CanWriteSharedFile(claims.UserID, virtualPath) {
+			return c.JSON(http.StatusForbidden, map[string]string{
+				"error": "No permission to edit this shared file",
+			})
+		}
+		sharedRealPath, _, err := h.GetSharedFileOwnerPath(claims.UserID, virtualPath)
+		if err != nil {
+			return c.JSON(http.StatusNotFound, map[string]string{
+				"error": "Shared file not found",
+			})
+		}
+		realPath = sharedRealPath
+		isSharedFile = true
+	}
+
+	// Check if file exists
+	info, err := os.Stat(realPath)
+	if err != nil {
+		// If not found at direct path, check if it's a shared file
+		if claims != nil && os.IsNotExist(err) && !isSharedFile {
+			if h.CanWriteSharedFile(claims.UserID, virtualPath) {
+				sharedRealPath, _, shareErr := h.GetSharedFileOwnerPath(claims.UserID, virtualPath)
+				if shareErr == nil {
+					realPath = sharedRealPath
+					info, err = os.Stat(realPath)
+					isSharedFile = true
+				}
+			}
+		}
+		if err != nil {
+			if os.IsNotExist(err) {
+				return c.JSON(http.StatusNotFound, map[string]string{
+					"error": "File not found",
+				})
+			}
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to access file",
+			})
+		}
+	}
+
+	if info.IsDir() {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Path is a directory",
+		})
+	}
+
+	// Read request body
+	body, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Failed to read request body",
+		})
+	}
+
+	// Write to file
+	if err := os.WriteFile(realPath, body, 0644); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to save file",
+		})
+	}
+
+	// Log the action
+	var userID *string
+	if claims != nil {
+		userID = &claims.UserID
+	}
+	clientIP := c.RealIP()
+	h.auditHandler.LogEvent(userID, clientIP, EventFileEdit, "/"+requestPath, map[string]interface{}{
+		"size":        len(body),
+		"storageType": storageType,
+		"isShared":    isSharedFile,
+	})
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "File saved successfully",
+		"size":    len(body),
+	})
+}
+
+// CheckFileExists checks if a file exists at the given path
+func (h *Handler) CheckFileExists(c echo.Context) error {
+	requestPath := c.QueryParam("path")
+	filename := c.QueryParam("filename")
+
+	if filename == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Filename required",
+		})
+	}
+
+	if requestPath == "" {
+		requestPath = "/"
+	}
+
+	// Get user claims
+	var claims *JWTClaims
+	if user, ok := c.Get("user").(*JWTClaims); ok {
+		claims = user
+	}
+
+	// Resolve path
+	realPath, storageType, displayPath, err := h.resolvePath(requestPath, claims)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": err.Error(),
+		})
+	}
+
+	if storageType == "root" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Cannot check file at root",
+		})
+	}
+
+	fullPath := filepath.Join(realPath, filename)
+
+	_, err = os.Stat(fullPath)
+	exists := !os.IsNotExist(err)
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"exists":   exists,
+		"path":     filepath.Join(displayPath, filename),
+		"filename": filename,
+	})
+}

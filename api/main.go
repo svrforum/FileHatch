@@ -16,6 +16,41 @@ import (
 
 const dataRoot = "/data"
 
+// getCORSOrigins returns allowed CORS origins from environment or defaults
+func getCORSOrigins() []string {
+	origins := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if origins == "" {
+		env := os.Getenv("SCV_ENV")
+		if env == "production" {
+			log.Println("WARNING: CORS_ALLOWED_ORIGINS not set in production. Using restrictive defaults.")
+			// In production without explicit config, only allow same-origin
+			return []string{}
+		}
+		// Development defaults
+		log.Println("CORS: Using development defaults (localhost:3000, 3080, 5173)")
+		return []string{
+			"http://localhost:3000",
+			"http://localhost:3080",
+			"http://localhost:5173",
+			"http://127.0.0.1:3000",
+			"http://127.0.0.1:3080",
+			"http://127.0.0.1:5173",
+		}
+	}
+
+	// Parse comma-separated origins
+	originList := strings.Split(origins, ",")
+	result := make([]string, 0, len(originList))
+	for _, o := range originList {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			result = append(result, o)
+		}
+	}
+	log.Printf("CORS: Configured origins: %v", result)
+	return result
+}
+
 func main() {
 	// Initialize Echo
 	e := echo.New()
@@ -25,7 +60,7 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
+		AllowOrigins: getCORSOrigins(),
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodHead, http.MethodOptions},
 		AllowHeaders: []string{
 			"*",
@@ -79,6 +114,12 @@ func main() {
 
 	// Create Share handler
 	shareHandler := handlers.NewShareHandler(db, dataRoot)
+
+	// Create Shared Folder handler
+	sharedFolderHandler := handlers.NewSharedFolderHandler(db, dataRoot)
+
+	// Create File Share handler
+	fileShareHandler := handlers.NewFileShareHandler(db)
 
 	// Routes
 	e.GET("/health", h.HealthCheck)
@@ -134,6 +175,7 @@ func main() {
 	api.GET("/preview/*", h.GetPreview, authHandler.OptionalJWTMiddleware)
 
 	// OnlyOffice API routes
+	api.GET("/onlyoffice/settings", h.GetOnlyOfficeSettings)
 	api.GET("/onlyoffice/config/*", h.GetOnlyOfficeConfig, authHandler.JWTMiddleware)
 	api.POST("/onlyoffice/callback", h.OnlyOfficeCallback)
 
@@ -160,8 +202,31 @@ func main() {
 	api.POST("/s/:token", shareHandler.AccessShare)
 	api.GET("/s/:token/download", shareHandler.DownloadShare)
 
+	// Shared Folders API (user - protected)
+	authApi.GET("/shared-folders", sharedFolderHandler.ListMySharedFolders)
+	authApi.GET("/shared-folders/:id/permission", sharedFolderHandler.GetMyPermission)
+
+	// Shared Folders API (admin - protected + admin only)
+	adminApi.GET("/admin/shared-folders", sharedFolderHandler.ListAllSharedFolders)
+	adminApi.POST("/admin/shared-folders", sharedFolderHandler.CreateSharedFolder)
+	adminApi.PUT("/admin/shared-folders/:id", sharedFolderHandler.UpdateSharedFolder)
+	adminApi.DELETE("/admin/shared-folders/:id", sharedFolderHandler.DeleteSharedFolder)
+	adminApi.GET("/admin/shared-folders/:id/members", sharedFolderHandler.ListMembers)
+	adminApi.POST("/admin/shared-folders/:id/members", sharedFolderHandler.AddMember)
+	adminApi.PUT("/admin/shared-folders/:id/members/:userId", sharedFolderHandler.UpdateMemberPermission)
+	adminApi.DELETE("/admin/shared-folders/:id/members/:userId", sharedFolderHandler.RemoveMember)
+
+	// File Share API (user-to-user sharing - protected)
+	authApi.POST("/file-shares", fileShareHandler.CreateFileShare)
+	authApi.GET("/file-shares/shared-by-me", fileShareHandler.ListSharedByMe)
+	authApi.GET("/file-shares/shared-with-me", fileShareHandler.ListSharedWithMe)
+	authApi.PUT("/file-shares/:id", fileShareHandler.UpdateFileShare)
+	authApi.DELETE("/file-shares/:id", fileShareHandler.DeleteFileShare)
+	authApi.GET("/file-shares/file/*", fileShareHandler.GetFileShareInfo)
+	authApi.GET("/users/search", fileShareHandler.SearchUsers)
+
 	// Simple upload (non-resumable)
-	api.POST("/upload/simple", h.SimpleUpload)
+	api.POST("/upload/simple", h.SimpleUpload, authHandler.OptionalJWTMiddleware)
 
 	// Tus upload routes (resumable) using UnroutedHandler
 	tusHandler := uploadHandler.TusHandler()
