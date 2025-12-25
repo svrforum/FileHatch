@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, Suspense, lazy } from 'react'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from './stores/authStore'
@@ -11,13 +11,26 @@ import CreateFolderModal from './components/CreateFolderModal'
 import UploadPanel from './components/UploadPanel'
 import DuplicateModal from './components/DuplicateModal'
 import UserProfile from './components/UserProfile'
-import AdminUserList from './components/AdminUserList'
-import AdminSettings from './components/AdminSettings'
-import AdminLogs from './components/AdminLogs'
-import AdminSharedFolders from './components/AdminSharedFolders'
 import LoginPage from './components/LoginPage'
 import ShareAccessPage from './components/ShareAccessPage'
+import FileListSkeleton from './components/FileListSkeleton'
 import './styles/app.css'
+
+// Lazy load admin components for better initial load performance
+const AdminUserList = lazy(() => import('./components/AdminUserList'))
+const AdminSettings = lazy(() => import('./components/AdminSettings'))
+const AdminLogs = lazy(() => import('./components/AdminLogs'))
+const AdminSharedFolders = lazy(() => import('./components/AdminSharedFolders'))
+
+// Admin loading skeleton
+function AdminSkeleton() {
+  return (
+    <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div style={{ height: '32px', width: '200px', background: '#e0e0e0', borderRadius: '4px', animation: 'pulse 1.5s infinite' }} />
+      <div style={{ height: '200px', background: '#f5f5f5', borderRadius: '8px', animation: 'pulse 1.5s infinite' }} />
+    </div>
+  )
+}
 
 function App() {
   const [currentPath, setCurrentPath] = useState('/home')
@@ -99,32 +112,54 @@ function App() {
           onExitAdminMode={handleExitAdminMode}
         />
         <main className="main-content">
-          <Routes>
-            <Route path="/" element={
-              <FileList
-                currentPath={currentPath}
-                onNavigate={handleNavigate}
-                onUploadClick={() => setUploadModalOpen(true)}
-                onNewFolderClick={() => setFolderModalOpen(true)}
-              />
-            } />
-            <Route path="/files" element={
-              <FileList
-                currentPath={currentPath}
-                onNavigate={handleNavigate}
-                onUploadClick={() => setUploadModalOpen(true)}
-                onNewFolderClick={() => setFolderModalOpen(true)}
-              />
-            } />
-            <Route path="/trash" element={
-              <Trash onNavigate={handleNavigate} />
-            } />
-            <Route path="/scvadmin/users" element={<AdminUserList />} />
-            <Route path="/scvadmin/shared-folders" element={<AdminSharedFolders />} />
-            <Route path="/scvadmin/settings" element={<AdminSettings />} />
-            <Route path="/scvadmin/logs" element={<AdminLogs />} />
-            <Route path="/scvadmin" element={<AdminUserList />} />
-          </Routes>
+          <Suspense fallback={<FileListSkeleton />}>
+            <Routes>
+              <Route path="/" element={
+                <FileList
+                  currentPath={currentPath}
+                  onNavigate={handleNavigate}
+                  onUploadClick={() => setUploadModalOpen(true)}
+                  onNewFolderClick={() => setFolderModalOpen(true)}
+                />
+              } />
+              <Route path="/files" element={
+                <FileList
+                  currentPath={currentPath}
+                  onNavigate={handleNavigate}
+                  onUploadClick={() => setUploadModalOpen(true)}
+                  onNewFolderClick={() => setFolderModalOpen(true)}
+                />
+              } />
+              <Route path="/trash" element={
+                <Trash onNavigate={handleNavigate} />
+              } />
+              <Route path="/scvadmin/users" element={
+                <Suspense fallback={<AdminSkeleton />}>
+                  <AdminUserList />
+                </Suspense>
+              } />
+              <Route path="/scvadmin/shared-folders" element={
+                <Suspense fallback={<AdminSkeleton />}>
+                  <AdminSharedFolders />
+                </Suspense>
+              } />
+              <Route path="/scvadmin/settings" element={
+                <Suspense fallback={<AdminSkeleton />}>
+                  <AdminSettings />
+                </Suspense>
+              } />
+              <Route path="/scvadmin/logs" element={
+                <Suspense fallback={<AdminSkeleton />}>
+                  <AdminLogs />
+                </Suspense>
+              } />
+              <Route path="/scvadmin" element={
+                <Suspense fallback={<AdminSkeleton />}>
+                  <AdminUserList />
+                </Suspense>
+              } />
+            </Routes>
+          </Suspense>
         </main>
       </div>
 

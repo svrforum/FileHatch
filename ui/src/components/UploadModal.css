@@ -1,5 +1,5 @@
-/* Modal Overlay */
-.modal-overlay {
+/* Modal Overlay - Scoped to upload-modal context */
+.upload-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -15,8 +15,8 @@
   animation: fadeIn 0.2s ease;
 }
 
-/* Modal Content */
-.modal-content {
+/* Modal Content - Use .upload-modal class to avoid conflicts */
+.upload-modal {
   background: var(--bg-primary);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
@@ -40,7 +40,7 @@
 }
 
 /* Modal Header */
-.modal-header {
+.upload-modal .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -48,14 +48,14 @@
   border-bottom: 1px solid var(--border-light);
 }
 
-.modal-header h2 {
+.upload-modal .modal-header h2 {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
   letter-spacing: -0.02em;
 }
 
-.close-btn {
+.upload-modal .close-btn {
   width: 36px;
   height: 36px;
   display: flex;
@@ -66,7 +66,7 @@
   transition: all var(--transition-fast);
 }
 
-.close-btn:hover {
+.upload-modal .close-btn:hover {
   background: var(--bg-secondary);
   color: var(--text-primary);
   transform: rotate(90deg);

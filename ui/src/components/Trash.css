@@ -243,8 +243,8 @@
   cursor: not-allowed;
 }
 
-/* Modal Styles */
-.modal-overlay {
+/* Modal Styles - Scoped to trash-container to avoid conflicts */
+.trash-container .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -257,7 +257,7 @@
   z-index: 1000;
 }
 
-.modal-content {
+.trash-container .modal-content {
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
   padding: var(--spacing-xl);
@@ -267,7 +267,7 @@
   box-shadow: var(--shadow-xl);
 }
 
-.modal-icon {
+.trash-container .modal-icon {
   width: 64px;
   height: 64px;
   border-radius: 50%;
@@ -277,26 +277,26 @@
   margin: 0 auto var(--spacing-md);
 }
 
-.modal-icon.warning {
+.trash-container .modal-icon.warning {
   background: rgba(231, 76, 60, 0.1);
   color: var(--color-error);
 }
 
-.modal-content h3 {
+.trash-container .modal-content h3 {
   margin: 0 0 var(--spacing-sm);
   font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.modal-content p {
+.trash-container .modal-content p {
   margin: 0 0 var(--spacing-lg);
   font-size: 14px;
   color: var(--text-secondary);
   line-height: 1.5;
 }
 
-.modal-actions {
+.trash-container .modal-actions {
   display: flex;
   gap: var(--spacing-sm);
   justify-content: center;

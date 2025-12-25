@@ -1,34 +1,11 @@
-/* Create User Modal - Modern Apple + Toss Style */
+/* Edit User Modal - Apple + Toss Style */
 
-/* Modal Overlay */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-  animation: fadeIn 0.2s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.create-user-modal {
+.edit-user-modal {
   background: var(--bg-primary);
   border-radius: 20px;
   width: 100%;
   max-width: 560px;
-  max-height: 85vh;
+  max-height: 90vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -46,23 +23,47 @@
   }
 }
 
-.create-user-modal .modal-header {
+.edit-user-modal .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 24px;
   border-bottom: 1px solid var(--border-light);
-  flex-shrink: 0;
 }
 
-.create-user-modal .modal-header h2 {
+.modal-user-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.modal-user-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.modal-user-info h2 {
   font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.modal-user-info p {
+  font-size: 14px;
+  color: var(--text-secondary);
   margin: 0;
 }
 
-.create-user-modal .close-btn {
+.edit-user-modal .close-btn {
   width: 36px;
   height: 36px;
   border: none;
@@ -74,42 +75,38 @@
   justify-content: center;
   transition: all 0.2s ease;
   color: var(--text-secondary);
-  flex-shrink: 0;
 }
 
-.create-user-modal .close-btn:hover {
+.edit-user-modal .close-btn:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }
 
-.create-user-modal .modal-content {
+.edit-user-modal .modal-content {
   padding: 24px;
   overflow-y: auto;
   flex: 1;
-  min-height: 0;
   width: 100%;
   max-width: none;
   box-sizing: border-box;
 }
 
-.create-user-modal form {
+.edit-user-modal form {
   display: flex;
   flex-direction: column;
-  height: 100%;
   width: 100%;
 }
 
-/* Form Sections */
-.create-user-modal .form-section {
-  margin-bottom: 28px;
+.edit-user-modal .form-section {
+  margin-bottom: 24px;
   width: 100%;
 }
 
-.create-user-modal .form-section:last-of-type {
+.edit-user-modal .form-section:last-of-type {
   margin-bottom: 0;
 }
 
-.create-user-modal .form-section h3 {
+.edit-user-modal .form-section h3 {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
@@ -118,38 +115,27 @@
   letter-spacing: 0.5px;
 }
 
-.create-user-modal .section-description {
-  font-size: 13px;
-  color: var(--text-tertiary);
-  margin: -8px 0 16px;
-}
-
-/* Form Groups */
-.create-user-modal .form-row {
+.edit-user-modal .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  margin-bottom: 16px;
   width: 100%;
 }
 
-.create-user-modal .form-group {
+.edit-user-modal .form-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
   width: 100%;
 }
 
-.create-user-modal .form-group label {
+.edit-user-modal .form-group label {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
 }
 
-.create-user-modal .form-group input[type="text"],
-.create-user-modal .form-group input[type="email"],
-.create-user-modal .form-group input[type="password"],
-.create-user-modal .form-group input[type="search"] {
+.edit-user-modal .form-group input {
   padding: 14px 16px;
   border: 2px solid var(--border-light);
   border-radius: 12px;
@@ -161,70 +147,46 @@
   box-sizing: border-box;
 }
 
-.create-user-modal .form-group input:focus {
+.edit-user-modal .form-group input:focus {
   outline: none;
   border-color: #228be6;
   box-shadow: 0 0 0 3px rgba(34, 139, 230, 0.1);
 }
 
-.create-user-modal .form-group input::placeholder {
+.edit-user-modal .form-group input::placeholder {
   color: var(--text-tertiary);
 }
 
-.create-user-modal .form-hint {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-top: 4px;
-}
-
-/* Checkbox Group */
-.create-user-modal .checkbox-group {
-  margin-top: 8px;
-}
-
-.create-user-modal .checkbox-label {
+.edit-user-modal .input-with-unit {
   display: flex;
   align-items: center;
   gap: 12px;
-  cursor: pointer;
+}
+
+.edit-user-modal .input-with-unit input {
+  flex: 1;
+}
+
+.edit-user-modal .input-with-unit .unit {
   font-size: 15px;
-  color: var(--text-primary);
-  font-weight: 500;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
-.create-user-modal .checkbox-label input[type="checkbox"] {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  border: 2px solid var(--border-default);
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  background: var(--bg-primary);
-  transition: all 0.2s ease;
-  position: relative;
-  flex-shrink: 0;
+.edit-user-modal .form-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin: 4px 0 0;
 }
 
-.create-user-modal .checkbox-label input[type="checkbox"]:checked {
-  background: #228be6;
-  border-color: #228be6;
-}
-
-.create-user-modal .checkbox-label input[type="checkbox"]:checked::after {
-  content: '';
-  position: absolute;
-  left: 6px;
-  top: 3px;
-  width: 6px;
-  height: 10px;
-  border: solid white;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
+.edit-user-modal .section-description {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin: -8px 0 16px;
 }
 
 /* Folder Permissions */
-.create-user-modal .loading-folders {
+.edit-user-modal .loading-folders {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -234,7 +196,7 @@
   font-size: 14px;
 }
 
-.create-user-modal .loading-folders .spinner {
+.edit-user-modal .loading-folders .spinner {
   width: 24px;
   height: 24px;
   border: 3px solid var(--border-light);
@@ -243,11 +205,7 @@
   animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.create-user-modal .no-folders {
+.edit-user-modal .no-folders {
   padding: 40px;
   text-align: center;
   color: var(--text-tertiary);
@@ -256,12 +214,11 @@
   border-radius: 14px;
 }
 
-/* Folder Search */
-.create-user-modal .folder-search-group {
+.edit-user-modal .folder-search-group {
   margin-bottom: 16px;
 }
 
-.create-user-modal .folder-search-input {
+.edit-user-modal .folder-search-input {
   width: 100%;
   padding: 12px 16px;
   border: 2px solid var(--border-light);
@@ -273,17 +230,17 @@
   box-sizing: border-box;
 }
 
-.create-user-modal .folder-search-input:focus {
+.edit-user-modal .folder-search-input:focus {
   outline: none;
   border-color: #228be6;
   background: var(--bg-primary);
 }
 
-.create-user-modal .folder-search-input::placeholder {
+.edit-user-modal .folder-search-input::placeholder {
   color: var(--text-tertiary);
 }
 
-.create-user-modal .folder-permissions-list {
+.edit-user-modal .folder-permissions-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -292,7 +249,7 @@
   width: 100%;
 }
 
-.create-user-modal .folder-permission-item {
+.edit-user-modal .folder-permission-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -304,7 +261,7 @@
   box-sizing: border-box;
 }
 
-.create-user-modal .folder-info {
+.edit-user-modal .folder-info {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -312,14 +269,14 @@
   flex: 1;
 }
 
-.create-user-modal .folder-icon {
+.edit-user-modal .folder-icon {
   width: 28px;
   height: 28px;
   color: #fab005;
   flex-shrink: 0;
 }
 
-.create-user-modal .folder-name {
+.edit-user-modal .folder-name {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
@@ -328,13 +285,13 @@
   white-space: nowrap;
 }
 
-.create-user-modal .permission-buttons {
+.edit-user-modal .permission-buttons {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
 }
 
-.create-user-modal .perm-btn {
+.edit-user-modal .perm-btn {
   padding: 8px 14px;
   font-size: 12px;
   font-weight: 600;
@@ -347,28 +304,127 @@
   white-space: nowrap;
 }
 
-.create-user-modal .perm-btn:hover {
+.edit-user-modal .perm-btn:hover {
   background: var(--bg-tertiary);
 }
 
-.create-user-modal .perm-btn.active {
+.edit-user-modal .perm-btn.active {
   color: white;
 }
 
-.create-user-modal .perm-btn.active.none {
+.edit-user-modal .perm-btn.active.none {
   background: #868e96;
 }
 
-.create-user-modal .perm-btn.active.readonly {
+.edit-user-modal .perm-btn.active.readonly {
   background: #228be6;
 }
 
-.create-user-modal .perm-btn.active.readwrite {
+.edit-user-modal .perm-btn.active.readwrite {
   background: #40c057;
 }
 
+/* Toggle List */
+.edit-user-modal .toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.edit-user-modal .toggle-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.edit-user-modal .toggle-item:hover:not(.disabled) {
+  background: var(--bg-tertiary);
+}
+
+.edit-user-modal .toggle-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.edit-user-modal .toggle-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.edit-user-modal .toggle-info svg {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.edit-user-modal .toggle-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.edit-user-modal .toggle-desc {
+  display: block;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.edit-user-modal .toggle-switch {
+  position: relative;
+  width: 52px;
+  height: 32px;
+  background: var(--bg-tertiary);
+  border-radius: 16px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.edit-user-modal .toggle-switch.active {
+  background: linear-gradient(135deg, #228be6 0%, #1c7ed6 100%);
+}
+
+.edit-user-modal .toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.edit-user-modal .toggle-slider {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 24px;
+  height: 24px;
+  background: white;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.edit-user-modal .toggle-switch.active .toggle-slider {
+  left: 24px;
+}
+
+.edit-user-modal .self-warning {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin: 12px 0 0;
+  text-align: center;
+  font-style: italic;
+}
+
 /* Error Message */
-.create-user-modal .error-message {
+.edit-user-modal .error-message {
   color: #fa5252;
   font-size: 14px;
   text-align: center;
@@ -381,17 +437,16 @@
 }
 
 /* Modal Footer */
-.create-user-modal .modal-footer {
+.edit-user-modal .modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
   padding: 20px 24px;
   border-top: 1px solid var(--border-light);
   background: var(--bg-secondary);
-  flex-shrink: 0;
 }
 
-.create-user-modal .btn-cancel {
+.edit-user-modal .btn-cancel {
   padding: 12px 24px;
   font-size: 15px;
   font-weight: 600;
@@ -403,12 +458,12 @@
   transition: all 0.2s ease;
 }
 
-.create-user-modal .btn-cancel:hover {
+.edit-user-modal .btn-cancel:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }
 
-.create-user-modal .btn-submit {
+.edit-user-modal .btn-submit {
   padding: 12px 24px;
   font-size: 15px;
   font-weight: 600;
@@ -423,18 +478,18 @@
   gap: 8px;
 }
 
-.create-user-modal .btn-submit:hover:not(:disabled) {
+.edit-user-modal .btn-submit:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(34, 139, 230, 0.3);
 }
 
-.create-user-modal .btn-submit:disabled {
+.edit-user-modal .btn-submit:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
 }
 
-.create-user-modal .btn-spinner {
+.edit-user-modal .btn-spinner {
   width: 16px;
   height: 16px;
   border: 2px solid rgba(255, 255, 255, 0.3);
@@ -443,35 +498,38 @@
   animation: spin 0.8s linear infinite;
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Responsive */
 @media (max-width: 600px) {
-  .create-user-modal {
+  .edit-user-modal {
     max-width: 100%;
     max-height: 100%;
     border-radius: 0;
   }
 
-  .create-user-modal .modal-content {
+  .edit-user-modal .modal-content {
     padding: 20px;
   }
 
-  .create-user-modal .form-row {
+  .edit-user-modal .form-row {
     grid-template-columns: 1fr;
-    gap: 16px;
   }
 
-  .create-user-modal .folder-permission-item {
+  .edit-user-modal .folder-permission-item {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
   }
 
-  .create-user-modal .permission-buttons {
+  .edit-user-modal .permission-buttons {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
   }
 
-  .create-user-modal .perm-btn {
+  .edit-user-modal .perm-btn {
     padding: 10px 12px;
     text-align: center;
   }
