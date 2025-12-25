@@ -65,52 +65,38 @@ func (h *Handler) saveTrashMeta(username string, items map[string]TrashItem) err
 func (h *Handler) MoveToTrash(c echo.Context) error {
 	requestPath := c.Param("*")
 	if requestPath == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Path required",
-		})
+		return RespondError(c, ErrMissingParameter("path"))
 	}
 
 	// Get user claims - required for trash
 	claims, ok := c.Get("user").(*JWTClaims)
 	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
+		return RespondError(c, ErrUnauthorized(""))
 	}
 
 	// Resolve path
 	realPath, storageType, displayPath, err := h.resolvePath("/"+requestPath, claims)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		return RespondError(c, ErrInvalidPath(err.Error()))
 	}
 
 	if storageType == "root" || displayPath == "/home" || displayPath == "/shared" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Cannot delete root folders",
-		})
+		return RespondError(c, ErrForbidden("Cannot delete root folders"))
 	}
 
 	// Check if source exists
 	info, err := os.Stat(realPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "Item not found",
-			})
+			return RespondError(c, ErrNotFound("Item"))
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to access item",
-		})
+		return RespondError(c, ErrOperationFailed("access item", err))
 	}
 
 	// Create trash directory
 	trashPath := h.getTrashPath(claims.Username)
 	if err := os.MkdirAll(trashPath, 0755); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create trash directory",
-		})
+		return RespondError(c, ErrOperationFailed("create trash directory", err))
 	}
 
 	// Generate unique ID for trash item
@@ -119,9 +105,7 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 
 	// Move to trash
 	if err := os.Rename(realPath, trashItemPath); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to move to trash",
-		})
+		return RespondError(c, ErrOperationFailed("move to trash", err))
 	}
 
 	// Calculate size
@@ -155,16 +139,12 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 func (h *Handler) ListTrash(c echo.Context) error {
 	claims, ok := c.Get("user").(*JWTClaims)
 	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
+		return RespondError(c, ErrUnauthorized(""))
 	}
 
 	meta, err := h.loadTrashMeta(claims.Username)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to load trash",
-		})
+		return RespondError(c, ErrOperationFailed("load trash", err))
 	}
 
 	items := make([]TrashItem, 0, len(meta))
@@ -187,38 +167,28 @@ func (h *Handler) ListTrash(c echo.Context) error {
 func (h *Handler) RestoreFromTrash(c echo.Context) error {
 	trashID := c.Param("id")
 	if trashID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Trash ID required",
-		})
+		return RespondError(c, ErrMissingParameter("id"))
 	}
 
 	claims, ok := c.Get("user").(*JWTClaims)
 	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
+		return RespondError(c, ErrUnauthorized(""))
 	}
 
 	meta, err := h.loadTrashMeta(claims.Username)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to load trash",
-		})
+		return RespondError(c, ErrOperationFailed("load trash", err))
 	}
 
 	item, exists := meta[trashID]
 	if !exists {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "Trash item not found",
-		})
+		return RespondError(c, ErrNotFound("Trash item"))
 	}
 
 	// Resolve original path
 	realPath, _, _, err := h.resolvePath(item.OriginalPath, claims)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Cannot restore to original location",
-		})
+		return RespondError(c, ErrInvalidPath("Cannot restore to original location"))
 	}
 
 	// Check if destination already exists
@@ -232,17 +202,13 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 	// Ensure parent directory exists
 	parentDir := filepath.Dir(realPath)
 	if err := os.MkdirAll(parentDir, 0755); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create parent directory",
-		})
+		return RespondError(c, ErrOperationFailed("create parent directory", err))
 	}
 
 	// Move back from trash
 	trashItemPath := filepath.Join(h.getTrashPath(claims.Username), trashID)
 	if err := os.Rename(trashItemPath, realPath); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to restore item",
-		})
+		return RespondError(c, ErrOperationFailed("restore item", err))
 	}
 
 	// Update metadata
@@ -259,37 +225,27 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 func (h *Handler) DeleteFromTrash(c echo.Context) error {
 	trashID := c.Param("id")
 	if trashID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Trash ID required",
-		})
+		return RespondError(c, ErrMissingParameter("id"))
 	}
 
 	claims, ok := c.Get("user").(*JWTClaims)
 	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
+		return RespondError(c, ErrUnauthorized(""))
 	}
 
 	meta, err := h.loadTrashMeta(claims.Username)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to load trash",
-		})
+		return RespondError(c, ErrOperationFailed("load trash", err))
 	}
 
 	if _, exists := meta[trashID]; !exists {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "Trash item not found",
-		})
+		return RespondError(c, ErrNotFound("Trash item"))
 	}
 
 	// Delete permanently
 	trashItemPath := filepath.Join(h.getTrashPath(claims.Username), trashID)
 	if err := os.RemoveAll(trashItemPath); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to delete item",
-		})
+		return RespondError(c, ErrOperationFailed("delete item", err))
 	}
 
 	// Update metadata
@@ -305,18 +261,14 @@ func (h *Handler) DeleteFromTrash(c echo.Context) error {
 func (h *Handler) EmptyTrash(c echo.Context) error {
 	claims, ok := c.Get("user").(*JWTClaims)
 	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
+		return RespondError(c, ErrUnauthorized(""))
 	}
 
 	trashPath := h.getTrashPath(claims.Username)
 
 	// Remove all contents
 	if err := os.RemoveAll(trashPath); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to empty trash",
-		})
+		return RespondError(c, ErrOperationFailed("empty trash", err))
 	}
 
 	// Recreate empty trash directory
@@ -437,16 +389,12 @@ func (h *Handler) runTrashCleanup(retentionDays int) {
 func (h *Handler) GetTrashStats(c echo.Context) error {
 	claims, ok := c.Get("user").(*JWTClaims)
 	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
+		return RespondError(c, ErrUnauthorized(""))
 	}
 
 	meta, err := h.loadTrashMeta(claims.Username)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to load trash",
-		})
+		return RespondError(c, ErrOperationFailed("load trash", err))
 	}
 
 	var totalSize int64

@@ -8,6 +8,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/labstack/echo/v4 v4.12.0
 	github.com/lib/pq v1.10.9
+	github.com/rs/zerolog v1.33.0
 	github.com/samber/lo v1.47.0
 	github.com/tus/tusd/v2 v2.4.0
 )

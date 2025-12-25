@@ -24,6 +24,13 @@ interface User {
   isAdmin: boolean
 }
 
+interface InitialMember {
+  userId: string
+  username: string
+  email: string
+  permission: number
+}
+
 async function getUsers(): Promise<User[]> {
   const stored = localStorage.getItem('scv-auth')
   let headers: HeadersInit = {}
@@ -60,6 +67,12 @@ function AdminSharedFolders() {
   })
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // Initial members for create modal
+  const [allUsers, setAllUsers] = useState<User[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
+  const [initialMembers, setInitialMembers] = useState<InitialMember[]>([])
+  const [memberSearchQuery, setMemberSearchQuery] = useState('')
 
   // Members Modal
   const [showMembersModal, setShowMembersModal] = useState(false)
@@ -107,8 +120,21 @@ function AdminSharedFolders() {
     (folder.description || '').toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  // Load users for create modal
+  const loadAllUsers = async () => {
+    setLoadingUsers(true)
+    try {
+      const usersData = await getUsers()
+      setAllUsers(usersData)
+    } catch (err) {
+      console.error('Failed to load users:', err)
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
+
   // Open create modal
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setEditingFolder(null)
     setFormData({
       name: '',
@@ -118,11 +144,14 @@ function AdminSharedFolders() {
       isActive: true,
     })
     setFormError(null)
+    setInitialMembers([])
+    setMemberSearchQuery('')
     setShowModal(true)
+    await loadAllUsers()
   }
 
   // Open edit modal
-  const handleEdit = (folder: SharedFolder) => {
+  const handleEdit = async (folder: SharedFolder) => {
     setEditingFolder(folder)
     let quota = folder.storageQuota
     let unit: 'MB' | 'GB' | 'TB' = 'GB'
@@ -148,8 +177,40 @@ function AdminSharedFolders() {
       isActive: folder.isActive,
     })
     setFormError(null)
+    setInitialMembers([])
+    setMemberSearchQuery('')
     setShowModal(true)
   }
+
+  // Add initial member (for create modal)
+  const handleAddInitialMember = (user: User, permission: number) => {
+    if (initialMembers.some(m => m.userId === user.id)) return
+    setInitialMembers([...initialMembers, {
+      userId: user.id,
+      username: user.username,
+      email: user.email,
+      permission,
+    }])
+  }
+
+  // Remove initial member
+  const handleRemoveInitialMember = (userId: string) => {
+    setInitialMembers(initialMembers.filter(m => m.userId !== userId))
+  }
+
+  // Update initial member permission
+  const handleUpdateInitialMemberPermission = (userId: string, permission: number) => {
+    setInitialMembers(initialMembers.map(m =>
+      m.userId === userId ? { ...m, permission } : m
+    ))
+  }
+
+  // Filter available users for initial member selection
+  const availableUsersForInitial = allUsers.filter(u =>
+    !initialMembers.some(m => m.userId === u.id) &&
+    (u.username.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
+     (u.email || '').toLowerCase().includes(memberSearchQuery.toLowerCase()))
+  )
 
   // Save folder
   const handleSave = async () => {
@@ -183,11 +244,23 @@ function AdminSharedFolders() {
           isActive: formData.isActive,
         })
       } else {
-        await createSharedFolder({
+        // Create new folder
+        const newFolder = await createSharedFolder({
           name: formData.name.trim(),
           description: formData.description.trim(),
           storageQuota: quotaBytes,
         })
+
+        // Add initial members if any
+        if (initialMembers.length > 0 && newFolder?.id) {
+          for (const member of initialMembers) {
+            try {
+              await addSharedFolderMember(newFolder.id, member.userId, member.permission)
+            } catch (err) {
+              console.error(`Failed to add member ${member.username}:`, err)
+            }
+          }
+        }
       }
       setShowModal(false)
       loadFolders()
@@ -244,6 +317,8 @@ function AdminSharedFolders() {
       setMembers(updated)
       setNewMemberUserId('')
       setNewMemberPermission(PERMISSION_READ_ONLY)
+      // Reload folders to update member count
+      loadFolders()
     } catch (err) {
       alert(err instanceof Error ? err.message : '멤버 추가에 실패했습니다')
     } finally {
@@ -271,6 +346,8 @@ function AdminSharedFolders() {
       await removeSharedFolderMember(selectedFolder.id, userId)
       const updated = await getSharedFolderMembers(selectedFolder.id)
       setMembers(updated)
+      // Reload folders to update member count
+      loadFolders()
     } catch (err) {
       alert(err instanceof Error ? err.message : '멤버 제거에 실패했습니다')
     }
@@ -498,7 +575,7 @@ function AdminSharedFolders() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="sf-modal" onClick={e => e.stopPropagation()}>
+          <div className="sf-modal create-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div className="modal-title-row">
                 <div className="modal-icon">
@@ -517,61 +594,196 @@ function AdminSharedFolders() {
             <div className="modal-body">
               {formError && <div className="form-error">{formError}</div>}
 
-              <div className="form-group">
-                <label>드라이브 이름 *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="예: 마케팅팀 공유폴더"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>설명</label>
-                <textarea
-                  value={formData.description}
-                  onChange={e => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="이 드라이브의 용도를 설명해주세요 (선택사항)"
-                  rows={3}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>용량 제한</label>
-                <div className="quota-input">
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.storageQuota}
-                    onChange={e => setFormData({ ...formData, storageQuota: Number(e.target.value) })}
-                    placeholder="0"
-                  />
-                  <select
-                    value={formData.storageQuotaUnit}
-                    onChange={e => setFormData({ ...formData, storageQuotaUnit: e.target.value as 'MB' | 'GB' | 'TB' })}
-                  >
-                    <option value="MB">MB</option>
-                    <option value="GB">GB</option>
-                    <option value="TB">TB</option>
-                  </select>
-                </div>
-                <span className="form-hint">0을 입력하면 용량 제한이 없습니다.</span>
-              </div>
-
-              {editingFolder && (
+              <div className="form-section">
+                <h3 className="form-section-title">기본 정보</h3>
                 <div className="form-group">
-                  <label className="toggle-label">
-                    <span>활성화 상태</span>
-                    <div className={`toggle-switch ${formData.isActive ? 'active' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={formData.isActive}
-                        onChange={e => setFormData({ ...formData, isActive: e.target.checked })}
-                      />
-                      <span className="toggle-slider"></span>
+                  <label>드라이브 이름 *</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="예: 마케팅팀 공유폴더"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>설명</label>
+                  <textarea
+                    value={formData.description}
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="이 드라이브의 용도를 설명해주세요 (선택사항)"
+                    rows={3}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>용량 제한</label>
+                  <div className="quota-input">
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.storageQuota}
+                      onChange={e => setFormData({ ...formData, storageQuota: Number(e.target.value) })}
+                      placeholder="0"
+                    />
+                    <select
+                      value={formData.storageQuotaUnit}
+                      onChange={e => setFormData({ ...formData, storageQuotaUnit: e.target.value as 'MB' | 'GB' | 'TB' })}
+                    >
+                      <option value="MB">MB</option>
+                      <option value="GB">GB</option>
+                      <option value="TB">TB</option>
+                    </select>
+                  </div>
+                  <span className="form-hint">0을 입력하면 용량 제한이 없습니다.</span>
+                </div>
+
+                {editingFolder && (
+                  <div className="form-group">
+                    <label className="toggle-label">
+                      <span>활성화 상태</span>
+                      <div className={`toggle-switch ${formData.isActive ? 'active' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={formData.isActive}
+                          onChange={e => setFormData({ ...formData, isActive: e.target.checked })}
+                        />
+                        <span className="toggle-slider"></span>
+                      </div>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Initial Members Section - Only for Create */}
+              {!editingFolder && (
+                <div className="form-section">
+                  <h3 className="form-section-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                      <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="2"/>
+                    </svg>
+                    초기 멤버 할당
+                    <span className="section-badge">{initialMembers.length}명</span>
+                  </h3>
+
+                  {/* Selected Members */}
+                  {initialMembers.length > 0 && (
+                    <div className="initial-members-list">
+                      {initialMembers.map(member => (
+                        <div key={member.userId} className="initial-member-item">
+                          <div className="member-info">
+                            <div className="member-avatar">
+                              {member.username.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="member-details">
+                              <span className="member-name">{member.username}</span>
+                              {member.email && <span className="member-email">{member.email}</span>}
+                            </div>
+                          </div>
+                          <div className="member-actions">
+                            <select
+                              value={member.permission}
+                              onChange={e => handleUpdateInitialMemberPermission(member.userId, Number(e.target.value))}
+                              className="permission-select"
+                            >
+                              <option value={PERMISSION_READ_ONLY}>읽기 전용</option>
+                              <option value={PERMISSION_READ_WRITE}>읽기/쓰기</option>
+                            </select>
+                            <button
+                              className="remove-btn"
+                              onClick={() => handleRemoveInitialMember(member.userId)}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </label>
+                  )}
+
+                  {/* Add Members */}
+                  <div className="add-member-section">
+                    <div className="member-search-box">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
+                        <path d="M21 21L16.65 16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      </svg>
+                      <input
+                        type="text"
+                        placeholder="사용자 검색..."
+                        value={memberSearchQuery}
+                        onChange={e => setMemberSearchQuery(e.target.value)}
+                      />
+                      {memberSearchQuery && (
+                        <button className="clear-btn" onClick={() => setMemberSearchQuery('')}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                            <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+
+                    {loadingUsers ? (
+                      <div className="users-loading">
+                        <div className="spinner small"></div>
+                        <span>사용자 목록을 불러오는 중...</span>
+                      </div>
+                    ) : (
+                      <div className="available-users-list">
+                        {availableUsersForInitial.length === 0 ? (
+                          <div className="no-users">
+                            {memberSearchQuery ? '검색 결과가 없습니다' : '추가 가능한 사용자가 없습니다'}
+                          </div>
+                        ) : (
+                          availableUsersForInitial.slice(0, 5).map(user => (
+                            <div key={user.id} className="available-user-item">
+                              <div className="user-info">
+                                <div className="user-avatar">
+                                  {user.username.slice(0, 2).toUpperCase()}
+                                </div>
+                                <div className="user-details">
+                                  <span className="user-name">{user.username}</span>
+                                  {user.email && <span className="user-email">{user.email}</span>}
+                                </div>
+                              </div>
+                              <div className="user-actions">
+                                <button
+                                  className="add-btn readonly"
+                                  onClick={() => handleAddInitialMember(user, PERMISSION_READ_ONLY)}
+                                  title="읽기 전용으로 추가"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                    <path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+                                  </svg>
+                                  읽기
+                                </button>
+                                <button
+                                  className="add-btn readwrite"
+                                  onClick={() => handleAddInitialMember(user, PERMISSION_READ_WRITE)}
+                                  title="읽기/쓰기로 추가"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                    <path d="M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <path d="M18.5 2.50001C18.8978 2.10219 19.4374 1.87869 20 1.87869C20.5626 1.87869 21.1022 2.10219 21.5 2.50001C21.8978 2.89784 22.1213 3.4374 22.1213 4.00001C22.1213 4.56262 21.8978 5.10219 21.5 5.50001L12 15L8 16L9 12L18.5 2.50001Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                  편집
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                        {availableUsersForInitial.length > 5 && (
+                          <div className="more-users-hint">
+                            + {availableUsersForInitial.length - 5}명 더 있음 (검색하여 찾기)
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -675,9 +887,9 @@ function AdminSharedFolders() {
                           <div key={member.id} className="member-item">
                             <div className="member-info">
                               <div className="member-avatar">
-                                {member.username.slice(0, 2).toUpperCase()}
+                                {(member.username || '??').slice(0, 2).toUpperCase()}
                               </div>
-                              <span className="member-name">{member.username}</span>
+                              <span className="member-name">{member.username || '알 수 없음'}</span>
                             </div>
                             <div className="member-actions">
                               <select
