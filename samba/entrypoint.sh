@@ -3,6 +3,7 @@ set -e
 
 SYNC_FILE="/etc/scv/smb_users.txt"
 SYNC_DIR="/etc/scv"
+AUDIT_LOG="/etc/scv/smb_audit.log"
 
 echo "[SCV-Samba] Starting user sync service..."
 
@@ -10,7 +11,7 @@ echo "[SCV-Samba] Starting user sync service..."
 groupadd -f users 2>/dev/null || true
 
 # Ensure directories exist
-mkdir -p /data/users /data/shared
+mkdir -p /data/users /data/shared /var/log/samba
 chmod 775 /data/shared
 chown root:users /data/shared 2>/dev/null || true
 
@@ -19,6 +20,22 @@ chown root:users /data/shared 2>/dev/null || true
 echo "[SCV-Samba] Fixing shared folder permissions..."
 find /data/shared -type d -exec chmod 775 {} \; 2>/dev/null || true
 find /data/shared -type d -exec chown :users {} \; 2>/dev/null || true
+
+# Create audit log file
+echo "[SCV-Samba] Setting up audit logging..."
+touch "$AUDIT_LOG"
+chmod 644 "$AUDIT_LOG"
+
+# Start audit log watcher - monitors smbd logs for SMB_AUDIT entries
+# and writes them to the shared audit log file
+(
+    echo "[SCV-Samba] Starting audit log watcher..."
+    tail -F /var/log/samba/*.log 2>/dev/null | while read -r line; do
+        if [[ "$line" == *"SMB_AUDIT"* ]]; then
+            echo "$(date '+%b %d %H:%M:%S') $line" >> "$AUDIT_LOG"
+        fi
+    done
+) &
 
 # Sync users from file
 sync_users() {

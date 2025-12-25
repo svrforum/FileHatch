@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -106,6 +107,11 @@ func main() {
 	// Create SMB handler
 	smbHandler := handlers.NewSMBHandler(db, "/etc/scv")
 
+	// Create SMB Audit handler
+	smbAuditHandler := handlers.NewSMBAuditHandler(db, "/etc/scv")
+	// Start background sync every 30 seconds
+	smbAuditHandler.StartBackgroundSync(30 * time.Second)
+
 	// Create Auth handler
 	authHandler := handlers.NewAuthHandler(db)
 
@@ -186,6 +192,8 @@ func main() {
 	authApi.DELETE("/smb/users/:username", smbHandler.DeleteSMBUser)
 	authApi.GET("/smb/config", smbHandler.GetSMBConfig)
 	authApi.PUT("/smb/config", smbHandler.UpdateSMBConfig)
+	adminApi.GET("/smb/audit", smbAuditHandler.GetSMBAuditLogs)
+	adminApi.POST("/smb/audit/sync", smbAuditHandler.SyncSMBAuditLogs)
 
 	// Audit logs API (protected)
 	authApi.GET("/audit/logs", auditHandler.ListAuditLogs)
