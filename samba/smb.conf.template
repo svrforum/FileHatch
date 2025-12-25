@@ -39,9 +39,10 @@
    valid users = @users
    force group = users
    # Audit logging for file operations (Samba 4.22+ operation names)
+   # openat: file open/create, mkdirat: folder create, unlinkat: delete, renameat: rename
    vfs objects = full_audit
    full_audit:prefix = SMB_AUDIT|%u|%I|%m|%S
-   full_audit:success = mkdirat unlinkat pwrite renameat
+   full_audit:success = openat mkdirat unlinkat renameat
    full_audit:failure = none
    full_audit:facility = local7
    full_audit:priority = notice
@@ -57,9 +58,10 @@
    directory mask = 0755
    path = /data/users/%U
    # Audit logging for file operations (Samba 4.22+ operation names)
+   # openat: file open/create, mkdirat: folder create, unlinkat: delete, renameat: rename
    vfs objects = full_audit
    full_audit:prefix = SMB_AUDIT|%u|%I|%m|%S
-   full_audit:success = mkdirat unlinkat pwrite renameat
+   full_audit:success = openat mkdirat unlinkat renameat
    full_audit:failure = none
    full_audit:facility = local7
    full_audit:priority = notice

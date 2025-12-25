@@ -71,8 +71,19 @@ func parseAuditLine(line string) (*SMBAuditEntry, error) {
 	}
 
 	// parts[5] is status (ok/fail)
-	// parts[6+] is file path (may contain | for rename operations)
-	if len(parts) >= 7 {
+	// For openat: parts[6] is mode (r/w), parts[7] is file path
+	// For other ops: parts[6] is file path
+	if parts[4] == "openat" {
+		// openat format: SMB_AUDIT|user|ip|host|share|openat|ok|mode|filepath
+		if len(parts) >= 8 {
+			mode := parts[6]
+			entry.FilePath = parts[7]
+			// Skip read-only opens (r mode) to reduce noise
+			if mode == "r" {
+				return nil, fmt.Errorf("skipping read-only openat")
+			}
+		}
+	} else if len(parts) >= 7 {
 		entry.FilePath = parts[6]
 	}
 
@@ -93,10 +104,13 @@ func parseAuditLine(line string) (*SMBAuditEntry, error) {
 }
 
 // mapOperationToAction maps SMB operations to audit action types
-// Samba 4.22+ uses new operation names: mkdirat, unlinkat, renameat, pwrite
+// Samba 4.22+ uses new operation names: openat, mkdirat, unlinkat, renameat
 func mapOperationToAction(op string) string {
 	switch strings.ToLower(op) {
-	case "open", "read", "close":
+	case "open", "openat":
+		// openat with write mode indicates file creation/modification
+		return "smb_create"
+	case "read", "close":
 		return "smb_read"
 	case "write", "pwrite":
 		return "smb_write"
@@ -153,8 +167,9 @@ func (h *SMBAuditHandler) ProcessAuditLog() (int, error) {
 			continue // Skip non-audit lines
 		}
 
-		// Skip read/open/close operations to reduce noise (optional - can be configurable)
-		if entry.Operation == "open" || entry.Operation == "read" || entry.Operation == "close" {
+		// Skip read/close operations to reduce noise
+		// Note: openat is now logged for file creation tracking
+		if entry.Operation == "read" || entry.Operation == "close" {
 			continue
 		}
 

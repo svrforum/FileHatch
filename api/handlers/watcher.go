@@ -277,15 +277,10 @@ func (fw *FileWatcher) eventLoop() {
 			log.Printf("[Watcher] Event: %s %s (isDir: %v)", eventType, virtualPath, isDir)
 			BroadcastFileChange(changeEvent)
 
-			// Log to audit (SMB operations) - only for create/delete/rename, not modify
-			// Skip if this is a web upload (not SMB)
-			if eventType != "write" && !GetWebUploadTracker().IsWebUpload(event.Name) {
-				fw.logAuditEvent(username, auditEventType, virtualPath, map[string]interface{}{
-					"source":   "smb",
-					"fileName": filepath.Base(event.Name),
-					"isDir":    isDir,
-				})
-			}
+			// SMB audit logging is now handled by vfs_full_audit (smb_audit_handler.go)
+			// which provides accurate username and IP information
+			_ = username       // Suppress unused variable warning
+			_ = auditEventType // Suppress unused variable warning
 
 		case err, ok := <-fw.watcher.Errors:
 			if !ok {

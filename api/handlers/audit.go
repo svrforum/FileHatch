@@ -130,7 +130,8 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 
 	// Category filter
 	if category == "file" {
-		query += " AND (al.event_type LIKE 'file.%' OR al.event_type LIKE 'folder.%' OR al.event_type LIKE 'smb.%')"
+		// Include both smb.% (legacy watcher) and smb_% (vfs_full_audit)
+		query += " AND (al.event_type LIKE 'file.%' OR al.event_type LIKE 'folder.%' OR al.event_type LIKE 'smb.%' OR al.event_type LIKE 'smb\\_%')"
 	} else if category == "admin" {
 		query += " AND al.event_type LIKE 'admin.%'"
 	} else if category == "user" {
@@ -193,7 +194,8 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 	// Get total count
 	countQuery := `SELECT COUNT(*) FROM audit_logs al WHERE 1=1`
 	if category == "file" {
-		countQuery += " AND (al.event_type LIKE 'file.%' OR al.event_type LIKE 'folder.%' OR al.event_type LIKE 'smb.%')"
+		// Include both smb.% (legacy watcher) and smb_% (vfs_full_audit)
+		countQuery += " AND (al.event_type LIKE 'file.%' OR al.event_type LIKE 'folder.%' OR al.event_type LIKE 'smb.%' OR al.event_type LIKE 'smb\\_%')"
 	} else if category == "admin" {
 		countQuery += " AND al.event_type LIKE 'admin.%'"
 	} else if category == "user" {
