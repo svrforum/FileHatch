@@ -14,6 +14,12 @@ mkdir -p /data/users /data/shared
 chmod 775 /data/shared
 chown root:users /data/shared 2>/dev/null || true
 
+# Fix permissions on all subdirectories in /data/shared
+# This ensures SMB users can write to shared folders
+echo "[SCV-Samba] Fixing shared folder permissions..."
+find /data/shared -type d -exec chmod 775 {} \; 2>/dev/null || true
+find /data/shared -type d -exec chown :users {} \; 2>/dev/null || true
+
 # Sync users from file
 sync_users() {
     if [ -f "$SYNC_FILE" ]; then

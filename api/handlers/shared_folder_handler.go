@@ -75,11 +75,27 @@ func (h *SharedFolderHandler) GetSharedFoldersDir() string {
 }
 
 // EnsureSharedFolderDir creates the directory for a shared folder by name
+// The directory is created with 0775 permissions and 'users' group ownership
+// to allow SMB users in the 'users' group to write to it
 func (h *SharedFolderHandler) EnsureSharedFolderDir(folderName string) error {
 	// Sanitize folder name for filesystem
 	safeName := sanitizeFolderName(folderName)
 	dir := filepath.Join(h.GetSharedFoldersDir(), safeName)
-	return os.MkdirAll(dir, 0755)
+
+	// Create directory with group-writable permissions (775)
+	if err := os.MkdirAll(dir, 0775); err != nil {
+		return err
+	}
+
+	// Set group ownership to 'users' (GID 100 on Alpine/Debian)
+	// This allows SMB users in the 'users' group to write to the directory
+	// Use 'users' group which is typically GID 100
+	if err := os.Chown(dir, -1, 100); err != nil {
+		// Log but don't fail - permissions might still work
+		fmt.Printf("Warning: Failed to set group ownership for %s: %v\n", dir, err)
+	}
+
+	return nil
 }
 
 // GetFolderPath returns the filesystem path for a shared folder
