@@ -27,18 +27,25 @@ echo "[SCV-Samba] Fixing shared folder permissions..."
 find /data/shared -type d -exec chmod 775 {} \; 2>/dev/null || true
 find /data/shared -type d -exec chown :users {} \; 2>/dev/null || true
 
-# Create audit log file
+# Create audit log files
 echo "[SCV-Samba] Setting up audit logging..."
 touch "$AUDIT_LOG"
+touch /var/log/samba/smb_audit.log
 chmod 644 "$AUDIT_LOG"
+chmod 644 /var/log/samba/smb_audit.log
 
-# Start audit log watcher - monitors smbd logs for SMB_AUDIT entries
+# Start rsyslog daemon to capture vfs_full_audit logs
+echo "[SCV-Samba] Starting rsyslog for audit capture..."
+rsyslogd 2>/dev/null || true
+
+# Start audit log watcher - monitors rsyslog output for SMB_AUDIT entries
 # and writes them to the shared audit log file
 (
     echo "[SCV-Samba] Starting audit log watcher..."
-    tail -F /var/log/samba/*.log 2>/dev/null | while read -r line; do
+    sleep 2  # Wait for rsyslog to start
+    tail -F /var/log/samba/smb_audit.log 2>/dev/null | while read -r line; do
         if [[ "$line" == *"SMB_AUDIT"* ]]; then
-            echo "$(date '+%b %d %H:%M:%S') $line" >> "$AUDIT_LOG"
+            echo "$line" >> "$AUDIT_LOG"
         fi
     done
 ) &
@@ -52,9 +59,9 @@ sync_users() {
             # Skip empty lines and comments
             [[ -z "$username" || "$username" =~ ^# ]] && continue
 
-            # Create Linux user if not exists
+            # Create Linux user if not exists (Alpine uses adduser)
             if ! id "$username" &>/dev/null; then
-                useradd -M -s /usr/sbin/nologin -G users "$username" 2>/dev/null || true
+                adduser -D -H -G users -s /sbin/nologin "$username" 2>/dev/null || true
                 echo "[SCV-Samba] Created Linux user: $username"
             fi
 
@@ -99,5 +106,7 @@ sync_users
 
 echo "[SCV-Samba] User sync service started."
 
-# Call original entrypoint
-exec /sbin/tini -- /usr/bin/samba.sh "$@"
+# Start smbd and nmbd directly
+echo "[SCV-Samba] Starting Samba services..."
+nmbd -D 2>/dev/null || true
+exec smbd -F --no-process-group "$@"

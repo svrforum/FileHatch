@@ -19,8 +19,6 @@
    disable netbios = no
 
    # Authentication settings
-   client lanman auth = no
-   client ntlmv2 auth = yes
    ntlm auth = ntlmv2-only
 
    # Browsing settings
@@ -40,6 +38,13 @@
    directory mask = 0775
    valid users = @users
    force group = users
+   # Audit logging for file operations (Samba 4.22+ operation names)
+   vfs objects = full_audit
+   full_audit:prefix = SMB_AUDIT|%u|%I|%m|%S
+   full_audit:success = mkdirat unlinkat pwrite renameat
+   full_audit:failure = none
+   full_audit:facility = local7
+   full_audit:priority = notice
 
 # User home directories - automatically creates share with username
 # When user 'admin' connects, they see 'admin' share pointing to /data/users/admin
@@ -51,3 +56,10 @@
    create mask = 0644
    directory mask = 0755
    path = /data/users/%U
+   # Audit logging for file operations (Samba 4.22+ operation names)
+   vfs objects = full_audit
+   full_audit:prefix = SMB_AUDIT|%u|%I|%m|%S
+   full_audit:success = mkdirat unlinkat pwrite renameat
+   full_audit:failure = none
+   full_audit:facility = local7
+   full_audit:priority = notice

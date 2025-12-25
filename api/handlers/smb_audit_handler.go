@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -47,11 +46,8 @@ func NewSMBAuditHandler(db *sql.DB, configPath string) *SMBAuditHandler {
 }
 
 // parseAuditLine parses a single SMB audit log line
-// Format: <timestamp> <hostname> smbd_audit: SMB_AUDIT|username|clientIP|hostname|sharename|operation|filepath
+// Format (rsyslog): 2025-12-25T22:57:49.939325+09:00 HOSTNAME smbd_audit: SMB_AUDIT|username|clientIP|hostname|sharename|operation|status|filepath
 func parseAuditLine(line string) (*SMBAuditEntry, error) {
-	// Match syslog format with SMB_AUDIT prefix
-	// Example: Dec 25 12:00:00 hostname smbd_audit: SMB_AUDIT|admin|192.168.1.1|client|shared|open|/path/to/file
-
 	// Find SMB_AUDIT marker
 	idx := strings.Index(line, "SMB_AUDIT|")
 	if idx == -1 {
@@ -59,46 +55,37 @@ func parseAuditLine(line string) (*SMBAuditEntry, error) {
 	}
 
 	auditPart := line[idx+len("SMB_AUDIT|"):]
-	parts := strings.SplitN(auditPart, "|", 5)
-	if len(parts) < 4 {
-		return nil, fmt.Errorf("invalid audit format")
+	parts := strings.Split(auditPart, "|")
+	if len(parts) < 6 {
+		return nil, fmt.Errorf("invalid audit format: need at least 6 parts, got %d", len(parts))
 	}
 
 	entry := &SMBAuditEntry{
-		Timestamp:  time.Now(), // Will be parsed from syslog timestamp if needed
+		Timestamp:  time.Now(),
 		Username:   parts[0],
 		ClientIP:   parts[1],
 		Hostname:   parts[2],
 		ShareName:  parts[3],
+		Operation:  parts[4],
 		RawMessage: line,
 	}
 
-	// Parse operation and file path from the rest
-	if len(parts) >= 5 {
-		remaining := parts[4]
-		// Operation format: "operation|/path/to/file" or "operation(/path/to/file)"
-		if opIdx := strings.Index(remaining, "|"); opIdx != -1 {
-			entry.Operation = remaining[:opIdx]
-			entry.FilePath = remaining[opIdx+1:]
-		} else if strings.Contains(remaining, "(") {
-			// Format: open(/data/shared/file.txt)
-			re := regexp.MustCompile(`(\w+)\((.*)\)`)
-			matches := re.FindStringSubmatch(remaining)
-			if len(matches) >= 3 {
-				entry.Operation = matches[1]
-				entry.FilePath = matches[2]
-			}
-		}
+	// parts[5] is status (ok/fail)
+	// parts[6+] is file path (may contain | for rename operations)
+	if len(parts) >= 7 {
+		entry.FilePath = parts[6]
 	}
 
-	// Parse timestamp from syslog format (e.g., "Dec 25 12:00:00")
-	if len(line) > 15 {
-		timestampStr := line[:15]
-		currentYear := time.Now().Year()
-		parsed, err := time.Parse("Jan  2 15:04:05", timestampStr)
-		if err == nil {
-			entry.Timestamp = time.Date(currentYear, parsed.Month(), parsed.Day(),
-				parsed.Hour(), parsed.Minute(), parsed.Second(), 0, time.Local)
+	// Parse ISO 8601 timestamp from rsyslog format (e.g., "2025-12-25T22:57:49.939325+09:00")
+	if len(line) > 32 && strings.HasPrefix(line, "20") {
+		// Find first space to get timestamp
+		spaceIdx := strings.Index(line, " ")
+		if spaceIdx > 0 {
+			timestampStr := line[:spaceIdx]
+			parsed, err := time.Parse(time.RFC3339Nano, timestampStr)
+			if err == nil {
+				entry.Timestamp = parsed
+			}
 		}
 	}
 
@@ -106,19 +93,20 @@ func parseAuditLine(line string) (*SMBAuditEntry, error) {
 }
 
 // mapOperationToAction maps SMB operations to audit action types
+// Samba 4.22+ uses new operation names: mkdirat, unlinkat, renameat, pwrite
 func mapOperationToAction(op string) string {
 	switch strings.ToLower(op) {
-	case "open", "read":
+	case "open", "read", "close":
 		return "smb_read"
-	case "write":
+	case "write", "pwrite":
 		return "smb_write"
-	case "mkdir":
+	case "mkdir", "mkdirat":
 		return "smb_mkdir"
 	case "rmdir":
 		return "smb_rmdir"
-	case "unlink":
+	case "unlink", "unlinkat":
 		return "smb_delete"
-	case "rename":
+	case "rename", "renameat":
 		return "smb_rename"
 	default:
 		return "smb_" + strings.ToLower(op)
@@ -165,8 +153,8 @@ func (h *SMBAuditHandler) ProcessAuditLog() (int, error) {
 			continue // Skip non-audit lines
 		}
 
-		// Skip read/open operations to reduce noise (optional - can be configurable)
-		if entry.Operation == "open" || entry.Operation == "read" {
+		// Skip read/open/close operations to reduce noise (optional - can be configurable)
+		if entry.Operation == "open" || entry.Operation == "read" || entry.Operation == "close" {
 			continue
 		}
 
@@ -212,16 +200,16 @@ func (h *SMBAuditHandler) ProcessAuditLog() (int, error) {
 func (h *SMBAuditHandler) GetSMBAuditLogs(c echo.Context) error {
 	// Query audit logs with smb_ prefix
 	rows, err := h.db.Query(`
-		SELECT al.id, al.user_id, u.username, al.ip_address, al.action,
-		       al.resource_path, al.details, al.created_at
+		SELECT al.id, al.actor_id, u.username, al.ip_addr::text, al.event_type,
+		       al.target_resource, al.details, al.ts
 		FROM audit_logs al
-		LEFT JOIN users u ON al.user_id = u.id
-		WHERE al.action LIKE 'smb_%'
-		ORDER BY al.created_at DESC
+		LEFT JOIN users u ON al.actor_id = u.id
+		WHERE al.event_type LIKE 'smb_%'
+		ORDER BY al.ts DESC
 		LIMIT 100
 	`)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error: " + err.Error()})
 	}
 	defer rows.Close()
 
@@ -231,7 +219,7 @@ func (h *SMBAuditHandler) GetSMBAuditLogs(c echo.Context) error {
 			id           int64
 			userID       sql.NullString
 			username     sql.NullString
-			ipAddress    string
+			ipAddress    sql.NullString
 			action       string
 			resourcePath string
 			details      sql.NullString
@@ -243,7 +231,6 @@ func (h *SMBAuditHandler) GetSMBAuditLogs(c echo.Context) error {
 
 		log := map[string]interface{}{
 			"id":           id,
-			"ipAddress":    ipAddress,
 			"action":       action,
 			"resourcePath": resourcePath,
 			"createdAt":    createdAt,
@@ -253,6 +240,9 @@ func (h *SMBAuditHandler) GetSMBAuditLogs(c echo.Context) error {
 		}
 		if username.Valid {
 			log["username"] = username.String
+		}
+		if ipAddress.Valid {
+			log["ipAddress"] = ipAddress.String
 		}
 		if details.Valid {
 			log["details"] = details.String
