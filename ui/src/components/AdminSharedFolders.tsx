@@ -54,6 +54,9 @@ function AdminSharedFolders() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    return (localStorage.getItem('scv-shared-folders-view') as 'grid' | 'list') || 'grid'
+  })
 
   // Create/Edit Modal
   const [showModal, setShowModal] = useState(false)
@@ -83,6 +86,7 @@ function AdminSharedFolders() {
   const [addingMember, setAddingMember] = useState(false)
   const [newMemberUserId, setNewMemberUserId] = useState('')
   const [newMemberPermission, setNewMemberPermission] = useState(PERMISSION_READ_ONLY)
+  const [memberModalSearch, setMemberModalSearch] = useState('')
 
   // Delete confirmation
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -119,6 +123,12 @@ function AdminSharedFolders() {
     folder.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (folder.description || '').toLowerCase().includes(searchQuery.toLowerCase())
   )
+
+  // Handle view mode change
+  const handleViewModeChange = (mode: 'grid' | 'list') => {
+    setViewMode(mode)
+    localStorage.setItem('scv-shared-folders-view', mode)
+  }
 
   // Load users for create modal
   const loadAllUsers = async () => {
@@ -292,6 +302,8 @@ function AdminSharedFolders() {
     setSelectedFolder(folder)
     setLoadingMembers(true)
     setShowMembersModal(true)
+    setMemberModalSearch('')
+    setNewMemberUserId('')
 
     try {
       const [membersData, usersData] = await Promise.all([
@@ -308,11 +320,13 @@ function AdminSharedFolders() {
   }
 
   // Add member
-  const handleAddMember = async () => {
-    if (!selectedFolder || !newMemberUserId) return
+  const handleAddMember = async (userId?: string, permission?: number) => {
+    const targetUserId = userId || newMemberUserId
+    const targetPermission = permission !== undefined ? permission : newMemberPermission
+    if (!selectedFolder || !targetUserId) return
     setAddingMember(true)
     try {
-      await addSharedFolderMember(selectedFolder.id, newMemberUserId, newMemberPermission)
+      await addSharedFolderMember(selectedFolder.id, targetUserId, targetPermission)
       const updated = await getSharedFolderMembers(selectedFolder.id)
       setMembers(updated)
       setNewMemberUserId('')
@@ -354,6 +368,16 @@ function AdminSharedFolders() {
   }
 
   const availableUsers = users.filter(u => !members.some(m => m.userId === u.id))
+
+  // Filter for member modal search
+  const filteredAvailableUsers = availableUsers.filter(u =>
+    u.username.toLowerCase().includes(memberModalSearch.toLowerCase()) ||
+    (u.email || '').toLowerCase().includes(memberModalSearch.toLowerCase())
+  )
+
+  const filteredMembers = members.filter(m =>
+    (m.username || '').toLowerCase().includes(memberModalSearch.toLowerCase())
+  )
 
   const getUsagePercent = (folder: SharedFolder) => {
     if (!folder.storageQuota || folder.storageQuota === 0) return 0
@@ -458,6 +482,29 @@ function AdminSharedFolders() {
             </button>
           )}
         </div>
+        <div className="view-toggle">
+          <button
+            className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
+            onClick={() => handleViewModeChange('grid')}
+            title="그리드 뷰"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="2"/>
+              <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="2"/>
+              <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="2"/>
+              <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="2"/>
+            </svg>
+          </button>
+          <button
+            className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
+            onClick={() => handleViewModeChange('list')}
+            title="리스트 뷰"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M8 6H21M8 12H21M8 18H21M3 6H3.01M3 12H3.01M3 18H3.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Folders Grid/List */}
@@ -479,7 +526,7 @@ function AdminSharedFolders() {
             </button>
           )}
         </div>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <div className="folders-grid">
           {filteredFolders.map(folder => (
             <div key={folder.id} className={`folder-card ${!folder.isActive ? 'inactive' : ''}`}>
@@ -564,6 +611,63 @@ function AdminSharedFolders() {
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                     <path d="M3 6H5H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="folders-list">
+          {filteredFolders.map(folder => (
+            <div key={folder.id} className={`folder-row ${!folder.isActive ? 'inactive' : ''}`}>
+              <div className="folder-row-main">
+                <div className="folder-icon-sm">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H9L11 6H20C20.5304 6 21.0391 6.21071 21.4142 6.58579C21.7893 6.96086 22 7.46957 22 8V19Z" fill="#3B82F6" stroke="#3B82F6" strokeWidth="2"/>
+                  </svg>
+                </div>
+                <div className="folder-row-info">
+                  <span className="folder-row-name">{folder.name}</span>
+                  <span className="folder-row-desc">{folder.description || '설명 없음'}</span>
+                </div>
+              </div>
+              <div className="folder-row-meta">
+                <span className="meta-item">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" stroke="currentColor" strokeWidth="2"/>
+                    <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                  {folder.memberCount || 0}
+                </span>
+                <span className="meta-item">
+                  {folder.storageQuota > 0
+                    ? `${formatStorageSize(folder.usedStorage || 0)} / ${formatStorageSize(folder.storageQuota)}`
+                    : '무제한'
+                  }
+                </span>
+                <span className={`status-pill ${folder.isActive ? 'active' : 'inactive'}`}>
+                  {folder.isActive ? '활성' : '비활성'}
+                </span>
+              </div>
+              <div className="folder-row-actions">
+                <button className="row-action-btn" onClick={() => handleManageMembers(folder)} title="멤버 관리">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" stroke="currentColor" strokeWidth="2"/>
+                    <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                </button>
+                <button className="row-action-btn" onClick={() => handleEdit(folder)} title="수정">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M18.5 2.50001C18.8978 2.10219 19.4374 1.87869 20 1.87869C20.5626 1.87869 21.1022 2.10219 21.5 2.50001C21.8978 2.89784 22.1213 3.4374 22.1213 4.00001C22.1213 4.56262 21.8978 5.10219 21.5 5.50001L12 15L8 16L9 12L18.5 2.50001Z" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                </button>
+                <button className="row-action-btn danger" onClick={() => { setDeletingFolder(folder); setShowDeleteConfirm(true) }} title="삭제">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M3 6H5H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    <path d="M19 6V20C19 21.1046 18.1046 22 17 22H7C5.89543 22 5 21.1046 5 20V6" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M8 6V4C8 2.89543 8.89543 2 10 2H14C15.1046 2 16 2.89543 16 4V6" stroke="currentColor" strokeWidth="2"/>
                   </svg>
                 </button>
               </div>
@@ -835,44 +939,84 @@ function AdminSharedFolders() {
                 </div>
               ) : (
                 <>
+                  {/* Search box */}
+                  <div className="member-search-box" style={{ marginBottom: '20px' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                      <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
+                      <path d="M21 21L16.65 16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="멤버 또는 사용자 검색..."
+                      value={memberModalSearch}
+                      onChange={e => setMemberModalSearch(e.target.value)}
+                    />
+                    {memberModalSearch && (
+                      <button className="clear-btn" onClick={() => setMemberModalSearch('')}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                          <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+
                   {/* Add member section */}
                   <div className="add-member-section">
-                    <h3>멤버 추가</h3>
-                    <div className="add-member-form">
-                      <select
-                        value={newMemberUserId}
-                        onChange={e => setNewMemberUserId(e.target.value)}
-                        disabled={availableUsers.length === 0}
-                      >
-                        <option value="">
-                          {availableUsers.length === 0 ? '추가 가능한 사용자 없음' : '사용자 선택...'}
-                        </option>
-                        {availableUsers.map(user => (
-                          <option key={user.id} value={user.id}>
-                            {user.username} {user.email ? `(${user.email})` : ''}
-                          </option>
+                    <h3>멤버 추가 {filteredAvailableUsers.length > 0 && <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>({filteredAvailableUsers.length}명)</span>}</h3>
+                    {filteredAvailableUsers.length === 0 ? (
+                      <div className="no-users">
+                        {memberModalSearch ? '검색 결과가 없습니다' : '추가 가능한 사용자가 없습니다'}
+                      </div>
+                    ) : (
+                      <div className="available-users-list">
+                        {filteredAvailableUsers.slice(0, 10).map(user => (
+                          <div key={user.id} className="available-user-item">
+                            <div className="user-info">
+                              <div className="user-avatar">
+                                {user.username.slice(0, 2).toUpperCase()}
+                              </div>
+                              <div className="user-details">
+                                <span className="user-name">{user.username}</span>
+                              </div>
+                            </div>
+                            <div className="user-actions">
+                              <button
+                                className="add-btn readonly"
+                                onClick={() => handleAddMember(user.id, PERMISSION_READ_ONLY)}
+                                disabled={addingMember}
+                                title="읽기 전용으로 추가"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                  <path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                  <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+                                </svg>
+                              </button>
+                              <button
+                                className="add-btn readwrite"
+                                onClick={() => handleAddMember(user.id, PERMISSION_READ_WRITE)}
+                                disabled={addingMember}
+                                title="읽기/쓰기로 추가"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                  <path d="M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                  <path d="M18.5 2.50001C18.8978 2.10219 19.4374 1.87869 20 1.87869C20.5626 1.87869 21.1022 2.10219 21.5 2.50001C21.8978 2.89784 22.1213 3.4374 22.1213 4.00001C22.1213 4.56262 21.8978 5.10219 21.5 5.50001L12 15L8 16L9 12L18.5 2.50001Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
                         ))}
-                      </select>
-                      <select
-                        value={newMemberPermission}
-                        onChange={e => setNewMemberPermission(Number(e.target.value))}
-                      >
-                        <option value={PERMISSION_READ_ONLY}>읽기 전용</option>
-                        <option value={PERMISSION_READ_WRITE}>읽기/쓰기</option>
-                      </select>
-                      <button
-                        className="btn-primary"
-                        onClick={handleAddMember}
-                        disabled={!newMemberUserId || addingMember}
-                      >
-                        {addingMember ? '추가 중...' : '추가'}
-                      </button>
-                    </div>
+                        {filteredAvailableUsers.length > 10 && (
+                          <div className="more-users-hint">
+                            + {filteredAvailableUsers.length - 10}명 더 있음
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Members list */}
                   <div className="members-section">
-                    <h3>현재 멤버 ({members.length})</h3>
+                    <h3>현재 멤버 ({members.length}){memberModalSearch && filteredMembers.length !== members.length && <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}> - {filteredMembers.length}명 표시</span>}</h3>
                     {members.length === 0 ? (
                       <div className="no-members">
                         <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
@@ -881,9 +1025,13 @@ function AdminSharedFolders() {
                         </svg>
                         <p>아직 멤버가 없습니다</p>
                       </div>
+                    ) : filteredMembers.length === 0 ? (
+                      <div className="no-members">
+                        <p>검색 결과가 없습니다</p>
+                      </div>
                     ) : (
                       <div className="members-list">
-                        {members.map(member => (
+                        {filteredMembers.map(member => (
                           <div key={member.id} className="member-item">
                             <div className="member-info">
                               <div className="member-avatar">
