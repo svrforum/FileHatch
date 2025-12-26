@@ -14,6 +14,7 @@ import UserProfile from './components/UserProfile'
 import LoginPage from './components/LoginPage'
 import ShareAccessPage from './components/ShareAccessPage'
 import FileListSkeleton from './components/FileListSkeleton'
+import ErrorBoundary from './components/ErrorBoundary'
 import './styles/app.css'
 
 // Lazy load admin components for better initial load performance
@@ -93,27 +94,28 @@ function App() {
   }, [navigate])
 
   return (
-    <div className="app">
-      <Header
-        onProfileClick={() => setProfileOpen(true)}
-        onNavigate={handleNavigate}
-        currentPath={currentPath}
-      />
-      <div className="app-container">
-        <Sidebar
-          currentPath={currentPath}
+    <ErrorBoundary>
+      <div className="app">
+        <Header
+          onProfileClick={() => setProfileOpen(true)}
           onNavigate={handleNavigate}
-          onUploadClick={() => setUploadModalOpen(true)}
-          onNewFolderClick={() => setFolderModalOpen(true)}
-          onAdminClick={handleAdminClick}
-          isTrashView={isTrashView}
-          isAdminMode={isAdminMode}
-          adminView={adminView}
-          onExitAdminMode={handleExitAdminMode}
+          currentPath={currentPath}
         />
-        <main className="main-content">
-          <Suspense fallback={<FileListSkeleton />}>
-            <Routes>
+        <div className="app-container">
+          <Sidebar
+            currentPath={currentPath}
+            onNavigate={handleNavigate}
+            onUploadClick={() => setUploadModalOpen(true)}
+            onNewFolderClick={() => setFolderModalOpen(true)}
+            onAdminClick={handleAdminClick}
+            isTrashView={isTrashView}
+            isAdminMode={isAdminMode}
+            adminView={adminView}
+            onExitAdminMode={handleExitAdminMode}
+          />
+          <main className="main-content">
+            <Suspense fallback={<FileListSkeleton />}>
+              <Routes>
               <Route path="/" element={
                 <FileList
                   currentPath={currentPath}
@@ -160,31 +162,32 @@ function App() {
               } />
             </Routes>
           </Suspense>
-        </main>
+          </main>
+        </div>
+
+        <UploadModal
+          isOpen={isUploadModalOpen}
+          onClose={() => setUploadModalOpen(false)}
+          currentPath={currentPath}
+          onUploadComplete={handleUploadComplete}
+        />
+
+        <CreateFolderModal
+          isOpen={isFolderModalOpen}
+          onClose={() => setFolderModalOpen(false)}
+          currentPath={currentPath}
+          onCreated={handleFolderCreated}
+        />
+
+        <UploadPanel />
+        <DuplicateModal />
+
+        <UserProfile
+          isOpen={isProfileOpen}
+          onClose={() => setProfileOpen(false)}
+        />
       </div>
-
-      <UploadModal
-        isOpen={isUploadModalOpen}
-        onClose={() => setUploadModalOpen(false)}
-        currentPath={currentPath}
-        onUploadComplete={handleUploadComplete}
-      />
-
-      <CreateFolderModal
-        isOpen={isFolderModalOpen}
-        onClose={() => setFolderModalOpen(false)}
-        currentPath={currentPath}
-        onCreated={handleFolderCreated}
-      />
-
-      <UploadPanel />
-      <DuplicateModal />
-
-      <UserProfile
-        isOpen={isProfileOpen}
-        onClose={() => setProfileOpen(false)}
-      />
-    </div>
+    </ErrorBoundary>
   )
 }
 

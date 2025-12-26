@@ -1,10 +1,63 @@
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import './Toast.css'
+
+export type ToastType = 'success' | 'error' | 'info' | 'warning'
 
 export interface ToastMessage {
   id: string
-  type: 'success' | 'error' | 'info'
+  type: ToastType
   message: string
+  duration?: number
+}
+
+interface ToastContextType {
+  showToast: (message: string, type?: ToastType, duration?: number) => void
+  showSuccess: (message: string) => void
+  showError: (message: string) => void
+  showWarning: (message: string) => void
+  showInfo: (message: string) => void
+  toasts: ToastMessage[]
+  removeToast: (id: string) => void
+}
+
+const ToastContext = createContext<ToastContextType | null>(null)
+
+export const useToast = () => {
+  const context = useContext(ToastContext)
+  if (!context) {
+    throw new Error('useToast must be used within a ToastProvider')
+  }
+  return context
+}
+
+interface ToastProviderProps {
+  children: ReactNode
+}
+
+export function ToastProvider({ children }: ToastProviderProps) {
+  const [toasts, setToasts] = useState<ToastMessage[]>([])
+
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id))
+  }, [])
+
+  const showToast = useCallback((message: string, type: ToastType = 'info', duration = 5000) => {
+    const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    const toast: ToastMessage = { id, type, message, duration }
+    setToasts(prev => [...prev, toast])
+  }, [])
+
+  const showSuccess = useCallback((message: string) => showToast(message, 'success'), [showToast])
+  const showError = useCallback((message: string) => showToast(message, 'error', 7000), [showToast])
+  const showWarning = useCallback((message: string) => showToast(message, 'warning'), [showToast])
+  const showInfo = useCallback((message: string) => showToast(message, 'info'), [showToast])
+
+  return (
+    <ToastContext.Provider value={{ showToast, showSuccess, showError, showWarning, showInfo, toasts, removeToast }}>
+      {children}
+      <Toast toasts={toasts} onRemove={removeToast} />
+    </ToastContext.Provider>
+  )
 }
 
 interface ToastProps {
@@ -26,12 +79,13 @@ function ToastItem({ toast, onRemove }: { toast: ToastMessage; onRemove: (id: st
   const [isLeaving, setIsLeaving] = useState(false)
 
   useEffect(() => {
+    const duration = toast.duration || 5000
     const timer = setTimeout(() => {
       setIsLeaving(true)
       setTimeout(() => onRemove(toast.id), 200)
-    }, 3000)
+    }, duration)
     return () => clearTimeout(timer)
-  }, [toast.id, onRemove])
+  }, [toast.id, toast.duration, onRemove])
 
   const icons = {
     success: (
@@ -44,6 +98,12 @@ function ToastItem({ toast, onRemove }: { toast: ToastMessage; onRemove: (id: st
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
         <path d="M15 9L9 15M9 9L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+    ),
+    warning: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="currentColor" strokeWidth="2"/>
+        <path d="M12 9V13M12 17H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
       </svg>
     ),
     info: (

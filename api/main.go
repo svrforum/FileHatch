@@ -57,6 +57,19 @@ func main() {
 	e := echo.New()
 	e.HideBanner = true
 
+	// Security Headers Middleware
+	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
+		XSSProtection:         "1; mode=block",
+		ContentTypeNosniff:    "nosniff",
+		XFrameOptions:         "SAMEORIGIN",
+		HSTSMaxAge:            31536000, // 1 year
+		HSTSExcludeSubdomains: false,
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-src 'self' *;",
+	}))
+
+	// Rate Limiting Middleware - 100 requests per second per IP
+	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(100)))
+
 	// Middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
@@ -64,9 +77,16 @@ func main() {
 		AllowOrigins: getCORSOrigins(),
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodHead, http.MethodOptions},
 		AllowHeaders: []string{
-			"*",
+			"Accept",
+			"Accept-Language",
 			"Authorization",
 			"Content-Type",
+			"Content-Length",
+			"X-Requested-With",
+			"Origin",
+			"Cache-Control",
+			"If-None-Match",
+			"If-Modified-Since",
 			"Upload-Length",
 			"Upload-Offset",
 			"Tus-Resumable",
@@ -85,6 +105,9 @@ func main() {
 			"Upload-Metadata",
 			"Upload-Defer-Length",
 			"Upload-Concat",
+			"ETag",
+			"Last-Modified",
+			"Content-Disposition",
 		},
 	}))
 

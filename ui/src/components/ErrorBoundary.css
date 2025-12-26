@@ -1,0 +1,138 @@
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.error-boundary-content {
+  max-width: 500px;
+  padding: 40px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.error-boundary-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 24px;
+  color: #ef4444;
+}
+
+.error-boundary-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.error-boundary-title {
+  margin: 0 0 12px;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.error-boundary-message {
+  margin: 0 0 24px;
+  font-size: 16px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.error-boundary-details {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.error-boundary-details summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #374151;
+  user-select: none;
+}
+
+.error-boundary-details pre {
+  margin-top: 12px;
+  padding: 12px;
+  background: #1f2937;
+  border-radius: 6px;
+  color: #f87171;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.error-boundary-btn {
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.error-boundary-btn.primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.error-boundary-btn.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.error-boundary-btn.secondary {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.error-boundary-btn.secondary:hover {
+  background: #e5e7eb;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .error-boundary-content {
+    background: #1f2937;
+  }
+
+  .error-boundary-title {
+    color: #f9fafb;
+  }
+
+  .error-boundary-message {
+    color: #9ca3af;
+  }
+
+  .error-boundary-details {
+    background: #374151;
+  }
+
+  .error-boundary-details summary {
+    color: #e5e7eb;
+  }
+
+  .error-boundary-btn.secondary {
+    background: #374151;
+    color: #e5e7eb;
+  }
+
+  .error-boundary-btn.secondary:hover {
+    background: #4b5563;
+  }
+}
