@@ -82,7 +82,16 @@ func (h *AuthHandler) ensureUserHomeDir(username string) error {
 }
 
 // calculateStorageUsed calculates the total storage used by a user
+// Uses cache for performance optimization
 func (h *AuthHandler) calculateStorageUsed(username string) int64 {
+	cache := GetStorageCache()
+
+	// Try to get from cache first
+	if data, ok := cache.GetUserUsage(username); ok {
+		return data.HomeUsed
+	}
+
+	// Calculate fresh value
 	userDir := h.dataRoot + "/users/" + username
 	var totalSize int64
 
@@ -100,7 +109,19 @@ func (h *AuthHandler) calculateStorageUsed(username string) int64 {
 		return nil
 	})
 
+	// Cache the result
+	cache.SetUserUsage(username, &StorageUsageData{
+		HomeUsed:  totalSize,
+		TotalUsed: totalSize,
+	})
+
 	return totalSize
+}
+
+// invalidateStorageCache invalidates the storage cache for a user
+func (h *AuthHandler) invalidateStorageCache(username string) {
+	cache := GetStorageCache()
+	cache.InvalidateUserUsage(username)
 }
 
 // GetUserQuotaInfo returns quota info for a user by username

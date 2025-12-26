@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -75,6 +76,10 @@ type ListFilesResponse struct {
 	Files       []FileInfo `json:"files"`
 	Total       int        `json:"total"`
 	TotalSize   int64      `json:"totalSize"`
+	// Pagination fields
+	Page       int `json:"page,omitempty"`
+	PageSize   int `json:"pageSize,omitempty"`
+	TotalPages int `json:"totalPages,omitempty"`
 }
 
 // validateAndCleanPath validates a path component and returns cleaned version
@@ -233,7 +238,7 @@ func (h *Handler) InitializeStorage() error {
 	return nil
 }
 
-// ListFiles handles directory listing requests
+// ListFiles handles directory listing requests with optional pagination
 func (h *Handler) ListFiles(c echo.Context) error {
 	requestPath := c.QueryParam("path")
 	if requestPath == "" {
@@ -248,6 +253,28 @@ func (h *Handler) ListFiles(c echo.Context) error {
 	sortOrder := c.QueryParam("order")
 	if sortOrder == "" {
 		sortOrder = "asc"
+	}
+
+	// Pagination parameters (optional - if not provided, return all files)
+	pageStr := c.QueryParam("page")
+	pageSizeStr := c.QueryParam("pageSize")
+	var page, pageSize int
+	usePagination := false
+
+	if pageStr != "" && pageSizeStr != "" {
+		var err error
+		page, err = strconv.Atoi(pageStr)
+		if err != nil || page < 1 {
+			page = 1
+		}
+		pageSize, err = strconv.Atoi(pageSizeStr)
+		if err != nil || pageSize < 1 {
+			pageSize = 50
+		}
+		if pageSize > 500 {
+			pageSize = 500 // Max page size limit
+		}
+		usePagination = true
 	}
 
 	// Get user claims if available
@@ -392,13 +419,36 @@ func (h *Handler) ListFiles(c echo.Context) error {
 	// Sort files
 	sortFiles(files, sortBy, sortOrder)
 
-	return c.JSON(http.StatusOK, ListFilesResponse{
+	// Apply pagination if requested
+	total := len(files)
+	response := ListFilesResponse{
 		Path:        displayPath,
 		StorageType: storageType,
-		Files:       files,
-		Total:       len(files),
+		Total:       total,
 		TotalSize:   totalSize,
-	})
+	}
+
+	if usePagination {
+		totalPages := (total + pageSize - 1) / pageSize
+		start := (page - 1) * pageSize
+		end := start + pageSize
+
+		if start > total {
+			start = total
+		}
+		if end > total {
+			end = total
+		}
+
+		response.Files = files[start:end]
+		response.Page = page
+		response.PageSize = pageSize
+		response.TotalPages = totalPages
+	} else {
+		response.Files = files
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 // sortFiles sorts a slice of FileInfo
