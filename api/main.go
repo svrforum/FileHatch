@@ -174,6 +174,10 @@ func main() {
 	api.GET("/storage/usage", h.GetStorageUsage, authHandler.OptionalJWTMiddleware)
 	api.POST("/files/create", h.CreateFile, authHandler.OptionalJWTMiddleware)
 
+	// ZIP Download API routes
+	api.POST("/download/zip", h.DownloadAsZip, authHandler.OptionalJWTMiddleware)
+	api.GET("/download/folder/*", h.DownloadFolderAsZip, authHandler.OptionalJWTMiddleware)
+
 	// Trash API routes
 	api.POST("/trash/*", h.MoveToTrash, authHandler.OptionalJWTMiddleware)
 	api.GET("/trash", h.ListTrash, authHandler.OptionalJWTMiddleware)

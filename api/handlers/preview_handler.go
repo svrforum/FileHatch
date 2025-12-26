@@ -12,7 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// GetPreview handles file preview requests
+// GetPreview handles file preview requests with caching support
 func (h *Handler) GetPreview(c echo.Context) error {
 	requestPath := c.Param("*")
 	if requestPath == "" {
@@ -56,40 +56,69 @@ func (h *Handler) GetPreview(c echo.Context) error {
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(info.Name()), "."))
 	mimeType := getMimeType(ext)
 
-	// For images, return the file directly
+	// Generate ETag for cache validation
+	etag := GenerateETag(realPath, info.ModTime(), info.Size())
+
+	// Check If-None-Match header for cache validation
+	if !CheckETag(c.Request(), etag) {
+		return c.NoContent(http.StatusNotModified)
+	}
+
+	// For images, return the file with caching headers
 	if strings.HasPrefix(mimeType, "image/") {
+		SetCacheHeaders(c.Response().Writer, etag, 86400) // 24 hour cache
+		c.Response().Header().Set("Last-Modified", info.ModTime().UTC().Format(http.TimeFormat))
 		return c.File(realPath)
 	}
 
-	// For text files, return content
+	// For text files, return content with caching
 	if strings.HasPrefix(mimeType, "text/") || ext == "json" || ext == "md" {
-		file, err := os.Open(realPath)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to open file",
-			})
-		}
-		defer file.Close()
+		// Use preview cache for text content
+		cache := GetPreviewCache()
+		var content string
+		var truncated bool
 
-		// Limit preview to first 100KB
-		content := make([]byte, 100*1024)
-		n, err := file.Read(content)
-		if err != nil && err != io.EOF {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to read file",
-			})
+		if cache != nil {
+			content, truncated, err = cache.CachedTextPreview(realPath, info, DefaultTextPreviewOptions())
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{
+					"error": "Failed to read file",
+				})
+			}
+		} else {
+			// Fallback to direct read if cache not available
+			file, err := os.Open(realPath)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{
+					"error": "Failed to open file",
+				})
+			}
+			defer file.Close()
+
+			buf := make([]byte, 100*1024)
+			n, err := file.Read(buf)
+			if err != nil && err != io.EOF {
+				return c.JSON(http.StatusInternalServerError, map[string]string{
+					"error": "Failed to read file",
+				})
+			}
+			content = string(buf[:n])
+			truncated = n == 100*1024
 		}
 
+		// Set cache headers for JSON response
+		SetCacheHeaders(c.Response().Writer, etag, 300) // 5 minute cache for text previews
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"type":      "text",
 			"mimeType":  mimeType,
-			"content":   string(content[:n]),
-			"truncated": n == 100*1024,
+			"content":   content,
+			"truncated": truncated,
 		})
 	}
 
 	// For videos and audio, return file info for streaming
 	if strings.HasPrefix(mimeType, "video/") || strings.HasPrefix(mimeType, "audio/") {
+		SetCacheHeaders(c.Response().Writer, etag, 3600) // 1 hour cache
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"type":     strings.Split(mimeType, "/")[0],
 			"mimeType": mimeType,
@@ -100,6 +129,7 @@ func (h *Handler) GetPreview(c echo.Context) error {
 
 	// For PDFs
 	if mimeType == "application/pdf" {
+		SetCacheHeaders(c.Response().Writer, etag, 3600) // 1 hour cache
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"type":     "pdf",
 			"mimeType": mimeType,
@@ -109,6 +139,7 @@ func (h *Handler) GetPreview(c echo.Context) error {
 	}
 
 	// For unsupported types
+	SetCacheHeaders(c.Response().Writer, etag, 3600) // 1 hour cache
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"type":     "unsupported",
 		"mimeType": mimeType,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '../stores/authStore'
 
@@ -10,18 +10,34 @@ interface FileChangeEvent {
   timestamp: number
 }
 
+type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
+
 interface UseFileWatcherOptions {
   watchPaths?: string[]
   onFileChange?: (event: FileChangeEvent) => void
+  onConnectionStateChange?: (state: ConnectionState) => void
 }
 
+// Exponential backoff configuration
+const INITIAL_RETRY_DELAY = 1000  // 1 second
+const MAX_RETRY_DELAY = 30000     // 30 seconds
+const MAX_RETRY_ATTEMPTS = 10
+
 export function useFileWatcher(options: UseFileWatcherOptions = {}) {
-  const { watchPaths = ['/home', '/shared'], onFileChange } = options
+  const { watchPaths = ['/home', '/shared'], onFileChange, onConnectionStateChange } = options
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isConnectingRef = useRef(false)
+  const retryCountRef = useRef(0)
+  const retryDelayRef = useRef(INITIAL_RETRY_DELAY)
+  const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected')
   const queryClient = useQueryClient()
   const { token } = useAuthStore()
+
+  // Keep ref in sync for debugging
+  useEffect(() => {
+    console.debug('[WebSocket] Connection state:', connectionState)
+  }, [connectionState])
 
   // Store callbacks in refs to avoid dependency changes
   const onFileChangeRef = useRef(onFileChange)
@@ -35,14 +51,23 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
     watchPathsRef.current = watchPaths
   }, [watchPaths])
 
+  // Update connection state and notify callback
+  const updateConnectionState = useCallback((state: ConnectionState) => {
+    setConnectionState(state)
+    onConnectionStateChange?.(state)
+  }, [onConnectionStateChange])
+
   useEffect(() => {
-    if (!token) return
+    if (!token) {
+      updateConnectionState('disconnected')
+      return
+    }
 
     // Prevent multiple simultaneous connection attempts
     if (isConnectingRef.current || wsRef.current) return
     isConnectingRef.current = true
 
-    const connect = () => {
+    const connect = (isReconnect = false) => {
       // Clear any existing reconnect timeout
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
@@ -55,6 +80,8 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
         wsRef.current = null
       }
 
+      updateConnectionState(isReconnect ? 'reconnecting' : 'connecting')
+
       // Determine WebSocket URL with token as query parameter
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       const wsUrl = `${protocol}//${window.location.host}/api/ws?token=${encodeURIComponent(token)}`
@@ -66,6 +93,9 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
         ws.onopen = () => {
           console.log('[WebSocket] Connected')
           isConnectingRef.current = false
+          retryCountRef.current = 0
+          retryDelayRef.current = INITIAL_RETRY_DELAY
+          updateConnectionState('connected')
           // Subscribe to watch paths
           ws.send(JSON.stringify({
             type: 'subscribe',
@@ -123,13 +153,26 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
           console.log('[WebSocket] Disconnected:', event.code, event.reason)
           wsRef.current = null
           isConnectingRef.current = false
+          updateConnectionState('disconnected')
 
-          // Reconnect after delay (unless it was a normal closure)
+          // Reconnect after delay (unless it was a normal closure or max retries reached)
           if (event.code !== 1000 && event.code !== 1005) {
-            reconnectTimeoutRef.current = setTimeout(() => {
-              console.log('[WebSocket] Attempting to reconnect...')
-              connect()
-            }, 3000)
+            if (retryCountRef.current < MAX_RETRY_ATTEMPTS) {
+              const delay = retryDelayRef.current
+              console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${retryCountRef.current + 1}/${MAX_RETRY_ATTEMPTS})`)
+
+              reconnectTimeoutRef.current = setTimeout(() => {
+                retryCountRef.current++
+                // Exponential backoff with jitter
+                retryDelayRef.current = Math.min(
+                  retryDelayRef.current * 2 + Math.random() * 1000,
+                  MAX_RETRY_DELAY
+                )
+                connect(true)
+              }, delay)
+            } else {
+              console.log('[WebSocket] Max retry attempts reached, giving up')
+            }
           }
         }
 
@@ -140,14 +183,45 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
       } catch (err) {
         console.error('[WebSocket] Failed to connect:', err)
         isConnectingRef.current = false
-        // Retry connection after delay
-        reconnectTimeoutRef.current = setTimeout(connect, 5000)
+        updateConnectionState('disconnected')
+
+        // Retry connection with exponential backoff
+        if (retryCountRef.current < MAX_RETRY_ATTEMPTS) {
+          const delay = retryDelayRef.current
+          reconnectTimeoutRef.current = setTimeout(() => {
+            retryCountRef.current++
+            retryDelayRef.current = Math.min(
+              retryDelayRef.current * 2 + Math.random() * 1000,
+              MAX_RETRY_DELAY
+            )
+            connect(true)
+          }, delay)
+        }
       }
     }
+
+    // Handle online/offline events
+    const handleOnline = () => {
+      console.log('[WebSocket] Browser came online, reconnecting...')
+      retryCountRef.current = 0
+      retryDelayRef.current = INITIAL_RETRY_DELAY
+      connect(true)
+    }
+
+    const handleOffline = () => {
+      console.log('[WebSocket] Browser went offline')
+      updateConnectionState('disconnected')
+    }
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
 
     connect()
 
     return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
         reconnectTimeoutRef.current = null
@@ -157,8 +231,10 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
         wsRef.current = null
       }
       isConnectingRef.current = false
+      retryCountRef.current = 0
+      retryDelayRef.current = INITIAL_RETRY_DELAY
     }
-  }, [token, queryClient])
+  }, [token, queryClient, updateConnectionState])
 
   const updateWatchPaths = useCallback((paths: string[]) => {
     watchPathsRef.current = paths
@@ -171,6 +247,7 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
   }, [])
 
   return {
+    connectionState,
     updateWatchPaths
   }
 }
