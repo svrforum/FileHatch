@@ -6,7 +6,7 @@ import { getStorageUsage, formatFileSize } from '../api/files'
 import { getMySharedFolders, SharedFolderWithPermission, PERMISSION_READ_WRITE } from '../api/sharedFolders'
 import './Sidebar.css'
 
-export type AdminView = 'users' | 'shared-folders' | 'settings' | 'logs'
+export type AdminView = 'users' | 'shared-folders' | 'settings' | 'sso' | 'logs'
 
 interface SidebarProps {
   currentPath: string
@@ -88,6 +88,26 @@ const icons: Record<string, JSX.Element> = {
       <path d="M12 2V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   ),
+  sharedByMe: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M4 12V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M8 18L12 22L16 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M12 22V9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  linkShare: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  sso: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M15 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M10 17L15 12L10 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M15 12H3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
 }
 
 function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onAdminClick, isTrashView, isAdminMode, adminView, onExitAdminMode }: SidebarProps) {
@@ -96,6 +116,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
   const [storageUsage, setStorageUsage] = useState({ totalUsed: 0, quota: 10 * 1024 * 1024 * 1024 })
   const [sharedFolders, setSharedFolders] = useState<SharedFolderWithPermission[]>([])
   const [sharedDrivesExpanded, setSharedDrivesExpanded] = useState(true)
+  const [sharingExpanded, setSharingExpanded] = useState(true)
 
   // Fetch storage usage
   useEffect(() => {
@@ -226,15 +247,54 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
               </div>
             )}
 
+            {/* Sharing Section */}
             {user && (
-              <Link
-                to="/files"
-                className={`nav-item ${isActive('/shared-with-me') ? 'active' : ''}`}
-                onClick={() => onNavigate('/shared-with-me')}
-              >
-                {icons.sharedWithMe}
-                <span>공유받은 파일</span>
-              </Link>
+              <div className="shared-section">
+                <div
+                  className="shared-header"
+                  onClick={() => setSharingExpanded(!sharingExpanded)}
+                >
+                  {icons.shared}
+                  <span>공유</span>
+                  <svg
+                    className={`chevron ${sharingExpanded ? 'expanded' : ''}`}
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                {sharingExpanded && (
+                  <div className="shared-list">
+                    <Link
+                      to="/files"
+                      className={`nav-item shared-drive-item ${isActive('/shared-with-me') ? 'active' : ''}`}
+                      onClick={() => onNavigate('/shared-with-me')}
+                    >
+                      {icons.sharedWithMe}
+                      <span>나에게 공유된 파일</span>
+                    </Link>
+                    <Link
+                      to="/files"
+                      className={`nav-item shared-drive-item ${isActive('/shared-by-me') ? 'active' : ''}`}
+                      onClick={() => onNavigate('/shared-by-me')}
+                    >
+                      {icons.sharedByMe}
+                      <span>다른사용자에 공유된 파일</span>
+                    </Link>
+                    <Link
+                      to="/files"
+                      className={`nav-item shared-drive-item ${isActive('/link-shares') ? 'active' : ''}`}
+                      onClick={() => onNavigate('/link-shares')}
+                    >
+                      {icons.linkShare}
+                      <span>링크로 공유된 파일</span>
+                    </Link>
+                  </div>
+                )}
+              </div>
             )}
 
             {user && (
@@ -281,6 +341,13 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
             >
               {icons.settings}
               <span>시스템 설정</span>
+            </Link>
+            <Link
+              to="/scvadmin/sso"
+              className={`nav-item ${adminView === 'sso' ? 'active' : ''}`}
+            >
+              {icons.sso}
+              <span>SSO 설정</span>
             </Link>
             <Link
               to="/scvadmin/logs"

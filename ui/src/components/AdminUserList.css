@@ -619,6 +619,11 @@
   color: #1c7ed6;
 }
 
+.badge.twofa {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
+  color: #059669;
+}
+
 .badge.disabled {
   background: linear-gradient(135deg, rgba(244, 67, 54, 0.15) 0%, rgba(239, 68, 68, 0.15) 100%);
   color: #ef4444;
@@ -888,6 +893,16 @@
 
 .smb-status.enabled {
   color: #228be6;
+  font-weight: 500;
+}
+
+.twofa-status {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.twofa-status.enabled {
+  color: #059669;
   font-weight: 500;
 }
 

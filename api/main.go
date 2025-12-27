@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/svrforum/SimpleCloudVault/api/database"
 	"github.com/svrforum/SimpleCloudVault/api/handlers"
+	"golang.org/x/time/rate"
 )
 
 const dataRoot = "/data"
@@ -57,18 +58,59 @@ func main() {
 	e := echo.New()
 	e.HideBanner = true
 
-	// Security Headers Middleware
-	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
-		XSSProtection:         "1; mode=block",
-		ContentTypeNosniff:    "nosniff",
-		XFrameOptions:         "SAMEORIGIN",
-		HSTSMaxAge:            31536000, // 1 year
-		HSTSExcludeSubdomains: false,
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-src 'self' *;",
-	}))
+	// Database connection (needed for settings before middleware)
+	db, err := database.Connect()
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
 
-	// Rate Limiting Middleware - 100 requests per second per IP
-	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(100)))
+	// Create Settings handler early for middleware configuration
+	settingsHandler := handlers.NewSettingsHandler(db)
+	handlers.SetGlobalSettingsHandler(settingsHandler)
+
+	// Conditionally apply Security Headers Middleware based on settings
+	if settingsHandler.IsSecurityHeadersEnabled() {
+		secureConfig := middleware.SecureConfig{
+			ContentTypeNosniff: "nosniff",
+		}
+
+		// XSS Protection
+		if settingsHandler.IsXSSProtectionEnabled() {
+			secureConfig.XSSProtection = "1; mode=block"
+		}
+
+		// X-Frame-Options
+		secureConfig.XFrameOptions = settingsHandler.GetXFrameOptions()
+
+		// HSTS
+		if settingsHandler.IsHSTSEnabled() {
+			secureConfig.HSTSMaxAge = 31536000 // 1 year
+			secureConfig.HSTSExcludeSubdomains = false
+		}
+
+		// CSP
+		if settingsHandler.IsCSPEnabled() {
+			secureConfig.ContentSecurityPolicy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-src 'self' *;"
+		}
+
+		e.Use(middleware.SecureWithConfig(secureConfig))
+		log.Println("Security headers middleware enabled")
+	} else {
+		log.Println("Security headers middleware disabled")
+	}
+
+	// Conditionally apply Rate Limiting Middleware based on settings
+	if settingsHandler.IsRateLimitEnabled() {
+		rps := settingsHandler.GetRateLimitRPS()
+		if rps < 1 {
+			rps = 100 // default
+		}
+		e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(rate.Limit(rps))))
+		log.Printf("Rate limiting enabled: %d requests/second per IP", rps)
+	} else {
+		log.Println("Rate limiting disabled")
+	}
 
 	// Middleware
 	e.Use(middleware.Logger())
@@ -111,13 +153,6 @@ func main() {
 		},
 	}))
 
-	// Database connection
-	db, err := database.Connect()
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
-
 	// Create handlers
 	h := handlers.NewHandler(db)
 
@@ -141,8 +176,11 @@ func main() {
 	// Create Audit handler
 	auditHandler := handlers.NewAuditHandler(db)
 
+	// Create TOTP handler for 2FA
+	totpHandler := handlers.NewTOTPHandler(db, auditHandler)
+
 	// Create Share handler
-	shareHandler := handlers.NewShareHandler(db, dataRoot)
+	shareHandler := handlers.NewShareHandler(db, dataRoot, auditHandler)
 
 	// Create Shared Folder handler
 	sharedFolderHandler := handlers.NewSharedFolderHandler(db, dataRoot)
@@ -150,9 +188,17 @@ func main() {
 	// Create File Share handler
 	fileShareHandler := handlers.NewFileShareHandler(db)
 
-	// Create Settings handler and set as global
-	settingsHandler := handlers.NewSettingsHandler(db)
-	handlers.SetGlobalSettingsHandler(settingsHandler)
+	// Create File Metadata handler (descriptions and tags)
+	fileMetadataHandler := handlers.NewFileMetadataHandler(db)
+
+	// Create SSO handler
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "scv-dev-secret-not-for-production-use"
+	}
+	ssoHandler := handlers.NewSSOHandler(db, jwtSecret, dataRoot)
+
+	// Note: settingsHandler is already created earlier for middleware configuration
 
 	// Routes
 	e.GET("/health", h.HealthCheck)
@@ -163,6 +209,12 @@ func main() {
 
 	// Auth routes (public)
 	api.POST("/auth/login", authHandler.Login)
+	api.POST("/auth/2fa/verify", totpHandler.Verify2FA)
+
+	// SSO routes (public)
+	api.GET("/auth/sso/providers", ssoHandler.GetProviders)
+	api.GET("/auth/sso/auth/:providerId", ssoHandler.GetAuthURL)
+	api.GET("/auth/sso/callback/:providerId", ssoHandler.HandleCallback)
 
 	// Auth routes (protected)
 	authApi := api.Group("")
@@ -172,6 +224,13 @@ func main() {
 	authApi.PUT("/auth/smb-password", authHandler.SetMySMBPassword)
 	authApi.GET("/auth/storage", authHandler.GetMyStorageUsage)
 
+	// 2FA routes (protected)
+	authApi.GET("/auth/2fa/status", totpHandler.Get2FAStatus)
+	authApi.GET("/auth/2fa/setup", totpHandler.Setup2FA)
+	authApi.POST("/auth/2fa/enable", totpHandler.Enable2FA)
+	authApi.POST("/auth/2fa/disable", totpHandler.Disable2FA)
+	authApi.POST("/auth/2fa/backup-codes", totpHandler.RegenerateBackupCodes)
+
 	// Admin routes (protected + admin only)
 	adminApi := authApi.Group("")
 	adminApi.Use(authHandler.AdminMiddleware)
@@ -179,6 +238,7 @@ func main() {
 	adminApi.POST("/admin/users", authHandler.CreateUser)
 	adminApi.PUT("/admin/users/:id", authHandler.UpdateUser)
 	adminApi.DELETE("/admin/users/:id", authHandler.DeleteUser)
+	adminApi.DELETE("/admin/users/:id/2fa", totpHandler.AdminReset2FA)
 
 	// File API routes (with optional auth for virtual path resolution)
 	api.GET("/files", h.ListFiles, authHandler.OptionalJWTMiddleware)
@@ -196,6 +256,8 @@ func main() {
 	api.GET("/folders/stats/*", h.GetFolderStats, authHandler.OptionalJWTMiddleware)
 	api.GET("/storage/usage", h.GetStorageUsage, authHandler.OptionalJWTMiddleware)
 	api.POST("/files/create", h.CreateFile, authHandler.OptionalJWTMiddleware)
+	api.POST("/files/compress", h.CompressFiles, authHandler.OptionalJWTMiddleware)
+	api.POST("/files/extract", h.ExtractZip, authHandler.OptionalJWTMiddleware)
 
 	// ZIP Download API routes
 	api.POST("/download/zip", h.DownloadAsZip, authHandler.OptionalJWTMiddleware)
@@ -260,6 +322,14 @@ func main() {
 	adminApi.GET("/admin/settings", settingsHandler.GetAllSettings)
 	adminApi.PUT("/admin/settings", settingsHandler.UpdateSettings)
 
+	// SSO Provider Management API (admin only)
+	adminApi.GET("/admin/sso/providers", ssoHandler.ListAllProviders)
+	adminApi.POST("/admin/sso/providers", ssoHandler.CreateProvider)
+	adminApi.PUT("/admin/sso/providers/:id", ssoHandler.UpdateProvider)
+	adminApi.DELETE("/admin/sso/providers/:id", ssoHandler.DeleteProvider)
+	adminApi.GET("/admin/sso/settings", ssoHandler.GetSSOSettings)
+	adminApi.PUT("/admin/sso/settings", ssoHandler.UpdateSSOSettings)
+
 	// File Share API (user-to-user sharing - protected)
 	authApi.POST("/file-shares", fileShareHandler.CreateFileShare)
 	authApi.GET("/file-shares/shared-by-me", fileShareHandler.ListSharedByMe)
@@ -268,6 +338,14 @@ func main() {
 	authApi.DELETE("/file-shares/:id", fileShareHandler.DeleteFileShare)
 	authApi.GET("/file-shares/file/*", fileShareHandler.GetFileShareInfo)
 	authApi.GET("/users/search", fileShareHandler.SearchUsers)
+
+	// File Metadata API (descriptions and tags - protected)
+	authApi.GET("/file-metadata/tags", fileMetadataHandler.ListUserTags)
+	authApi.GET("/file-metadata/search", fileMetadataHandler.SearchByTag)
+	authApi.POST("/file-metadata/batch", fileMetadataHandler.GetBatchMetadata)
+	authApi.GET("/file-metadata/*", fileMetadataHandler.GetFileMetadata)
+	authApi.PUT("/file-metadata/*", fileMetadataHandler.UpdateFileMetadata)
+	authApi.DELETE("/file-metadata/*", fileMetadataHandler.DeleteFileMetadata)
 
 	// Simple upload (non-resumable)
 	api.POST("/upload/simple", h.SimpleUpload, authHandler.OptionalJWTMiddleware)

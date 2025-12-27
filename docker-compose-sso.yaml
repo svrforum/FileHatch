@@ -1,0 +1,48 @@
+# SimpleCloudVault with Keycloak SSO
+#
+# Usage:
+#   1. Set HOST_IP environment variable (or it will be auto-detected):
+#      export HOST_IP=$(hostname -I | awk '{print $1}')
+#
+#   2. Start containers:
+#      docker compose -f docker-compose.yml -f docker-compose-sso.yaml up -d
+#
+#   3. Wait for Keycloak to be healthy (about 2 minutes), then run setup:
+#      ./scripts/setup-keycloak.sh
+#
+# Keycloak Admin Console: http://${HOST_IP}:8080/auth
+# Admin credentials: admin / admin123
+
+services:
+  # Keycloak Identity Provider
+  keycloak:
+    container_name: scv-keycloak
+    image: quay.io/keycloak/keycloak:26.4.0
+    restart: unless-stopped
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin123
+      - KC_HTTP_RELATIVE_PATH=/auth
+      # KC_HOSTNAME must match the URL used by both browser and API container
+      # This ensures token issuer consistency (critical for SSO to work)
+      - KC_HOSTNAME=${HOST_IP:-localhost}
+      - KC_HOSTNAME_PORT=8080
+      - KC_HOSTNAME_STRICT=false
+      - KC_HOSTNAME_STRICT_HTTPS=false
+      - KC_HTTP_ENABLED=true
+      - KC_PROXY_HEADERS=xforwarded
+    ports:
+      - "8080:8080"
+    command:
+      - start-dev
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /auth/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && timeout 1 cat <&3 | grep -q '200\\|UP' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+
+volumes:
+  keycloak_data:

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { updateUser, User } from '../api/auth'
+import { updateUser, adminReset2FA, User } from '../api/auth'
 import {
   getAllSharedFolders,
   getSharedFolderMembers,
@@ -45,6 +45,10 @@ function EditUserModal({ isOpen, user, currentUserId, onClose, onUpdated }: Edit
   const [folderPermissions, setFolderPermissions] = useState<FolderPermission[]>([])
   const [loadingFolders, setLoadingFolders] = useState(false)
   const [folderSearch, setFolderSearch] = useState('')
+
+  // 2FA reset state
+  const [showReset2FAConfirm, setShowReset2FAConfirm] = useState(false)
+  const [resetting2FA, setResetting2FA] = useState(false)
 
   // Format bytes to human readable
   const formatBytes = (bytes: number): string => {
@@ -122,6 +126,23 @@ function EditUserModal({ isOpen, user, currentUserId, onClose, onUpdated }: Edit
         fp.folderId === folderId ? { ...fp, permission } : fp
       )
     )
+  }
+
+  const handleReset2FA = async () => {
+    if (!token || !user) return
+
+    setResetting2FA(true)
+    setError(null)
+
+    try {
+      await adminReset2FA(token, user.id)
+      setShowReset2FAConfirm(false)
+      onUpdated() // Refresh user list to update 2FA badge
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '2FA 초기화에 실패했습니다')
+    } finally {
+      setResetting2FA(false)
+    }
   }
 
   const getInitials = (username: string) => {
@@ -397,6 +418,85 @@ function EditUserModal({ isOpen, user, currentUserId, onClose, onUpdated }: Edit
                 <p className="self-warning">자신의 권한은 변경할 수 없습니다.</p>
               )}
             </div>
+
+            {/* 2FA Security Section */}
+            <div className="form-section twofa-section">
+              <h3>2단계 인증</h3>
+              <div className={`twofa-status-card ${user.has2fa ? 'enabled' : 'disabled'}`}>
+                <div className="twofa-info">
+                  <div className={`twofa-icon ${user.has2fa ? 'enabled' : 'disabled'}`}>
+                    {user.has2fa ? (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    ) : (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <span className={`twofa-status-title ${user.has2fa ? '' : 'disabled'}`}>
+                      {user.has2fa ? '2FA 활성화됨' : '2FA 비활성화'}
+                    </span>
+                    <span className="twofa-status-desc">
+                      {user.has2fa
+                        ? '이 사용자는 2단계 인증을 사용 중입니다'
+                        : '이 사용자는 2단계 인증을 사용하지 않습니다'}
+                    </span>
+                  </div>
+                </div>
+                {user.has2fa && (
+                  <button
+                    type="button"
+                    className="btn-reset-2fa"
+                    onClick={() => setShowReset2FAConfirm(true)}
+                  >
+                    2FA 초기화
+                  </button>
+                )}
+              </div>
+              {user.has2fa && (
+                <p className="form-hint">
+                  2FA를 초기화하면 사용자가 다시 설정해야 합니다.
+                </p>
+              )}
+            </div>
+
+            {/* 2FA Reset Confirmation Dialog */}
+            {showReset2FAConfirm && (
+              <div className="reset-2fa-confirm">
+                <div className="confirm-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4.99c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <div className="confirm-content">
+                  <h4>2FA 초기화 확인</h4>
+                  <p><strong>{user.username}</strong> 사용자의 2단계 인증을 초기화하시겠습니까?</p>
+                  <p className="confirm-warning">이 작업은 되돌릴 수 없습니다.</p>
+                </div>
+                <div className="confirm-actions">
+                  <button
+                    type="button"
+                    className="btn-confirm-cancel"
+                    onClick={() => setShowReset2FAConfirm(false)}
+                    disabled={resetting2FA}
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-confirm-reset"
+                    onClick={handleReset2FA}
+                    disabled={resetting2FA}
+                  >
+                    {resetting2FA ? '초기화 중...' : '초기화'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {error && <div className="error-message">{error}</div>}
           </div>

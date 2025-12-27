@@ -139,3 +139,143 @@
   font-size: 13px;
   color: #6b7280;
 }
+
+/* 2FA Styles */
+.twofa-logo {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+}
+
+.otp-input {
+  font-size: 24px !important;
+  text-align: center;
+  letter-spacing: 8px;
+  font-family: monospace;
+  padding: 16px !important;
+}
+
+.otp-hint {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.cancel-btn {
+  width: 100%;
+  padding: 14px;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 12px;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* SSO Styles */
+.sso-section {
+  padding: 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sso-btn {
+  width: 100%;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #ffffff;
+  color: #333;
+}
+
+.sso-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.sso-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sso-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.sso-icon img {
+  max-width: 20px;
+  max-height: 20px;
+  object-fit: contain;
+}
+
+.sso-text {
+  flex: 1;
+  text-align: center;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  padding: 0 40px;
+  margin: 5px 0;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.login-divider span {
+  padding: 0 16px;
+  color: #9ca3af;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.sso-only-notice {
+  padding: 30px 40px;
+  text-align: center;
+}
+
+.sso-only-notice p {
+  margin: 0 0 8px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.sso-only-notice p:last-child {
+  margin-bottom: 0;
+}
+
+/* Move error to top of container for SSO page */
+.login-container > .login-error {
+  margin: 20px 40px 0;
+}

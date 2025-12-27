@@ -6,6 +6,8 @@ services:
       context: ./api
       dockerfile: Dockerfile
     restart: unless-stopped
+    extra_hosts:
+      - "localhost:host-gateway"
     environment:
       - DB_HOST=db
       - DB_PORT=5432

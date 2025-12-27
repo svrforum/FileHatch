@@ -203,3 +203,290 @@
 .logout-btn:hover {
   background: #fee2e2;
 }
+
+/* 2FA Styles */
+.twofa-content {
+  padding-top: 8px;
+}
+
+.twofa-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.twofa-status-badge.enabled {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+}
+
+.twofa-status-badge.disabled {
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+
+.twofa-status-badge span {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.twofa-status-badge.enabled span {
+  color: #059669;
+}
+
+.twofa-status-badge.disabled span {
+  color: #6b7280;
+}
+
+.twofa-enabled-info p,
+.twofa-disabled-info p {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.twofa-backup-info {
+  padding: 12px;
+  background: #eff6ff;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: #1e40af;
+}
+
+.twofa-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.twofa-actions .secondary-btn,
+.twofa-actions .danger-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.secondary-btn {
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  color: #374151;
+}
+
+.secondary-btn:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.danger-btn {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+}
+
+.danger-btn:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.danger-btn:disabled,
+.secondary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.twofa-info-box {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: #eff6ff;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.twofa-info-box svg {
+  flex-shrink: 0;
+}
+
+.twofa-info-box h4 {
+  margin: 0 0 4px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e40af;
+}
+
+.twofa-info-box p {
+  margin: 0;
+  font-size: 13px;
+  color: #3b82f6;
+}
+
+/* QR Code Setup */
+.twofa-setup h4 {
+  margin: 0 0 8px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.twofa-setup p {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.qr-code-container {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.qr-code-container img {
+  width: 200px;
+  height: 200px;
+}
+
+.manual-entry {
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.manual-entry p {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+}
+
+.secret-code {
+  display: block;
+  padding: 8px 12px;
+  background: #1f2937;
+  color: #10b981;
+  font-family: monospace;
+  font-size: 14px;
+  border-radius: 6px;
+  word-break: break-all;
+}
+
+.verify-code-input {
+  font-size: 24px !important;
+  text-align: center;
+  letter-spacing: 8px;
+  font-family: monospace;
+  padding: 16px !important;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.form-actions .secondary-btn {
+  flex: 1;
+}
+
+.form-actions .primary-btn {
+  flex: 2;
+}
+
+/* Danger Warning */
+.danger-warning {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.danger-warning svg {
+  flex-shrink: 0;
+}
+
+.danger-warning h4 {
+  margin: 0 0 4px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #dc2626;
+}
+
+.danger-warning p {
+  margin: 0;
+  font-size: 13px;
+  color: #b91c1c;
+}
+
+/* Backup Codes */
+.backup-codes-display {
+  padding: 16px;
+  background: #fefce8;
+  border: 1px solid #fde047;
+  border-radius: 12px;
+}
+
+.backup-codes-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.backup-codes-header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.backup-codes-warning {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  color: #a16207;
+  line-height: 1.5;
+}
+
+.backup-codes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.backup-codes-grid code {
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 14px;
+  text-align: center;
+  color: #374151;
+}
+
+.backup-codes-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.backup-codes-actions .secondary-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.backup-codes-actions .primary-btn {
+  flex: 2;
+}

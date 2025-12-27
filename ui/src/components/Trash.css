@@ -338,3 +338,152 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Trash Toolbar - Search and Filters */
+.trash-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+}
+
+.trash-search {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 200px;
+  max-width: 400px;
+  position: relative;
+}
+
+.trash-search .search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.trash-search-input {
+  width: 100%;
+  padding: 8px 36px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast);
+}
+
+.trash-search-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.trash-search-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.trash-search .search-clear {
+  position: absolute;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: var(--bg-tertiary);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.trash-search .search-clear:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+
+.trash-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.trash-filter-select {
+  padding: 8px 12px;
+  padding-right: 28px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color var(--transition-fast);
+}
+
+.trash-filter-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.trash-filter-select:hover {
+  border-color: var(--border-color);
+}
+
+.filter-reset-btn {
+  padding: 8px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background: var(--bg-primary);
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.filter-reset-btn:hover {
+  background: rgba(49, 130, 246, 0.1);
+  border-color: var(--color-primary);
+}
+
+.filter-reset-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.filter-reset-link:hover {
+  color: #1d6ce0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .trash-toolbar {
+    flex-direction: column;
+  }
+
+  .trash-search {
+    max-width: none;
+  }
+
+  .trash-filters {
+    width: 100%;
+  }
+
+  .trash-filter-select {
+    flex: 1;
+    min-width: 0;
+  }
+}

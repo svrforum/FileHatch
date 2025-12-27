@@ -6,6 +6,20 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+.file-list-container.marquee-selecting {
+  user-select: none;
+}
+
+/* Marquee selection box */
+.marquee-selection-box {
+  position: absolute;
+  border: 1px solid var(--color-primary);
+  background: rgba(34, 139, 230, 0.1);
+  pointer-events: none;
+  z-index: 100;
 }
 
 .file-list-header {
@@ -206,6 +220,37 @@
 
 .new-file-modal .modal-body {
   padding: var(--spacing-lg);
+}
+
+/* Compress Modal */
+.compress-modal .modal-body {
+  padding: var(--spacing-lg);
+}
+
+.compress-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.compress-input-wrapper .rename-input {
+  flex: 1;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.compress-extension {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--spacing-md);
+  height: 36px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-left: none;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-family: var(--font-mono);
 }
 
 @keyframes fadeIn {
@@ -852,6 +897,29 @@
   outline-offset: -2px;
 }
 
+/* Drag and Drop styles */
+.file-row.dragging,
+.file-card.dragging {
+  opacity: 0.5;
+}
+
+.file-row.drop-target,
+.file-card.drop-target {
+  background: var(--color-primary-light) !important;
+  outline: 2px dashed var(--color-primary);
+  outline-offset: -2px;
+}
+
+.file-row.cut,
+.file-card.cut {
+  opacity: 0.5;
+}
+
+.file-row.cut .file-name,
+.file-card.cut .file-card-name {
+  font-style: italic;
+}
+
 /* Empty state quick actions */
 .empty-actions {
   display: flex;
@@ -910,4 +978,179 @@
   .empty-actions {
     flex-direction: column;
   }
+}
+
+/* File Metadata Section - Compact Design */
+.details-metadata {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-top: 1px solid var(--border-light);
+}
+
+.metadata-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.metadata-row:last-child {
+  border-bottom: none;
+}
+
+.metadata-label {
+  flex-shrink: 0;
+  width: 40px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  padding-top: 2px;
+}
+
+.metadata-value {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.metadata-value.clickable {
+  min-height: 20px;
+}
+
+.metadata-value.editable {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background var(--transition-fast);
+}
+
+.metadata-value.editable:hover {
+  background: var(--bg-tertiary);
+}
+
+.metadata-value .placeholder {
+  color: var(--text-tertiary);
+  font-style: italic;
+  font-size: 11px;
+}
+
+.metadata-edit-inline {
+  flex: 1;
+}
+
+.description-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: inherit;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  resize: none;
+  line-height: 1.4;
+}
+
+.description-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-primary-alpha);
+}
+
+/* Tags - Inline Compact */
+.tags-inline {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.tag-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--color-primary);
+  opacity: 0.7;
+  transition: opacity var(--transition-fast);
+}
+
+.tag-remove-btn:hover {
+  opacity: 1;
+}
+
+.tag-add-inline {
+  position: relative;
+}
+
+.tag-add-input {
+  width: 60px;
+  padding: 2px 6px;
+  border: 1px dashed var(--border-default);
+  border-radius: 10px;
+  font-size: 11px;
+  background: transparent;
+  color: var(--text-tertiary);
+  transition: all var(--transition-fast);
+}
+
+.tag-add-input:focus {
+  width: 100px;
+  border-style: solid;
+  border-color: var(--color-primary);
+  outline: none;
+  color: var(--text-primary);
+}
+
+.tag-add-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.tag-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 100px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  z-index: 20;
+  margin-top: 2px;
+  overflow: hidden;
+}
+
+.tag-dropdown button {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 11px;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.tag-dropdown button:hover {
+  background: var(--bg-secondary);
 }

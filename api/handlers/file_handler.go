@@ -101,8 +101,22 @@ func (h *Handler) GetFile(c echo.Context) error {
 	}
 
 	// Check if download is requested
-	if c.QueryParam("download") == "true" {
+	isDownload := c.QueryParam("download") == "true"
+	if isDownload {
 		c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, info.Name()))
+	}
+
+	// Log audit event for downloads
+	if isDownload {
+		var userID *string
+		if claims != nil {
+			userID = &claims.UserID
+		}
+		h.auditHandler.LogEvent(userID, c.RealIP(), EventFileDownload, virtualPath, map[string]interface{}{
+			"filename":    info.Name(),
+			"size":        info.Size(),
+			"storageType": storageType,
+		})
 	}
 
 	return c.File(realPath)

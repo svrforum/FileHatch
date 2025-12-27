@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listTrash, restoreFromTrash, deleteFromTrash, emptyTrash, formatFileSize, TrashItem } from '../api/files'
 import Toast from './Toast'
@@ -8,12 +8,22 @@ interface TrashProps {
   onNavigate: (path: string) => void
 }
 
+type DateFilter = 'all' | 'today' | 'week' | 'month'
+type TypeFilter = 'all' | 'file' | 'folder'
+type SortOption = 'newest' | 'oldest' | 'name' | 'size'
+
 export default function Trash({ onNavigate }: TrashProps) {
   const queryClient = useQueryClient()
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [showEmptyConfirm, setShowEmptyConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' | 'info' }[]>([])
+
+  // Search and filter states
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all')
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
+  const [sortOption, setSortOption] = useState<SortOption>('newest')
 
   const addToast = (type: 'success' | 'error' | 'info', message: string) => {
     const id = Date.now().toString()
@@ -165,6 +175,75 @@ export default function Trash({ onNavigate }: TrashProps) {
     </svg>
   )
 
+  const allItems = data?.items || []
+  const totalSize = data?.totalSize || 0
+
+  // Filter and sort items - must be called before any early returns
+  const filteredItems = useMemo(() => {
+    let items = [...allItems]
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      items = items.filter(item =>
+        item.name.toLowerCase().includes(query) ||
+        item.originalPath.toLowerCase().includes(query)
+      )
+    }
+
+    // Date filter
+    if (dateFilter !== 'all') {
+      const now = new Date()
+      const cutoff = new Date()
+
+      switch (dateFilter) {
+        case 'today':
+          cutoff.setHours(0, 0, 0, 0)
+          break
+        case 'week':
+          cutoff.setDate(now.getDate() - 7)
+          break
+        case 'month':
+          cutoff.setMonth(now.getMonth() - 1)
+          break
+      }
+
+      items = items.filter(item => new Date(item.deletedAt) >= cutoff)
+    }
+
+    // Type filter
+    if (typeFilter !== 'all') {
+      items = items.filter(item =>
+        typeFilter === 'folder' ? item.isDir : !item.isDir
+      )
+    }
+
+    // Sort
+    switch (sortOption) {
+      case 'newest':
+        items.sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime())
+        break
+      case 'oldest':
+        items.sort((a, b) => new Date(a.deletedAt).getTime() - new Date(b.deletedAt).getTime())
+        break
+      case 'name':
+        items.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+        break
+      case 'size':
+        items.sort((a, b) => b.size - a.size)
+        break
+    }
+
+    return items
+  }, [allItems, searchQuery, dateFilter, typeFilter, sortOption])
+
+  // Calculate filtered size
+  const filteredSize = useMemo(() =>
+    filteredItems.reduce((sum, item) => sum + item.size, 0)
+  , [filteredItems])
+
+  const hasFilters = searchQuery || dateFilter !== 'all' || typeFilter !== 'all'
+
   if (isLoading) {
     return (
       <div className="trash-container">
@@ -181,9 +260,6 @@ export default function Trash({ onNavigate }: TrashProps) {
     )
   }
 
-  const items = data?.items || []
-  const totalSize = data?.totalSize || 0
-
   return (
     <div className="trash-container">
       <div className="trash-header">
@@ -192,10 +268,14 @@ export default function Trash({ onNavigate }: TrashProps) {
           <h2>휴지통</h2>
         </div>
         <div className="trash-info">
-          <span className="trash-count">{items.length}개 항목</span>
-          <span className="trash-size">{formatFileSize(totalSize)}</span>
+          <span className="trash-count">
+            {hasFilters ? `${filteredItems.length}/${allItems.length}개 항목` : `${allItems.length}개 항목`}
+          </span>
+          <span className="trash-size">
+            {hasFilters ? `${formatFileSize(filteredSize)} / ${formatFileSize(totalSize)}` : formatFileSize(totalSize)}
+          </span>
         </div>
-        {items.length > 0 && (
+        {allItems.length > 0 && (
           <button
             className="empty-trash-btn"
             onClick={handleEmptyTrash}
@@ -207,14 +287,106 @@ export default function Trash({ onNavigate }: TrashProps) {
         )}
       </div>
 
-      {items.length === 0 ? (
+      {/* Search and Filter Bar */}
+      {allItems.length > 0 && (
+        <div className="trash-toolbar">
+          <div className="trash-search">
+            <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/>
+              <path d="M20 20L16 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            <input
+              type="text"
+              placeholder="휴지통 내 검색..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="trash-search-input"
+            />
+            {searchQuery && (
+              <button className="search-clear" onClick={() => setSearchQuery('')}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
+
+          <div className="trash-filters">
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+              className="trash-filter-select"
+            >
+              <option value="all">전체 기간</option>
+              <option value="today">오늘</option>
+              <option value="week">최근 7일</option>
+              <option value="month">최근 30일</option>
+            </select>
+
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+              className="trash-filter-select"
+            >
+              <option value="all">전체 유형</option>
+              <option value="file">파일만</option>
+              <option value="folder">폴더만</option>
+            </select>
+
+            <select
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value as SortOption)}
+              className="trash-filter-select"
+            >
+              <option value="newest">최근 삭제순</option>
+              <option value="oldest">오래된순</option>
+              <option value="name">이름순</option>
+              <option value="size">크기순</option>
+            </select>
+
+            {hasFilters && (
+              <button
+                className="filter-reset-btn"
+                onClick={() => {
+                  setSearchQuery('')
+                  setDateFilter('all')
+                  setTypeFilter('all')
+                }}
+              >
+                필터 초기화
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {allItems.length === 0 ? (
         <div className="trash-empty">
           <TrashIcon size={64} />
           <p>휴지통이 비어 있습니다</p>
         </div>
+      ) : filteredItems.length === 0 ? (
+        <div className="trash-empty">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
+            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M20 20L16 16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <path d="M8 11H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          <p>검색 결과가 없습니다</p>
+          <button
+            className="filter-reset-link"
+            onClick={() => {
+              setSearchQuery('')
+              setDateFilter('all')
+              setTypeFilter('all')
+            }}
+          >
+            필터 초기화
+          </button>
+        </div>
       ) : (
         <div className="trash-list">
-          {items.map((item: TrashItem) => (
+          {filteredItems.map((item: TrashItem) => (
             <div
               key={item.id}
               className={`trash-item ${selectedItems.has(item.id) ? 'selected' : ''}`}
@@ -280,7 +452,7 @@ export default function Trash({ onNavigate }: TrashProps) {
             </div>
             <h3>휴지통 비우기</h3>
             <p>
-              휴지통의 모든 항목({items.length}개)이 영구적으로 삭제됩니다.
+              휴지통의 모든 항목({allItems.length}개)이 영구적으로 삭제됩니다.
               <br />이 작업은 취소할 수 없습니다.
             </p>
             <div className="modal-actions">

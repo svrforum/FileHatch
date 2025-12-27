@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { updateProfile, setSMBPassword } from '../api/auth'
+import { updateProfile, setSMBPassword, get2FAStatus, setup2FA, enable2FA, disable2FA, regenerateBackupCodes, TwoFASetupResponse } from '../api/auth'
 import './AuthModal.css'
 import './UserProfile.css'
 
@@ -11,7 +11,7 @@ interface UserProfileProps {
 
 function UserProfile({ isOpen, onClose }: UserProfileProps) {
   const { user, token, refreshProfile, logout } = useAuthStore()
-  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'smb'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'smb' | '2fa'>('profile')
 
   // Profile state
   const [email, setEmail] = useState(user?.email || '')
@@ -25,9 +25,38 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
   const [smbPassword, setSmbPasswordVal] = useState('')
   const [smbConfirmPassword, setSmbConfirmPassword] = useState('')
 
+  // 2FA state
+  const [twoFAEnabled, setTwoFAEnabled] = useState(false)
+  const [backupCodesCount, setBackupCodesCount] = useState(0)
+  const [setupData, setSetupData] = useState<TwoFASetupResponse | null>(null)
+  const [verifyCode, setVerifyCode] = useState('')
+  const [disablePassword, setDisablePassword] = useState('')
+  const [backupCodes, setBackupCodes] = useState<string[]>([])
+  const [showBackupCodes, setShowBackupCodes] = useState(false)
+  const [twoFAStep, setTwoFAStep] = useState<'status' | 'setup' | 'verify' | 'disable'>('status')
+
   // UI state
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Fetch 2FA status when tab changes
+  useEffect(() => {
+    if (activeTab === '2fa' && token) {
+      fetchTwoFAStatus()
+    }
+  }, [activeTab, token])
+
+  const fetchTwoFAStatus = async () => {
+    if (!token) return
+    try {
+      const status = await get2FAStatus(token)
+      setTwoFAEnabled(status.enabled)
+      setBackupCodesCount(status.backupCodesCount)
+      setTwoFAStep('status')
+    } catch (err) {
+      console.error('Failed to get 2FA status:', err)
+    }
+  }
 
   if (!isOpen || !user || !token) return null
 
@@ -97,6 +126,82 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
     onClose()
   }
 
+  // 2FA handlers
+  const handleSetup2FA = async () => {
+    setLoading(true)
+    setMessage(null)
+    try {
+      const data = await setup2FA(token)
+      setSetupData(data)
+      setTwoFAStep('setup')
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : '2FA 설정 실패' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEnable2FA = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setMessage(null)
+    try {
+      const result = await enable2FA(token, verifyCode)
+      setBackupCodes(result.backupCodes)
+      setShowBackupCodes(true)
+      setTwoFAEnabled(true)
+      setVerifyCode('')
+      setSetupData(null)
+      setTwoFAStep('status')
+      await refreshProfile()
+      setMessage({ type: 'success', text: '2FA가 활성화되었습니다. 백업 코드를 안전하게 보관하세요.' })
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : '2FA 활성화 실패' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDisable2FA = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setMessage(null)
+    try {
+      await disable2FA(token, disablePassword)
+      setTwoFAEnabled(false)
+      setDisablePassword('')
+      setTwoFAStep('status')
+      await refreshProfile()
+      setMessage({ type: 'success', text: '2FA가 비활성화되었습니다.' })
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : '2FA 비활성화 실패' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRegenerateBackupCodes = async () => {
+    setLoading(true)
+    setMessage(null)
+    try {
+      const result = await regenerateBackupCodes(token)
+      setBackupCodes(result.backupCodes)
+      setShowBackupCodes(true)
+      await fetchTwoFAStatus()
+      setMessage({ type: 'success', text: '새 백업 코드가 생성되었습니다. 안전하게 보관하세요.' })
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : '백업 코드 생성 실패' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const copyBackupCodes = () => {
+    const text = backupCodes.join('\n')
+    navigator.clipboard.writeText(text)
+    setMessage({ type: 'success', text: '백업 코드가 클립보드에 복사되었습니다.' })
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal user-profile-modal" onClick={(e) => e.stopPropagation()}>
@@ -127,6 +232,12 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
             onClick={() => { setActiveTab('smb'); setMessage(null); }}
           >
             SMB 설정
+          </button>
+          <button
+            className={activeTab === '2fa' ? 'active' : ''}
+            onClick={() => { setActiveTab('2fa'); setMessage(null); setShowBackupCodes(false); }}
+          >
+            2FA 보안
           </button>
         </div>
 
@@ -274,6 +385,179 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
                 </button>
               </div>
             </form>
+          )}
+
+          {activeTab === '2fa' && (
+            <div className="twofa-content">
+              {/* Show backup codes if just generated */}
+              {showBackupCodes && backupCodes.length > 0 && (
+                <div className="backup-codes-display">
+                  <div className="backup-codes-header">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="#f59e0b" strokeWidth="2"/>
+                      <path d="M12 8V12M12 16H12.01" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                    <h4>백업 코드 (반드시 안전하게 보관하세요)</h4>
+                  </div>
+                  <p className="backup-codes-warning">
+                    이 코드들은 인증 앱을 사용할 수 없을 때 로그인에 사용할 수 있습니다.
+                    각 코드는 한 번만 사용할 수 있으며, 이 창을 닫으면 다시 볼 수 없습니다.
+                  </p>
+                  <div className="backup-codes-grid">
+                    {backupCodes.map((code, index) => (
+                      <code key={index}>{code}</code>
+                    ))}
+                  </div>
+                  <div className="backup-codes-actions">
+                    <button type="button" className="secondary-btn" onClick={copyBackupCodes}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M8 4V16C8 17.1046 8.89543 18 10 18H18C19.1046 18 20 17.1046 20 16V7.242C20 6.711 19.789 6.201 19.414 5.828L16.172 2.586C15.799 2.211 15.289 2 14.758 2H10C8.89543 2 8 2.89543 8 4Z" stroke="currentColor" strokeWidth="2"/>
+                        <path d="M16 18V20C16 21.1046 15.1046 22 14 22H6C4.89543 22 4 21.1046 4 20V9C4 7.89543 4.89543 7 6 7H8" stroke="currentColor" strokeWidth="2"/>
+                      </svg>
+                      복사
+                    </button>
+                    <button type="button" className="primary-btn" onClick={() => setShowBackupCodes(false)}>
+                      확인했습니다
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 2FA Status */}
+              {!showBackupCodes && twoFAStep === 'status' && (
+                <div className="twofa-status">
+                  <div className={`twofa-status-badge ${twoFAEnabled ? 'enabled' : 'disabled'}`}>
+                    {twoFAEnabled ? (
+                      <>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                          <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="#22c55e" strokeWidth="2"/>
+                          <path d="M8 12L11 15L16 9" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        <span>2FA 활성화됨</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                          <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="#94a3b8" strokeWidth="2"/>
+                          <path d="M15 9L9 15M9 9L15 15" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round"/>
+                        </svg>
+                        <span>2FA 비활성화됨</span>
+                      </>
+                    )}
+                  </div>
+
+                  {twoFAEnabled ? (
+                    <div className="twofa-enabled-info">
+                      <p>2단계 인증이 활성화되어 있습니다. 로그인 시 인증 앱의 코드를 입력해야 합니다.</p>
+                      <div className="twofa-backup-info">
+                        <span>남은 백업 코드: <strong>{backupCodesCount}개</strong></span>
+                      </div>
+                      <div className="twofa-actions">
+                        <button type="button" className="secondary-btn" onClick={handleRegenerateBackupCodes} disabled={loading}>
+                          {loading ? '생성 중...' : '백업 코드 재생성'}
+                        </button>
+                        <button type="button" className="danger-btn" onClick={() => setTwoFAStep('disable')} disabled={loading}>
+                          2FA 비활성화
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="twofa-disabled-info">
+                      <div className="twofa-info-box">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="#3182f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        <div>
+                          <h4>계정을 더 안전하게 보호하세요</h4>
+                          <p>2단계 인증을 활성화하면 비밀번호 외에 인증 앱의 코드를 입력해야 합니다.</p>
+                        </div>
+                      </div>
+                      <button type="button" className="primary-btn" onClick={handleSetup2FA} disabled={loading}>
+                        {loading ? '설정 중...' : '2FA 설정하기'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 2FA Setup - QR Code */}
+              {!showBackupCodes && twoFAStep === 'setup' && setupData && (
+                <div className="twofa-setup">
+                  <h4>1. 인증 앱으로 QR 코드 스캔</h4>
+                  <p>Google Authenticator, Microsoft Authenticator 등의 앱에서 아래 QR 코드를 스캔하세요.</p>
+                  <div className="qr-code-container">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setupData.qrCodeUrl)}`}
+                      alt="2FA QR Code"
+                    />
+                  </div>
+                  <div className="manual-entry">
+                    <p>QR 코드를 스캔할 수 없는 경우, 수동으로 입력하세요:</p>
+                    <code className="secret-code">{setupData.secret}</code>
+                  </div>
+
+                  <form onSubmit={handleEnable2FA}>
+                    <h4>2. 인증 코드 입력</h4>
+                    <p>인증 앱에 표시된 6자리 코드를 입력하세요.</p>
+                    <div className="form-group">
+                      <input
+                        type="text"
+                        value={verifyCode}
+                        onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="000000"
+                        className="verify-code-input"
+                        maxLength={6}
+                        pattern="\d{6}"
+                        required
+                        autoComplete="one-time-code"
+                      />
+                    </div>
+                    <div className="form-actions">
+                      <button type="button" className="secondary-btn" onClick={() => { setTwoFAStep('status'); setSetupData(null); }}>
+                        취소
+                      </button>
+                      <button type="submit" className="primary-btn" disabled={loading || verifyCode.length !== 6}>
+                        {loading ? '확인 중...' : '2FA 활성화'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* 2FA Disable */}
+              {!showBackupCodes && twoFAStep === 'disable' && (
+                <form onSubmit={handleDisable2FA} className="twofa-disable">
+                  <div className="danger-warning">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="#ef4444" strokeWidth="2"/>
+                      <path d="M12 8V12M12 16H12.01" stroke="#ef4444" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                    <div>
+                      <h4>2FA를 비활성화하시겠습니까?</h4>
+                      <p>2단계 인증을 비활성화하면 계정 보안이 약해집니다.</p>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>비밀번호 확인</label>
+                    <input
+                      type="password"
+                      value={disablePassword}
+                      onChange={(e) => setDisablePassword(e.target.value)}
+                      placeholder="현재 비밀번호를 입력하세요"
+                      required
+                    />
+                  </div>
+                  <div className="form-actions">
+                    <button type="button" className="secondary-btn" onClick={() => { setTwoFAStep('status'); setDisablePassword(''); }}>
+                      취소
+                    </button>
+                    <button type="submit" className="danger-btn" disabled={loading || !disablePassword}>
+                      {loading ? '처리 중...' : '2FA 비활성화'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           )}
         </div>
 

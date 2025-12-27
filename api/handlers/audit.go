@@ -43,6 +43,8 @@ const (
 	EventFileEdit     = "file.edit"
 	EventFileDelete   = "file.delete"
 	EventFileRename   = "file.rename"
+	EventFileCopy     = "file.copy"
+	EventFileMove     = "file.move"
 	EventFolderCreate = "folder.create"
 	EventFolderDelete = "folder.delete"
 
@@ -344,7 +346,7 @@ func (h *AuditHandler) fetchContainerLogs(container string, tail int, level stri
 	// Parse log lines
 	scanner := bufio.NewScanner(strings.NewReader(string(output)))
 	logPattern := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s+(.*)$`)
-	levelPattern := regexp.MustCompile(`(?i)\b(fatal|error|warn(?:ing)?|info|debug)\b`)
+	levelPattern := regexp.MustCompile(`(?i)^.*?\b(fatal|error|warn(?:ing)?|info|debug)\b`)
 
 	containerShort := strings.TrimPrefix(container, "scv-")
 
@@ -368,8 +370,25 @@ func (h *AuditHandler) fetchContainerLogs(container string, tail int, level stri
 			entry.Message = line
 		}
 
-		// Detect log level
-		if levelMatch := levelPattern.FindStringSubmatch(entry.Message); len(levelMatch) > 0 {
+		// Detect log level - handle JSON access logs specially
+		if strings.HasPrefix(entry.Message, "{") && strings.Contains(entry.Message, `"status":`) {
+			// This is likely an Echo access log JSON
+			// Check status code to determine level
+			var accessLog struct {
+				Status int    `json:"status"`
+				Error  string `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(entry.Message), &accessLog); err == nil {
+				if accessLog.Status >= 500 {
+					entry.Level = "error"
+				} else if accessLog.Status >= 400 {
+					entry.Level = "warn"
+				} else if accessLog.Error != "" {
+					entry.Level = "error"
+				}
+				// else keep default "info"
+			}
+		} else if levelMatch := levelPattern.FindStringSubmatch(entry.Message); len(levelMatch) > 0 {
 			detectedLevel := strings.ToLower(levelMatch[1])
 			if detectedLevel == "warning" {
 				detectedLevel = "warn"

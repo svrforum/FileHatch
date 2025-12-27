@@ -6,6 +6,16 @@ export interface FileInfo {
   modTime: string
   extension?: string
   mimeType?: string
+  // Search result fields
+  matchType?: 'name' | 'tag' | 'description' | 'trash'
+  matchedTag?: string
+  description?: string
+  tags?: string[]
+  // Trash-related fields
+  inTrash?: boolean
+  trashId?: string
+  originalPath?: string
+  deletedAt?: string
 }
 
 export interface ListFilesResponse {
@@ -333,14 +343,37 @@ export async function copyItem(path: string, destination: string): Promise<{ suc
 }
 
 // Search files
+export type MatchType = 'all' | 'name' | 'tag' | 'description'
+
 export interface SearchResponse {
   query: string
   results: FileInfo[]
   total: number
+  page: number
+  limit: number
+  hasMore: boolean
+  matchType?: MatchType
 }
 
-export async function searchFiles(query: string, path: string = '/'): Promise<SearchResponse> {
-  const params = new URLSearchParams({ q: query, path })
+export interface SearchOptions {
+  path?: string
+  page?: number
+  limit?: number
+  matchType?: MatchType
+}
+
+export async function searchFiles(
+  query: string,
+  options: SearchOptions = {}
+): Promise<SearchResponse> {
+  const { path = '/', page = 1, limit = 20, matchType = 'all' } = options
+  const params = new URLSearchParams({
+    q: query,
+    path,
+    page: String(page),
+    limit: String(limit),
+    matchType,
+  })
   const response = await fetch(`${API_BASE}/files/search?${params}`, {
     headers: getAuthHeaders(),
   })
@@ -604,9 +637,13 @@ export function isOnlyOfficeSupported(extension: string | undefined): boolean {
   if (!extension) return false
   const ext = extension.toLowerCase()
   const supported = [
-    'doc', 'docx', 'odt', 'rtf', 'txt',
+    // Document formats (txt excluded - use built-in text editor instead)
+    'doc', 'docx', 'odt', 'rtf',
+    // Spreadsheet formats
     'xls', 'xlsx', 'ods', 'csv',
+    // Presentation formats
     'ppt', 'pptx', 'odp',
+    // PDF
     'pdf'
   ]
   return supported.includes(ext)
@@ -641,6 +678,133 @@ export async function createFile(path: string, filename: string, fileType: strin
   if (!response.ok) {
     const data = await response.json()
     throw new Error(data.error || 'Failed to create file')
+  }
+
+  return response.json()
+}
+
+// File Metadata types
+export interface FileMetadata {
+  id?: number
+  filePath: string
+  description: string
+  tags: string[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+// Get file metadata (description and tags)
+export async function getFileMetadata(filePath: string): Promise<FileMetadata> {
+  const encodedPath = encodeURIComponent(filePath).replace(/%2F/g, '/')
+  const response = await fetch(`${API_BASE}/file-metadata/${encodedPath}`, {
+    headers: getAuthHeaders(),
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to get file metadata')
+  }
+
+  return response.json()
+}
+
+// Update file metadata
+export async function updateFileMetadata(
+  filePath: string,
+  data: { description?: string; tags?: string[] }
+): Promise<FileMetadata> {
+  const encodedPath = encodeURIComponent(filePath).replace(/%2F/g, '/')
+  const response = await fetch(`${API_BASE}/file-metadata/${encodedPath}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to update file metadata')
+  }
+
+  return response.json()
+}
+
+// Get all user tags for autocomplete
+export async function getUserTags(): Promise<{ tags: string[]; total: number }> {
+  const response = await fetch(`${API_BASE}/file-metadata/tags`, {
+    headers: getAuthHeaders(),
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to get tags')
+  }
+
+  return response.json()
+}
+
+// Search files by tag
+export async function searchByTag(tag: string): Promise<{ files: FileMetadata[]; total: number }> {
+  const response = await fetch(`${API_BASE}/file-metadata/search?tag=${encodeURIComponent(tag)}`, {
+    headers: getAuthHeaders(),
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to search by tag')
+  }
+
+  return response.json()
+}
+
+// Compress files/folders into a zip archive
+export interface CompressResponse {
+  success: boolean
+  outputPath: string
+  outputName: string
+  size: number
+}
+
+export async function compressFiles(
+  paths: string[],
+  outputName?: string
+): Promise<CompressResponse> {
+  const response = await fetch(`${API_BASE}/files/compress`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ paths, outputName }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error || 'Failed to compress files')
+  }
+
+  return response.json()
+}
+
+// Extract zip response
+export interface ExtractResponse {
+  success: boolean
+  extractedPath: string
+  extractedCount: number
+}
+
+// Extract a zip file
+export async function extractZip(
+  path: string,
+  outputPath?: string
+): Promise<ExtractResponse> {
+  const response = await fetch(`${API_BASE}/files/extract`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path, outputPath }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error || 'Failed to extract zip file')
   }
 
   return response.json()

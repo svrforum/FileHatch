@@ -8,6 +8,7 @@ export interface User {
   isAdmin: boolean
   isActive: boolean
   hasSmb: boolean
+  has2fa: boolean
   storageQuota: number  // 0 = unlimited
   storageUsed: number
   createdAt: string
@@ -26,8 +27,29 @@ export interface CreateUserRequest {
 }
 
 export interface AuthResponse {
-  token: string
-  user: User
+  token?: string
+  user?: User
+  requires2fa?: boolean
+  userId?: string
+}
+
+// 2FA interfaces
+export interface TwoFASetupResponse {
+  secret: string
+  qrCodeUrl: string
+  accountName: string
+  issuer: string
+}
+
+export interface TwoFAStatusResponse {
+  enabled: boolean
+  backupCodesCount: number
+}
+
+export interface TwoFAEnableResponse {
+  success: boolean
+  message: string
+  backupCodes: string[]
 }
 
 export interface UpdateProfileRequest {
@@ -174,5 +196,270 @@ export async function setSMBPassword(
   if (!response.ok) {
     const error = await response.json()
     throw new Error(error.error || 'Failed to set SMB password')
+  }
+}
+
+// 2FA Functions
+export async function get2FAStatus(token: string): Promise<TwoFAStatusResponse> {
+  const response = await fetch(`${API_BASE}/auth/2fa/status`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to get 2FA status')
+  }
+
+  return response.json()
+}
+
+export async function setup2FA(token: string): Promise<TwoFASetupResponse> {
+  const response = await fetch(`${API_BASE}/auth/2fa/setup`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to setup 2FA')
+  }
+
+  return response.json()
+}
+
+export async function enable2FA(token: string, code: string): Promise<TwoFAEnableResponse> {
+  const response = await fetch(`${API_BASE}/auth/2fa/enable`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ code }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to enable 2FA')
+  }
+
+  return response.json()
+}
+
+export async function disable2FA(token: string, password: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/auth/2fa/disable`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ password }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to disable 2FA')
+  }
+}
+
+export async function verify2FA(userId: string, code: string): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE}/auth/2fa/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, code }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || '2FA verification failed')
+  }
+
+  return response.json()
+}
+
+export async function regenerateBackupCodes(token: string): Promise<{ backupCodes: string[] }> {
+  const response = await fetch(`${API_BASE}/auth/2fa/backup-codes`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to regenerate backup codes')
+  }
+
+  return response.json()
+}
+
+export async function adminReset2FA(token: string, userId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/admin/users/${userId}/2fa`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to reset 2FA')
+  }
+}
+
+// SSO Types
+export interface SSOProviderPublic {
+  id: string
+  name: string
+  providerType: string
+  iconUrl?: string
+  buttonColor?: string
+}
+
+export interface SSOProvidersResponse {
+  enabled: boolean
+  ssoOnlyMode: boolean
+  providers: SSOProviderPublic[]
+}
+
+export interface SSOProvider {
+  id: string
+  name: string
+  providerType: string
+  clientId: string
+  clientSecret?: string
+  issuerUrl?: string
+  authorizationUrl?: string
+  tokenUrl?: string
+  userinfoUrl?: string
+  scopes: string
+  allowedDomains?: string
+  autoCreateUser: boolean
+  defaultAdmin: boolean
+  isEnabled: boolean
+  displayOrder: number
+  iconUrl?: string
+  buttonColor?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SSOSettings {
+  sso_enabled: string
+  sso_only_mode: string
+  sso_auto_register: string
+  sso_allowed_domains: string
+}
+
+// SSO Functions
+export async function getSSOProviders(): Promise<SSOProvidersResponse> {
+  const response = await fetch(`${API_BASE}/auth/sso/providers`)
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch SSO providers')
+  }
+
+  return response.json()
+}
+
+export async function getSSOAuthURL(providerId: string): Promise<{ authUrl: string; state: string }> {
+  const response = await fetch(`${API_BASE}/auth/sso/auth/${providerId}`)
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to get SSO auth URL')
+  }
+
+  return response.json()
+}
+
+// Admin SSO Functions
+export async function listSSOProviders(token: string): Promise<SSOProvider[]> {
+  const response = await fetch(`${API_BASE}/admin/sso/providers`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch SSO providers')
+  }
+
+  return response.json()
+}
+
+export async function createSSOProvider(
+  token: string,
+  data: Omit<SSOProvider, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<{ id: string }> {
+  const response = await fetch(`${API_BASE}/admin/sso/providers`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to create SSO provider')
+  }
+
+  return response.json()
+}
+
+export async function updateSSOProvider(
+  token: string,
+  id: string,
+  data: Partial<Omit<SSOProvider, 'id' | 'createdAt' | 'updatedAt'>>
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/admin/sso/providers/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to update SSO provider')
+  }
+}
+
+export async function deleteSSOProvider(token: string, id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/admin/sso/providers/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to delete SSO provider')
+  }
+}
+
+export async function getSSOSettings(token: string): Promise<SSOSettings> {
+  const response = await fetch(`${API_BASE}/admin/sso/settings`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch SSO settings')
+  }
+
+  return response.json()
+}
+
+export async function updateSSOSettings(
+  token: string,
+  settings: Partial<SSOSettings>
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/admin/sso/settings`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(settings),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to update SSO settings')
   }
 }

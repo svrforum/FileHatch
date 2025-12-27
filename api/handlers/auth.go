@@ -173,6 +173,7 @@ type User struct {
 	IsAdmin      bool      `json:"isAdmin"`
 	IsActive     bool      `json:"isActive"`
 	HasSMB       bool      `json:"hasSmb"`
+	Has2FA       bool      `json:"has2fa"`
 	StorageQuota int64     `json:"storageQuota"` // 0 = unlimited
 	StorageUsed  int64     `json:"storageUsed"`
 	CreatedAt    time.Time `json:"createdAt"`
@@ -202,8 +203,10 @@ type RegisterRequest struct {
 
 // LoginResponse represents login response
 type LoginResponse struct {
-	Token string `json:"token"`
-	User  User   `json:"user"`
+	Token       string `json:"token,omitempty"`
+	User        User   `json:"user,omitempty"`
+	Requires2FA bool   `json:"requires2fa,omitempty"`
+	UserID      string `json:"userId,omitempty"` // Only sent when 2FA is required
 }
 
 // Register creates a new user account
@@ -292,11 +295,14 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	var email sql.NullString
 	var smbHash sql.NullString
 	var provider sql.NullString
+	var totpEnabled sql.NullBool
 
 	err := h.db.QueryRow(`
-		SELECT id, username, email, password_hash, smb_hash, provider, is_admin, is_active, created_at, updated_at
+		SELECT id, username, email, password_hash, smb_hash, provider, is_admin, is_active,
+		       COALESCE(totp_enabled, false), created_at, updated_at
 		FROM users WHERE username = $1
-	`, req.Username).Scan(&user.ID, &user.Username, &email, &passwordHash, &smbHash, &provider, &user.IsAdmin, &user.IsActive, &user.CreatedAt, &user.UpdatedAt)
+	`, req.Username).Scan(&user.ID, &user.Username, &email, &passwordHash, &smbHash, &provider,
+		&user.IsAdmin, &user.IsActive, &totpEnabled, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
@@ -333,6 +339,16 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		user.Provider = "local"
 	}
 	user.HasSMB = smbHash.Valid && smbHash.String != ""
+	user.Has2FA = totpEnabled.Valid && totpEnabled.Bool
+
+	// Check if 2FA is enabled
+	if user.Has2FA {
+		// Return requires_2fa response - user needs to verify OTP
+		return c.JSON(http.StatusOK, LoginResponse{
+			Requires2FA: true,
+			UserID:      user.ID,
+		})
+	}
 
 	// Generate JWT token
 	token, err := h.generateToken(user.ID, user.Username, user.IsAdmin)
@@ -362,11 +378,14 @@ func (h *AuthHandler) GetProfile(c echo.Context) error {
 	var email sql.NullString
 	var smbHash sql.NullString
 	var provider sql.NullString
+	var totpEnabled sql.NullBool
 
 	err := h.db.QueryRow(`
-		SELECT id, username, email, smb_hash, provider, is_admin, is_active, created_at, updated_at
+		SELECT id, username, email, smb_hash, provider, is_admin, is_active,
+		       COALESCE(totp_enabled, false), created_at, updated_at
 		FROM users WHERE id = $1
-	`, claims.UserID).Scan(&user.ID, &user.Username, &email, &smbHash, &provider, &user.IsAdmin, &user.IsActive, &user.CreatedAt, &user.UpdatedAt)
+	`, claims.UserID).Scan(&user.ID, &user.Username, &email, &smbHash, &provider,
+		&user.IsAdmin, &user.IsActive, &totpEnabled, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return c.JSON(http.StatusNotFound, map[string]string{
@@ -388,6 +407,7 @@ func (h *AuthHandler) GetProfile(c echo.Context) error {
 		user.Provider = "local"
 	}
 	user.HasSMB = smbHash.Valid && smbHash.String != ""
+	user.Has2FA = totpEnabled.Valid && totpEnabled.Bool
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"user": user,
@@ -707,7 +727,8 @@ type CreateUserRequest struct {
 // ListUsers returns all users (admin only)
 func (h *AuthHandler) ListUsers(c echo.Context) error {
 	rows, err := h.db.Query(`
-		SELECT id, username, email, provider, is_admin, is_active, smb_hash, storage_quota, created_at, updated_at
+		SELECT id, username, email, provider, is_admin, is_active, smb_hash,
+		       COALESCE(totp_enabled, false), storage_quota, created_at, updated_at
 		FROM users
 		ORDER BY created_at DESC
 	`)
@@ -724,9 +745,11 @@ func (h *AuthHandler) ListUsers(c echo.Context) error {
 		var email sql.NullString
 		var provider sql.NullString
 		var smbHash sql.NullString
+		var totpEnabled bool
 		var storageQuota sql.NullInt64
 
-		err := rows.Scan(&user.ID, &user.Username, &email, &provider, &user.IsAdmin, &user.IsActive, &smbHash, &storageQuota, &user.CreatedAt, &user.UpdatedAt)
+		err := rows.Scan(&user.ID, &user.Username, &email, &provider, &user.IsAdmin,
+			&user.IsActive, &smbHash, &totpEnabled, &storageQuota, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			continue
 		}
@@ -740,6 +763,7 @@ func (h *AuthHandler) ListUsers(c echo.Context) error {
 			user.Provider = "local"
 		}
 		user.HasSMB = smbHash.Valid && smbHash.String != ""
+		user.Has2FA = totpEnabled
 		if storageQuota.Valid {
 			user.StorageQuota = storageQuota.Int64
 		}

@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchFiles, downloadFileWithProgress, formatFileSize, getFolderStats, renameItem, copyItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions } from '../api/files'
+import { fetchFiles, downloadFileWithProgress, formatFileSize, getFolderStats, renameItem, copyItem, moveItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, getFileMetadata, updateFileMetadata, getUserTags, FileMetadata, compressFiles, extractZip } from '../api/files'
 import { getMySharedFolders, SharedFolderWithPermission } from '../api/sharedFolders'
+import { getSharedWithMe, getSharedByMe, getMyShareLinks, SharedWithMeItem, SharedByMeItem, LinkShare, deleteFileShare, deleteShareLink, getPermissionLabel } from '../api/fileShares'
 import { useUploadStore } from '../stores/uploadStore'
 import { useFileWatcher } from '../hooks/useFileWatcher'
 import ConfirmModal from './ConfirmModal'
@@ -18,6 +19,8 @@ interface FileListProps {
   onNavigate: (path: string) => void
   onUploadClick: () => void
   onNewFolderClick: () => void
+  highlightedFilePath?: string | null
+  onClearHighlight?: () => void
 }
 
 type SortField = 'name' | 'size' | 'date'
@@ -25,11 +28,11 @@ type SortOrder = 'asc' | 'desc'
 type ViewMode = 'list' | 'grid'
 
 type ContextMenuType =
-  | { type: 'file'; x: number; y: number; file: FileInfo }
+  | { type: 'file'; x: number; y: number; file: FileInfo; selectedPaths: string[] }
   | { type: 'background'; x: number; y: number }
   | null
 
-function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: FileListProps) {
+function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, highlightedFilePath, onClearHighlight }: FileListProps) {
   const [sortBy, setSortBy] = useState<SortField>('name')
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -63,6 +66,55 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
   const [shareTarget, setShareTarget] = useState<FileInfo | null>(null)
   const [linkShareTarget, setLinkShareTarget] = useState<FileInfo | null>(null)
   const [sharedFolders, setSharedFolders] = useState<SharedFolderWithPermission[]>([])
+  // Compress modal state
+  const [showCompressModal, setShowCompressModal] = useState(false)
+  const [compressFileName, setCompressFileName] = useState('')
+  const [pathsToCompress, setPathsToCompress] = useState<string[]>([])
+  // Clipboard state for copy/cut operations
+  const [clipboard, setClipboard] = useState<{ files: FileInfo[]; mode: 'copy' | 'cut' } | null>(null)
+  // Drag and drop state for internal file movement
+  const [draggedFiles, setDraggedFiles] = useState<FileInfo[]>([])
+  const [dropTargetPath, setDropTargetPath] = useState<string | null>(null)
+  // Marquee selection state
+  const [isMarqueeSelecting, setIsMarqueeSelecting] = useState(false)
+  const [marqueeStart, setMarqueeStart] = useState<{ x: number; y: number } | null>(null)
+  const [marqueeEnd, setMarqueeEnd] = useState<{ x: number; y: number } | null>(null)
+  const fileRowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  // Undo/Redo history
+  type HistoryAction = {
+    type: 'move' | 'copy' | 'delete' | 'rename'
+    sourcePaths: string[]  // Original file paths
+    destPaths?: string[]   // Destination file paths (for copy/move)
+    destination?: string   // Destination folder
+    oldName?: string
+    newName?: string
+  }
+  // Combined history state to avoid stale closure issues
+  const [historyState, setHistoryState] = useState<{
+    actions: HistoryAction[]
+    index: number
+  }>({ actions: [], index: -1 })
+
+  // File metadata state (description and tags)
+  const [fileMetadata, setFileMetadata] = useState<FileMetadata | null>(null)
+  const [loadingMetadata, setLoadingMetadata] = useState(false)
+  const [editingDescription, setEditingDescription] = useState(false)
+  const [descriptionInput, setDescriptionInput] = useState('')
+  const [tagInput, setTagInput] = useState('')
+  const [allUserTags, setAllUserTags] = useState<string[]>([])
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
+  // Keyboard search state
+  const [searchBuffer, setSearchBuffer] = useState('')
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Add action to history for undo/redo
+  const addToHistory = useCallback((action: HistoryAction) => {
+    setHistoryState(prev => ({
+      actions: [...prev.actions.slice(0, prev.index + 1), action],
+      index: prev.index + 1
+    }))
+  }, [])
+
   const queryClient = useQueryClient()
   const containerRef = useRef<HTMLDivElement>(null)
   const uploadStore = useUploadStore()
@@ -81,10 +133,97 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
     watchPaths: ['/home', '/shared'],
   })
 
+  // Check if current path is a special share view
+  const isSharedWithMeView = currentPath === '/shared-with-me'
+  const isSharedByMeView = currentPath === '/shared-by-me'
+  const isLinkSharesView = currentPath === '/link-shares'
+  const isSpecialShareView = isSharedWithMeView || isSharedByMeView || isLinkSharesView
+
+  // Regular file list query
   const { data, isLoading, error } = useQuery({
     queryKey: ['files', currentPath, sortBy, sortOrder],
     queryFn: () => fetchFiles(currentPath, sortBy, sortOrder),
+    enabled: !isSpecialShareView,
   })
+
+  // Shared with me query
+  const { data: sharedWithMeData, isLoading: sharedWithMeLoading } = useQuery({
+    queryKey: ['shared-with-me'],
+    queryFn: getSharedWithMe,
+    enabled: isSharedWithMeView,
+  })
+
+  // Shared by me query
+  const { data: sharedByMeData, isLoading: sharedByMeLoading } = useQuery({
+    queryKey: ['shared-by-me'],
+    queryFn: getSharedByMe,
+    enabled: isSharedByMeView,
+  })
+
+  // Link shares query
+  const { data: linkSharesData, isLoading: linkSharesLoading } = useQuery({
+    queryKey: ['link-shares'],
+    queryFn: getMyShareLinks,
+    enabled: isLinkSharesView,
+  })
+
+  // Transform share data to FileInfo format for display
+  const getDisplayFiles = useCallback((): FileInfo[] => {
+    if (isSharedWithMeView && sharedWithMeData) {
+      return sharedWithMeData.map((share: SharedWithMeItem) => ({
+        name: share.itemName,
+        path: share.itemPath,
+        size: 0,
+        isDir: share.isFolder,
+        modTime: share.createdAt,
+        extension: share.isFolder ? undefined : share.itemName.split('.').pop(),
+        // Extra fields for display
+        sharedBy: share.sharedBy || share.ownerUsername,
+        permissionLevel: share.permissionLevel,
+        shareId: share.id,
+      } as FileInfo & { sharedBy?: string; permissionLevel?: number; shareId?: number }))
+    }
+    if (isSharedByMeView && sharedByMeData) {
+      return sharedByMeData.map((share: SharedByMeItem) => ({
+        name: share.itemName,
+        path: share.itemPath,
+        size: 0,
+        isDir: share.isFolder,
+        modTime: share.createdAt,
+        extension: share.isFolder ? undefined : share.itemName.split('.').pop(),
+        // Extra fields for display
+        sharedWith: share.sharedWith || share.sharedWithUsername,
+        permissionLevel: share.permissionLevel,
+        shareId: share.id,
+      } as FileInfo & { sharedWith?: string; permissionLevel?: number; shareId?: number }))
+    }
+    if (isLinkSharesView && linkSharesData) {
+      return linkSharesData.map((share: LinkShare) => {
+        const pathParts = share.path.split('/')
+        const name = pathParts[pathParts.length - 1] || share.path
+        return {
+          name: name,
+          path: share.path,
+          size: 0,
+          isDir: false, // We don't know, but treat as file for icon
+          modTime: share.createdAt,
+          extension: name.includes('.') ? name.split('.').pop() : undefined,
+          // Extra fields for display
+          linkToken: share.token,
+          linkId: share.id,
+          accessCount: share.accessCount,
+          maxAccess: share.maxAccess,
+          expiresAt: share.expiresAt,
+          hasPassword: share.hasPassword,
+          isActive: share.isActive,
+        } as FileInfo & { linkToken?: string; linkId?: string; accessCount?: number; maxAccess?: number; expiresAt?: string; hasPassword?: boolean; isActive?: boolean }
+      })
+    }
+    return data?.files || []
+  }, [isSharedWithMeView, isSharedByMeView, isLinkSharesView, sharedWithMeData, sharedByMeData, linkSharesData, data?.files])
+
+  const displayFiles = getDisplayFiles()
+  const isLoadingFiles = isLoading || sharedWithMeLoading || sharedByMeLoading || linkSharesLoading
 
   // Clear selected file when path changes
   useEffect(() => {
@@ -109,6 +248,24 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
     }
   }, [uploadStore.items, currentPath, queryClient])
 
+  // Handle highlighted file from search
+  useEffect(() => {
+    if (highlightedFilePath && data?.files) {
+      const file = data.files.find(f => f.path === highlightedFilePath)
+      if (file) {
+        setSelectedFile(file)
+        setSelectedFiles(new Set())
+        // Scroll to the file if needed
+        const index = data.files.indexOf(file)
+        if (index >= 0) {
+          setFocusedIndex(index)
+        }
+        // Clear the highlight after selecting
+        onClearHighlight?.()
+      }
+    }
+  }, [highlightedFilePath, data?.files, onClearHighlight])
+
   // Fetch folder stats when a folder is selected
   useEffect(() => {
     if (selectedFile?.isDir) {
@@ -121,6 +278,93 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
       setFolderStats(null)
     }
   }, [selectedFile])
+
+  // Keyboard search - type to jump to file
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input, textarea, or contenteditable
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+      // Ignore modifier keys and special keys
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.key.length !== 1) return // Only single character keys
+
+      const pressedKey = e.key.toLowerCase()
+
+      // Clear previous timeout
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+
+      // Reset buffer after 500ms of no typing (shorter for better UX)
+      searchTimeoutRef.current = setTimeout(() => {
+        setSearchBuffer('')
+      }, 500)
+
+      // Find matching file
+      if (data?.files) {
+        // Check if same single character is being repeated
+        const isSameChar = searchBuffer.length === 1 && pressedKey === searchBuffer
+
+        // Try accumulated search first
+        const accumulatedBuffer = isSameChar ? pressedKey : searchBuffer + pressedKey
+
+        // Get all matching files for accumulated search
+        const getMatchingIndices = (searchStr: string) => {
+          const indices: number[] = []
+          data.files.forEach((file, index) => {
+            if (file.name.toLowerCase().startsWith(searchStr)) {
+              indices.push(index)
+            }
+          })
+          return indices
+        }
+
+        let matchingIndices = getMatchingIndices(accumulatedBuffer)
+        let useBuffer = accumulatedBuffer
+
+        // If no match with accumulated buffer and it's multi-char, try just the pressed key
+        if (matchingIndices.length === 0 && accumulatedBuffer.length > 1) {
+          matchingIndices = getMatchingIndices(pressedKey)
+          useBuffer = pressedKey
+        }
+
+        setSearchBuffer(useBuffer)
+
+        if (matchingIndices.length > 0) {
+          let targetIndex: number
+
+          if (isSameChar && matchingIndices.length > 1) {
+            // Same character repeated - cycle to next match
+            const currentIndex = matchingIndices.indexOf(focusedIndex)
+            if (currentIndex >= 0 && currentIndex < matchingIndices.length - 1) {
+              // Go to next match
+              targetIndex = matchingIndices[currentIndex + 1]
+            } else {
+              // Wrap around to first match
+              targetIndex = matchingIndices[0]
+            }
+          } else {
+            // New search - go to first match
+            targetIndex = matchingIndices[0]
+          }
+
+          const file = data.files[targetIndex]
+          setSelectedFile(file)
+          setSelectedFiles(new Set([file.path]))
+          setFocusedIndex(targetIndex)
+          // Scroll to the file
+          const fileEl = fileRowRefs.current.get(file.path)
+          fileEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [searchBuffer, data?.files, focusedIndex])
 
   // Load thumbnail for image files
   useEffect(() => {
@@ -153,6 +397,100 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
       if (thumbnailUrl) URL.revokeObjectURL(thumbnailUrl)
     }
   }, [selectedFile])
+
+  // Load file metadata (description and tags) when file is selected
+  useEffect(() => {
+    if (!selectedFile) {
+      setFileMetadata(null)
+      setEditingDescription(false)
+      return
+    }
+
+    setLoadingMetadata(true)
+    getFileMetadata(selectedFile.path)
+      .then(metadata => {
+        setFileMetadata(metadata)
+        setDescriptionInput(metadata.description || '')
+      })
+      .catch(() => setFileMetadata(null))
+      .finally(() => setLoadingMetadata(false))
+  }, [selectedFile])
+
+  // Load all user tags for autocomplete
+  useEffect(() => {
+    getUserTags()
+      .then(({ tags }) => setAllUserTags(tags))
+      .catch(() => setAllUserTags([]))
+  }, [])
+
+  // Filter tag suggestions based on input
+  useEffect(() => {
+    if (!tagInput.trim()) {
+      setTagSuggestions([])
+      return
+    }
+    const query = tagInput.toLowerCase()
+    const currentTags = fileMetadata?.tags || []
+    const suggestions = allUserTags
+      .filter(tag => tag.toLowerCase().includes(query) && !currentTags.includes(tag))
+      .slice(0, 5)
+    setTagSuggestions(suggestions)
+  }, [tagInput, allUserTags, fileMetadata?.tags])
+
+  // Save file description
+  const handleSaveDescription = useCallback(async () => {
+    if (!selectedFile) return
+    try {
+      const updated = await updateFileMetadata(selectedFile.path, {
+        description: descriptionInput,
+        tags: fileMetadata?.tags || []
+      })
+      setFileMetadata(updated)
+      setEditingDescription(false)
+      setToasts(prev => [...prev, { id: Date.now().toString(), message: '설명이 저장되었습니다.', type: 'success' }])
+    } catch {
+      setToasts(prev => [...prev, { id: Date.now().toString(), message: '설명 저장에 실패했습니다.', type: 'error' }])
+    }
+  }, [selectedFile, descriptionInput, fileMetadata?.tags])
+
+  // Add tag to file
+  const handleAddTag = useCallback(async (tag: string) => {
+    if (!selectedFile || !tag.trim()) return
+    const newTag = tag.trim().toLowerCase()
+    const currentTags = fileMetadata?.tags || []
+    if (currentTags.includes(newTag)) {
+      setTagInput('')
+      return
+    }
+    try {
+      const updated = await updateFileMetadata(selectedFile.path, {
+        description: fileMetadata?.description || '',
+        tags: [...currentTags, newTag]
+      })
+      setFileMetadata(updated)
+      setTagInput('')
+      if (!allUserTags.includes(newTag)) {
+        setAllUserTags(prev => [...prev, newTag].sort())
+      }
+    } catch {
+      setToasts(prev => [...prev, { id: Date.now().toString(), message: '태그 추가에 실패했습니다.', type: 'error' }])
+    }
+  }, [selectedFile, fileMetadata, allUserTags])
+
+  // Remove tag from file
+  const handleRemoveTag = useCallback(async (tagToRemove: string) => {
+    if (!selectedFile || !fileMetadata) return
+    const newTags = fileMetadata.tags.filter(t => t !== tagToRemove)
+    try {
+      const updated = await updateFileMetadata(selectedFile.path, {
+        description: fileMetadata.description,
+        tags: newTags
+      })
+      setFileMetadata(updated)
+    } catch {
+      setToasts(prev => [...prev, { id: Date.now().toString(), message: '태그 삭제에 실패했습니다.', type: 'error' }])
+    }
+  }, [selectedFile, fileMetadata])
 
   // Check if file is editable (text-based)
   const isEditableFile = useCallback((file: FileInfo): boolean => {
@@ -213,8 +551,20 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
   const handleContextMenu = useCallback((e: React.MouseEvent, file: FileInfo) => {
     e.preventDefault()
     e.stopPropagation()
-    setContextMenu({ type: 'file', x: e.clientX, y: e.clientY, file })
-  }, [])
+    // If right-clicked file is not in selection, select only that file
+    // If right-clicked file is already selected, keep the selection
+    let pathsForMenu: string[]
+    if (selectedFiles.has(file.path)) {
+      // Keep current selection
+      pathsForMenu = Array.from(selectedFiles)
+    } else {
+      // Select only the right-clicked file
+      setSelectedFiles(new Set([file.path]))
+      setSelectedFile(file)
+      pathsForMenu = [file.path]
+    }
+    setContextMenu({ type: 'file', x: e.clientX, y: e.clientY, file, selectedPaths: pathsForMenu })
+  }, [selectedFiles])
 
   const handleBackgroundContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -252,6 +602,74 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
     closeContextMenu()
   }, [closeContextMenu, downloadStore])
 
+  // Compress files handler - opens modal to enter filename
+  const handleCompress = useCallback((paths: string[]) => {
+    if (paths.length === 0) return
+    closeContextMenu()
+    setPathsToCompress(paths)
+    // Generate default filename
+    const now = new Date()
+    const timestamp = now.toISOString().replace(/[-:T]/g, '').slice(0, 14)
+    const defaultName = paths.length === 1
+      ? paths[0].split('/').pop()?.replace(/\.[^/.]+$/, '') || 'archive' // Get filename without extension
+      : `archive_${timestamp}`
+    setCompressFileName(defaultName)
+    setShowCompressModal(true)
+  }, [closeContextMenu])
+
+  // Actually execute compression
+  const handleCompressConfirm = useCallback(async () => {
+    if (pathsToCompress.length === 0 || !compressFileName.trim()) return
+    setShowCompressModal(false)
+
+    try {
+      const outputName = compressFileName.trim().endsWith('.zip')
+        ? compressFileName.trim()
+        : `${compressFileName.trim()}.zip`
+      const result = await compressFiles(pathsToCompress, outputName)
+      queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+      const id = Date.now().toString()
+      setToasts((prev) => [...prev, {
+        id,
+        message: `${pathsToCompress.length}개 항목이 "${result.outputName}"으로 압축되었습니다`,
+        type: 'success'
+      }])
+      setSelectedFiles(new Set())
+    } catch (err) {
+      const id = Date.now().toString()
+      setToasts((prev) => [...prev, {
+        id,
+        message: err instanceof Error ? err.message : '압축에 실패했습니다',
+        type: 'error'
+      }])
+    }
+    setPathsToCompress([])
+    setCompressFileName('')
+  }, [pathsToCompress, compressFileName, currentPath, queryClient])
+
+  // Extract zip file handler
+  const handleExtract = useCallback(async (file: FileInfo) => {
+    closeContextMenu()
+
+    try {
+      const result = await extractZip(file.path)
+      queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+      const id = Date.now().toString()
+      setToasts((prev) => [...prev, {
+        id,
+        message: `${result.extractedCount}개 파일이 "${result.extractedPath}"에 압축해제되었습니다`,
+        type: 'success'
+      }])
+    } catch (err) {
+      const id = Date.now().toString()
+      setToasts((prev) => [...prev, {
+        id,
+        message: err instanceof Error ? err.message : '압축해제에 실패했습니다',
+        type: 'error'
+      }])
+    }
+  }, [closeContextMenu, currentPath, queryClient])
+
   const handleRenameClick = useCallback((file: FileInfo) => {
     setRenameTarget(file)
     setNewName(file.name)
@@ -264,19 +682,33 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
       return
     }
 
+    const trimmedName = newName.trim()
+    const dir = renameTarget.path.split('/').slice(0, -1).join('/')
+    const newPath = `${dir}/${trimmedName}`
+
     try {
-      await renameItem(renameTarget.path, newName.trim())
+      await renameItem(renameTarget.path, trimmedName)
+
+      // Add to history for undo/redo
+      addToHistory({
+        type: 'rename',
+        sourcePaths: [renameTarget.path],
+        destPaths: [newPath],
+        oldName: renameTarget.name,
+        newName: trimmedName
+      })
+
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
       setSelectedFile(null)
       const id = Date.now().toString()
-      setToasts((prev) => [...prev, { id, message: `"${renameTarget.name}"이(가) "${newName.trim()}"(으)로 이름이 변경되었습니다`, type: 'success' }])
+      setToasts((prev) => [...prev, { id, message: `"${renameTarget.name}"이(가) "${trimmedName}"(으)로 이름이 변경되었습니다`, type: 'success' }])
     } catch (err) {
       const id = Date.now().toString()
       setToasts((prev) => [...prev, { id, message: err instanceof Error ? err.message : '이름 변경에 실패했습니다', type: 'error' }])
     }
     setRenameTarget(null)
     setNewName('')
-  }, [renameTarget, newName, currentPath, queryClient])
+  }, [renameTarget, newName, currentPath, queryClient, addToHistory])
 
   const handleCopyClick = useCallback((file: FileInfo) => {
     setCopyTarget(file)
@@ -391,6 +823,355 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
     }
   }, [selectedFiles, data, currentPath, queryClient])
 
+  // Clipboard operations
+  const handleCopy = useCallback(() => {
+    const files = data?.files.filter(f => selectedFiles.has(f.path)) || []
+    if (files.length === 0 && selectedFile) {
+      setClipboard({ files: [selectedFile], mode: 'copy' })
+    } else if (files.length > 0) {
+      setClipboard({ files, mode: 'copy' })
+    }
+    const id = Date.now().toString()
+    setToasts((prev) => [...prev, { id, message: `${files.length || 1}개 항목이 복사되었습니다`, type: 'info' }])
+  }, [selectedFiles, selectedFile, data])
+
+  const handleCut = useCallback(() => {
+    const files = data?.files.filter(f => selectedFiles.has(f.path)) || []
+    if (files.length === 0 && selectedFile) {
+      setClipboard({ files: [selectedFile], mode: 'cut' })
+    } else if (files.length > 0) {
+      setClipboard({ files, mode: 'cut' })
+    }
+    const id = Date.now().toString()
+    setToasts((prev) => [...prev, { id, message: `${files.length || 1}개 항목이 잘라내기되었습니다`, type: 'info' }])
+  }, [selectedFiles, selectedFile, data])
+
+  const handlePaste = useCallback(async () => {
+    if (!clipboard || clipboard.files.length === 0) return
+
+    let successCount = 0
+    let errorCount = 0
+    const successfulSourcePaths: string[] = []
+    const successfulDestPaths: string[] = []
+
+    for (const file of clipboard.files) {
+      try {
+        if (clipboard.mode === 'copy') {
+          await copyItem(file.path, currentPath)
+        } else {
+          await moveItem(file.path, currentPath)
+        }
+        successCount++
+        successfulSourcePaths.push(file.path)
+        // Calculate destination path
+        const fileName = file.path.split('/').pop() || file.name
+        successfulDestPaths.push(`${currentPath}/${fileName}`)
+      } catch {
+        errorCount++
+      }
+    }
+
+    // Add to history for undo/redo
+    if (successfulSourcePaths.length > 0) {
+      addToHistory({
+        type: clipboard.mode === 'copy' ? 'copy' : 'move',
+        sourcePaths: successfulSourcePaths,
+        destPaths: successfulDestPaths,
+        destination: currentPath
+      })
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+    // If cut, also refresh the source folder
+    if (clipboard.mode === 'cut') {
+      const sourceFolders = new Set(clipboard.files.map(f => f.path.split('/').slice(0, -1).join('/')))
+      sourceFolders.forEach(path => {
+        queryClient.invalidateQueries({ queryKey: ['files', path] })
+      })
+      setClipboard(null) // Clear clipboard after cut-paste
+    }
+
+    const id = Date.now().toString()
+    const action = clipboard.mode === 'copy' ? '복사' : '이동'
+    if (errorCount === 0) {
+      setToasts((prev) => [...prev, { id, message: `${successCount}개 항목이 ${action}되었습니다`, type: 'success' }])
+    } else {
+      setToasts((prev) => [...prev, { id, message: `${successCount}개 ${action} 성공, ${errorCount}개 실패`, type: 'error' }])
+    }
+  }, [clipboard, currentPath, queryClient, addToHistory])
+
+  // Drag and Drop handlers for internal file movement
+  const handleDragStart = useCallback((e: React.DragEvent, file: FileInfo) => {
+    e.stopPropagation()
+    // If the file being dragged is selected, drag all selected files
+    const files = selectedFiles.has(file.path)
+      ? data?.files.filter(f => selectedFiles.has(f.path)) || [file]
+      : [file]
+    setDraggedFiles(files)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('application/x-file-move', JSON.stringify(files.map(f => f.path)))
+    // Set drag image
+    const dragImage = document.createElement('div')
+    dragImage.className = 'drag-ghost'
+    dragImage.textContent = files.length > 1 ? `${files.length}개 항목` : file.name
+    dragImage.style.cssText = 'position: absolute; top: -1000px; padding: 8px 16px; background: var(--bg-primary); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-size: 14px;'
+    document.body.appendChild(dragImage)
+    e.dataTransfer.setDragImage(dragImage, 0, 0)
+    setTimeout(() => document.body.removeChild(dragImage), 0)
+  }, [selectedFiles, data])
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedFiles([])
+    setDropTargetPath(null)
+  }, [])
+
+  const handleFolderDragOver = useCallback((e: React.DragEvent, folder: FileInfo) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Only accept if it's an internal file move (not external file upload)
+    if (e.dataTransfer.types.includes('application/x-file-move') && folder.isDir) {
+      // Don't allow dropping on self or into dragged folders
+      const isDraggingSelf = draggedFiles.some(f => f.path === folder.path)
+      const isDroppingIntoSelf = draggedFiles.some(f => folder.path.startsWith(f.path + '/'))
+      if (!isDraggingSelf && !isDroppingIntoSelf) {
+        e.dataTransfer.dropEffect = 'move'
+        setDropTargetPath(folder.path)
+      }
+    }
+  }, [draggedFiles])
+
+  const handleFolderDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDropTargetPath(null)
+  }, [])
+
+  const handleFolderDrop = useCallback(async (e: React.DragEvent, folder: FileInfo) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDropTargetPath(null)
+
+    // Handle internal file move
+    if (e.dataTransfer.types.includes('application/x-file-move') && folder.isDir) {
+      const filePaths = JSON.parse(e.dataTransfer.getData('application/x-file-move')) as string[]
+      let successCount = 0
+      let errorCount = 0
+      const successfulSourcePaths: string[] = []
+      const successfulDestPaths: string[] = []
+
+      for (const filePath of filePaths) {
+        // Don't move to self or parent
+        if (filePath === folder.path || folder.path.startsWith(filePath + '/')) continue
+        try {
+          await moveItem(filePath, folder.path)
+          successCount++
+          successfulSourcePaths.push(filePath)
+          const fileName = filePath.split('/').pop() || ''
+          successfulDestPaths.push(`${folder.path}/${fileName}`)
+        } catch {
+          errorCount++
+        }
+      }
+
+      if (successCount > 0) {
+        // Add to history for undo/redo
+        addToHistory({
+          type: 'move',
+          sourcePaths: successfulSourcePaths,
+          destPaths: successfulDestPaths,
+          destination: folder.path
+        })
+
+        queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+        queryClient.invalidateQueries({ queryKey: ['files', folder.path] })
+        setSelectedFiles(new Set())
+        setSelectedFile(null)
+
+        const id = Date.now().toString()
+        if (errorCount === 0) {
+          setToasts((prev) => [...prev, { id, message: `${successCount}개 항목이 "${folder.name}"(으)로 이동되었습니다`, type: 'success' }])
+        } else {
+          setToasts((prev) => [...prev, { id, message: `${successCount}개 이동 성공, ${errorCount}개 실패`, type: 'error' }])
+        }
+      }
+    }
+
+    setDraggedFiles([])
+  }, [currentPath, queryClient, addToHistory])
+
+  // Marquee selection handlers
+  const handleMarqueeStart = useCallback((e: React.MouseEvent) => {
+    // Only start if clicking on background (not on a file or UI elements)
+    if ((e.target as HTMLElement).closest('.file-row, .file-card, .multi-select-bar, .context-menu, .modal')) return
+    // Only on left click
+    if (e.button !== 0) return
+
+    const container = containerRef.current
+    if (!container) return
+
+    const rect = container.getBoundingClientRect()
+    const x = e.clientX - rect.left + container.scrollLeft
+    const y = e.clientY - rect.top + container.scrollTop
+
+    setIsMarqueeSelecting(true)
+    setMarqueeStart({ x, y })
+    setMarqueeEnd({ x, y })
+
+    // Clear selection unless holding Ctrl/Cmd
+    if (!e.ctrlKey && !e.metaKey) {
+      setSelectedFiles(new Set())
+      setSelectedFile(null)
+    }
+  }, [])
+
+  const handleMarqueeMove = useCallback((e: React.MouseEvent) => {
+    if (!isMarqueeSelecting || !marqueeStart) return
+
+    const container = containerRef.current
+    if (!container) return
+
+    const rect = container.getBoundingClientRect()
+    const x = e.clientX - rect.left + container.scrollLeft
+    const y = e.clientY - rect.top + container.scrollTop
+
+    setMarqueeEnd({ x, y })
+
+    // Calculate marquee rectangle
+    const minX = Math.min(marqueeStart.x, x)
+    const maxX = Math.max(marqueeStart.x, x)
+    const minY = Math.min(marqueeStart.y, y)
+    const maxY = Math.max(marqueeStart.y, y)
+
+    // Check intersection with file items
+    const newSelection = new Set<string>()
+    fileRowRefs.current.forEach((element, path) => {
+      const elemRect = element.getBoundingClientRect()
+      const elemLeft = elemRect.left - rect.left + container.scrollLeft
+      const elemTop = elemRect.top - rect.top + container.scrollTop
+      const elemRight = elemLeft + elemRect.width
+      const elemBottom = elemTop + elemRect.height
+
+      // Check if rectangles intersect
+      if (!(elemRight < minX || elemLeft > maxX || elemBottom < minY || elemTop > maxY)) {
+        newSelection.add(path)
+      }
+    })
+
+    setSelectedFiles(newSelection)
+    if (newSelection.size > 0) {
+      const firstPath = Array.from(newSelection)[0]
+      const file = data?.files.find(f => f.path === firstPath)
+      if (file) setSelectedFile(file)
+    }
+  }, [isMarqueeSelecting, marqueeStart, data])
+
+  const handleMarqueeEnd = useCallback(() => {
+    setIsMarqueeSelecting(false)
+    setMarqueeStart(null)
+    setMarqueeEnd(null)
+  }, [])
+
+  // Undo handler
+  const handleUndo = useCallback(async () => {
+    if (historyState.index < 0 || historyState.actions.length === 0) {
+      const id = Date.now().toString()
+      setToasts(prev => [...prev, { id, message: '실행취소할 작업이 없습니다', type: 'info' }])
+      return
+    }
+
+    const action = historyState.actions[historyState.index]
+    try {
+      switch (action.type) {
+        case 'move':
+          // Move files back to original location
+          if (action.destPaths && action.destPaths.length > 0) {
+            for (let i = 0; i < action.destPaths.length; i++) {
+              const destPath = action.destPaths[i]
+              const originalDir = action.sourcePaths[i].split('/').slice(0, -1).join('/')
+              await moveItem(destPath, originalDir)
+            }
+          }
+          break
+        case 'rename':
+          // Rename back to original name
+          if (action.oldName && action.newName && action.destPaths?.[0]) {
+            await renameItem(action.destPaths[0], action.oldName)
+          }
+          break
+        case 'delete': {
+          // Cannot undo delete (trash) - would need restore API
+          const id = Date.now().toString()
+          setToasts(prev => [...prev, { id, message: '삭제는 휴지통에서 복원해주세요', type: 'info' }])
+          return
+        }
+        case 'copy':
+          // Undo copy by moving copied files to trash
+          if (action.destPaths && action.destPaths.length > 0) {
+            for (const destPath of action.destPaths) {
+              await moveToTrash(destPath)
+            }
+          }
+          break
+      }
+
+      setHistoryState(prev => ({ ...prev, index: prev.index - 1 }))
+      queryClient.invalidateQueries({ queryKey: ['files'] })
+      const id = Date.now().toString()
+      setToasts(prev => [...prev, { id, message: '실행취소되었습니다', type: 'success' }])
+    } catch (err) {
+      const id = Date.now().toString()
+      setToasts(prev => [...prev, { id, message: '실행취소에 실패했습니다', type: 'error' }])
+    }
+  }, [historyState, queryClient])
+
+  // Redo handler
+  const handleRedo = useCallback(async () => {
+    if (historyState.index >= historyState.actions.length - 1) {
+      const id = Date.now().toString()
+      setToasts(prev => [...prev, { id, message: '다시실행할 작업이 없습니다', type: 'info' }])
+      return
+    }
+
+    const action = historyState.actions[historyState.index + 1]
+    try {
+      switch (action.type) {
+        case 'move':
+          if (action.destination) {
+            for (const sourcePath of action.sourcePaths) {
+              await moveItem(sourcePath, action.destination)
+            }
+          }
+          break
+        case 'rename':
+          if (action.oldName && action.newName && action.sourcePaths[0]) {
+            await renameItem(action.sourcePaths[0], action.newName)
+          }
+          break
+        case 'copy':
+          // Redo copy - copy files again
+          if (action.destination) {
+            for (const sourcePath of action.sourcePaths) {
+              await copyItem(sourcePath, action.destination)
+            }
+          }
+          break
+        case 'delete': {
+          const id = Date.now().toString()
+          setToasts(prev => [...prev, { id, message: '삭제는 다시실행할 수 없습니다', type: 'info' }])
+          return
+        }
+      }
+
+      setHistoryState(prev => ({ ...prev, index: prev.index + 1 }))
+      queryClient.invalidateQueries({ queryKey: ['files'] })
+      const id = Date.now().toString()
+      setToasts(prev => [...prev, { id, message: '다시실행되었습니다', type: 'success' }])
+    } catch (err) {
+      const id = Date.now().toString()
+      setToasts(prev => [...prev, { id, message: '다시실행에 실패했습니다', type: 'error' }])
+    }
+  }, [historyState, queryClient])
+
   // Check if we can go back (not at root level of home/shared)
   const canGoBack = useCallback(() => {
     // Root paths where back button should not appear
@@ -430,24 +1211,65 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
       const files = data?.files || []
       if (files.length === 0) return
 
+      // Calculate grid columns for grid view navigation
+      const getGridColumns = () => {
+        const gridElement = containerRef.current?.querySelector('.file-grid') as HTMLElement
+        if (!gridElement) return 1
+        // Get computed style - grid-template-columns returns something like "140px 140px 140px 140px"
+        const gridStyle = window.getComputedStyle(gridElement)
+        const columnsStr = gridStyle.getPropertyValue('grid-template-columns')
+        // Filter out empty strings and count actual column values
+        const columns = columnsStr.split(' ').filter(s => s.trim() !== '').length
+        // Fallback: calculate from container width and item width
+        if (columns <= 1) {
+          const firstCard = gridElement.querySelector('.file-card') as HTMLElement
+          if (firstCard) {
+            const cardWidth = firstCard.offsetWidth + 16 // 16 is gap
+            const gridWidth = gridElement.clientWidth
+            return Math.max(1, Math.floor(gridWidth / cardWidth))
+          }
+        }
+        return columns || 1
+      }
+
+      const navigateTo = (newIndex: number) => {
+        if (newIndex >= 0 && newIndex < files.length) {
+          setFocusedIndex(newIndex)
+          setSelectedFile(files[newIndex])
+          setSelectedFiles(new Set([files[newIndex].path]))
+        }
+      }
+
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault()
-          setFocusedIndex(prev => {
-            const next = prev < files.length - 1 ? prev + 1 : prev
-            setSelectedFile(files[next])
-            setSelectedFiles(new Set([files[next].path]))
-            return next
-          })
+          if (viewMode === 'grid') {
+            const cols = getGridColumns()
+            navigateTo(Math.min(focusedIndex + cols, files.length - 1))
+          } else {
+            navigateTo(Math.min(focusedIndex + 1, files.length - 1))
+          }
           break
         case 'ArrowUp':
           e.preventDefault()
-          setFocusedIndex(prev => {
-            const next = prev > 0 ? prev - 1 : 0
-            setSelectedFile(files[next])
-            setSelectedFiles(new Set([files[next].path]))
-            return next
-          })
+          if (viewMode === 'grid') {
+            const cols = getGridColumns()
+            navigateTo(Math.max(focusedIndex - cols, 0))
+          } else {
+            navigateTo(Math.max(focusedIndex - 1, 0))
+          }
+          break
+        case 'ArrowLeft':
+          if (viewMode === 'grid') {
+            e.preventDefault()
+            navigateTo(Math.max(focusedIndex - 1, 0))
+          }
+          break
+        case 'ArrowRight':
+          if (viewMode === 'grid') {
+            e.preventDefault()
+            navigateTo(Math.min(focusedIndex + 1, files.length - 1))
+          }
           break
         case 'Enter':
           e.preventDefault()
@@ -482,12 +1304,49 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
             setSelectedFiles(new Set(files.map(f => f.path)))
           }
           break
+        case 'c':
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            handleCopy()
+          }
+          break
+        case 'x':
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            handleCut()
+          }
+          break
+        case 'v':
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            handlePaste()
+          }
+          break
+        case 'F2':
+          e.preventDefault()
+          if (selectedFile) {
+            setRenameTarget(selectedFile)
+            setNewName(selectedFile.name)
+          }
+          break
+        case 'z':
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            handleUndo()
+          }
+          break
+        case 'y':
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            handleRedo()
+          }
+          break
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [data, focusedIndex, selectedFile, selectedFiles, handleItemDoubleClick, handleBulkDelete])
+  }, [data, focusedIndex, selectedFile, selectedFiles, handleItemDoubleClick, handleBulkDelete, handleCopy, handleCut, handlePaste, handleUndo, handleRedo])
 
   // Drag and drop handlers for file upload
   const handleFileDragOver = useCallback((e: React.DragEvent) => {
@@ -791,9 +1650,17 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
     return parts[parts.length - 1] || '홈'
   }
 
+  // Calculate marquee box position
+  const marqueeStyle = marqueeStart && marqueeEnd ? {
+    left: Math.min(marqueeStart.x, marqueeEnd.x),
+    top: Math.min(marqueeStart.y, marqueeEnd.y),
+    width: Math.abs(marqueeEnd.x - marqueeStart.x),
+    height: Math.abs(marqueeEnd.y - marqueeStart.y),
+  } : null
+
   return (
     <div
-      className={`file-list-container ${isDraggingFiles ? 'dragging-files' : ''}`}
+      className={`file-list-container ${isDraggingFiles ? 'dragging-files' : ''} ${isMarqueeSelecting ? 'marquee-selecting' : ''}`}
       ref={containerRef}
       onClick={closeContextMenu}
       onContextMenu={handleBackgroundContextMenu}
@@ -801,7 +1668,23 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
       onDragEnter={handleFileDragEnter}
       onDragLeave={handleFileDragLeave}
       onDrop={handleFileDrop}
+      onMouseDown={handleMarqueeStart}
+      onMouseMove={handleMarqueeMove}
+      onMouseUp={handleMarqueeEnd}
+      onMouseLeave={handleMarqueeEnd}
     >
+      {/* Marquee selection box */}
+      {isMarqueeSelecting && marqueeStyle && (
+        <div
+          className="marquee-selection-box"
+          style={{
+            left: marqueeStyle.left,
+            top: marqueeStyle.top,
+            width: marqueeStyle.width,
+            height: marqueeStyle.height,
+          }}
+        />
+      )}
       {/* Drag overlay */}
       {isDraggingFiles && (
         <div className="drag-overlay">
@@ -872,7 +1755,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
         </div>
       </div>
 
-      {isLoading && (
+      {isLoadingFiles && (
         <div className="loading-state">
           <div className="spinner" />
           <p>파일을 불러오는 중...</p>
@@ -943,10 +1826,17 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
             {data.files.map((file, index) => (
               <div
                 key={file.path}
-                className={`file-row ${selectedFiles.has(file.path) || selectedFile?.path === file.path ? 'selected' : ''} ${focusedIndex === index ? 'focused' : ''}`}
+                ref={(el) => { if (el) fileRowRefs.current.set(file.path, el); else fileRowRefs.current.delete(file.path); }}
+                className={`file-row ${selectedFiles.has(file.path) || selectedFile?.path === file.path ? 'selected' : ''} ${focusedIndex === index ? 'focused' : ''} ${dropTargetPath === file.path ? 'drop-target' : ''} ${draggedFiles.some(f => f.path === file.path) ? 'dragging' : ''} ${clipboard?.mode === 'cut' && clipboard.files.some(f => f.path === file.path) ? 'cut' : ''}`}
                 onClick={(e) => { handleSelectFile(file, e); setFocusedIndex(index); }}
                 onDoubleClick={() => handleItemDoubleClick(file)}
                 onContextMenu={(e) => handleContextMenu(e, file)}
+                draggable
+                onDragStart={(e) => handleDragStart(e, file)}
+                onDragEnd={handleDragEnd}
+                onDragOver={file.isDir ? (e) => handleFolderDragOver(e, file) : undefined}
+                onDragLeave={file.isDir ? handleFolderDragLeave : undefined}
+                onDrop={file.isDir ? (e) => handleFolderDrop(e, file) : undefined}
               >
                 <div className="col-name">
                   {getFileIcon(file)}
@@ -974,10 +1864,17 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
           {data.files.map((file, index) => (
             <div
               key={file.path}
-              className={`file-card ${selectedFiles.has(file.path) || selectedFile?.path === file.path ? 'selected' : ''} ${focusedIndex === index ? 'focused' : ''}`}
+              ref={(el) => { if (el) fileRowRefs.current.set(file.path, el); else fileRowRefs.current.delete(file.path); }}
+              className={`file-card ${selectedFiles.has(file.path) || selectedFile?.path === file.path ? 'selected' : ''} ${focusedIndex === index ? 'focused' : ''} ${dropTargetPath === file.path ? 'drop-target' : ''} ${draggedFiles.some(f => f.path === file.path) ? 'dragging' : ''} ${clipboard?.mode === 'cut' && clipboard.files.some(f => f.path === file.path) ? 'cut' : ''}`}
               onClick={(e) => { handleSelectFile(file, e); setFocusedIndex(index); }}
               onDoubleClick={() => handleItemDoubleClick(file)}
               onContextMenu={(e) => handleContextMenu(e, file)}
+              draggable
+              onDragStart={(e) => handleDragStart(e, file)}
+              onDragEnd={handleDragEnd}
+              onDragOver={file.isDir ? (e) => handleFolderDragOver(e, file) : undefined}
+              onDragLeave={file.isDir ? handleFolderDragLeave : undefined}
+              onDrop={file.isDir ? (e) => handleFolderDrop(e, file) : undefined}
             >
               <div className="file-card-icon">
                 {getFileIcon(file)}
@@ -995,7 +1892,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
 
       {/* File Details Panel */}
       {selectedFile && (
-        <div className="file-details-panel">
+        <div className="file-details-panel" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
           <div className="details-header">
             <h3>파일 정보</h3>
             <button className="close-details-btn" onClick={() => setSelectedFile(null)}>
@@ -1064,6 +1961,96 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
               <span className="details-value path">{selectedFile.path}</span>
             </div>
           </div>
+
+          {/* File Metadata Section */}
+          {!loadingMetadata && (
+            <div className="details-metadata">
+              {/* Description */}
+              <div className="metadata-row">
+                <span className="metadata-label">설명</span>
+                {editingDescription ? (
+                  <div className="metadata-edit-inline">
+                    <textarea
+                      className="description-input"
+                      value={descriptionInput}
+                      onChange={(e) => setDescriptionInput(e.target.value)}
+                      placeholder="설명 입력..."
+                      rows={2}
+                      autoFocus
+                      onBlur={() => {
+                        if (descriptionInput !== (fileMetadata?.description || '')) {
+                          handleSaveDescription()
+                        } else {
+                          setEditingDescription(false)
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          handleSaveDescription()
+                        } else if (e.key === 'Escape') {
+                          setEditingDescription(false)
+                          setDescriptionInput(fileMetadata?.description || '')
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className={`metadata-value clickable ${!currentPath.startsWith('/shared-with-me') ? 'editable' : ''}`}
+                    onClick={() => {
+                      if (!currentPath.startsWith('/shared-with-me')) {
+                        setDescriptionInput(fileMetadata?.description || '')
+                        setEditingDescription(true)
+                      }
+                    }}
+                  >
+                    {fileMetadata?.description || <span className="placeholder">클릭하여 설명 추가</span>}
+                  </div>
+                )}
+              </div>
+
+              {/* Tags */}
+              <div className="metadata-row">
+                <span className="metadata-label">태그</span>
+                <div className="tags-inline">
+                  {fileMetadata?.tags?.map(tag => (
+                    <span key={tag} className="tag-chip">
+                      #{tag}
+                      {!currentPath.startsWith('/shared-with-me') && (
+                        <button className="tag-remove-btn" onClick={() => handleRemoveTag(tag)}>×</button>
+                      )}
+                    </span>
+                  ))}
+                  {!currentPath.startsWith('/shared-with-me') && (
+                    <div className="tag-add-inline">
+                      <input
+                        type="text"
+                        className="tag-add-input"
+                        placeholder="+ 태그"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            handleAddTag(tagInput)
+                          }
+                        }}
+                      />
+                      {tagSuggestions.length > 0 && (
+                        <div className="tag-dropdown">
+                          {tagSuggestions.map(tag => (
+                            <button key={tag} onClick={() => handleAddTag(tag)}>#{tag}</button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="details-actions">
             {!selectedFile.isDir && (
               <button className="btn-detail-action" onClick={() => downloadFileWithProgress(selectedFile.path, selectedFile.size, downloadStore)}>
@@ -1270,6 +2257,27 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
                 </svg>
                 복사
               </button>
+              <button className="context-menu-item" onClick={() => {
+                handleCompress(contextMenu.selectedPaths)
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M21 8V21H3V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M23 3H1V8H23V3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M10 12H14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {contextMenu.selectedPaths.length > 1 ? `${contextMenu.selectedPaths.length}개 압축` : '압축'}
+              </button>
+              {/* Extract button - only for zip files */}
+              {contextMenu.file.name.toLowerCase().endsWith('.zip') && (
+                <button className="context-menu-item" onClick={() => handleExtract(contextMenu.file)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 8V21H3V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M23 3H1V8H23V3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M12 11V17M12 17L9 14M12 17L15 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  압축풀기
+                </button>
+              )}
               <div className="context-menu-divider" />
               <button className="context-menu-item" onClick={() => { setShareTarget(contextMenu.file); closeContextMenu(); }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -1302,9 +2310,23 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
 
       {/* Multi-select action bar */}
       {selectedFiles.size > 1 && (
-        <div className="multi-select-bar">
+        <div className="multi-select-bar" onClick={(e) => e.stopPropagation()}>
           <span className="select-count">{selectedFiles.size}개 선택됨</span>
-          <button className="multi-action-btn danger" onClick={handleBulkDelete}>
+          <button className="multi-action-btn" onClick={(e) => {
+            e.stopPropagation()
+            const paths = Array.from(selectedFiles)
+            if (paths.length > 0) {
+              handleCompress(paths)
+            }
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M21 8V21H3V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M23 3H1V8H23V3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M10 12H14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            압축
+          </button>
+          <button className="multi-action-btn danger" onClick={(e) => { e.stopPropagation(); handleBulkDelete(); }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path d="M3 6H5H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M19 6V20C19 21.1046 18.1046 22 17 22H7C5.89543 22 5 21.1046 5 20V6" stroke="currentColor" strokeWidth="2"/>
@@ -1455,6 +2477,48 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick }: 
               <button className="btn-cancel" onClick={() => setShowNewFileModal(false)}>취소</button>
               <button className="btn-confirm" onClick={handleNewFileCreate} disabled={!newFileName.trim()}>
                 만들기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Compress Modal */}
+      {showCompressModal && (
+        <div className="modal-overlay" onClick={() => setShowCompressModal(false)}>
+          <div className="modal compress-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>압축 파일 만들기</h3>
+              <button className="modal-close" onClick={() => setShowCompressModal(false)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <label className="input-label">압축 파일 이름</label>
+              <div className="compress-input-wrapper">
+                <input
+                  type="text"
+                  className="rename-input"
+                  value={compressFileName}
+                  onChange={e => setCompressFileName(e.target.value)}
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleCompressConfirm()
+                    if (e.key === 'Escape') setShowCompressModal(false)
+                  }}
+                />
+                <span className="compress-extension">.zip</span>
+              </div>
+              <p className="input-hint">
+                {pathsToCompress.length}개 항목을 압축합니다
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={() => setShowCompressModal(false)}>취소</button>
+              <button className="btn-confirm" onClick={handleCompressConfirm} disabled={!compressFileName.trim()}>
+                압축
               </button>
             </div>
           </div>

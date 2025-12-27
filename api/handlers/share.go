@@ -14,14 +14,16 @@ import (
 )
 
 type ShareHandler struct {
-	db       *sql.DB
-	dataRoot string
+	db           *sql.DB
+	dataRoot     string
+	auditHandler *AuditHandler
 }
 
-func NewShareHandler(db *sql.DB, dataRoot string) *ShareHandler {
+func NewShareHandler(db *sql.DB, dataRoot string, auditHandler *AuditHandler) *ShareHandler {
 	return &ShareHandler{
-		db:       db,
-		dataRoot: dataRoot,
+		db:           db,
+		dataRoot:     dataRoot,
+		auditHandler: auditHandler,
 	}
 }
 
@@ -430,6 +432,18 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 	if info.IsDir() {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Cannot download a directory"})
 	}
+
+	// Log audit event for shared link download
+	var userID *string
+	if claims, ok := c.Get("user").(*JWTClaims); ok && claims != nil {
+		userID = &claims.UserID
+	}
+	h.auditHandler.LogEvent(userID, c.RealIP(), EventShareAccess, path, map[string]interface{}{
+		"action":   "download",
+		"token":    token,
+		"filename": info.Name(),
+		"size":     info.Size(),
+	})
 
 	c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, info.Name()))
 	return c.File(fullPath)

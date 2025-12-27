@@ -502,6 +502,189 @@
   to { transform: rotate(360deg); }
 }
 
+/* 2FA Section */
+.edit-user-modal .twofa-section {
+  border-top: 1px solid var(--border-light);
+  padding-top: 24px;
+}
+
+.edit-user-modal .twofa-status-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  gap: 16px;
+}
+
+.edit-user-modal .twofa-status-card.enabled {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.edit-user-modal .twofa-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.edit-user-modal .twofa-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.edit-user-modal .twofa-icon.enabled {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.edit-user-modal .twofa-icon.disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+}
+
+.edit-user-modal .twofa-status-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: #059669;
+  margin-bottom: 2px;
+}
+
+.edit-user-modal .twofa-status-title.disabled {
+  color: var(--text-tertiary);
+}
+
+.edit-user-modal .twofa-status-desc {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.edit-user-modal .btn-reset-2fa {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.edit-user-modal .btn-reset-2fa:hover {
+  background: rgba(220, 38, 38, 0.15);
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
+/* 2FA Reset Confirmation */
+.edit-user-modal .reset-2fa-confirm {
+  margin-top: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 14px;
+}
+
+.edit-user-modal .confirm-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  background: rgba(251, 191, 36, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d97706;
+}
+
+.edit-user-modal .confirm-content {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.edit-user-modal .confirm-content h4 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 12px;
+}
+
+.edit-user-modal .confirm-content p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+}
+
+.edit-user-modal .confirm-content strong {
+  color: var(--text-primary);
+}
+
+.edit-user-modal .confirm-warning {
+  color: #d97706 !important;
+  font-weight: 500;
+}
+
+.edit-user-modal .confirm-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.edit-user-modal .btn-confirm-cancel {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.edit-user-modal .btn-confirm-cancel:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+}
+
+.edit-user-modal .btn-confirm-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.edit-user-modal .btn-confirm-reset {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.edit-user-modal .btn-confirm-reset:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+.edit-user-modal .btn-confirm-reset:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   .edit-user-modal {
@@ -531,6 +714,16 @@
 
   .edit-user-modal .perm-btn {
     padding: 10px 12px;
+    text-align: center;
+  }
+
+  .edit-user-modal .twofa-status-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .edit-user-modal .btn-reset-2fa {
+    width: 100%;
     text-align: center;
   }
 }

@@ -9,6 +9,14 @@ interface SystemSettings {
   default_storage_quota: string
   max_file_size: string
   session_timeout_hours: string
+  // Security Settings
+  rate_limit_enabled: string
+  rate_limit_rps: string
+  security_headers_enabled: string
+  xss_protection_enabled: string
+  hsts_enabled: string
+  csp_enabled: string
+  x_frame_options: string
   [key: string]: string
 }
 
@@ -17,11 +25,20 @@ function AdminSettings() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+
   const [settings, setSettings] = useState<SystemSettings>({
     trash_retention_days: '30',
     default_storage_quota: '10737418240',
     max_file_size: '10737418240',
-    session_timeout_hours: '24'
+    session_timeout_hours: '24',
+    // Security Settings
+    rate_limit_enabled: 'true',
+    rate_limit_rps: '100',
+    security_headers_enabled: 'true',
+    xss_protection_enabled: 'true',
+    hsts_enabled: 'true',
+    csp_enabled: 'true',
+    x_frame_options: 'SAMEORIGIN'
   })
 
   // Convert bytes to GB for display
@@ -55,7 +72,15 @@ function AdminSettings() {
           trash_retention_days: '30',
           default_storage_quota: '10737418240',
           max_file_size: '10737418240',
-          session_timeout_hours: '24'
+          session_timeout_hours: '24',
+          // Security Settings
+          rate_limit_enabled: 'true',
+          rate_limit_rps: '100',
+          security_headers_enabled: 'true',
+          xss_protection_enabled: 'true',
+          hsts_enabled: 'true',
+          csp_enabled: 'true',
+          x_frame_options: 'SAMEORIGIN'
         }
         data.settings?.forEach((s: { key: string; value: string }) => {
           if (s.key in loadedSettings) {
@@ -267,6 +292,155 @@ function AdminSettings() {
           </div>
         </div>
 
+        {/* Rate Limiting Settings */}
+        <div className="as-section">
+          <div className="as-section-header">
+            <div className="as-section-icon ratelimit">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                <polyline points="12,6 12,12 16,14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <div className="as-section-title">
+              <h3>Rate Limiting</h3>
+              <p>API 요청 제한 설정입니다. 서버 재시작 시 적용됩니다.</p>
+            </div>
+          </div>
+          <div className="as-section-content">
+            <div className="as-setting-row">
+              <div className="as-setting-info">
+                <label>Rate Limiting 활성화</label>
+                <span className="as-setting-desc">IP별 초당 요청 수를 제한하여 과도한 요청을 방지합니다.</span>
+              </div>
+              <label className="as-toggle">
+                <input
+                  type="checkbox"
+                  checked={settings.rate_limit_enabled === 'true'}
+                  onChange={(e) => setSettings({ ...settings, rate_limit_enabled: e.target.checked ? 'true' : 'false' })}
+                />
+                <span className="as-toggle-slider"></span>
+              </label>
+            </div>
+            {settings.rate_limit_enabled === 'true' && (
+              <>
+                <div className="as-divider"></div>
+                <div className="as-setting-row">
+                  <div className="as-setting-info">
+                    <label>초당 요청 제한</label>
+                    <span className="as-setting-desc">IP당 초당 허용되는 최대 요청 수입니다.</span>
+                  </div>
+                  <div className="as-setting-input-group">
+                    <input
+                      type="number"
+                      value={settings.rate_limit_rps}
+                      onChange={(e) => setSettings({ ...settings, rate_limit_rps: e.target.value })}
+                      min="1"
+                      max="10000"
+                    />
+                    <span className="as-input-unit">req/s</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Security Headers Settings */}
+        <div className="as-section">
+          <div className="as-section-header">
+            <div className="as-section-icon headers">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M4 4H20C21.1 4 22 4.9 22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6C2 4.9 2.9 4 4 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M2 10H22" stroke="currentColor" strokeWidth="2"/>
+              </svg>
+            </div>
+            <div className="as-section-title">
+              <h3>보안 헤더</h3>
+              <p>HTTP 보안 헤더 설정입니다. 서버 재시작 시 적용됩니다.</p>
+            </div>
+          </div>
+          <div className="as-section-content">
+            <div className="as-setting-row">
+              <div className="as-setting-info">
+                <label>보안 헤더 활성화</label>
+                <span className="as-setting-desc">XSS, HSTS, CSP 등 보안 헤더를 전체적으로 활성화합니다.</span>
+              </div>
+              <label className="as-toggle">
+                <input
+                  type="checkbox"
+                  checked={settings.security_headers_enabled === 'true'}
+                  onChange={(e) => setSettings({ ...settings, security_headers_enabled: e.target.checked ? 'true' : 'false' })}
+                />
+                <span className="as-toggle-slider"></span>
+              </label>
+            </div>
+            {settings.security_headers_enabled === 'true' && (
+              <>
+                <div className="as-divider"></div>
+                <div className="as-setting-row">
+                  <div className="as-setting-info">
+                    <label>XSS Protection</label>
+                    <span className="as-setting-desc">브라우저의 XSS 필터를 활성화합니다.</span>
+                  </div>
+                  <label className="as-toggle">
+                    <input
+                      type="checkbox"
+                      checked={settings.xss_protection_enabled === 'true'}
+                      onChange={(e) => setSettings({ ...settings, xss_protection_enabled: e.target.checked ? 'true' : 'false' })}
+                    />
+                    <span className="as-toggle-slider"></span>
+                  </label>
+                </div>
+                <div className="as-divider"></div>
+                <div className="as-setting-row">
+                  <div className="as-setting-info">
+                    <label>HSTS (HTTP Strict Transport Security)</label>
+                    <span className="as-setting-desc">HTTPS 강제 사용을 브라우저에 알립니다.</span>
+                  </div>
+                  <label className="as-toggle">
+                    <input
+                      type="checkbox"
+                      checked={settings.hsts_enabled === 'true'}
+                      onChange={(e) => setSettings({ ...settings, hsts_enabled: e.target.checked ? 'true' : 'false' })}
+                    />
+                    <span className="as-toggle-slider"></span>
+                  </label>
+                </div>
+                <div className="as-divider"></div>
+                <div className="as-setting-row">
+                  <div className="as-setting-info">
+                    <label>Content Security Policy (CSP)</label>
+                    <span className="as-setting-desc">콘텐츠 로드 정책을 설정하여 XSS 공격을 방지합니다.</span>
+                  </div>
+                  <label className="as-toggle">
+                    <input
+                      type="checkbox"
+                      checked={settings.csp_enabled === 'true'}
+                      onChange={(e) => setSettings({ ...settings, csp_enabled: e.target.checked ? 'true' : 'false' })}
+                    />
+                    <span className="as-toggle-slider"></span>
+                  </label>
+                </div>
+                <div className="as-divider"></div>
+                <div className="as-setting-row">
+                  <div className="as-setting-info">
+                    <label>X-Frame-Options</label>
+                    <span className="as-setting-desc">iframe 임베딩 허용 정책입니다.</span>
+                  </div>
+                  <select
+                    className="as-select"
+                    value={settings.x_frame_options}
+                    onChange={(e) => setSettings({ ...settings, x_frame_options: e.target.value })}
+                  >
+                    <option value="DENY">DENY (완전 차단)</option>
+                    <option value="SAMEORIGIN">SAMEORIGIN (동일 도메인만 허용)</option>
+                  </select>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
         {/* SMB Settings - Read Only */}
         <div className="as-section">
           <div className="as-section-header">
@@ -360,6 +534,7 @@ function AdminSettings() {
           <span>{toast.message}</span>
         </div>
       )}
+
     </div>
   )
 }

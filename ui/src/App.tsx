@@ -20,6 +20,7 @@ import './styles/app.css'
 // Lazy load admin components for better initial load performance
 const AdminUserList = lazy(() => import('./components/AdminUserList'))
 const AdminSettings = lazy(() => import('./components/AdminSettings'))
+const AdminSSOSettings = lazy(() => import('./components/AdminSSOSettings'))
 const AdminLogs = lazy(() => import('./components/AdminLogs'))
 const AdminSharedFolders = lazy(() => import('./components/AdminSharedFolders'))
 
@@ -38,6 +39,7 @@ function App() {
   const [isUploadModalOpen, setUploadModalOpen] = useState(false)
   const [isFolderModalOpen, setFolderModalOpen] = useState(false)
   const [isProfileOpen, setProfileOpen] = useState(false)
+  const [highlightedFilePath, setHighlightedFilePath] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const { refreshProfile, token } = useAuthStore()
   const navigate = useNavigate()
@@ -51,6 +53,7 @@ function App() {
   const getAdminView = (): AdminView => {
     if (location.pathname === '/scvadmin/shared-folders') return 'shared-folders'
     if (location.pathname === '/scvadmin/settings') return 'settings'
+    if (location.pathname === '/scvadmin/sso') return 'sso'
     if (location.pathname === '/scvadmin/logs') return 'logs'
     return 'users'
   }
@@ -82,6 +85,13 @@ function App() {
 
   const handleNavigate = useCallback((path: string) => {
     setCurrentPath(path)
+    setHighlightedFilePath(null)
+    navigate('/files')
+  }, [navigate])
+
+  const handleFileSelect = useCallback((filePath: string, parentPath: string) => {
+    setCurrentPath(parentPath)
+    setHighlightedFilePath(filePath)
     navigate('/files')
   }, [navigate])
 
@@ -99,7 +109,9 @@ function App() {
         <Header
           onProfileClick={() => setProfileOpen(true)}
           onNavigate={handleNavigate}
+          onFileSelect={handleFileSelect}
           currentPath={currentPath}
+          isAdminMode={isAdminMode}
         />
         <div className="app-container">
           <Sidebar
@@ -122,6 +134,8 @@ function App() {
                   onNavigate={handleNavigate}
                   onUploadClick={() => setUploadModalOpen(true)}
                   onNewFolderClick={() => setFolderModalOpen(true)}
+                  highlightedFilePath={highlightedFilePath}
+                  onClearHighlight={() => setHighlightedFilePath(null)}
                 />
               } />
               <Route path="/files" element={
@@ -130,6 +144,8 @@ function App() {
                   onNavigate={handleNavigate}
                   onUploadClick={() => setUploadModalOpen(true)}
                   onNewFolderClick={() => setFolderModalOpen(true)}
+                  highlightedFilePath={highlightedFilePath}
+                  onClearHighlight={() => setHighlightedFilePath(null)}
                 />
               } />
               <Route path="/trash" element={
@@ -148,6 +164,11 @@ function App() {
               <Route path="/scvadmin/settings" element={
                 <Suspense fallback={<AdminSkeleton />}>
                   <AdminSettings />
+                </Suspense>
+              } />
+              <Route path="/scvadmin/sso" element={
+                <Suspense fallback={<AdminSkeleton />}>
+                  <AdminSSOSettings />
                 </Suspense>
               } />
               <Route path="/scvadmin/logs" element={

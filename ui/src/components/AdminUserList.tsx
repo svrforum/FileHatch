@@ -295,6 +295,9 @@ function AdminUserList() {
                   {user.hasSmb && (
                     <span className="badge smb">SMB</span>
                   )}
+                  {user.has2fa && (
+                    <span className="badge twofa">2FA</span>
+                  )}
                   {!user.isActive && (
                     <span className="badge disabled">비활성</span>
                   )}
@@ -393,6 +396,7 @@ function AdminUserList() {
                   <th>상태</th>
                   <th>저장공간</th>
                   <th>SMB</th>
+                  <th>2FA</th>
                   <th>가입일</th>
                   <th>작업</th>
                 </tr>
@@ -430,6 +434,11 @@ function AdminUserList() {
                     <td>
                       <span className={`smb-status ${user.hasSmb ? 'enabled' : ''}`}>
                         {user.hasSmb ? '설정됨' : '-'}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`twofa-status ${user.has2fa ? 'enabled' : ''}`}>
+                        {user.has2fa ? '활성' : '-'}
                       </span>
                     </td>
                     <td className="date-cell">

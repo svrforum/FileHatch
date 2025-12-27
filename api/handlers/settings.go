@@ -98,6 +98,54 @@ func (h *SettingsHandler) GetSettingInt64(key string, defaultValue int64) int64 
 	return intValue
 }
 
+// GetSettingBool retrieves a setting as boolean
+func (h *SettingsHandler) GetSettingBool(key string, defaultValue bool) bool {
+	value, err := h.GetSetting(key)
+	if err != nil || value == "" {
+		return defaultValue
+	}
+	return value == "true" || value == "1" || value == "yes"
+}
+
+// Security Settings Helpers
+func (h *SettingsHandler) IsRateLimitEnabled() bool {
+	return h.GetSettingBool("rate_limit_enabled", true)
+}
+
+func (h *SettingsHandler) GetRateLimitRPS() int {
+	return h.GetSettingInt("rate_limit_rps", 100)
+}
+
+func (h *SettingsHandler) IsSecurityHeadersEnabled() bool {
+	return h.GetSettingBool("security_headers_enabled", true)
+}
+
+func (h *SettingsHandler) IsXSSProtectionEnabled() bool {
+	return h.GetSettingBool("xss_protection_enabled", true)
+}
+
+func (h *SettingsHandler) IsHSTSEnabled() bool {
+	return h.GetSettingBool("hsts_enabled", true)
+}
+
+func (h *SettingsHandler) IsCSPEnabled() bool {
+	return h.GetSettingBool("csp_enabled", true)
+}
+
+func (h *SettingsHandler) GetXFrameOptions() string {
+	value, err := h.GetSetting("x_frame_options")
+	if err != nil || value == "" {
+		return "SAMEORIGIN"
+	}
+	// Validate allowed values
+	switch value {
+	case "DENY", "SAMEORIGIN":
+		return value
+	default:
+		return "SAMEORIGIN"
+	}
+}
+
 // InvalidateCache removes a key from cache
 func (h *SettingsHandler) InvalidateCache(key string) {
 	h.mu.Lock()

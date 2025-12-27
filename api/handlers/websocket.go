@@ -195,14 +195,9 @@ func (h *Handler) HandleWebSocket(c echo.Context) error {
 		})
 	}
 
-	// Parse and validate the JWT token
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		secret = "scv-default-secret-change-in-production"
-	}
-
+	// Parse and validate the JWT token using shared secret from auth.go
 	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return []byte(secret), nil
+		return sharedJWTSecret, nil
 	})
 	if err != nil || !token.Valid {
 		return c.JSON(http.StatusUnauthorized, map[string]string{

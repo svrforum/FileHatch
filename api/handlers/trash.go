@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -68,6 +69,11 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 		return RespondError(c, ErrMissingParameter("path"))
 	}
 
+	// URL decode the path in case browser didn't encode special characters
+	if decodedPath, err := url.QueryUnescape(requestPath); err == nil {
+		requestPath = decodedPath
+	}
+
 	// Get user claims - required for trash
 	claims, ok := c.Get("user").(*JWTClaims)
 	if !ok || claims == nil {
@@ -128,6 +134,13 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 	}
 	h.saveTrashMeta(claims.Username, meta)
 
+	// Log audit event
+	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventFileDelete, displayPath, map[string]interface{}{
+		"isDir":   info.IsDir(),
+		"size":    size,
+		"trashId": trashID,
+	})
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
 		"path":    displayPath,
@@ -148,8 +161,10 @@ func (h *Handler) ListTrash(c echo.Context) error {
 	}
 
 	items := make([]TrashItem, 0, len(meta))
+	var totalSize int64
 	for _, item := range meta {
 		items = append(items, item)
+		totalSize += item.Size
 	}
 
 	// Sort by deleted time (newest first)
@@ -158,8 +173,9 @@ func (h *Handler) ListTrash(c echo.Context) error {
 	})
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"items": items,
-		"total": len(items),
+		"items":     items,
+		"total":     len(items),
+		"totalSize": totalSize,
 	})
 }
 
