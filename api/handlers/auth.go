@@ -529,7 +529,7 @@ type SetSMBPasswordRequest struct {
 	Password string `json:"password"`
 }
 
-// SetMySMBPassword sets the current user's SMB password
+// SetMySMBPassword sets the current user's SMB/WebDAV password
 func (h *AuthHandler) SetMySMBPassword(c echo.Context) error {
 	claims := c.Get("user").(*JWTClaims)
 
@@ -546,12 +546,17 @@ func (h *AuthHandler) SetMySMBPassword(c echo.Context) error {
 		})
 	}
 
-	// Generate SMB marker
-	smbHash := generateSMBMarker()
+	// Generate bcrypt hash for WebDAV authentication
+	smbHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to hash password",
+		})
+	}
 
-	_, err := h.db.Exec(`
+	_, err = h.db.Exec(`
 		UPDATE users SET smb_hash = $1, updated_at = NOW() WHERE id = $2
-	`, smbHash, claims.UserID)
+	`, string(smbHash), claims.UserID)
 
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{

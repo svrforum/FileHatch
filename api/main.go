@@ -182,6 +182,12 @@ func main() {
 	// Create Share handler
 	shareHandler := handlers.NewShareHandler(db, dataRoot, auditHandler)
 
+	// Create Upload Share handler
+	uploadShareHandler, err := handlers.NewUploadShareHandler(db, dataRoot, auditHandler)
+	if err != nil {
+		log.Fatalf("Failed to create upload share handler: %v", err)
+	}
+
 	// Create Shared Folder handler
 	sharedFolderHandler := handlers.NewSharedFolderHandler(db, dataRoot)
 
@@ -262,6 +268,7 @@ func main() {
 	// ZIP Download API routes
 	api.POST("/download/zip", h.DownloadAsZip, authHandler.OptionalJWTMiddleware)
 	api.GET("/download/folder/*", h.DownloadFolderAsZip, authHandler.OptionalJWTMiddleware)
+	api.GET("/zip/preview/*", h.PreviewZip, authHandler.OptionalJWTMiddleware)
 
 	// Trash API routes
 	api.POST("/trash/*", h.MoveToTrash, authHandler.OptionalJWTMiddleware)
@@ -294,6 +301,9 @@ func main() {
 	authApi.GET("/audit/resource/*", auditHandler.GetResourceHistory)
 	authApi.GET("/audit/system", auditHandler.GetSystemLogs)
 
+	// Recent files API (protected)
+	authApi.GET("/files/recent", auditHandler.GetRecentFiles)
+
 	// Share API (protected for management)
 	authApi.POST("/shares", shareHandler.CreateShare)
 	authApi.GET("/shares", shareHandler.ListShares)
@@ -303,6 +313,14 @@ func main() {
 	api.GET("/s/:token", shareHandler.AccessShare, authHandler.OptionalJWTMiddleware)
 	api.POST("/s/:token", shareHandler.AccessShare, authHandler.OptionalJWTMiddleware)
 	api.GET("/s/:token/download", shareHandler.DownloadShare, authHandler.OptionalJWTMiddleware)
+
+	// Upload share access (public, with optional auth for require_login check)
+	api.GET("/u/:token", uploadShareHandler.AccessUploadShare, authHandler.OptionalJWTMiddleware)
+	api.POST("/u/:token", uploadShareHandler.AccessUploadShare, authHandler.OptionalJWTMiddleware)
+
+	// Upload share TUS routes
+	e.Any("/api/u/:token/upload/", uploadShareHandler.HandleShareUpload, authHandler.OptionalJWTMiddleware)
+	e.Any("/api/u/:token/upload/*", uploadShareHandler.HandleShareUpload, authHandler.OptionalJWTMiddleware)
 
 	// Shared Folders API (user - protected)
 	authApi.GET("/shared-folders", sharedFolderHandler.ListMySharedFolders)
@@ -464,15 +482,33 @@ func main() {
 		defer fileWatcher.Stop()
 	}
 
+	// WebDAV handler
+	webdavHandler := handlers.NewWebDAVHandler(db, dataRoot)
+
 	// Get port from environment or default
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
+	// Create a custom handler that routes WebDAV requests before Echo
+	// This is necessary because Echo's routing doesn't work well with WebDAV methods
+	combinedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/webdav") {
+			webdavHandler.ServeHTTP(w, r)
+			return
+		}
+		e.ServeHTTP(w, r)
+	})
+
 	// Start server
 	log.Printf("Starting server on port %s", port)
-	if err := e.Start(":" + port); err != nil && err != http.ErrServerClosed {
+	log.Printf("WebDAV available at /webdav (use application password)")
+	server := &http.Server{
+		Addr:    ":" + port,
+		Handler: combinedHandler,
+	}
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }

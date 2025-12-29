@@ -32,6 +32,7 @@ type Share struct {
 	ID           string     `json:"id"`
 	Token        string     `json:"token"`
 	Path         string     `json:"path"`
+	DisplayPath  string     `json:"displayPath"`
 	CreatedBy    string     `json:"createdBy"`
 	CreatedAt    time.Time  `json:"createdAt"`
 	ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
@@ -40,6 +41,17 @@ type Share struct {
 	MaxAccess    *int       `json:"maxAccess,omitempty"`
 	IsActive     bool       `json:"isActive"`
 	RequireLogin bool       `json:"requireLogin"`
+	// File metadata fields
+	Size  int64  `json:"size"`
+	IsDir bool   `json:"isDir"`
+	Name  string `json:"name"`
+	// Upload share fields
+	ShareType         string `json:"shareType"`                   // "download" or "upload"
+	MaxFileSize       int64  `json:"maxFileSize,omitempty"`       // Max size per file in bytes (0 = unlimited)
+	AllowedExtensions string `json:"allowedExtensions,omitempty"` // Comma-separated list (e.g., "pdf,docx,jpg")
+	UploadCount       int    `json:"uploadCount"`                 // Number of files uploaded
+	MaxTotalSize      int64  `json:"maxTotalSize,omitempty"`      // Max total upload size in bytes (0 = unlimited)
+	TotalUploadedSize int64  `json:"totalUploadedSize"`           // Current total uploaded bytes
 }
 
 // CreateShareRequest represents share creation request
@@ -49,6 +61,11 @@ type CreateShareRequest struct {
 	ExpiresIn    int    `json:"expiresIn,omitempty"` // hours, 0 = never
 	MaxAccess    int    `json:"maxAccess,omitempty"` // 0 = unlimited
 	RequireLogin bool   `json:"requireLogin"`        // If true, only authenticated users can access
+	// Upload share specific fields
+	ShareType         string `json:"shareType,omitempty"`         // "download" (default) or "upload"
+	MaxFileSize       int64  `json:"maxFileSize,omitempty"`       // Max size per file in bytes (0 = unlimited)
+	AllowedExtensions string `json:"allowedExtensions,omitempty"` // Comma-separated list
+	MaxTotalSize      int64  `json:"maxTotalSize,omitempty"`      // Max total upload size
 }
 
 // AccessShareRequest represents share access request
@@ -105,6 +122,17 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 		})
 	}
 
+	// Default share type is download
+	shareType := req.ShareType
+	if shareType == "" {
+		shareType = "download"
+	}
+	if shareType != "download" && shareType != "upload" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid share type. Must be 'download' or 'upload'",
+		})
+	}
+
 	// Resolve virtual path to real filesystem path
 	fullPath, storedPath, err := h.resolvePath(req.Path, claims.Username)
 	if err != nil {
@@ -113,9 +141,17 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 		})
 	}
 
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+	fileInfo, err := os.Stat(fullPath)
+	if os.IsNotExist(err) {
 		return c.JSON(http.StatusNotFound, map[string]string{
 			"error": "Path not found",
+		})
+	}
+
+	// Upload shares can only be created for folders
+	if shareType == "upload" && !fileInfo.IsDir() {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Upload shares can only be created for folders",
 		})
 	}
 
@@ -148,13 +184,15 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 		maxAccess = &req.MaxAccess
 	}
 
-	// Insert share
+	// Insert new share with upload-specific fields
 	var shareID string
 	err = h.db.QueryRow(`
-		INSERT INTO shares (token, path, created_by, password_hash, expires_at, max_access, require_login)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO shares (token, path, created_by, password_hash, expires_at, max_access, require_login,
+		                    share_type, max_file_size, allowed_extensions, max_total_size)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id
-	`, token, storedPath, claims.UserID, passwordHash, expiresAt, maxAccess, req.RequireLogin).Scan(&shareID)
+	`, token, storedPath, claims.UserID, passwordHash, expiresAt, maxAccess, req.RequireLogin,
+		shareType, req.MaxFileSize, req.AllowedExtensions, req.MaxTotalSize).Scan(&shareID)
 
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -162,7 +200,13 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 		})
 	}
 
-	shareURL := fmt.Sprintf("/s/%s", token)
+	// Use different URL prefix for upload shares
+	var shareURL string
+	if shareType == "upload" {
+		shareURL = fmt.Sprintf("/u/%s", token)
+	} else {
+		shareURL = fmt.Sprintf("/s/%s", token)
+	}
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"success":      true,
@@ -172,6 +216,7 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 		"path":         storedPath,
 		"expiresAt":    expiresAt,
 		"requireLogin": req.RequireLogin,
+		"shareType":    shareType,
 	})
 }
 
@@ -182,7 +227,8 @@ func (h *ShareHandler) ListShares(c echo.Context) error {
 	rows, err := h.db.Query(`
 		SELECT id, token, path, created_at, expires_at,
 		       CASE WHEN password_hash IS NOT NULL THEN true ELSE false END as has_password,
-		       access_count, max_access, is_active, require_login
+		       access_count, max_access, is_active, require_login,
+		       share_type, max_file_size, allowed_extensions, upload_count, max_total_size, total_uploaded_size
 		FROM shares
 		WHERE created_by = $1
 		ORDER BY created_at DESC
@@ -200,9 +246,11 @@ func (h *ShareHandler) ListShares(c echo.Context) error {
 		var share Share
 		var expiresAt sql.NullTime
 		var maxAccess sql.NullInt32
+		var allowedExtensions sql.NullString
 
 		err := rows.Scan(&share.ID, &share.Token, &share.Path, &share.CreatedAt,
-			&expiresAt, &share.HasPassword, &share.AccessCount, &maxAccess, &share.IsActive, &share.RequireLogin)
+			&expiresAt, &share.HasPassword, &share.AccessCount, &maxAccess, &share.IsActive, &share.RequireLogin,
+			&share.ShareType, &share.MaxFileSize, &allowedExtensions, &share.UploadCount, &share.MaxTotalSize, &share.TotalUploadedSize)
 		if err != nil {
 			continue
 		}
@@ -214,6 +262,37 @@ func (h *ShareHandler) ListShares(c echo.Context) error {
 		if maxAccess.Valid {
 			val := int(maxAccess.Int32)
 			share.MaxAccess = &val
+		}
+		if allowedExtensions.Valid {
+			share.AllowedExtensions = allowedExtensions.String
+		}
+
+		// Get file metadata - share.Path is stored path like "users/admin/file.txt"
+		realPath := filepath.Join(h.dataRoot, share.Path)
+		if info, err := os.Stat(realPath); err == nil {
+			share.Size = info.Size()
+			share.IsDir = info.IsDir()
+			share.Name = info.Name()
+		} else {
+			// File doesn't exist anymore, extract name from path
+			pathParts := strings.Split(share.Path, "/")
+			if len(pathParts) > 0 {
+				share.Name = pathParts[len(pathParts)-1]
+			}
+		}
+
+		// Convert stored path to display path
+		// "users/admin/file.txt" -> "/home/file.txt"
+		// "shared/file.txt" -> "/shared/file.txt"
+		pathParts := strings.Split(share.Path, "/")
+		if len(pathParts) >= 2 && pathParts[0] == "users" {
+			// users/{username}/... -> /home/...
+			share.DisplayPath = "/home/" + strings.Join(pathParts[2:], "/")
+		} else if len(pathParts) >= 1 && pathParts[0] == "shared" {
+			// shared/... -> /shared/...
+			share.DisplayPath = "/" + share.Path
+		} else {
+			share.DisplayPath = "/" + share.Path
 		}
 
 		shares = append(shares, share)

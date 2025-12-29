@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useUploadStore } from '../stores/uploadStore'
 import { useAuthStore } from '../stores/authStore'
 import { getStorageUsage, formatFileSize } from '../api/files'
@@ -108,11 +108,18 @@ const icons: Record<string, JSX.Element> = {
       <path d="M15 12H3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   ),
+  recent: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+      <path d="M12 6V12L16 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
 }
 
 function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onAdminClick, isTrashView, isAdminMode, adminView, onExitAdminMode }: SidebarProps) {
   const { items, downloads, togglePanel, isPanelOpen, clearCompleted, clearCompletedDownloads } = useUploadStore()
   const { user } = useAuthStore()
+  const location = useLocation()
   const [storageUsage, setStorageUsage] = useState({ totalUsed: 0, quota: 10 * 1024 * 1024 * 1024 })
   const [sharedFolders, setSharedFolders] = useState<SharedFolderWithPermission[]>([])
   const [sharedDrivesExpanded, setSharedDrivesExpanded] = useState(true)
@@ -200,11 +207,22 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
             {user && (
               <Link
                 to="/files"
-                className={`nav-item ${isActive('/home') ? 'active' : ''}`}
+                className={`nav-item ${(location.pathname === '/files' || location.pathname === '/') && isActive('/home') ? 'active' : ''}`}
                 onClick={() => onNavigate('/home')}
               >
                 {icons.folder}
                 <span>내 파일</span>
+              </Link>
+            )}
+
+            {/* My Activity Link */}
+            {user && (
+              <Link
+                to="/my-activity"
+                className={`nav-item ${location.pathname === '/my-activity' ? 'active' : ''}`}
+              >
+                {icons.recent}
+                <span>내 작업</span>
               </Link>
             )}
 
@@ -232,9 +250,8 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                     {sharedFolders.map(folder => (
                       <Link
                         key={folder.id}
-                        to="/files"
-                        className={`nav-item shared-drive-item ${isActive(`/shared/${folder.name}`) ? 'active' : ''}`}
-                        onClick={() => onNavigate(`/shared/${folder.name}`)}
+                        to={`/shared-drive/${encodeURIComponent(folder.name)}`}
+                        className={`nav-item shared-drive-item ${location.pathname.startsWith(`/shared-drive/${encodeURIComponent(folder.name)}`) ? 'active' : ''}`}
                       >
                         <span className="drive-name">{folder.name}</span>
                         <span className={`permission-badge ${folder.permissionLevel === PERMISSION_READ_WRITE ? 'rw' : 'r'}`}>
@@ -269,25 +286,22 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                 {sharingExpanded && (
                   <div className="shared-list">
                     <Link
-                      to="/files"
-                      className={`nav-item shared-drive-item ${isActive('/shared-with-me') ? 'active' : ''}`}
-                      onClick={() => onNavigate('/shared-with-me')}
+                      to="/shared-with-me"
+                      className={`nav-item shared-drive-item ${location.pathname === '/shared-with-me' ? 'active' : ''}`}
                     >
                       {icons.sharedWithMe}
                       <span>나에게 공유된 파일</span>
                     </Link>
                     <Link
-                      to="/files"
-                      className={`nav-item shared-drive-item ${isActive('/shared-by-me') ? 'active' : ''}`}
-                      onClick={() => onNavigate('/shared-by-me')}
+                      to="/shared-by-me"
+                      className={`nav-item shared-drive-item ${location.pathname === '/shared-by-me' ? 'active' : ''}`}
                     >
                       {icons.sharedByMe}
                       <span>다른사용자에 공유된 파일</span>
                     </Link>
                     <Link
-                      to="/files"
-                      className={`nav-item shared-drive-item ${isActive('/link-shares') ? 'active' : ''}`}
-                      onClick={() => onNavigate('/link-shares')}
+                      to="/link-shares"
+                      className={`nav-item shared-drive-item ${location.pathname === '/link-shares' ? 'active' : ''}`}
                     >
                       {icons.linkShare}
                       <span>링크로 공유된 파일</span>

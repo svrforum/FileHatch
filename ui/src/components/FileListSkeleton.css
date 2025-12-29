@@ -99,11 +99,9 @@
 }
 
 /* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .file-list-skeleton {
-    --skeleton-bg: #3a3a3a;
-    --skeleton-highlight: #4a4a4a;
-    --border-color: #404040;
-    --header-bg: #2a2a2a;
-  }
+[data-theme='dark'] .file-list-skeleton {
+  --skeleton-bg: #3a3a3a;
+  --skeleton-highlight: #4a4a4a;
+  --border-color: #404040;
+  --header-bg: #2a2a2a;
 }

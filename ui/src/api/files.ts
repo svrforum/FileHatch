@@ -752,6 +752,28 @@ export async function searchByTag(tag: string): Promise<{ files: FileMetadata[];
   return response.json()
 }
 
+// Recent files
+export interface RecentFile {
+  path: string
+  name: string
+  eventType: string
+  timestamp: string
+  isDir: boolean
+}
+
+export async function getRecentFiles(limit: number = 10): Promise<RecentFile[]> {
+  const params = new URLSearchParams({ limit: String(limit) })
+  const response = await fetch(`${API_BASE}/files/recent?${params}`, {
+    headers: getAuthHeaders(),
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to get recent files')
+  }
+
+  return response.json()
+}
+
 // Compress files/folders into a zip archive
 export interface CompressResponse {
   success: boolean
@@ -808,4 +830,99 @@ export async function extractZip(
   }
 
   return response.json()
+}
+
+// ZIP preview types
+export interface ZipFileEntry {
+  name: string
+  path: string
+  size: number
+  compressedSize: number
+  isDir: boolean
+  modTime: string
+}
+
+export interface ZipPreviewResponse {
+  fileName: string
+  totalFiles: number
+  totalSize: number
+  files: ZipFileEntry[]
+}
+
+// Preview ZIP file contents
+export async function previewZip(path: string): Promise<ZipPreviewResponse> {
+  const encodedPath = path.startsWith('/') ? path.slice(1) : path
+  const response = await fetch(`${API_BASE}/zip/preview/${encodedPath}`, {
+    headers: getAuthHeaders(),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error || 'Failed to preview zip file')
+  }
+
+  return response.json()
+}
+
+// Download multiple files as ZIP archive
+export async function downloadAsZip(
+  paths: string[],
+  onProgress?: (progress: number) => void
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/download/zip`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ paths }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error || 'Failed to download as ZIP')
+  }
+
+  // Get filename from Content-Disposition header
+  const contentDisposition = response.headers.get('Content-Disposition')
+  let filename = 'download.zip'
+  if (contentDisposition) {
+    const match = contentDisposition.match(/filename="(.+)"/)
+    if (match) filename = match[1]
+  }
+
+  // Get total size for progress
+  const contentLength = response.headers.get('Content-Length')
+  const total = contentLength ? parseInt(contentLength, 10) : 0
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    throw new Error('Failed to read response')
+  }
+
+  const chunks: Uint8Array[] = []
+  let received = 0
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    chunks.push(value)
+    received += value.length
+
+    if (onProgress && total > 0) {
+      onProgress(Math.round((received / total) * 100))
+    }
+  }
+
+  // Combine chunks and download
+  const blob = new Blob(chunks, { type: 'application/zip' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }

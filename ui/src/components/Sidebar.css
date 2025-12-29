@@ -473,3 +473,85 @@
   background: rgba(49, 130, 246, 0.15);
   color: #3182F6;
 }
+
+/* Recent Files Section */
+.recent-section {
+  margin-top: var(--spacing-sm);
+  margin-left: var(--spacing-md);
+}
+
+.recent-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.recent-header:hover {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.recent-header svg {
+  width: 18px;
+  height: 18px;
+  opacity: 0.7;
+}
+
+.recent-header .chevron {
+  margin-left: auto;
+  transition: transform var(--transition-fast);
+  width: 14px;
+  height: 14px;
+}
+
+.recent-header .chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.recent-list {
+  margin-left: var(--spacing-sm);
+  padding-left: var(--spacing-md);
+  border-left: 1px solid var(--border-light);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: 12px;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+}
+
+.recent-item:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.recent-item svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.recent-item:hover svg {
+  opacity: 1;
+}
+
+.recent-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}

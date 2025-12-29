@@ -56,7 +56,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts);
 CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_logs(target_resource);
 CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_logs(actor_id);
 
--- 4. Shares (Public Links)
+-- 4. Shares (Public Links - Download and Upload)
 CREATE TABLE IF NOT EXISTS shares (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     token VARCHAR(64) UNIQUE NOT NULL,
@@ -68,11 +68,19 @@ CREATE TABLE IF NOT EXISTS shares (
     access_count INT DEFAULT 0,
     max_access INT,
     is_active BOOLEAN DEFAULT TRUE,
-    require_login BOOLEAN DEFAULT FALSE  -- If true, only authenticated users can access
+    require_login BOOLEAN DEFAULT FALSE,  -- If true, only authenticated users can access
+    -- Upload share fields
+    share_type VARCHAR(20) DEFAULT 'download' NOT NULL,  -- 'download' or 'upload'
+    max_file_size BIGINT DEFAULT 0,           -- Max size per file in bytes (0 = unlimited)
+    allowed_extensions TEXT,                   -- Comma-separated list (e.g., "pdf,docx,jpg")
+    upload_count INT DEFAULT 0,               -- Number of files uploaded
+    max_total_size BIGINT DEFAULT 0,          -- Max total upload size in bytes (0 = unlimited)
+    total_uploaded_size BIGINT DEFAULT 0      -- Current total uploaded bytes
 );
 
 CREATE INDEX IF NOT EXISTS idx_shares_token ON shares(token);
 CREATE INDEX IF NOT EXISTS idx_shares_created_by ON shares(created_by);
+CREATE INDEX IF NOT EXISTS idx_shares_type ON shares(share_type);
 
 -- 5. Shared Folders (Team Drives)
 CREATE TABLE IF NOT EXISTS shared_folders (

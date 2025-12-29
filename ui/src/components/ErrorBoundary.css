@@ -106,33 +106,31 @@
 }
 
 /* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .error-boundary-content {
-    background: #1f2937;
-  }
+[data-theme='dark'] .error-boundary-content {
+  background: #1f2937;
+}
 
-  .error-boundary-title {
-    color: #f9fafb;
-  }
+[data-theme='dark'] .error-boundary-title {
+  color: #f9fafb;
+}
 
-  .error-boundary-message {
-    color: #9ca3af;
-  }
+[data-theme='dark'] .error-boundary-message {
+  color: #9ca3af;
+}
 
-  .error-boundary-details {
-    background: #374151;
-  }
+[data-theme='dark'] .error-boundary-details {
+  background: #374151;
+}
 
-  .error-boundary-details summary {
-    color: #e5e7eb;
-  }
+[data-theme='dark'] .error-boundary-details summary {
+  color: #e5e7eb;
+}
 
-  .error-boundary-btn.secondary {
-    background: #374151;
-    color: #e5e7eb;
-  }
+[data-theme='dark'] .error-boundary-btn.secondary {
+  background: #374151;
+  color: #e5e7eb;
+}
 
-  .error-boundary-btn.secondary:hover {
-    background: #4b5563;
-  }
+[data-theme='dark'] .error-boundary-btn.secondary:hover {
+  background: #4b5563;
 }

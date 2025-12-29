@@ -1,17 +1,20 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchFiles, downloadFileWithProgress, formatFileSize, getFolderStats, renameItem, copyItem, moveItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, getFileMetadata, updateFileMetadata, getUserTags, FileMetadata, compressFiles, extractZip } from '../api/files'
+import { fetchFiles, downloadFileWithProgress, formatFileSize, getFolderStats, renameItem, copyItem, moveItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, getFileMetadata, updateFileMetadata, getUserTags, FileMetadata, compressFiles, extractZip, downloadAsZip } from '../api/files'
 import { getMySharedFolders, SharedFolderWithPermission } from '../api/sharedFolders'
-import { getSharedWithMe, getSharedByMe, getMyShareLinks, SharedWithMeItem, SharedByMeItem, LinkShare, deleteFileShare, deleteShareLink, getPermissionLabel } from '../api/fileShares'
+import { getSharedWithMe, getSharedByMe, getMyShareLinks, SharedWithMeItem, SharedByMeItem, LinkShare, deleteFileShare, deleteShareLink } from '../api/fileShares'
 import { useUploadStore } from '../stores/uploadStore'
 import { useFileWatcher } from '../hooks/useFileWatcher'
 import ConfirmModal from './ConfirmModal'
 import Toast from './Toast'
 import TextEditor from './TextEditor'
 import FileViewer from './FileViewer'
+import ZipViewer from './ZipViewer'
 import OnlyOfficeEditor from './OnlyOfficeEditor'
 import ShareModal from './ShareModal'
 import LinkShareModal from './LinkShareModal'
+import { SortField, SortOrder, ViewMode, ContextMenuType, HistoryAction, SharedFileInfo } from './filelist'
+import ShareOptionsDisplay from './filelist/ShareOptionsDisplay'
 import './FileList.css'
 
 interface FileListProps {
@@ -22,15 +25,6 @@ interface FileListProps {
   highlightedFilePath?: string | null
   onClearHighlight?: () => void
 }
-
-type SortField = 'name' | 'size' | 'date'
-type SortOrder = 'asc' | 'desc'
-type ViewMode = 'list' | 'grid'
-
-type ContextMenuType =
-  | { type: 'file'; x: number; y: number; file: FileInfo; selectedPaths: string[] }
-  | { type: 'background'; x: number; y: number }
-  | null
 
 function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, highlightedFilePath, onClearHighlight }: FileListProps) {
   const [sortBy, setSortBy] = useState<SortField>('name')
@@ -54,6 +48,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [isDraggingFiles, setIsDraggingFiles] = useState(false)
   const [editingFile, setEditingFile] = useState<FileInfo | null>(null)
   const [viewingFile, setViewingFile] = useState<FileInfo | null>(null)
+  const [zipViewingFile, setZipViewingFile] = useState<FileInfo | null>(null)
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
   const [onlyOfficeAvailable, setOnlyOfficeAvailable] = useState(false)
   const [onlyOfficePublicUrl, setOnlyOfficePublicUrl] = useState<string | null>(null)
@@ -70,6 +65,10 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [showCompressModal, setShowCompressModal] = useState(false)
   const [compressFileName, setCompressFileName] = useState('')
   const [pathsToCompress, setPathsToCompress] = useState<string[]>([])
+  // Download options modal state
+  const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [pathsToDownload, setPathsToDownload] = useState<string[]>([])
+  const [downloadingAsZip, setDownloadingAsZip] = useState(false)
   // Clipboard state for copy/cut operations
   const [clipboard, setClipboard] = useState<{ files: FileInfo[]; mode: 'copy' | 'cut' } | null>(null)
   // Drag and drop state for internal file movement
@@ -80,15 +79,6 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [marqueeStart, setMarqueeStart] = useState<{ x: number; y: number } | null>(null)
   const [marqueeEnd, setMarqueeEnd] = useState<{ x: number; y: number } | null>(null)
   const fileRowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
-  // Undo/Redo history
-  type HistoryAction = {
-    type: 'move' | 'copy' | 'delete' | 'rename'
-    sourcePaths: string[]  // Original file paths
-    destPaths?: string[]   // Destination file paths (for copy/move)
-    destination?: string   // Destination folder
-    oldName?: string
-    newName?: string
-  }
   // Combined history state to avoid stale closure issues
   const [historyState, setHistoryState] = useState<{
     actions: HistoryAction[]
@@ -117,6 +107,8 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
 
   const queryClient = useQueryClient()
   const containerRef = useRef<HTMLDivElement>(null)
+  const contextMenuRef = useRef<HTMLDivElement>(null)
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null)
   const uploadStore = useUploadStore()
   const downloadStore = uploadStore
 
@@ -199,15 +191,14 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     }
     if (isLinkSharesView && linkSharesData) {
       return linkSharesData.map((share: LinkShare) => {
-        const pathParts = share.path.split('/')
-        const name = pathParts[pathParts.length - 1] || share.path
+        const name = share.name || share.path.split('/').pop() || share.path
         return {
           name: name,
           path: share.path,
-          size: 0,
-          isDir: false, // We don't know, but treat as file for icon
+          size: share.size || 0,
+          isDir: share.isDir || false,
           modTime: share.createdAt,
-          extension: name.includes('.') ? name.split('.').pop() : undefined,
+          extension: share.isDir ? undefined : (name.includes('.') ? name.split('.').pop() : undefined),
           // Extra fields for display
           linkToken: share.token,
           linkId: share.id,
@@ -216,7 +207,8 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
           expiresAt: share.expiresAt,
           hasPassword: share.hasPassword,
           isActive: share.isActive,
-        } as FileInfo & { linkToken?: string; linkId?: string; accessCount?: number; maxAccess?: number; expiresAt?: string; hasPassword?: boolean; isActive?: boolean }
+          requireLogin: share.requireLogin,
+        } as FileInfo & { linkToken?: string; linkId?: string; accessCount?: number; maxAccess?: number; expiresAt?: string; hasPassword?: boolean; isActive?: boolean; requireLogin?: boolean }
       })
     }
     return data?.files || []
@@ -231,6 +223,37 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     setSelectedFiles(new Set())
     setFolderStats(null)
   }, [currentPath])
+
+  // Adjust context menu position to keep it within viewport
+  useEffect(() => {
+    if (contextMenu && contextMenuRef.current) {
+      const menu = contextMenuRef.current
+      const rect = menu.getBoundingClientRect()
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+
+      let adjustedX = contextMenu.x
+      let adjustedY = contextMenu.y
+
+      // Adjust horizontal position if menu goes beyond right edge
+      if (contextMenu.x + rect.width > viewportWidth - 10) {
+        adjustedX = viewportWidth - rect.width - 10
+      }
+
+      // Adjust vertical position if menu goes beyond bottom edge
+      if (contextMenu.y + rect.height > viewportHeight - 10) {
+        adjustedY = viewportHeight - rect.height - 10
+      }
+
+      // Make sure menu doesn't go beyond left or top edge
+      if (adjustedX < 10) adjustedX = 10
+      if (adjustedY < 10) adjustedY = 10
+
+      setContextMenuPosition({ x: adjustedX, y: adjustedY })
+    } else {
+      setContextMenuPosition(null)
+    }
+  }, [contextMenu])
 
   // Check OnlyOffice availability on mount
   useEffect(() => {
@@ -250,13 +273,13 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
 
   // Handle highlighted file from search
   useEffect(() => {
-    if (highlightedFilePath && data?.files) {
-      const file = data.files.find(f => f.path === highlightedFilePath)
+    if (highlightedFilePath && displayFiles.length > 0) {
+      const file = displayFiles.find(f => f.path === highlightedFilePath)
       if (file) {
         setSelectedFile(file)
         setSelectedFiles(new Set())
         // Scroll to the file if needed
-        const index = data.files.indexOf(file)
+        const index = displayFiles.indexOf(file)
         if (index >= 0) {
           setFocusedIndex(index)
         }
@@ -264,7 +287,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         onClearHighlight?.()
       }
     }
-  }, [highlightedFilePath, data?.files, onClearHighlight])
+  }, [highlightedFilePath, displayFiles, onClearHighlight])
 
   // Fetch folder stats when a folder is selected
   useEffect(() => {
@@ -304,7 +327,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       }, 500)
 
       // Find matching file
-      if (data?.files) {
+      if (displayFiles.length > 0) {
         // Check if same single character is being repeated
         const isSameChar = searchBuffer.length === 1 && pressedKey === searchBuffer
 
@@ -314,7 +337,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         // Get all matching files for accumulated search
         const getMatchingIndices = (searchStr: string) => {
           const indices: number[] = []
-          data.files.forEach((file, index) => {
+          displayFiles.forEach((file, index) => {
             if (file.name.toLowerCase().startsWith(searchStr)) {
               indices.push(index)
             }
@@ -351,7 +374,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
             targetIndex = matchingIndices[0]
           }
 
-          const file = data.files[targetIndex]
+          const file = displayFiles[targetIndex]
           setSelectedFile(file)
           setSelectedFiles(new Set([file.path]))
           setFocusedIndex(targetIndex)
@@ -364,7 +387,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [searchBuffer, data?.files, focusedIndex])
+  }, [searchBuffer, displayFiles, focusedIndex])
 
   // Load thumbnail for image files
   useEffect(() => {
@@ -534,9 +557,16 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     }
   }, [])
 
+  const isZipFile = useCallback((file: FileInfo) => {
+    const ext = file.extension?.toLowerCase() || file.name.split('.').pop()?.toLowerCase()
+    return ext === 'zip'
+  }, [])
+
   const handleItemDoubleClick = useCallback((file: FileInfo) => {
     if (file.isDir) {
       onNavigate(file.path)
+    } else if (isZipFile(file)) {
+      setZipViewingFile(file)
     } else if (isEditableFile(file)) {
       setEditingFile(file)
     } else if (isViewableFile(file)) {
@@ -546,7 +576,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     } else {
       downloadFileWithProgress(file.path, file.size, downloadStore)
     }
-  }, [onNavigate, downloadStore, isEditableFile, isViewableFile, onlyOfficeAvailable, handleOnlyOfficeEdit])
+  }, [onNavigate, downloadStore, isEditableFile, isViewableFile, isZipFile, onlyOfficeAvailable, handleOnlyOfficeEdit])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, file: FileInfo) => {
     e.preventDefault()
@@ -670,6 +700,72 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     }
   }, [closeContextMenu, currentPath, queryClient])
 
+  // Multiple file download handler - opens modal for download options
+  const handleMultiDownload = useCallback((paths: string[]) => {
+    if (paths.length === 0) return
+    closeContextMenu()
+    setPathsToDownload(paths)
+    setShowDownloadModal(true)
+  }, [closeContextMenu])
+
+  // Download as ZIP
+  const handleDownloadAsZip = useCallback(async () => {
+    if (pathsToDownload.length === 0) return
+    setDownloadingAsZip(true)
+
+    try {
+      await downloadAsZip(pathsToDownload)
+      setShowDownloadModal(false)
+      setPathsToDownload([])
+      setSelectedFiles(new Set())
+      const id = Date.now().toString()
+      setToasts((prev) => [...prev, {
+        id,
+        message: `${pathsToDownload.length}개 파일을 ZIP으로 다운로드 중...`,
+        type: 'info'
+      }])
+    } catch (err) {
+      const id = Date.now().toString()
+      setToasts((prev) => [...prev, {
+        id,
+        message: err instanceof Error ? err.message : 'ZIP 다운로드에 실패했습니다',
+        type: 'error'
+      }])
+    } finally {
+      setDownloadingAsZip(false)
+    }
+  }, [pathsToDownload])
+
+  // Download files individually with delay between each to avoid browser blocking
+  const handleDownloadIndividually = useCallback(async () => {
+    if (pathsToDownload.length === 0) return
+    setShowDownloadModal(false)
+
+    // Find file info for each path to get sizes
+    const filesToDownload = displayFiles.filter((f: FileInfo) => pathsToDownload.includes(f.path))
+    const filesToDownloadFiltered = filesToDownload.filter((f: FileInfo) => !f.isDir)
+
+    setPathsToDownload([])
+    setSelectedFiles(new Set())
+    const id = Date.now().toString()
+    setToasts((prev) => [...prev, {
+      id,
+      message: `${filesToDownloadFiltered.length}개 파일 개별 다운로드 시작`,
+      type: 'info'
+    }])
+
+    // Download each file with a delay to prevent browser from blocking multiple downloads
+    for (let i = 0; i < filesToDownloadFiltered.length; i++) {
+      const file = filesToDownloadFiltered[i]
+      downloadFileWithProgress(file.path, file.size, downloadStore)
+
+      // Add delay between downloads (except for the last one)
+      if (i < filesToDownloadFiltered.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+    }
+  }, [pathsToDownload, displayFiles, downloadStore])
+
   const handleRenameClick = useCallback((file: FileInfo) => {
     setRenameTarget(file)
     setNewName(file.name)
@@ -773,9 +869,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         }
         return newSet
       })
-    } else if (e.shiftKey && data?.files) {
+    } else if (e.shiftKey && displayFiles) {
       // Shift+click: select range
-      const files = data.files
+      const files = displayFiles
       const lastSelected = selectedFile?.path
       if (lastSelected) {
         const lastIdx = files.findIndex(f => f.path === lastSelected)
@@ -797,7 +893,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const handleBulkDelete = useCallback(async () => {
     if (selectedFiles.size === 0) return
 
-    const filesToDelete = data?.files.filter(f => selectedFiles.has(f.path)) || []
+    const filesToDelete = displayFiles.filter(f => selectedFiles.has(f.path)) || []
     let successCount = 0
     let errorCount = 0
 
@@ -825,7 +921,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
 
   // Clipboard operations
   const handleCopy = useCallback(() => {
-    const files = data?.files.filter(f => selectedFiles.has(f.path)) || []
+    const files = displayFiles.filter(f => selectedFiles.has(f.path)) || []
     if (files.length === 0 && selectedFile) {
       setClipboard({ files: [selectedFile], mode: 'copy' })
     } else if (files.length > 0) {
@@ -836,7 +932,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   }, [selectedFiles, selectedFile, data])
 
   const handleCut = useCallback(() => {
-    const files = data?.files.filter(f => selectedFiles.has(f.path)) || []
+    const files = displayFiles.filter(f => selectedFiles.has(f.path)) || []
     if (files.length === 0 && selectedFile) {
       setClipboard({ files: [selectedFile], mode: 'cut' })
     } else if (files.length > 0) {
@@ -905,7 +1001,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     e.stopPropagation()
     // If the file being dragged is selected, drag all selected files
     const files = selectedFiles.has(file.path)
-      ? data?.files.filter(f => selectedFiles.has(f.path)) || [file]
+      ? displayFiles.filter(f => selectedFiles.has(f.path)) || [file]
       : [file]
     setDraggedFiles(files)
     e.dataTransfer.effectAllowed = 'move'
@@ -1060,7 +1156,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     setSelectedFiles(newSelection)
     if (newSelection.size > 0) {
       const firstPath = Array.from(newSelection)[0]
-      const file = data?.files.find(f => f.path === firstPath)
+      const file = displayFiles.find(f => f.path === firstPath)
       if (file) setSelectedFile(file)
     }
   }, [isMarqueeSelecting, marqueeStart, data])
@@ -1208,7 +1304,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         return
       }
 
-      const files = data?.files || []
+      const files = displayFiles || []
       if (files.length === 0) return
 
       // Calculate grid columns for grid view navigation
@@ -1294,9 +1390,12 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
           }
           break
         case 'Escape':
-          setSelectedFile(null)
-          setSelectedFiles(new Set())
-          setFocusedIndex(-1)
+          // Don't handle ESC if any modal is open (modals handle their own ESC)
+          if (!viewingFile && !editingFile && !onlyOfficeConfig && !deleteTarget && !renameTarget && !showNewFileModal && !showCompressModal && !showDownloadModal) {
+            setSelectedFile(null)
+            setSelectedFiles(new Set())
+            setFocusedIndex(-1)
+          }
           break
         case 'a':
           if (e.metaKey || e.ctrlKey) {
@@ -1507,10 +1606,40 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   }, [sortBy])
 
   const formatDate = (date: string): string => {
-    return new Date(date).toLocaleDateString('ko-KR', {
+    const now = new Date()
+    const fileDate = new Date(date)
+    const diffMs = now.getTime() - fileDate.getTime()
+    const diffMinutes = Math.floor(diffMs / (1000 * 60))
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+
+    // Within 24 hours - show relative time
+    if (diffMs < 24 * 60 * 60 * 1000 && diffMs >= 0) {
+      if (diffMinutes < 1) {
+        return '방금 전'
+      } else if (diffMinutes < 60) {
+        return `${diffMinutes}분 전`
+      } else {
+        return `${diffHours}시간 전`
+      }
+    }
+
+    // Older than 24 hours - show date
+    return fileDate.toLocaleDateString('ko-KR', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
+    })
+  }
+
+  const getFullDateTime = (date: string): string => {
+    return new Date(date).toLocaleString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
     })
   }
 
@@ -1772,15 +1901,25 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         </div>
       )}
 
-      {data && data.files.length === 0 && (
+      {(data || isSpecialShareView) && displayFiles.length === 0 && !isLoadingFiles && (
         <div className="empty-state">
           <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
             <path d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H9L11 6H20C20.5304 6 21.0391 6.21071 21.4142 6.58579C21.7893 6.96086 22 7.46957 22 8V19Z" stroke="currentColor" strokeWidth="2"/>
           </svg>
-          {currentPath.startsWith('/shared-with-me') ? (
+          {isSharedWithMeView ? (
             <>
-              <h3>공유받은 파일이 없습니다</h3>
+              <h3>나에게 공유된 파일이 없습니다</h3>
               <p>다른 사용자가 파일을 공유하면 여기에 표시됩니다</p>
+            </>
+          ) : isSharedByMeView ? (
+            <>
+              <h3>다른 사용자에게 공유한 파일이 없습니다</h3>
+              <p>파일을 공유하면 여기에 표시됩니다</p>
+            </>
+          ) : isLinkSharesView ? (
+            <>
+              <h3>링크로 공유된 파일이 없습니다</h3>
+              <p>파일의 공유 링크를 생성하면 여기에 표시됩니다</p>
             </>
           ) : (
             <>
@@ -1808,22 +1947,34 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         </div>
       )}
 
-      {data && data.files.length > 0 && viewMode === 'list' && (
-        <div className="file-table">
+      {(data || isSpecialShareView) && displayFiles.length > 0 && viewMode === 'list' && (
+        <div className={`file-table ${isSpecialShareView ? 'share-view' : ''}`}>
           <div className="file-table-header">
             <div className="col-name sortable" onClick={() => handleSort('name')}>
               이름 {getSortIcon('name')}
             </div>
+            {isSharedWithMeView && (
+              <div className="col-share-info">공유자</div>
+            )}
+            {isSharedByMeView && (
+              <div className="col-share-info">공유 대상</div>
+            )}
+            {isLinkSharesView && (
+              <div className="col-share-options">공유 옵션</div>
+            )}
             <div className="col-size sortable" onClick={() => handleSort('size')}>
               크기 {getSortIcon('size')}
             </div>
             <div className="col-date sortable" onClick={() => handleSort('date')}>
-              수정일 {getSortIcon('date')}
+              {isSpecialShareView ? '공유일' : '수정일'} {getSortIcon('date')}
             </div>
+            {isSpecialShareView && (
+              <div className="col-unshare"></div>
+            )}
             <div className="col-actions"></div>
           </div>
           <div className="file-table-body">
-            {data.files.map((file, index) => (
+            {displayFiles.map((file, index) => (
               <div
                 key={file.path}
                 ref={(el) => { if (el) fileRowRefs.current.set(file.path, el); else fileRowRefs.current.delete(file.path); }}
@@ -1842,8 +1993,112 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
                   {getFileIcon(file)}
                   <span className="file-name">{file.name}</span>
                 </div>
+                {/* Shared with me - show who shared it */}
+                {isSharedWithMeView && (
+                  <div className="col-share-info">
+                    <span className="shared-with-user">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2"/>
+                        <path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="2"/>
+                      </svg>
+                      {(file as FileInfo & { sharedBy?: string }).sharedBy || '알 수 없음'}
+                    </span>
+                    <span className={`permission-tag ${(file as FileInfo & { permissionLevel?: number }).permissionLevel === 2 ? 'rw' : 'r'}`}>
+                      {(file as FileInfo & { permissionLevel?: number }).permissionLevel === 2 ? '읽기/쓰기' : '읽기 전용'}
+                    </span>
+                  </div>
+                )}
+                {/* Shared by me - show who it's shared with */}
+                {isSharedByMeView && (
+                  <div className="col-share-info">
+                    <span className="shared-with-user">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2"/>
+                        <path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="2"/>
+                      </svg>
+                      {(file as FileInfo & { sharedWith?: string }).sharedWith || '알 수 없음'}
+                    </span>
+                    <span className={`permission-tag ${(file as FileInfo & { permissionLevel?: number }).permissionLevel === 2 ? 'rw' : 'r'}`}>
+                      {(file as FileInfo & { permissionLevel?: number }).permissionLevel === 2 ? '읽기/쓰기' : '읽기 전용'}
+                    </span>
+                  </div>
+                )}
+                {/* Link shares - show share options */}
+                {isLinkSharesView && (
+                  <div className="col-share-options">
+                    <ShareOptionsDisplay file={file as SharedFileInfo} />
+                  </div>
+                )}
                 <div className="col-size">{file.isDir ? '-' : formatFileSize(file.size)}</div>
-                <div className="col-date">{formatDate(file.modTime)}</div>
+                <div className="col-date" title={getFullDateTime(file.modTime)}>{formatDate(file.modTime)}</div>
+                {/* Unshare button for share views */}
+                {isSharedByMeView && (
+                  <div className="col-unshare">
+                    <button
+                      className="unshare-btn"
+                      title="공유 해제"
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        const shareFile = file as FileInfo & { shareId?: number }
+                        if (shareFile.shareId) {
+                          try {
+                            await deleteFileShare(shareFile.shareId)
+                            queryClient.invalidateQueries({ queryKey: ['shared-by-me'] })
+                            setToasts(prev => [...prev, { id: Date.now().toString(), message: '공유가 해제되었습니다', type: 'success' }])
+                          } catch {
+                            setToasts(prev => [...prev, { id: Date.now().toString(), message: '공유 해제에 실패했습니다', type: 'error' }])
+                          }
+                        }
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                {isLinkSharesView && (
+                  <div className="col-unshare">
+                    <button
+                      className="copy-link-btn"
+                      title="링크 복사"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const linkFile = file as FileInfo & { linkToken?: string }
+                        if (linkFile.linkToken) {
+                          navigator.clipboard.writeText(`${window.location.origin}/s/${linkFile.linkToken}`)
+                          setToasts(prev => [...prev, { id: Date.now().toString(), message: '링크가 클립보드에 복사되었습니다', type: 'success' }])
+                        }
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="2"/>
+                        <path d="M5 15H4C2.89543 15 2 14.1046 2 13V4C2 2.89543 2.89543 2 4 2H13C14.1046 2 15 2.89543 15 4V5" stroke="currentColor" strokeWidth="2"/>
+                      </svg>
+                    </button>
+                    <button
+                      className="unshare-btn"
+                      title="링크 삭제"
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        const linkFile = file as FileInfo & { linkId?: string }
+                        if (linkFile.linkId) {
+                          try {
+                            await deleteShareLink(linkFile.linkId)
+                            queryClient.invalidateQueries({ queryKey: ['link-shares'] })
+                            setToasts(prev => [...prev, { id: Date.now().toString(), message: '링크가 삭제되었습니다', type: 'success' }])
+                          } catch {
+                            setToasts(prev => [...prev, { id: Date.now().toString(), message: '링크 삭제에 실패했습니다', type: 'error' }])
+                          }
+                        }
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      </svg>
+                    </button>
+                  </div>
+                )}
                 <div className="col-actions">
                   <button className="action-btn" onClick={(e) => { e.stopPropagation(); handleContextMenu(e, file) }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -1859,9 +2114,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         </div>
       )}
 
-      {data && data.files.length > 0 && viewMode === 'grid' && (
+      {(data || isSpecialShareView) && displayFiles.length > 0 && viewMode === 'grid' && (
         <div className="file-grid">
-          {data.files.map((file, index) => (
+          {displayFiles.map((file, index) => (
             <div
               key={file.path}
               ref={(el) => { if (el) fileRowRefs.current.set(file.path, el); else fileRowRefs.current.delete(file.path); }}
@@ -1997,9 +2252,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
                   </div>
                 ) : (
                   <div
-                    className={`metadata-value clickable ${!currentPath.startsWith('/shared-with-me') ? 'editable' : ''}`}
+                    className={`metadata-value clickable ${!isSpecialShareView ? 'editable' : ''}`}
                     onClick={() => {
-                      if (!currentPath.startsWith('/shared-with-me')) {
+                      if (!isSpecialShareView) {
                         setDescriptionInput(fileMetadata?.description || '')
                         setEditingDescription(true)
                       }
@@ -2017,12 +2272,12 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
                   {fileMetadata?.tags?.map(tag => (
                     <span key={tag} className="tag-chip">
                       #{tag}
-                      {!currentPath.startsWith('/shared-with-me') && (
+                      {!isSpecialShareView && (
                         <button className="tag-remove-btn" onClick={() => handleRemoveTag(tag)}>×</button>
                       )}
                     </span>
                   ))}
-                  {!currentPath.startsWith('/shared-with-me') && (
+                  {!isSpecialShareView && (
                     <div className="tag-add-inline">
                       <input
                         type="text"
@@ -2062,7 +2317,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
                 다운로드
               </button>
             )}
-            {!currentPath.startsWith('/shared-with-me') && (
+            {!isSpecialShareView && (
               <>
                 <button className="btn-detail-action" onClick={() => setShareTarget(selectedFile)}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -2096,14 +2351,21 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
 
       {contextMenu && (
         <div
+          ref={contextMenuRef}
           className="context-menu"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
+          style={{
+            top: contextMenuPosition?.y ?? contextMenu.y,
+            left: contextMenuPosition?.x ?? contextMenu.x,
+            visibility: contextMenuPosition ? 'visible' : 'hidden'
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           {contextMenu.type === 'background' ? (
-            currentPath.startsWith('/shared-with-me') ? (
+            isSpecialShareView ? (
               <div className="context-menu-item disabled">
-                공유받은 파일에서는 작업을 할 수 없습니다
+                {isSharedWithMeView ? '나에게 공유된 파일에서는 작업을 할 수 없습니다' :
+                 isSharedByMeView ? '다른사용자에 공유된 파일에서는 작업을 할 수 없습니다' :
+                 '링크로 공유된 파일에서는 작업을 할 수 없습니다'}
               </div>
             ) : (
             <>
@@ -2203,6 +2465,85 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
               </div>
             </>
             )
+          ) : isSpecialShareView ? (
+            <>
+              {/* Share view file context menu */}
+              <button className="context-menu-item" onClick={() => { onNavigate(contextMenu.file.path.substring(0, contextMenu.file.path.lastIndexOf('/'))); closeContextMenu(); }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H9L11 6H20C20.5304 6 21.0391 6.21071 21.4142 6.58579C21.7893 6.96086 22 7.46957 22 8V19Z" stroke="currentColor" strokeWidth="2"/>
+                </svg>
+                원본 위치로 이동
+              </button>
+              {!contextMenu.file.isDir && (
+                <button className="context-menu-item" onClick={() => handleDownload(contextMenu.file)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  다운로드
+                </button>
+              )}
+              {isLinkSharesView && (
+                <button className="context-menu-item" onClick={() => {
+                  const file = contextMenu.file as FileInfo & { linkToken?: string }
+                  if (file.linkToken) {
+                    navigator.clipboard.writeText(`${window.location.origin}/s/${file.linkToken}`)
+                    setToasts(prev => [...prev, { id: Date.now().toString(), message: '링크가 클립보드에 복사되었습니다', type: 'success' }])
+                  }
+                  closeContextMenu()
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M5 15H4C2.89543 15 2 14.1046 2 13V4C2 2.89543 2.89543 2 4 2H13C14.1046 2 15 2.89543 15 4V5" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                  링크 복사
+                </button>
+              )}
+              <div className="context-menu-divider" />
+              {isSharedByMeView && (
+                <button className="context-menu-item danger" onClick={async () => {
+                  const file = contextMenu.file as FileInfo & { shareId?: number }
+                  if (file.shareId) {
+                    try {
+                      await deleteFileShare(file.shareId)
+                      queryClient.invalidateQueries({ queryKey: ['shared-by-me'] })
+                      setToasts(prev => [...prev, { id: Date.now().toString(), message: '공유가 해제되었습니다', type: 'success' }])
+                    } catch (err) {
+                      setToasts(prev => [...prev, { id: Date.now().toString(), message: '공유 해제에 실패했습니다', type: 'error' }])
+                    }
+                  }
+                  closeContextMenu()
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M3 6H5H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M19 6V20C19 21.1 18.1 22 17 22H7C5.9 22 5 21.1 5 20V6" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                  공유 해제
+                </button>
+              )}
+              {isLinkSharesView && (
+                <button className="context-menu-item danger" onClick={async () => {
+                  const file = contextMenu.file as FileInfo & { linkId?: string }
+                  if (file.linkId) {
+                    try {
+                      await deleteShareLink(file.linkId)
+                      queryClient.invalidateQueries({ queryKey: ['link-shares'] })
+                      setToasts(prev => [...prev, { id: Date.now().toString(), message: '링크가 삭제되었습니다', type: 'success' }])
+                    } catch (err) {
+                      setToasts(prev => [...prev, { id: Date.now().toString(), message: '링크 삭제에 실패했습니다', type: 'error' }])
+                    }
+                  }
+                  closeContextMenu()
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M3 6H5H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M19 6V20C19 21.1 18.1 22 17 22H7C5.9 22 5 21.1 5 20V6" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                  링크 삭제
+                </button>
+              )}
+            </>
           ) : (
             <>
               {!contextMenu.file.isDir && isEditableFile(contextMenu.file) && (
@@ -2233,14 +2574,21 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
                   미리보기
                 </button>
               )}
+              {/* Download button - shows modal for multiple files */}
               {!contextMenu.file.isDir && (
-                <button className="context-menu-item" onClick={() => handleDownload(contextMenu.file)}>
+                <button className="context-menu-item" onClick={() => {
+                  if (contextMenu.selectedPaths.length > 1) {
+                    handleMultiDownload(contextMenu.selectedPaths)
+                  } else {
+                    handleDownload(contextMenu.file)
+                  }
+                }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                     <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
-                  다운로드
+                  {contextMenu.selectedPaths.length > 1 ? `${contextMenu.selectedPaths.length}개 다운로드` : '다운로드'}
                 </button>
               )}
               <button className="context-menu-item" onClick={() => handleRenameClick(contextMenu.file)}>
@@ -2312,6 +2660,18 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       {selectedFiles.size > 1 && (
         <div className="multi-select-bar" onClick={(e) => e.stopPropagation()}>
           <span className="select-count">{selectedFiles.size}개 선택됨</span>
+          <button className="multi-action-btn" onClick={(e) => {
+            e.stopPropagation()
+            const paths = Array.from(selectedFiles)
+            if (paths.length > 0) {
+              handleMultiDownload(paths)
+            }
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            다운로드
+          </button>
           <button className="multi-action-btn" onClick={(e) => {
             e.stopPropagation()
             const paths = Array.from(selectedFiles)
@@ -2422,8 +2782,22 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
           fileName={viewingFile.name}
           mimeType={viewingFile.mimeType}
           onClose={() => setViewingFile(null)}
-          siblingFiles={data?.files}
+          siblingFiles={displayFiles}
           onNavigate={(file) => setViewingFile(file)}
+        />
+      )}
+
+      {/* ZIP Viewer Modal */}
+      {zipViewingFile && (
+        <ZipViewer
+          filePath={zipViewingFile.path}
+          fileName={zipViewingFile.name}
+          onClose={() => setZipViewingFile(null)}
+          onExtract={() => {
+            queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+            const id = Date.now().toString()
+            setToasts((prev) => [...prev, { id, message: '압축이 해제되었습니다', type: 'success' }])
+          }}
         />
       )}
 
@@ -2519,6 +2893,69 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
               <button className="btn-cancel" onClick={() => setShowCompressModal(false)}>취소</button>
               <button className="btn-confirm" onClick={handleCompressConfirm} disabled={!compressFileName.trim()}>
                 압축
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Download Options Modal */}
+      {showDownloadModal && (
+        <div className="modal-overlay" onClick={() => !downloadingAsZip && setShowDownloadModal(false)}>
+          <div className="modal download-options-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>다운로드 방식 선택</h3>
+              <button className="modal-close" onClick={() => !downloadingAsZip && setShowDownloadModal(false)} disabled={downloadingAsZip}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="download-info">
+                {pathsToDownload.length}개 파일을 다운로드합니다
+              </p>
+              <div className="download-options">
+                <button
+                  className="download-option-btn"
+                  onClick={handleDownloadAsZip}
+                  disabled={downloadingAsZip}
+                >
+                  <div className="download-option-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 8v13H3V8" />
+                      <path d="M23 3H1v5h22V3z" />
+                      <path d="M10 12h4" />
+                    </svg>
+                  </div>
+                  <div className="download-option-text">
+                    <strong>ZIP으로 압축해서 다운로드</strong>
+                    <span>모든 파일을 하나의 ZIP 파일로 다운로드</span>
+                  </div>
+                  {downloadingAsZip && <span className="spinner small" />}
+                </button>
+                <button
+                  className="download-option-btn"
+                  onClick={handleDownloadIndividually}
+                  disabled={downloadingAsZip}
+                >
+                  <div className="download-option-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                      <path d="M7 10l5 5 5-5" />
+                      <path d="M12 15V3" />
+                    </svg>
+                  </div>
+                  <div className="download-option-text">
+                    <strong>개별 파일로 다운로드</strong>
+                    <span>각 파일을 따로 다운로드 (폴더 제외)</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={() => setShowDownloadModal(false)} disabled={downloadingAsZip}>
+                취소
               </button>
             </div>
           </div>

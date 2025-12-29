@@ -71,6 +71,13 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 		})
 	}
 
+	// Cannot create folders directly under /shared/ (must use admin interface)
+	if parentPath == "/shared" || parentPath == "/shared/" {
+		return c.JSON(http.StatusForbidden, map[string]string{
+			"error": "공유 드라이브는 관리자 설정에서만 생성할 수 있습니다",
+		})
+	}
+
 	// Check permissions for home folder
 	if storageType == StorageHome && claims == nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
@@ -139,10 +146,22 @@ func (h *Handler) DeleteFolder(c echo.Context) error {
 
 	// Cannot delete root storage types
 	virtualPath := "/" + requestPath
-	if storageType == "root" || displayPath == "/home" || displayPath == "/shared" || displayPath == "/shared" {
+	if storageType == "root" || displayPath == "/home" || displayPath == "/shared" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Cannot delete root folders",
 		})
+	}
+
+	// Protect shared drive root folders (e.g., /shared/111 but not /shared/111/subfolder)
+	if storageType == StorageShared {
+		// Count path segments after /shared/
+		sharedParts := strings.Split(strings.TrimPrefix(virtualPath, "/shared/"), "/")
+		// If only one part (the folder name itself) or empty after trim, it's the root
+		if len(sharedParts) == 1 && sharedParts[0] != "" {
+			return c.JSON(http.StatusForbidden, map[string]string{
+				"error": "공유 드라이브 폴더는 관리자 설정에서만 삭제할 수 있습니다",
+			})
+		}
 	}
 
 	// Check permissions for home folder

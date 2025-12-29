@@ -90,6 +90,35 @@ const apiProxy = createProxyMiddleware({
   }
 });
 
+// WebDAV proxy - handles all WebDAV methods
+// Note: Express strips the mount path, so we need to add it back
+const webdavProxy = createProxyMiddleware({
+  target: API_URL,
+  changeOrigin: true,
+  pathRewrite: (path, req) => {
+    // Ensure path always starts with /webdav/
+    let targetPath = req.originalUrl;
+    if (targetPath === '/webdav') {
+      targetPath = '/webdav/';
+    }
+    return targetPath;
+  },
+  on: {
+    proxyReq: (proxyReq, req, res) => {
+      const host = req.headers.host || 'localhost:3000';
+      proxyReq.setHeader('X-Forwarded-Host', host);
+      proxyReq.setHeader('X-Forwarded-Proto', 'http');
+      console.log(`[WebDAV] ${req.method} ${req.originalUrl} -> ${proxyReq.path}`);
+    },
+    error: (err, req, res) => {
+      console.error('[WebDAV] Error:', err.message);
+      if (!res.headersSent) {
+        res.status(500).send('WebDAV proxy error');
+      }
+    }
+  }
+});
+
 // OnlyOffice proxy (optional service) - with WebSocket support
 const onlyofficeProxy = createProxyMiddleware({
   target: ONLYOFFICE_URL,
@@ -143,6 +172,10 @@ app.use('/api/upload', tusProxy);
 // Route WebSocket connections to WS proxy
 app.use('/api/ws', wsProxy);
 
+// Route WebDAV requests - use all() for exact path matching
+app.all('/webdav', webdavProxy);
+app.use('/webdav/', webdavProxy);
+
 // Route other /api and /health paths to general proxy
 app.use((req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/health')) {
@@ -182,4 +215,5 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API proxy: ${API_URL}`);
   console.log('WebSocket proxy enabled');
+  console.log('WebDAV available at /webdav');
 });

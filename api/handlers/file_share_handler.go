@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -93,16 +94,13 @@ func (h *FileShareHandler) CreateFileShare(c echo.Context) error {
 	}
 
 	// Verify owner has access to the file (must be in their home folder or they have write access)
-	// For simplicity, we just check if the path starts with /home/{username}
-	if !strings.HasPrefix(req.ItemPath, "/home/"+claims.Username) && req.ItemPath != "/home/"+claims.Username {
-		// Check if user has write access in shared
-		if strings.HasPrefix(req.ItemPath, "/shared/") {
-			// For shared drives, check if user has write permission
-			// Note: For now, we'll allow sharing from shared drives if user has any access
-			// A more strict implementation would require write access
-		} else {
-			return c.JSON(http.StatusForbidden, map[string]string{"error": "You can only share files from your home folder or shared drives"})
-		}
+	// Virtual paths use /home/... (without username) for current user's home directory
+	// Also accept /home/{username}/... format for backwards compatibility
+	isHomeFolder := strings.HasPrefix(req.ItemPath, "/home/") || req.ItemPath == "/home"
+	isSharedFolder := strings.HasPrefix(req.ItemPath, "/shared/")
+
+	if !isHomeFolder && !isSharedFolder {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "You can only share files from your home folder or shared drives"})
 	}
 
 	// Insert the share
@@ -310,8 +308,18 @@ func (h *FileShareHandler) GetFileShareInfo(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
 	}
 
-	itemPath := "/" + c.Param("*")
-	if itemPath == "/" {
+	paramPath := c.Param("*")
+	// URL-decode the path parameter
+	decodedPath, err := url.QueryUnescape(paramPath)
+	if err != nil {
+		decodedPath = paramPath
+	}
+	// Handle paths - ensure it starts with /
+	itemPath := decodedPath
+	if !strings.HasPrefix(itemPath, "/") {
+		itemPath = "/" + decodedPath
+	}
+	if itemPath == "/" || itemPath == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Item path required"})
 	}
 

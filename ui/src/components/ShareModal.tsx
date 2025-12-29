@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   createFileShare,
   getFileShareInfo,
@@ -22,6 +23,7 @@ interface ShareModalProps {
 }
 
 function ShareModal({ isOpen, onClose, itemPath, itemName, isFolder }: ShareModalProps) {
+  const queryClient = useQueryClient()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -126,6 +128,8 @@ function ShareModal({ isOpen, onClose, itemPath, itemName, isFolder }: ShareModa
       setSearchQuery('')
       setMessage('')
       loadShares()
+      // Invalidate shared-by-me query for real-time update
+      queryClient.invalidateQueries({ queryKey: ['shared-by-me'] })
     } catch (err) {
       setError(err instanceof Error ? err.message : '공유에 실패했습니다')
     } finally {
@@ -147,6 +151,7 @@ function ShareModal({ isOpen, onClose, itemPath, itemName, isFolder }: ShareModa
     try {
       await deleteFileShare(shareId)
       loadShares()
+      queryClient.invalidateQueries({ queryKey: ['shared-by-me'] })
     } catch (err) {
       setError(err instanceof Error ? err.message : '공유 취소에 실패했습니다')
     }
@@ -155,8 +160,8 @@ function ShareModal({ isOpen, onClose, itemPath, itemName, isFolder }: ShareModa
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="share-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="share-modal" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>
             {isFolder ? '📁' : '📄'} {itemName} 공유

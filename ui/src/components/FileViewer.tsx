@@ -35,6 +35,14 @@ function getVideoMimeType(fileName: string): string {
   return mimeTypes[ext] || 'video/mp4'
 }
 
+// Check if video format is playable in browser
+function isBrowserPlayableVideo(fileName: string): boolean {
+  const ext = fileName.split('.').pop()?.toLowerCase() || ''
+  // Browsers natively support: MP4 (H.264), WebM (VP8/VP9), OGG
+  const playableExts = ['mp4', 'webm', 'ogg', 'm4v']
+  return playableExts.includes(ext)
+}
+
 // Get MIME type for audio files
 function getAudioMimeType(fileName: string): string {
   const ext = fileName.split('.').pop()?.toLowerCase() || ''
@@ -361,7 +369,7 @@ function FileViewer({ filePath, fileName, mimeType, onClose, siblingFiles, onNav
             </div>
           )}
 
-          {!loading && !error && viewerType === 'video' && (
+          {!loading && !error && viewerType === 'video' && isBrowserPlayableVideo(fileName) && (
             <div className="video-container">
               <video
                 controls
@@ -382,6 +390,38 @@ function FileViewer({ filePath, fileName, mimeType, onClose, siblingFiles, onNav
                 )}
                 브라우저가 비디오 재생을 지원하지 않습니다.
               </video>
+            </div>
+          )}
+
+          {!loading && !error && viewerType === 'video' && !isBrowserPlayableVideo(fileName) && (
+            <div className="unsupported-video-container">
+              <div className="unsupported-video-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="M10 9l5 3-5 3V9z" fill="currentColor" />
+                </svg>
+              </div>
+              <h3 className="unsupported-video-title">{fileName}</h3>
+              <p className="unsupported-video-message">
+                이 비디오 형식({fileName.split('.').pop()?.toUpperCase()})은 브라우저에서 직접 재생할 수 없습니다.
+              </p>
+              <p className="unsupported-video-hint">
+                MP4, WebM, OGG 형식만 브라우저에서 재생 가능합니다.
+              </p>
+              <button
+                className="download-video-btn"
+                onClick={() => {
+                  const link = document.createElement('a')
+                  link.href = streamingUrl
+                  link.download = fileName
+                  link.click()
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                파일 다운로드
+              </button>
             </div>
           )}
 

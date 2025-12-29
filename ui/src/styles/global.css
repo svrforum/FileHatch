@@ -22,6 +22,7 @@
   --bg-elevated: #FFFFFF;
   --bg-grouped: #F2F2F7;
   --bg-overlay: rgba(0, 0, 0, 0.4);
+  --bg-hover: rgba(0, 0, 0, 0.04);
 
   /* Text - High contrast for readability */
   --text-primary: #1D1D1F;
@@ -84,6 +85,61 @@
   --line-height-tight: 1.2;
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.7;
+}
+
+/* Dark Mode */
+[data-theme='dark'] {
+  /* Primary Colors - slightly brighter for dark mode */
+  --color-primary: #4A9CFF;
+  --color-primary-hover: #3182F6;
+  --color-primary-light: rgba(74, 156, 255, 0.15);
+  --color-primary-gradient: linear-gradient(135deg, #4A9CFF 0%, #3182F6 100%);
+  --color-primary-dark: #1B64DA;
+
+  /* Status Colors */
+  --color-success: #34D399;
+  --color-success-light: rgba(52, 211, 153, 0.15);
+  --color-error: #F87171;
+  --color-error-light: rgba(248, 113, 113, 0.15);
+  --color-warning: #FBBF24;
+  --color-warning-light: rgba(251, 191, 36, 0.15);
+  --color-info: #60A5FA;
+  --color-danger: #F87171;
+
+  /* Background - Dark layering */
+  --bg-primary: #1C1C1E;
+  --bg-secondary: #2C2C2E;
+  --bg-tertiary: #3A3A3C;
+  --bg-elevated: #2C2C2E;
+  --bg-grouped: #1C1C1E;
+  --bg-overlay: rgba(0, 0, 0, 0.6);
+  --bg-hover: rgba(255, 255, 255, 0.08);
+
+  /* Text - Adjusted for dark background */
+  --text-primary: #F5F5F7;
+  --text-secondary: #A1A1A6;
+  --text-tertiary: #6E6E73;
+  --text-quaternary: #48484A;
+  --text-on-primary: #FFFFFF;
+
+  /* Border - Subtle on dark */
+  --border-light: #3A3A3C;
+  --border-medium: #48484A;
+  --border-dark: #636366;
+
+  /* Shadow - More subtle in dark mode */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+  --shadow-primary: 0 4px 14px rgba(74, 156, 255, 0.25);
+  --shadow-primary-lg: 0 8px 24px rgba(74, 156, 255, 0.35);
+
+  /* Scrollbar */
+  --scrollbar-track: #2C2C2E;
+  --scrollbar-thumb: #48484A;
+  --scrollbar-thumb-hover: #636366;
 }
 
 /* Reset */

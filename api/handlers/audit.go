@@ -188,6 +188,14 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 		}
 		if details != nil {
 			log.Details = details
+			// Check if this is a share upload and set display name accordingly
+			var detailsMap map[string]interface{}
+			if err := json.Unmarshal(details, &detailsMap); err == nil {
+				if source, ok := detailsMap["source"].(string); ok && source == "share_upload" {
+					displayName := "업로드 링크"
+					log.ActorUsername = &displayName
+				}
+			}
 		}
 
 		logs = append(logs, log)
@@ -261,6 +269,14 @@ func (h *AuditHandler) GetResourceHistory(c echo.Context) error {
 		}
 		if details != nil {
 			log.Details = details
+			// Check if this is a share upload and set display name accordingly
+			var detailsMap map[string]interface{}
+			if err := json.Unmarshal(details, &detailsMap); err == nil {
+				if source, ok := detailsMap["source"].(string); ok && source == "share_upload" {
+					displayName := "업로드 링크"
+					log.ActorUsername = &displayName
+				}
+			}
 		}
 
 		logs = append(logs, log)
@@ -405,4 +421,91 @@ func (h *AuditHandler) fetchContainerLogs(container string, tail int, level stri
 	}
 
 	return logs
+}
+
+// RecentFile represents a recently accessed file
+type RecentFile struct {
+	Path       string    `json:"path"`
+	Name       string    `json:"name"`
+	EventType  string    `json:"eventType"`
+	Timestamp  time.Time `json:"timestamp"`
+	IsDir      bool      `json:"isDir"`
+}
+
+// GetRecentFiles returns recently accessed files for the current user
+func (h *AuditHandler) GetRecentFiles(c echo.Context) error {
+	// Get user claims from context
+	claims, ok := c.Get("user").(*JWTClaims)
+	if !ok || claims == nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	}
+
+	userIDStr := claims.UserID
+	limitStr := c.QueryParam("limit")
+	limit := 20
+	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 50 {
+		limit = l
+	}
+
+	// Query recent file events for this user
+	// Get distinct files by path, ordered by most recent
+	rows, err := h.db.Query(`
+		WITH ranked_files AS (
+			SELECT
+				target_resource,
+				event_type,
+				ts,
+				ROW_NUMBER() OVER (PARTITION BY target_resource ORDER BY ts DESC) as rn
+			FROM audit_logs
+			WHERE actor_id = $1
+			  AND event_type IN ('file.upload', 'file.download', 'file.view', 'file.edit', 'file.copy', 'file.move', 'folder.create', 'trash.restore')
+			  AND target_resource IS NOT NULL
+			  AND target_resource != ''
+		)
+		SELECT target_resource, event_type, ts
+		FROM ranked_files
+		WHERE rn = 1
+		ORDER BY ts DESC
+		LIMIT $2
+	`, userIDStr, limit)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+	}
+	defer rows.Close()
+
+	files := []RecentFile{}
+	seen := make(map[string]bool)
+
+	for rows.Next() {
+		var path, eventType string
+		var ts time.Time
+		if err := rows.Scan(&path, &eventType, &ts); err != nil {
+			continue
+		}
+
+		// Skip duplicates and empty paths
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+
+		// Extract filename from path
+		name := path
+		if idx := strings.LastIndex(path, "/"); idx >= 0 {
+			name = path[idx+1:]
+		}
+
+		// Determine if it's a directory based on event type
+		isDir := eventType == "folder.create"
+
+		files = append(files, RecentFile{
+			Path:      path,
+			Name:      name,
+			EventType: eventType,
+			Timestamp: ts,
+			IsDir:     isDir,
+		})
+	}
+
+	return c.JSON(http.StatusOK, files)
 }

@@ -133,22 +133,31 @@
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   cursor: pointer;
   flex: 1;
 }
 
 .checkbox-label input[type="checkbox"] {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  border: 2px solid var(--border-default);
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  border-radius: 5px;
+  border: 2px solid #adb5bd;
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  background: var(--bg-primary);
-  transition: all 0.2s ease;
+  background: #fff;
+  transition: all 0.15s ease;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkbox-label input[type="checkbox"]:hover {
+  border-color: #228be6;
 }
 
 .checkbox-label input[type="checkbox"]:checked {
@@ -158,20 +167,20 @@
 
 .checkbox-label input[type="checkbox"]:checked::after {
   content: '';
-  position: absolute;
-  left: 6px;
-  top: 3px;
-  width: 6px;
-  height: 10px;
+  display: block;
+  width: 5px;
+  height: 9px;
   border: solid white;
-  border-width: 0 2px 2px 0;
+  border-width: 0 2.5px 2.5px 0;
   transform: rotate(45deg);
+  margin-top: -2px;
 }
 
 .checkbox-label span {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text-primary);
   font-weight: 500;
+  line-height: 1.4;
 }
 
 .option-input {
@@ -325,8 +334,50 @@
 .link-item-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 12px;
+}
+
+.link-url-display {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.link-url-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  outline: none;
+}
+
+.link-url-input:focus {
+  border-color: #228be6;
+}
+
+.link-copy-btn {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  background: #228be6;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.link-copy-btn:hover {
+  background: #1c7ed6;
 }
 
 .link-token {
@@ -433,6 +484,84 @@
 .modal-close-btn svg {
   width: 16px;
   height: 16px;
+}
+
+/* Share Type Toggle */
+.share-type-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  background: var(--bg-secondary);
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.share-type-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.share-type-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.share-type-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.share-type-btn.active {
+  color: white;
+  background: linear-gradient(135deg, #228be6 0%, #1c7ed6 100%);
+  box-shadow: 0 2px 8px rgba(34, 139, 230, 0.3);
+}
+
+/* Upload Options Divider */
+.upload-options-divider {
+  display: flex;
+  align-items: center;
+  margin: 16px 0;
+  gap: 12px;
+}
+
+.upload-options-divider::before,
+.upload-options-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-light);
+}
+
+.upload-options-divider span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Upload link badge */
+.link-meta-badge.upload {
+  background: rgba(34, 139, 230, 0.1);
+  color: #228be6;
+}
+
+/* Upload link item styling */
+.link-item.upload-link {
+  border-left: 3px solid #228be6;
 }
 
 /* Responsive */

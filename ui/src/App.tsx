@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, Suspense, lazy } from 'react'
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from './stores/authStore'
 import Header from './components/Header'
@@ -13,6 +13,7 @@ import DuplicateModal from './components/DuplicateModal'
 import UserProfile from './components/UserProfile'
 import LoginPage from './components/LoginPage'
 import ShareAccessPage from './components/ShareAccessPage'
+import UploadShareAccessPage from './components/UploadShareAccessPage'
 import FileListSkeleton from './components/FileListSkeleton'
 import ErrorBoundary from './components/ErrorBoundary'
 import './styles/app.css'
@@ -23,6 +24,7 @@ const AdminSettings = lazy(() => import('./components/AdminSettings'))
 const AdminSSOSettings = lazy(() => import('./components/AdminSSOSettings'))
 const AdminLogs = lazy(() => import('./components/AdminLogs'))
 const AdminSharedFolders = lazy(() => import('./components/AdminSharedFolders'))
+const MyActivity = lazy(() => import('./components/MyActivity'))
 
 // Admin loading skeleton
 function AdminSkeleton() {
@@ -31,6 +33,31 @@ function AdminSkeleton() {
       <div style={{ height: '32px', width: '200px', background: '#e0e0e0', borderRadius: '4px', animation: 'pulse 1.5s infinite' }} />
       <div style={{ height: '200px', background: '#f5f5f5', borderRadius: '8px', animation: 'pulse 1.5s infinite' }} />
     </div>
+  )
+}
+
+// Wrapper component for shared drive routes
+interface SharedDriveWrapperProps {
+  onNavigate: (path: string) => void
+  onUploadClick: () => void
+  onNewFolderClick: () => void
+  highlightedFilePath: string | null
+  onClearHighlight: () => void
+}
+
+function SharedDriveWrapper({ onNavigate, onUploadClick, onNewFolderClick, highlightedFilePath, onClearHighlight }: SharedDriveWrapperProps) {
+  const { folderName, '*': subPath } = useParams()
+  const currentPath = subPath ? `/shared/${folderName}/${subPath}` : `/shared/${folderName}`
+
+  return (
+    <FileList
+      currentPath={currentPath}
+      onNavigate={onNavigate}
+      onUploadClick={onUploadClick}
+      onNewFolderClick={onNewFolderClick}
+      highlightedFilePath={highlightedFilePath}
+      onClearHighlight={onClearHighlight}
+    />
   )
 }
 
@@ -69,6 +96,11 @@ function App() {
     return <ShareAccessPage />
   }
 
+  // Handle upload share access page (public route, no auth required)
+  if (location.pathname.startsWith('/u/')) {
+    return <UploadShareAccessPage />
+  }
+
   // Show login page if not authenticated
   if (!token) {
     return <LoginPage />
@@ -86,7 +118,16 @@ function App() {
   const handleNavigate = useCallback((path: string) => {
     setCurrentPath(path)
     setHighlightedFilePath(null)
-    navigate('/files')
+    // Special share views have their own routes
+    if (path === '/shared-with-me' || path === '/shared-by-me' || path === '/link-shares') {
+      navigate(path)
+    } else if (path.startsWith('/shared/')) {
+      // Shared drive paths: /shared/{folderName}/... -> /shared-drive/{folderName}/...
+      const sharedPath = path.substring(8) // Remove '/shared/'
+      navigate(`/shared-drive/${sharedPath}`)
+    } else {
+      navigate('/files')
+    }
   }, [navigate])
 
   const handleFileSelect = useCallback((filePath: string, parentPath: string) => {
@@ -148,8 +189,61 @@ function App() {
                   onClearHighlight={() => setHighlightedFilePath(null)}
                 />
               } />
+              <Route path="/shared-with-me" element={
+                <FileList
+                  currentPath="/shared-with-me"
+                  onNavigate={handleNavigate}
+                  onUploadClick={() => setUploadModalOpen(true)}
+                  onNewFolderClick={() => setFolderModalOpen(true)}
+                  highlightedFilePath={highlightedFilePath}
+                  onClearHighlight={() => setHighlightedFilePath(null)}
+                />
+              } />
+              <Route path="/shared-by-me" element={
+                <FileList
+                  currentPath="/shared-by-me"
+                  onNavigate={handleNavigate}
+                  onUploadClick={() => setUploadModalOpen(true)}
+                  onNewFolderClick={() => setFolderModalOpen(true)}
+                  highlightedFilePath={highlightedFilePath}
+                  onClearHighlight={() => setHighlightedFilePath(null)}
+                />
+              } />
+              <Route path="/link-shares" element={
+                <FileList
+                  currentPath="/link-shares"
+                  onNavigate={handleNavigate}
+                  onUploadClick={() => setUploadModalOpen(true)}
+                  onNewFolderClick={() => setFolderModalOpen(true)}
+                  highlightedFilePath={highlightedFilePath}
+                  onClearHighlight={() => setHighlightedFilePath(null)}
+                />
+              } />
+              <Route path="/shared-drive/:folderName/*" element={
+                <SharedDriveWrapper
+                  onNavigate={handleNavigate}
+                  onUploadClick={() => setUploadModalOpen(true)}
+                  onNewFolderClick={() => setFolderModalOpen(true)}
+                  highlightedFilePath={highlightedFilePath}
+                  onClearHighlight={() => setHighlightedFilePath(null)}
+                />
+              } />
+              <Route path="/shared-drive/:folderName" element={
+                <SharedDriveWrapper
+                  onNavigate={handleNavigate}
+                  onUploadClick={() => setUploadModalOpen(true)}
+                  onNewFolderClick={() => setFolderModalOpen(true)}
+                  highlightedFilePath={highlightedFilePath}
+                  onClearHighlight={() => setHighlightedFilePath(null)}
+                />
+              } />
               <Route path="/trash" element={
                 <Trash onNavigate={handleNavigate} />
+              } />
+              <Route path="/my-activity" element={
+                <Suspense fallback={<FileListSkeleton />}>
+                  <MyActivity onNavigate={handleNavigate} />
+                </Suspense>
               } />
               <Route path="/scvadmin/users" element={
                 <Suspense fallback={<AdminSkeleton />}>

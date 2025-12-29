@@ -92,7 +92,14 @@ func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPR
 	}
 
 	if destPath == "" {
-		destPath = "/shared"
+		destPath = "/home" // Default to home folder instead of shared
+	}
+
+	// Prevent uploads directly to /shared/ root (must upload inside a shared folder)
+	if destPath == "/shared" || destPath == "/shared/" {
+		resp.StatusCode = 403
+		resp.Body = `{"error":"공유 드라이브 루트에는 파일을 업로드할 수 없습니다"}`
+		return resp, changes, tusd.ErrUploadRejectedByServer
 	}
 
 	// Validate path security
@@ -319,7 +326,7 @@ func (h *UploadHandler) handleCompletedUploads() {
 		overwrite := event.Upload.MetaData["overwrite"] == "true"
 
 		if destPath == "" {
-			destPath = "/shared" // Default to shared folder
+			destPath = "/home" // Default to home folder
 		}
 		if filename == "" {
 			filename = event.Upload.ID

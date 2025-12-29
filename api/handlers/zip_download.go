@@ -163,6 +163,90 @@ func zipAddFile(zipWriter *zip.Writer, filePath, zipPath string) error {
 	return err
 }
 
+// ZipFileEntry represents a file entry in a ZIP archive
+type ZipFileEntry struct {
+	Name         string `json:"name"`
+	Path         string `json:"path"`
+	Size         int64  `json:"size"`
+	CompressedSize int64  `json:"compressedSize"`
+	IsDir        bool   `json:"isDir"`
+	ModTime      string `json:"modTime"`
+}
+
+// ZipPreviewResponse represents the response for ZIP preview
+type ZipPreviewResponse struct {
+	FileName    string         `json:"fileName"`
+	TotalFiles  int            `json:"totalFiles"`
+	TotalSize   int64          `json:"totalSize"`
+	Files       []ZipFileEntry `json:"files"`
+}
+
+// PreviewZip returns the list of files inside a ZIP archive
+func (h *Handler) PreviewZip(c echo.Context) error {
+	requestPath := c.Param("*")
+	if requestPath == "" {
+		return RespondError(c, ErrMissingParameter("path"))
+	}
+
+	claims := GetClaims(c)
+
+	realPath, _, _, err := h.resolvePath("/"+requestPath, claims)
+	if err != nil {
+		return RespondError(c, ErrInvalidPath(err.Error()))
+	}
+
+	// Check if file exists and is a ZIP
+	info, err := os.Stat(realPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return RespondError(c, ErrNotFound("File"))
+		}
+		return RespondError(c, ErrOperationFailed("access file", err))
+	}
+
+	if info.IsDir() {
+		return RespondError(c, ErrBadRequest("Path is a directory, not a ZIP file"))
+	}
+
+	ext := strings.ToLower(filepath.Ext(realPath))
+	if ext != ".zip" {
+		return RespondError(c, ErrBadRequest("File is not a ZIP archive"))
+	}
+
+	// Open ZIP file
+	reader, err := zip.OpenReader(realPath)
+	if err != nil {
+		return RespondError(c, ErrOperationFailed("open ZIP file", err))
+	}
+	defer reader.Close()
+
+	// Build file list
+	files := make([]ZipFileEntry, 0, len(reader.File))
+	var totalSize int64
+
+	for _, f := range reader.File {
+		entry := ZipFileEntry{
+			Name:           filepath.Base(f.Name),
+			Path:           f.Name,
+			Size:           int64(f.UncompressedSize64),
+			CompressedSize: int64(f.CompressedSize64),
+			IsDir:          f.FileInfo().IsDir(),
+			ModTime:        f.Modified.Format(time.RFC3339),
+		}
+		files = append(files, entry)
+		if !entry.IsDir {
+			totalSize += entry.Size
+		}
+	}
+
+	return c.JSON(http.StatusOK, ZipPreviewResponse{
+		FileName:   filepath.Base(realPath),
+		TotalFiles: len(files),
+		TotalSize:  totalSize,
+		Files:      files,
+	})
+}
+
 // DownloadFolderAsZip handles downloading a single folder as ZIP
 func (h *Handler) DownloadFolderAsZip(c echo.Context) error {
 	requestPath := c.Param("*")

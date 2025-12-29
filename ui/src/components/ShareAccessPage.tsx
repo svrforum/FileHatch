@@ -14,7 +14,7 @@ interface ShareInfo {
   requiresLogin?: boolean
 }
 
-type MediaType = 'video' | 'image' | 'audio' | 'none'
+type MediaType = 'video' | 'image' | 'audio' | 'text' | 'none'
 
 function ShareAccessPage() {
   const navigate = useNavigate()
@@ -30,6 +30,8 @@ function ShareAccessPage() {
   const [needsPassword, setNeedsPassword] = useState(false)
   const [needsLogin, setNeedsLogin] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+  const [textContent, setTextContent] = useState<string | null>(null)
+  const [loadingText, setLoadingText] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const fetchShareInfo = useCallback(async (pwd?: string) => {
@@ -123,14 +125,25 @@ function ShareAccessPage() {
   // Detect media type from filename
   const getMediaType = (filename: string): MediaType => {
     const ext = filename.split('.').pop()?.toLowerCase() || ''
+    const name = filename.toLowerCase()
 
     const videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'm4v']
     const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico']
     const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a']
+    const textExts = [
+      'txt', 'md', 'markdown', 'json', 'xml', 'yaml', 'yml', 'toml',
+      'js', 'jsx', 'ts', 'tsx', 'html', 'htm', 'css', 'scss', 'less',
+      'py', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'php', 'rb',
+      'sh', 'bash', 'zsh', 'sql', 'log', 'ini', 'conf', 'cfg', 'env',
+      'dockerfile', 'makefile', 'gitignore', 'editorconfig'
+    ]
+    // Special files without extension
+    const specialTextFiles = ['dockerfile', 'makefile', '.gitignore', '.editorconfig', '.env']
 
     if (videoExts.includes(ext)) return 'video'
     if (imageExts.includes(ext)) return 'image'
     if (audioExts.includes(ext)) return 'audio'
+    if (textExts.includes(ext) || specialTextFiles.includes(name)) return 'text'
     return 'none'
   }
 
@@ -174,6 +187,16 @@ function ShareAccessPage() {
       )
     }
 
+    if (mediaType === 'text') {
+      return (
+        <svg className="share-file-icon text" viewBox="0 0 24 24" fill="none">
+          <path d="M14 2H6C4.89543 2 4 2.89543 4 4V20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V8L14 2Z" fill="currentColor"/>
+          <path d="M14 2V8H20" stroke="white" strokeWidth="1.5"/>
+          <path d="M8 13H16M8 17H13" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+      )
+    }
+
     return (
       <svg className="share-file-icon file" viewBox="0 0 24 24" fill="none">
         <path d="M14 2H6C4.89543 2 4 2.89543 4 4V20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V8L14 2Z" fill="currentColor"/>
@@ -182,12 +205,31 @@ function ShareAccessPage() {
     )
   }
 
-  const handlePreview = () => {
+  const handlePreview = async () => {
     setShowPreview(true)
+
+    // Load text content if it's a text file
+    if (shareInfo && getMediaType(shareInfo.name) === 'text') {
+      setLoadingText(true)
+      try {
+        const response = await fetch(getDownloadUrl())
+        if (response.ok) {
+          const text = await response.text()
+          setTextContent(text)
+        } else {
+          setTextContent('파일을 불러올 수 없습니다.')
+        }
+      } catch {
+        setTextContent('파일을 불러오는 중 오류가 발생했습니다.')
+      } finally {
+        setLoadingText(false)
+      }
+    }
   }
 
   const handleClosePreview = () => {
     setShowPreview(false)
+    setTextContent(null)
     if (videoRef.current) {
       videoRef.current.pause()
     }
@@ -331,6 +373,11 @@ function ShareAccessPage() {
                           <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
                           <circle cx="12" cy="12" r="3" fill="currentColor"/>
                         </>
+                      ) : mediaType === 'text' ? (
+                        <>
+                          <path d="M14 2H6C4.89543 2 4 2.89543 4 4V20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V8L14 2Z" stroke="currentColor" strokeWidth="2"/>
+                          <path d="M8 13H16M8 17H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                        </>
                       ) : (
                         <>
                           <path d="M9 18V5L21 3V16" stroke="currentColor" strokeWidth="2"/>
@@ -339,7 +386,7 @@ function ShareAccessPage() {
                         </>
                       )}
                     </svg>
-                    {mediaType === 'video' ? '재생' : mediaType === 'image' ? '보기' : '듣기'}
+                    {mediaType === 'video' ? '재생' : mediaType === 'image' ? '보기' : mediaType === 'text' ? '보기' : '듣기'}
                   </button>
                 )}
                 <a
@@ -420,6 +467,18 @@ function ShareAccessPage() {
                   >
                     브라우저가 오디오 재생을 지원하지 않습니다.
                   </audio>
+                </div>
+              )}
+              {mediaType === 'text' && (
+                <div className="share-text-viewer-container">
+                  {loadingText ? (
+                    <div className="share-text-loading">
+                      <div className="share-spinner"></div>
+                      <p>파일을 불러오는 중...</p>
+                    </div>
+                  ) : (
+                    <pre className="share-text-content">{textContent}</pre>
+                  )}
                 </div>
               )}
             </div>

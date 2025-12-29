@@ -191,6 +191,7 @@ export interface LinkShare {
   id: string
   token: string
   path: string
+  displayPath: string
   createdBy: string
   createdAt: string
   expiresAt?: string
@@ -199,6 +200,33 @@ export interface LinkShare {
   maxAccess?: number
   isActive: boolean
   requireLogin: boolean
+  // File metadata
+  size: number
+  isDir: boolean
+  name: string
+  // Upload share fields
+  shareType: 'download' | 'upload'
+  maxFileSize?: number
+  allowedExtensions?: string
+  uploadCount?: number
+  maxTotalSize?: number
+  totalUploadedSize?: number
+}
+
+export interface UploadShareInfo {
+  token: string
+  folderName: string
+  expiresAt?: string
+  maxFileSize?: number
+  allowedExtensions?: string
+  uploadCount: number
+  maxAccess?: number
+  maxTotalSize?: number
+  totalUploadedSize: number
+  remainingSize?: number
+  remainingUploads?: number
+  requiresPassword?: boolean
+  requiresLogin?: boolean
 }
 
 /**
@@ -210,7 +238,12 @@ export async function createShareLink(data: {
   expiresIn?: number // hours, 0 = never
   maxAccess?: number // 0 = unlimited
   requireLogin?: boolean // if true, only authenticated users can access
-}): Promise<{ id: string; token: string; url: string }> {
+  // Upload share specific options
+  shareType?: 'download' | 'upload' // default: 'download'
+  maxFileSize?: number // max file size in bytes (0 = unlimited)
+  allowedExtensions?: string // comma-separated list
+  maxTotalSize?: number // max total upload size in bytes
+}): Promise<{ id: string; token: string; url: string; shareType: string }> {
   const response = await fetch(`${API_BASE}/shares`, {
     method: 'POST',
     headers: {
@@ -288,6 +321,36 @@ export async function accessShareLink(
   }
 
   return response.json()
+}
+
+/**
+ * Access an upload share link (for public upload page)
+ */
+export async function accessUploadShare(
+  token: string,
+  password?: string
+): Promise<UploadShareInfo> {
+  const response = await fetch(`${API_BASE}/u/${token}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to access upload share')
+  }
+
+  return response.json()
+}
+
+/**
+ * Get TUS upload URL for upload share
+ */
+export function getUploadShareTusUrl(token: string): string {
+  return `/api/u/${token}/upload/`
 }
 
 // ========== Helper Functions ==========
