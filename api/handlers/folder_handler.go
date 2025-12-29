@@ -241,6 +241,7 @@ func (h *Handler) DeleteFolder(c echo.Context) error {
 }
 
 // GetFolderStats returns statistics for a folder (recursive file/folder count and total size)
+// Uses caching for improved performance
 func (h *Handler) GetFolderStats(c echo.Context) error {
 	requestPath := c.Param("*")
 	if requestPath == "" {
@@ -300,10 +301,56 @@ func (h *Handler) GetFolderStats(c echo.Context) error {
 		})
 	}
 
-	var fileCount, folderCount int
+	// Check for no-cache query parameter
+	noCache := c.QueryParam("no-cache") == "true"
+
+	// Try to get from cache first
+	cache := GetStatsCache()
+	if cache != nil && !noCache {
+		stats, err := cache.GetOrCompute(realPath, func() (*CachedFolderStats, error) {
+			return h.computeFolderStatsInternal(realPath)
+		})
+		if err == nil {
+			// Set cache headers
+			SetCacheHeaders(c.Response().Writer, GenerateETag(realPath, info.ModTime(), 0), 60) // 1 minute browser cache
+			return c.JSON(http.StatusOK, FolderStats{
+				Path:        displayPath,
+				FileCount:   int(stats.FileCount),
+				FolderCount: int(stats.FolderCount),
+				TotalSize:   stats.TotalSize,
+			})
+		}
+		// Cache error, fall through to compute
+	}
+
+	// Compute stats directly
+	stats, err := h.computeFolderStatsInternal(realPath)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to calculate folder stats",
+		})
+	}
+
+	// Cache the result
+	if cache != nil {
+		stats.DirModTime = info.ModTime()
+		cache.Set(realPath, stats)
+	}
+
+	return c.JSON(http.StatusOK, FolderStats{
+		Path:        displayPath,
+		FileCount:   int(stats.FileCount),
+		FolderCount: int(stats.FolderCount),
+		TotalSize:   stats.TotalSize,
+	})
+}
+
+// computeFolderStatsInternal calculates folder statistics
+func (h *Handler) computeFolderStatsInternal(realPath string) (*CachedFolderStats, error) {
+	var fileCount, folderCount int64
 	var totalSize int64
 
-	err = filepath.Walk(realPath, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(realPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors
 		}
@@ -331,15 +378,97 @@ func (h *Handler) GetFolderStats(c echo.Context) error {
 	})
 
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to calculate folder stats",
-		})
+		return nil, err
 	}
 
-	return c.JSON(http.StatusOK, FolderStats{
-		Path:        displayPath,
+	return &CachedFolderStats{
 		FileCount:   fileCount,
 		FolderCount: folderCount,
 		TotalSize:   totalSize,
-	})
+	}, nil
+}
+
+// BatchGetFolderStats returns statistics for multiple folders at once
+func (h *Handler) BatchGetFolderStats(c echo.Context) error {
+	var req struct {
+		Paths []string `json:"paths"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid request",
+		})
+	}
+
+	if len(req.Paths) == 0 || len(req.Paths) > 50 {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Paths must contain 1-50 items",
+		})
+	}
+
+	var claims *JWTClaims
+	if user, ok := c.Get("user").(*JWTClaims); ok {
+		claims = user
+	}
+
+	results := make(map[string]interface{})
+	cache := GetStatsCache()
+
+	for _, path := range req.Paths {
+		realPath, storageType, displayPath, err := h.resolvePath(path, claims)
+		if err != nil {
+			results[path] = map[string]string{"error": "access denied"}
+			continue
+		}
+
+		if storageType == "root" {
+			results[path] = map[string]string{"error": "invalid path"}
+			continue
+		}
+
+		// Check shared read permission
+		if storageType == StorageShared {
+			if claims == nil || !h.CanReadSharedDrive(claims.UserID, path) {
+				results[path] = map[string]string{"error": "no permission"}
+				continue
+			}
+		}
+
+		info, err := os.Stat(realPath)
+		if err != nil || !info.IsDir() {
+			results[path] = map[string]string{"error": "not a directory"}
+			continue
+		}
+
+		// Try cache
+		if cache != nil {
+			stats, err := cache.GetOrCompute(realPath, func() (*CachedFolderStats, error) {
+				return h.computeFolderStatsInternal(realPath)
+			})
+			if err == nil {
+				results[path] = FolderStats{
+					Path:        displayPath,
+					FileCount:   int(stats.FileCount),
+					FolderCount: int(stats.FolderCount),
+					TotalSize:   stats.TotalSize,
+				}
+				continue
+			}
+		}
+
+		// Compute directly
+		stats, err := h.computeFolderStatsInternal(realPath)
+		if err != nil {
+			results[path] = map[string]string{"error": "failed to compute"}
+			continue
+		}
+
+		results[path] = FolderStats{
+			Path:        displayPath,
+			FileCount:   int(stats.FileCount),
+			FolderCount: int(stats.FolderCount),
+			TotalSize:   stats.TotalSize,
+		}
+	}
+
+	return c.JSON(http.StatusOK, results)
 }

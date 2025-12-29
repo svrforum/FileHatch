@@ -1268,25 +1268,55 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     }
   }, [historyState, queryClient])
 
-  // Check if we can go back (not at root level of home/shared)
+  // Check if we can go back (not at root level of home/shared or at shared drive root)
   const canGoBack = useCallback(() => {
     // Root paths where back button should not appear
     const rootPaths = ['/', '/home', '/shared']
-    return !rootPaths.includes(currentPath)
+    if (rootPaths.includes(currentPath)) return false
+
+    // Also hide back button at shared drive root level (e.g., /shared/111)
+    // Users cannot navigate to /shared/ directly
+    if (currentPath.startsWith('/shared/')) {
+      const sharedParts = currentPath.substring(8).split('/') // Remove '/shared/'
+      if (sharedParts.length === 1) {
+        return false // At shared drive root, no back button
+      }
+    }
+
+    return true
   }, [currentPath])
 
   const goBack = useCallback(() => {
     const parts = currentPath.split('/').filter(Boolean)
     if (parts.length <= 1) {
-      // Already at root level, go to parent storage root
-      if (currentPath.startsWith('/home')) {
-        onNavigate('/home')
-      } else if (currentPath.startsWith('/shared')) {
-        onNavigate('/shared')
-      }
+      // Already at root level, go to home
+      onNavigate('/home')
       return
     }
+
+    // For shared paths, prevent going to /shared/ root
+    if (currentPath.startsWith('/shared/')) {
+      const sharedParts = currentPath.substring(8).split('/') // Remove '/shared/'
+      if (sharedParts.length <= 1) {
+        // At shared drive root, go to home instead
+        onNavigate('/home')
+        return
+      }
+      if (sharedParts.length === 2) {
+        // One level deep in shared drive, go to shared drive root
+        onNavigate('/shared/' + sharedParts[0])
+        return
+      }
+    }
+
     const parentPath = '/' + parts.slice(0, -1).join('/')
+
+    // Never navigate to /shared directly
+    if (parentPath === '/shared') {
+      onNavigate('/home')
+      return
+    }
+
     onNavigate(parentPath)
   }, [currentPath, onNavigate])
 

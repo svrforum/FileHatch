@@ -242,7 +242,7 @@ function App() {
               } />
               <Route path="/my-activity" element={
                 <Suspense fallback={<FileListSkeleton />}>
-                  <MyActivity onNavigate={handleNavigate} />
+                  <MyActivity onNavigate={handleNavigate} onFileSelect={handleFileSelect} />
                 </Suspense>
               } />
               <Route path="/scvadmin/users" element={

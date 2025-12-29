@@ -23,8 +23,9 @@ FROM alpine:3.20
 
 WORKDIR /app
 
-# Install ca-certificates for HTTPS and docker-cli for system logs
-RUN apk --no-cache add ca-certificates tzdata docker-cli
+# Install ca-certificates for HTTPS, docker-cli for system logs,
+# ffmpeg for video thumbnails, and libwebp-tools for WebP conversion
+RUN apk --no-cache add ca-certificates tzdata docker-cli ffmpeg libwebp-tools
 
 # Copy binary from builder
 COPY --from=builder /build/main .

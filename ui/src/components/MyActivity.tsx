@@ -7,9 +7,12 @@ type SortOrder = 'newest' | 'oldest' | 'name-asc' | 'name-desc'
 
 interface MyActivityProps {
   onNavigate: (path: string) => void
+  onFileSelect?: (filePath: string, parentPath: string) => void
 }
 
 // Normalize path to ensure it starts with /home/
+// Storage paths like "users/admin/folder/file.txt" -> "/home/folder/file.txt"
+// The "users/username" prefix represents the user's home directory
 function normalizePath(path: string): string {
   if (!path) return '/home'
 
@@ -18,17 +21,22 @@ function normalizePath(path: string): string {
     return path
   }
 
-  // Handle paths like "users/admin/..." -> "/home/admin/..."
+  // Handle paths like "users/admin/folder/..." -> "/home/folder/..."
+  // The format is: users/{username}/{actual_path}
   if (path.startsWith('users/')) {
     const parts = path.substring(6).split('/') // Remove "users/"
-    if (parts.length > 0) {
-      // Skip the first part if it's the username (e.g., "admin")
-      // and the second part is also "admin" (duplicate)
-      if (parts.length > 1 && parts[0] === parts[1]) {
-        return '/home/' + parts.slice(1).join('/')
-      }
-      return '/home/' + parts.join('/')
+    if (parts.length > 1) {
+      // Skip the first part (username) and use the rest
+      return '/home/' + parts.slice(1).join('/')
+    } else if (parts.length === 1) {
+      // Only username, no sub-path
+      return '/home'
     }
+  }
+
+  // Handle paths like "shared/..." -> "/shared/..."
+  if (path.startsWith('shared/')) {
+    return '/' + path
   }
 
   // Add leading slash if missing
@@ -147,7 +155,7 @@ function formatRelativeTime(dateStr: string): string {
   return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
 }
 
-function MyActivity({ onNavigate }: MyActivityProps) {
+function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
   const [activeTab, setActiveTab] = useState<ActivityTab>('all')
   const [activities, setActivities] = useState<RecentFile[]>([])
   const [loading, setLoading] = useState(true)
@@ -229,8 +237,17 @@ function MyActivity({ onNavigate }: MyActivityProps) {
     // Normalize and extract parent folder path from file path
     const normalizedPath = normalizePath(activity.path)
     const parentPath = normalizedPath.substring(0, normalizedPath.lastIndexOf('/')) || '/home'
-    // onNavigate already handles navigation to /files
-    onNavigate(parentPath)
+
+    if (activity.isDir) {
+      // For folders, navigate directly to the folder
+      onNavigate(normalizedPath)
+    } else if (onFileSelect) {
+      // For files, navigate to parent and select the file
+      onFileSelect(normalizedPath, parentPath)
+    } else {
+      // Fallback: just navigate to parent folder
+      onNavigate(parentPath)
+    }
   }
 
   const handleContextMenu = (e: React.MouseEvent, activity: RecentFile) => {

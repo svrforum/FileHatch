@@ -260,6 +260,7 @@ func main() {
 	api.POST("/folders", h.CreateFolder, authHandler.OptionalJWTMiddleware)
 	api.DELETE("/folders/*", h.DeleteFolder, authHandler.OptionalJWTMiddleware)
 	api.GET("/folders/stats/*", h.GetFolderStats, authHandler.OptionalJWTMiddleware)
+	api.POST("/folders/batch-stats", h.BatchGetFolderStats, authHandler.OptionalJWTMiddleware)
 	api.GET("/storage/usage", h.GetStorageUsage, authHandler.OptionalJWTMiddleware)
 	api.POST("/files/create", h.CreateFile, authHandler.OptionalJWTMiddleware)
 	api.POST("/files/compress", h.CompressFiles, authHandler.OptionalJWTMiddleware)
@@ -280,6 +281,14 @@ func main() {
 
 	// Preview API
 	api.GET("/preview/*", h.GetPreview, authHandler.OptionalJWTMiddleware)
+
+	// Thumbnail API
+	api.GET("/thumbnail/*", h.GetThumbnail, authHandler.OptionalJWTMiddleware)
+	api.GET("/thumbnails/responsive/*", h.GetResponsiveThumbnail, authHandler.OptionalJWTMiddleware)
+	api.POST("/thumbnails/batch", h.GetBatchThumbnails, authHandler.OptionalJWTMiddleware)
+	api.POST("/thumbnails/preload/*", h.PreloadThumbnails, authHandler.OptionalJWTMiddleware)
+	adminApi.GET("/thumbnails/stats", h.ThumbnailStats)
+	adminApi.DELETE("/thumbnails/cache", h.ClearThumbnailCache)
 
 	// OnlyOffice API routes
 	api.GET("/onlyoffice/settings", h.GetOnlyOfficeSettings)
