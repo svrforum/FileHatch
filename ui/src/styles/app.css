@@ -14,5 +14,6 @@
   flex: 1;
   padding: var(--spacing-lg);
   overflow-y: auto;
+  overflow-x: hidden;
   min-height: calc(100vh - 60px);
 }

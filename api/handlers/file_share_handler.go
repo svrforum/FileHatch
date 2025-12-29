@@ -44,7 +44,7 @@ type FileShareHandler struct {
 func NewFileShareHandler(db *sql.DB) *FileShareHandler {
 	return &FileShareHandler{
 		db:           db,
-		auditHandler: NewAuditHandler(db),
+		auditHandler: NewAuditHandler(db, "/data"),
 	}
 }
 

@@ -759,6 +759,7 @@ export interface RecentFile {
   eventType: string
   timestamp: string
   isDir: boolean
+  size: number
 }
 
 export async function getRecentFiles(limit: number = 10): Promise<RecentFile[]> {

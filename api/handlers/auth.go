@@ -47,7 +47,7 @@ func NewAuthHandler(db *sql.DB) *AuthHandler {
 		jwtSecret:    []byte(secret),
 		dataRoot:     "/data",
 		configPath:   "/etc/scv",
-		auditHandler: NewAuditHandler(db),
+		auditHandler: NewAuditHandler(db, "/data"),
 	}
 }
 

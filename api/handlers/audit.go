@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -15,11 +17,43 @@ import (
 )
 
 type AuditHandler struct {
-	db *sql.DB
+	db              *sql.DB
+	baseStoragePath string
 }
 
-func NewAuditHandler(db *sql.DB) *AuditHandler {
-	return &AuditHandler{db: db}
+func NewAuditHandler(db *sql.DB, baseStoragePath string) *AuditHandler {
+	return &AuditHandler{db: db, baseStoragePath: baseStoragePath}
+}
+
+// resolveDisplayPath converts a display path to a real filesystem path
+func (h *AuditHandler) resolveDisplayPath(displayPath, username string) string {
+	if strings.HasPrefix(displayPath, "/home/") {
+		rest := strings.TrimPrefix(displayPath, "/home/")
+		// Check if path includes username (e.g., /home/admin/file.txt)
+		// or is just /home/file.txt (needs username added)
+		parts := strings.SplitN(rest, "/", 2)
+		if len(parts) >= 1 {
+			// Check if first part is a directory under /data/users/
+			possibleUser := parts[0]
+			userDir := filepath.Join(h.baseStoragePath, "users", possibleUser)
+			if info, err := os.Stat(userDir); err == nil && info.IsDir() {
+				// Path already includes username
+				return filepath.Join(h.baseStoragePath, "users", rest)
+			}
+		}
+		// Path doesn't include username, add it
+		return filepath.Join(h.baseStoragePath, "users", username, rest)
+	} else if strings.HasPrefix(displayPath, "/shared/") {
+		// /shared/... -> baseStoragePath/shared/...
+		rest := strings.TrimPrefix(displayPath, "/shared/")
+		return filepath.Join(h.baseStoragePath, "shared", rest)
+	} else if strings.HasPrefix(displayPath, "/shared-drives/") {
+		// /shared-drives/... -> baseStoragePath/shared/...
+		rest := strings.TrimPrefix(displayPath, "/shared-drives/")
+		return filepath.Join(h.baseStoragePath, "shared", rest)
+	}
+	// Fallback: try to construct path based on username
+	return filepath.Join(h.baseStoragePath, "users", username, strings.TrimPrefix(displayPath, "/"))
 }
 
 // AuditLog represents an audit log entry
@@ -430,6 +464,7 @@ type RecentFile struct {
 	EventType  string    `json:"eventType"`
 	Timestamp  time.Time `json:"timestamp"`
 	IsDir      bool      `json:"isDir"`
+	Size       int64     `json:"size"`
 }
 
 // GetRecentFiles returns recently accessed files for the current user
@@ -442,8 +477,8 @@ func (h *AuditHandler) GetRecentFiles(c echo.Context) error {
 
 	userIDStr := claims.UserID
 	limitStr := c.QueryParam("limit")
-	limit := 20
-	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 50 {
+	limit := 100
+	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
 		limit = l
 	}
 
@@ -458,7 +493,7 @@ func (h *AuditHandler) GetRecentFiles(c echo.Context) error {
 				ROW_NUMBER() OVER (PARTITION BY target_resource ORDER BY ts DESC) as rn
 			FROM audit_logs
 			WHERE actor_id = $1
-			  AND event_type IN ('file.upload', 'file.download', 'file.view', 'file.edit', 'file.copy', 'file.move', 'folder.create', 'trash.restore')
+			  AND event_type IN ('file.upload', 'file.download', 'file.view', 'file.edit', 'file.copy', 'file.move', 'file.rename', 'folder.create', 'trash.restore')
 			  AND target_resource IS NOT NULL
 			  AND target_resource != ''
 		)
@@ -498,12 +533,23 @@ func (h *AuditHandler) GetRecentFiles(c echo.Context) error {
 		// Determine if it's a directory based on event type
 		isDir := eventType == "folder.create"
 
+		// Get file size from filesystem
+		var fileSize int64 = 0
+		if !isDir {
+			// Convert display path to real path
+			realPath := h.resolveDisplayPath(path, claims.Username)
+			if info, err := os.Stat(realPath); err == nil && !info.IsDir() {
+				fileSize = info.Size()
+			}
+		}
+
 		files = append(files, RecentFile{
 			Path:      path,
 			Name:      name,
 			EventType: eventType,
 			Timestamp: ts,
 			IsDir:     isDir,
+			Size:      fileSize,
 		})
 	}
 

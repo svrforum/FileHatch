@@ -26,7 +26,7 @@ func NewHandler(db *sql.DB) *Handler {
 	return &Handler{
 		db:           db,
 		dataRoot:     "/data",
-		auditHandler: NewAuditHandler(db),
+		auditHandler: NewAuditHandler(db, "/data"),
 	}
 }
 

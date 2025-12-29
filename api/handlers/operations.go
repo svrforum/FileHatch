@@ -529,6 +529,24 @@ type SearchResponse struct {
 	MatchType string         `json:"matchType,omitempty"` // Filter applied: "all", "name", "tag", "description", "trash"
 }
 
+// isGlobPattern checks if a query string contains glob pattern characters
+func isGlobPattern(query string) bool {
+	return strings.ContainsAny(query, "*?[")
+}
+
+// matchFileName checks if a filename matches the query using either glob pattern or substring
+func matchFileName(filename, query string, isGlob bool) bool {
+	filenameLower := strings.ToLower(filename)
+	if isGlob {
+		matched, err := filepath.Match(query, filenameLower)
+		if err != nil {
+			return false
+		}
+		return matched
+	}
+	return strings.Contains(filenameLower, query)
+}
+
 // SearchFiles searches for files and folders by name, tag, or description
 func (h *Handler) SearchFiles(c echo.Context) error {
 	query := c.QueryParam("q")
@@ -571,6 +589,7 @@ func (h *Handler) SearchFiles(c echo.Context) error {
 	}
 
 	queryLower := strings.ToLower(query)
+	isGlob := isGlobPattern(queryLower)
 	// Fetch more than needed for pagination
 	maxResults := 500
 
@@ -579,7 +598,7 @@ func (h *Handler) SearchFiles(c echo.Context) error {
 	// Search by file name (only if filter allows)
 	if matchTypeFilter == "all" || matchTypeFilter == "name" {
 		if searchPath == "/" {
-			allResults = h.parallelSearch(queryLower, claims, maxResults)
+			allResults = h.parallelSearch(queryLower, isGlob, claims, maxResults)
 		} else {
 			realPath, storageType, displayPath, err := h.resolvePath(searchPath, claims)
 			if err != nil {
@@ -594,7 +613,7 @@ func (h *Handler) SearchFiles(c echo.Context) error {
 				})
 			}
 
-			allResults = h.searchInDirParallel(realPath, displayPath, queryLower, maxResults)
+			allResults = h.searchInDirParallel(realPath, displayPath, queryLower, isGlob, maxResults)
 		}
 	}
 
@@ -654,7 +673,7 @@ type searchTarget struct {
 }
 
 // parallelSearch searches in multiple directories in parallel
-func (h *Handler) parallelSearch(query string, claims *JWTClaims, maxResults int) []SearchResult {
+func (h *Handler) parallelSearch(query string, isGlob bool, claims *JWTClaims, maxResults int) []SearchResult {
 	// Collect search targets
 	targets := []searchTarget{
 		{
@@ -672,7 +691,7 @@ func (h *Handler) parallelSearch(query string, claims *JWTClaims, maxResults int
 
 	// Search all targets in parallel
 	allResults := lop.Map(targets, func(target searchTarget, _ int) []SearchResult {
-		return h.searchInDirParallel(target.RealPath, target.DisplayPath, query, maxResults)
+		return h.searchInDirParallel(target.RealPath, target.DisplayPath, query, isGlob, maxResults)
 	})
 
 	// Merge results
@@ -689,7 +708,7 @@ func (h *Handler) parallelSearch(query string, claims *JWTClaims, maxResults int
 }
 
 // searchInDirParallel searches for files in a directory using parallel processing
-func (h *Handler) searchInDirParallel(realPath, displayPath, query string, maxResults int) []SearchResult {
+func (h *Handler) searchInDirParallel(realPath, displayPath, query string, isGlob bool, maxResults int) []SearchResult {
 	// First, collect top-level directories for parallel processing
 	entries, err := os.ReadDir(realPath)
 	if err != nil {
@@ -731,7 +750,7 @@ func (h *Handler) searchInDirParallel(realPath, displayPath, query string, maxRe
 		if err != nil {
 			continue
 		}
-		if strings.Contains(strings.ToLower(file.Name()), query) {
+		if matchFileName(file.Name(), query, isGlob) {
 			ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(file.Name()), "."))
 			addResult(SearchResult{
 				Name:      file.Name(),
@@ -762,7 +781,7 @@ func (h *Handler) searchInDirParallel(realPath, displayPath, query string, maxRe
 
 			// Check if directory name matches
 			info, err := dir.Info()
-			if err == nil && strings.Contains(strings.ToLower(dir.Name()), query) {
+			if err == nil && matchFileName(dir.Name(), query, isGlob) {
 				addResult(SearchResult{
 					Name:      dir.Name(),
 					Path:      dirDisplayPath,
@@ -800,8 +819,8 @@ func (h *Handler) searchInDirParallel(realPath, displayPath, query string, maxRe
 					return nil
 				}
 
-				// Check if name contains query
-				if strings.Contains(strings.ToLower(info.Name()), query) {
+				// Check if name matches query (glob or substring)
+				if matchFileName(info.Name(), query, isGlob) {
 					relPath, _ := filepath.Rel(realPath, path)
 					itemDisplayPath := filepath.Join(displayPath, relPath)
 
@@ -836,7 +855,8 @@ func (h *Handler) searchInDirParallel(realPath, displayPath, query string, maxRe
 
 // searchInDir recursively searches for files in a directory (legacy, for compatibility)
 func (h *Handler) searchInDir(realPath, displayPath, query string, results *[]SearchResult, maxResults int) {
-	parallelResults := h.searchInDirParallel(realPath, displayPath, query, maxResults-len(*results))
+	isGlob := isGlobPattern(query)
+	parallelResults := h.searchInDirParallel(realPath, displayPath, query, isGlob, maxResults-len(*results))
 	*results = append(*results, parallelResults...)
 }
 

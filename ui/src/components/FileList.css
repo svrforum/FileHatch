@@ -1,3 +1,17 @@
+/* Wrapper for file list and details panel */
+.file-list-wrapper {
+  display: flex;
+  height: 100%;
+  min-height: calc(100vh - 60px - 48px);
+  gap: 0;
+  align-items: flex-start;
+  transition: padding-right 0.2s ease;
+}
+
+.file-list-wrapper.panel-open {
+  padding-right: 320px;
+}
+
 .file-list-container {
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
@@ -7,6 +21,8 @@
   display: flex;
   flex-direction: column;
   position: relative;
+  flex: 1;
+  min-width: 0; /* Allow shrinking */
 }
 
 .file-list-container.marquee-selecting {
@@ -100,6 +116,99 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Local Search */
+.local-search-container {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.local-search-container.active {
+  flex: 1;
+  max-width: 300px;
+}
+
+.local-search-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  height: 36px;
+  flex: 1;
+  transition: all var(--transition-fast);
+}
+
+.local-search-input-wrapper:focus-within {
+  border-color: var(--color-primary);
+  background: var(--bg-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.local-search-input-wrapper .search-icon {
+  position: static;
+  transform: none;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.local-search-input {
+  flex: 1;
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  min-width: 0;
+}
+
+.local-search-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.clear-search-btn {
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.clear-search-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.search-toggle-btn.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+.search-toggle-btn.active:hover {
+  background: var(--color-primary-dark);
+  color: white;
+}
+
+.search-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-light);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* Table */
@@ -268,6 +377,16 @@
   display: flex;
   flex-direction: column;
   flex: 1;
+}
+
+/* 가상 스크롤용 스타일 - 명시적 높이와 overflow 필요 */
+.file-table-body-virtual {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  /* 부모가 flex container이므로 이 요소가 사용 가능한 공간을 모두 사용 */
+  height: 0; /* flex: 1과 함께 사용하면 남은 공간을 채움 */
 }
 
 .file-row {
@@ -540,18 +659,21 @@
   color: var(--text-secondary);
 }
 
-/* File Details Panel */
+/* File Details Panel - Right Sidebar (Fixed) */
 .file-details-panel {
-  position: fixed;
-  right: 0;
-  top: 60px;
   width: 320px;
+  min-width: 320px;
   height: calc(100vh - 60px);
   background: var(--bg-primary);
   border-left: 1px solid var(--border-light);
-  box-shadow: var(--shadow-lg);
+  border-radius: 0;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+  position: fixed;
+  top: 60px;
+  right: 0;
   z-index: 100;
   animation: slideInRight 0.2s ease;
 }
@@ -936,8 +1058,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
-  pointer-events: none;
+  z-index: 10;
+  pointer-events: none; /* Allow events to pass through to folder elements */
 }
 
 .drag-overlay-content {
@@ -950,6 +1072,7 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   color: var(--color-primary);
+  pointer-events: none; /* Allow drop events to pass through to parent overlay */
 }
 
 .drag-overlay-content svg {
@@ -1010,6 +1133,66 @@
 .file-card-icon svg {
   width: 48px;
   height: 48px;
+}
+
+/* Thumbnail styles for grid view */
+.file-thumbnail-wrapper {
+  width: 64px;
+  height: 64px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+
+.thumbnail-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  transition: opacity 0.2s ease;
+}
+
+.file-thumbnail.loading {
+  opacity: 0;
+}
+
+.file-card.has-thumbnail .file-card-icon {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Thumbnail styles for list view */
+.row-thumbnail-wrapper {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  margin-right: var(--spacing-sm);
+}
+
+.row-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
 }
 
 .file-card-name {

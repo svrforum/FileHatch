@@ -174,7 +174,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(db)
 
 	// Create Audit handler
-	auditHandler := handlers.NewAuditHandler(db)
+	auditHandler := handlers.NewAuditHandler(db, dataRoot)
 
 	// Create TOTP handler for 2FA
 	totpHandler := handlers.NewTOTPHandler(db, auditHandler)

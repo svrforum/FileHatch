@@ -49,7 +49,7 @@ func NewUploadHandler(dataRoot string, db *sql.DB) (*UploadHandler, error) {
 	h := &UploadHandler{
 		dataRoot:     dataRoot,
 		db:           db,
-		auditHandler: NewAuditHandler(db),
+		auditHandler: NewAuditHandler(db, dataRoot),
 	}
 
 	// Create TUS handler with pre-upload validation
@@ -244,14 +244,9 @@ func validateFilename(filename string) error {
 		return fmt.Errorf("filename too long (max 255 characters)")
 	}
 
-	// Check for dangerous extensions
-	dangerousExts := []string{".exe", ".bat", ".cmd", ".sh", ".ps1", ".vbs", ".js"}
-	lowerName := strings.ToLower(filename)
-	for _, ext := range dangerousExts {
-		if strings.HasSuffix(lowerName, ext) {
-			return fmt.Errorf("file type not allowed: %s", ext)
-		}
-	}
+	// Note: Dangerous extensions (.exe, .bat, etc.) are allowed for authenticated users
+	// Downloads are protected with Content-Disposition: attachment header to prevent execution
+	// Public upload links have their own extension restrictions via allowedExtensions
 
 	return nil
 }

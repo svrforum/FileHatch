@@ -114,9 +114,21 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 		})
 	}
 
+	newFolderPath := filepath.Join(displayPath, req.Name)
+
+	// Log audit event
+	var userID *string
+	if claims != nil {
+		userID = &claims.UserID
+	}
+	h.auditHandler.LogEvent(userID, c.RealIP(), EventFolderCreate, newFolderPath, map[string]interface{}{
+		"name":       req.Name,
+		"parentPath": displayPath,
+	})
+
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"success": true,
-		"path":    filepath.Join(displayPath, req.Name),
+		"path":    newFolderPath,
 		"name":    req.Name,
 	})
 }

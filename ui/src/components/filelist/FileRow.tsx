@@ -1,10 +1,72 @@
 // 파일 행 컴포넌트 - 리스트 뷰에서 각 파일/폴더 행을 렌더링
 
+import React, { useMemo, useEffect, useState } from 'react'
 import { FileInfo, formatFileSize } from '../../api/files'
 import { SharedFileInfo } from './types'
 import ShareOptionsDisplay from './ShareOptionsDisplay'
 
-interface FileRowProps {
+// 썸네일을 지원하는 확장자
+const THUMBNAIL_EXTENSIONS = new Set([
+  'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp',
+  'mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm'
+])
+
+// 썸네일을 fetch로 가져오는 훅
+function useThumbnail(path: string | null, enabled: boolean) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    if (!enabled || !path) return
+
+    let cancelled = false
+    // 토큰은 scv-auth에 JSON 형식으로 저장됨
+    const authData = localStorage.getItem('scv-auth')
+    const token = authData ? JSON.parse(authData).state?.token : null
+
+    const fetchThumbnail = async () => {
+      try {
+        const pathWithoutSlash = path.startsWith('/') ? path.slice(1) : path
+        // 경로의 각 부분을 개별적으로 인코딩 (괄호도 인코딩)
+        const encodedPath = pathWithoutSlash.split('/').map(part =>
+          encodeURIComponent(part).replace(/\(/g, '%28').replace(/\)/g, '%29')
+        ).join('/')
+        const url = `/api/thumbnail/${encodedPath}?size=small`
+
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+
+        if (!response.ok) throw new Error('Failed to fetch thumbnail')
+
+        const blob = await response.blob()
+        if (!cancelled) {
+          const objectUrl = URL.createObjectURL(blob)
+          setBlobUrl(objectUrl)
+        }
+      } catch {
+        if (!cancelled) {
+          setError(true)
+        }
+      }
+    }
+
+    fetchThumbnail()
+
+    return () => {
+      cancelled = true
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl)
+      }
+    }
+  }, [path, enabled])
+
+  return { blobUrl, error }
+}
+
+export interface FileRowProps {
   file: FileInfo
   index: number
   isSelected: boolean
@@ -28,11 +90,11 @@ interface FileRowProps {
   onDeleteLink?: (file: SharedFileInfo) => void
   getFileIcon: (file: FileInfo) => React.ReactNode
   formatDate: (date: string) => string
+  getFullDateTime?: (date: string) => string
   setFocusedIndex: (index: number) => void
-  rowRef: (el: HTMLDivElement | null) => void
 }
 
-function FileRow({
+const FileRow = React.forwardRef<HTMLDivElement, FileRowProps>(({
   file,
   index,
   isSelected,
@@ -56,10 +118,20 @@ function FileRow({
   onDeleteLink,
   getFileIcon,
   formatDate,
+  getFullDateTime,
   setFocusedIndex,
-  rowRef,
-}: FileRowProps) {
+}, ref) => {
   const sharedFile = file as SharedFileInfo
+
+  // 썸네일 지원 여부 확인
+  const hasThumbnail = useMemo(() => {
+    if (file.isDir) return false
+    const ext = file.extension?.toLowerCase() || ''
+    return THUMBNAIL_EXTENSIONS.has(ext)
+  }, [file.isDir, file.extension])
+
+  // 썸네일 fetch
+  const { blobUrl, error: thumbnailError } = useThumbnail(file.path, hasThumbnail)
 
   const classNames = [
     'file-row',
@@ -72,7 +144,7 @@ function FileRow({
 
   return (
     <div
-      ref={rowRef}
+      ref={ref}
       className={classNames}
       onClick={(e) => { onSelect(file, e); setFocusedIndex(index); }}
       onDoubleClick={() => onDoubleClick(file)}
@@ -85,7 +157,17 @@ function FileRow({
       onDrop={file.isDir && onFolderDrop ? (e) => onFolderDrop(e, file) : undefined}
     >
       <div className="col-name">
-        {getFileIcon(file)}
+        {hasThumbnail && !thumbnailError && blobUrl ? (
+          <div className="row-thumbnail-wrapper">
+            <img
+              src={blobUrl}
+              alt=""
+              className="row-thumbnail"
+            />
+          </div>
+        ) : (
+          getFileIcon(file)
+        )}
         <span className="file-name">{file.name}</span>
       </div>
 
@@ -129,7 +211,9 @@ function FileRow({
       )}
 
       <div className="col-size">{file.isDir ? '-' : formatFileSize(file.size)}</div>
-      <div className="col-date">{formatDate(file.modTime)}</div>
+      <div className="col-date" title={getFullDateTime ? getFullDateTime(file.modTime) : undefined}>
+        {formatDate(file.modTime)}
+      </div>
 
       {/* Unshare button for share views */}
       {isSharedByMeView && onUnshare && (
@@ -194,6 +278,8 @@ function FileRow({
       </div>
     </div>
   )
-}
+})
+
+FileRow.displayName = 'FileRow'
 
 export default FileRow

@@ -40,7 +40,7 @@ func NewSMBAuditHandler(db *sql.DB, configPath string) *SMBAuditHandler {
 	return &SMBAuditHandler{
 		db:           db,
 		configPath:   configPath,
-		auditHandler: NewAuditHandler(db),
+		auditHandler: NewAuditHandler(db, "/data"),
 		lastPosition: 0,
 	}
 }

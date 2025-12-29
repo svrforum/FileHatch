@@ -120,39 +120,51 @@ func (h *WebDAVHandler) authenticateUser(username, password string) (*UserInfo, 
 
 // logAccess logs WebDAV access to audit log
 func (h *WebDAVHandler) logAccess(userID string, r *http.Request) {
-	// Only log significant operations
+	// Only log write operations (not reads)
+	// WebDAV clients often make GET requests for verification before operations,
+	// which creates misleading "download" logs
 	method := r.Method
-	if method == "OPTIONS" || method == "PROPFIND" {
+	if method == "OPTIONS" || method == "PROPFIND" || method == "PROPPATCH" ||
+	   method == "LOCK" || method == "UNLOCK" || method == "GET" || method == "HEAD" {
 		return
 	}
 
 	path := strings.TrimPrefix(r.URL.Path, "/webdav")
-	if path == "" {
-		path = "/"
+	if path == "" || path == "/" {
+		return
 	}
 
+	// Convert WebDAV path to display path
+	// WebDAV path: /home/file.txt -> Display path: /home/username/file.txt
+	// But actually WebDAV uses /home directly which maps to user's home
+	displayPath := path
+
+	// Use standard event types for consistency with web UI
 	var eventType string
 	switch method {
-	case "GET":
-		eventType = "webdav_download"
 	case "PUT":
-		eventType = "webdav_upload"
+		eventType = EventFileUpload
 	case "DELETE":
-		eventType = "webdav_delete"
+		// Check if it's a folder based on path (ends with /)
+		if strings.HasSuffix(path, "/") {
+			eventType = EventFolderDelete
+		} else {
+			eventType = EventFileDelete
+		}
 	case "MKCOL":
-		eventType = "webdav_mkdir"
+		eventType = EventFolderCreate
 	case "MOVE":
-		eventType = "webdav_move"
+		eventType = EventFileMove
 	case "COPY":
-		eventType = "webdav_copy"
+		eventType = EventFileCopy
 	default:
-		eventType = "webdav_" + strings.ToLower(method)
+		return // Don't log other methods
 	}
 
 	h.db.Exec(`
 		INSERT INTO audit_logs (actor_id, ip_addr, event_type, target_resource, details)
 		VALUES ($1, $2, $3, $4, $5)
-	`, userID, getClientIP(r), eventType, path, fmt.Sprintf(`{"method": "%s"}`, method))
+	`, userID, getClientIP(r), eventType, displayPath, fmt.Sprintf(`{"source": "webdav", "method": "%s"}`, method))
 }
 
 // getClientIP extracts client IP from request

@@ -1,5 +1,6 @@
-// 파일 리스트 헤더 컴포넌트 - 경로 표시, 정렬, 뷰 모드 전환
+// 파일 리스트 헤더 컴포넌트 - 경로 표시, 정렬, 뷰 모드 전환, 로컬 검색
 
+import { useState, useRef, useEffect } from 'react'
 import { ViewMode } from './types'
 import { formatFileSize } from '../../api/files'
 
@@ -14,6 +15,11 @@ interface FileListHeaderProps {
   onViewModeChange: (mode: ViewMode) => void
   onRefresh: () => void
   getPathDisplayName: (path: string) => string
+  // 로컬 검색
+  localSearchQuery: string
+  onLocalSearchChange: (query: string) => void
+  isSearching: boolean
+  searchResultCount?: number
 }
 
 function FileListHeader({
@@ -27,7 +33,52 @@ function FileListHeader({
   onViewModeChange,
   onRefresh,
   getPathDisplayName,
+  localSearchQuery,
+  onLocalSearchChange,
+  isSearching,
+  searchResultCount,
 }: FileListHeaderProps) {
+  const [showSearch, setShowSearch] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // 검색창이 열릴 때 포커스
+  useEffect(() => {
+    if (showSearch && searchInputRef.current) {
+      searchInputRef.current.focus()
+    }
+  }, [showSearch])
+
+  // ESC로 검색창 닫기
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showSearch) {
+        setShowSearch(false)
+        onLocalSearchChange('')
+      }
+      // Ctrl+F로 검색창 열기
+      if (e.key === 'f' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        setShowSearch(true)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showSearch, onLocalSearchChange])
+
+  const handleSearchToggle = () => {
+    if (showSearch) {
+      setShowSearch(false)
+      onLocalSearchChange('')
+    } else {
+      setShowSearch(true)
+    }
+  }
+
+  const handleClearSearch = () => {
+    onLocalSearchChange('')
+    searchInputRef.current?.focus()
+  }
+
   return (
     <div className="file-list-header">
       <div className="breadcrumb">
@@ -42,13 +93,57 @@ function FileListHeader({
           {getPathDisplayName(currentPath)}
         </h2>
         <span className="file-count">
-          {selectedCount > 1
-            ? `${selectedCount}개 선택됨`
-            : `${totalCount}개 항목 · ${formatFileSize(totalSize)}`
-          }
+          {localSearchQuery ? (
+            isSearching ? '검색 중...' : `${searchResultCount ?? 0}개 검색 결과`
+          ) : selectedCount > 1 ? (
+            `${selectedCount}개 선택됨`
+          ) : (
+            `${totalCount}개 항목 · ${formatFileSize(totalSize)}`
+          )}
         </span>
       </div>
+
       <div className="view-options">
+        {/* 로컬 검색 */}
+        <div className={`local-search-container ${showSearch ? 'active' : ''}`}>
+          {showSearch && (
+            <div className="local-search-input-wrapper">
+              <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
+                <path d="M21 21L16.65 16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              <input
+                ref={searchInputRef}
+                type="text"
+                className="local-search-input"
+                placeholder="현재 폴더에서 검색..."
+                value={localSearchQuery}
+                onChange={(e) => onLocalSearchChange(e.target.value)}
+              />
+              {localSearchQuery && (
+                <button className="clear-search-btn" onClick={handleClearSearch} title="검색어 지우기">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              )}
+              {isSearching && (
+                <div className="search-spinner" />
+              )}
+            </div>
+          )}
+          <button
+            className={`view-btn search-toggle-btn ${showSearch ? 'active' : ''}`}
+            onClick={handleSearchToggle}
+            title={showSearch ? '검색 닫기 (ESC)' : '폴더 내 검색 (Ctrl+F)'}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
+              <path d="M21 21L16.65 16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
+
         <button
           className="view-btn refresh-btn"
           onClick={onRefresh}

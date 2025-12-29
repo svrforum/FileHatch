@@ -41,7 +41,7 @@
   width: 100%;
 }
 
-.search-icon {
+.search-box .search-icon {
   position: absolute;
   left: 14px;
   top: 50%;

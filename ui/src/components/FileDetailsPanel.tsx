@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { FileInfo, FolderStats, formatFileSize, getAuthToken, getFileUrl, getFolderStats } from '../api/files'
-import FileIcon from './FileIcon'
+import { getFileIcon } from '../utils/fileIcons'
 
 interface FileDetailsPanelProps {
   file: FileInfo
@@ -84,7 +84,7 @@ function FileDetailsPanel({ file, onClose, onDelete, onDownload, onView, onShare
         </div>
       ) : (
         <div className="details-icon">
-          <FileIcon file={file} size="large" />
+          {getFileIcon(file, 'large')}
         </div>
       )}
       <div className="details-name">{file.name}</div>

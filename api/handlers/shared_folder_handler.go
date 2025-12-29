@@ -65,7 +65,7 @@ func NewSharedFolderHandler(db *sql.DB, dataRoot string) *SharedFolderHandler {
 	return &SharedFolderHandler{
 		db:           db,
 		dataRoot:     dataRoot,
-		auditHandler: NewAuditHandler(db),
+		auditHandler: NewAuditHandler(db, dataRoot),
 	}
 }
 

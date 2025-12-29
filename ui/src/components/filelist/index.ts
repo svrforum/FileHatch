@@ -1,7 +1,15 @@
 // FileList 하위 컴포넌트들 export
 
 export { default as FileRow } from './FileRow'
+export type { FileRowProps } from './FileRow'
+export { default as FileCard } from './FileCard'
+export type { FileCardProps } from './FileCard'
+export { default as VirtualizedFileTable, VIRTUALIZATION_THRESHOLD } from './VirtualizedFileTable'
+export type { VirtualizedFileTableProps } from './VirtualizedFileTable'
 export { default as FileInfoPanel } from './FileInfoPanel'
 export { default as FileListHeader } from './FileListHeader'
+export { default as MultiSelectBar } from './MultiSelectBar'
+export { default as ContextMenu } from './ContextMenu'
 export { default as ShareOptionsDisplay } from './ShareOptionsDisplay'
+export * from './FileModals'
 export * from './types'
