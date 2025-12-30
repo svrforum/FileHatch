@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useUploadStore } from '../stores/uploadStore'
+import { useTransferStore } from '../stores/transferStore'
 import { useAuthStore } from '../stores/authStore'
 import { getStorageUsage, formatFileSize } from '../api/files'
 import { getMySharedFolders, SharedFolderWithPermission, PERMISSION_READ_WRITE } from '../api/sharedFolders'
@@ -118,6 +119,7 @@ const icons: Record<string, JSX.Element> = {
 
 function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onAdminClick, isTrashView, isAdminMode, adminView, onExitAdminMode }: SidebarProps) {
   const { items, downloads, togglePanel, isPanelOpen, clearCompleted, clearCompletedDownloads } = useUploadStore()
+  const { items: transferItems, clearCompleted: clearCompletedTransfers } = useTransferStore()
   const { user } = useAuthStore()
   const location = useLocation()
   const [storageUsage, setStorageUsage] = useState({ totalUsed: 0, quota: 10 * 1024 * 1024 * 1024 })
@@ -157,12 +159,21 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
 
   const activeUploads = items.filter(i => i.status === 'uploading' || i.status === 'pending')
   const activeDownloads = downloads.filter(d => d.status === 'downloading')
+  const activeMoveCopy = transferItems.filter(t => t.status === 'pending' || t.status === 'transferring')
   const completedUploads = items.filter(i => i.status === 'completed')
   const completedDownloads = downloads.filter(d => d.status === 'completed')
+  const completedMoveCopy = transferItems.filter(t => t.status === 'completed')
 
-  const hasActiveTransfers = activeUploads.length > 0 || activeDownloads.length > 0
-  const hasCompletedTransfers = completedUploads.length > 0 || completedDownloads.length > 0
-  const hasTransfers = items.length > 0 || downloads.length > 0
+  const hasActiveTransfers = activeUploads.length > 0 || activeDownloads.length > 0 || activeMoveCopy.length > 0
+  const hasCompletedTransfers = completedUploads.length > 0 || completedDownloads.length > 0 || completedMoveCopy.length > 0
+  const hasTransfers = items.length > 0 || downloads.length > 0 || transferItems.length > 0
+
+  // Debug logging for transfers
+  if (transferItems.length > 0) {
+    console.log('[Sidebar] Transfer items:', transferItems)
+    console.log('[Sidebar] Active move/copy:', activeMoveCopy)
+    console.log('[Sidebar] hasTransfers:', hasTransfers, 'hasActiveTransfers:', hasActiveTransfers)
+  }
 
   // Calculate overall upload progress
   const uploadProgress = activeUploads.length > 0
@@ -181,6 +192,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
   const handleClearCompleted = () => {
     clearCompleted()
     clearCompletedDownloads()
+    clearCompletedTransfers()
   }
 
   return (
@@ -401,7 +413,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
             <div className="transfer-header" onClick={togglePanel}>
               <span className="transfer-title">전송 현황</span>
               {hasActiveTransfers && (
-                <span className="transfer-badge">{activeUploads.length + activeDownloads.length}</span>
+                <span className="transfer-badge">{activeUploads.length + activeDownloads.length + activeMoveCopy.length}</span>
               )}
               <svg className={`transfer-chevron ${isPanelOpen ? 'open' : ''}`} width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -445,13 +457,41 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                     <span className="transfer-mini-percent">{downloadProgress}%</span>
                   </div>
                 )}
+                {activeMoveCopy.length > 0 && (() => {
+                  const transferringItems = activeMoveCopy.filter(t => t.status === 'transferring')
+                  const avgProgress = transferringItems.length > 0
+                    ? Math.round(transferringItems.reduce((sum, t) => sum + (t.progress || 0), 0) / transferringItems.length)
+                    : 0
+                  return (
+                    <div className="transfer-mini-item">
+                      <div className="transfer-mini-icon move-copy">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                          <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                      <div className="transfer-mini-info">
+                        <span className="transfer-mini-label">
+                          {activeMoveCopy.filter(t => t.type === 'move').length > 0 && `이동 ${activeMoveCopy.filter(t => t.type === 'move').length}개`}
+                          {activeMoveCopy.filter(t => t.type === 'move').length > 0 && activeMoveCopy.filter(t => t.type === 'copy').length > 0 && ' / '}
+                          {activeMoveCopy.filter(t => t.type === 'copy').length > 0 && `복사 ${activeMoveCopy.filter(t => t.type === 'copy').length}개`}
+                        </span>
+                        <div className="transfer-mini-bar">
+                          <div className="transfer-mini-fill move-copy" style={{ width: `${avgProgress}%` }} />
+                        </div>
+                      </div>
+                      <span className="transfer-mini-percent">
+                        {transferringItems.length > 0 ? `${avgProgress}%` : '대기'}
+                      </span>
+                    </div>
+                  )
+                })()}
               </div>
             )}
 
             {/* Completed notification */}
             {!hasActiveTransfers && hasCompletedTransfers && (
               <div className="transfer-completed">
-                <span>완료 {completedUploads.length + completedDownloads.length}개</span>
+                <span>완료 {completedUploads.length + completedDownloads.length + completedMoveCopy.length}개</span>
                 <button className="clear-btn" onClick={handleClearCompleted}>삭제</button>
               </div>
             )}

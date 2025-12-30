@@ -342,6 +342,123 @@ export async function copyItem(path: string, destination: string): Promise<{ suc
   return response.json()
 }
 
+// Progress callback type for streaming operations
+export interface TransferProgress {
+  status: 'started' | 'progress' | 'completed' | 'error'
+  totalBytes: number
+  copiedBytes: number
+  currentFile?: string
+  totalFiles?: number
+  copiedFiles?: number
+  error?: string
+  newPath?: string
+  bytesPerSec?: number
+}
+
+// Move file or folder with streaming progress
+export function moveItemStream(
+  path: string,
+  destination: string,
+  onProgress: (progress: TransferProgress) => void
+): { cancel: () => void; promise: Promise<string> } {
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path
+  const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
+  const encodedDest = encodeURIComponent(destination)
+
+  const token = getAuthToken()
+  const url = `${API_BASE}/files/move-stream/${encodedPath}?destination=${encodedDest}${token ? `&token=${token}` : ''}`
+
+  let eventSource: EventSource | null = null
+  let rejectFn: ((reason: Error) => void) | null = null
+
+  const promise = new Promise<string>((resolve, reject) => {
+    rejectFn = reject
+    eventSource = new EventSource(url)
+
+    eventSource.onmessage = (event) => {
+      try {
+        const progress: TransferProgress = JSON.parse(event.data)
+        onProgress(progress)
+
+        if (progress.status === 'completed') {
+          eventSource?.close()
+          resolve(progress.newPath || '')
+        } else if (progress.status === 'error') {
+          eventSource?.close()
+          reject(new Error(progress.error || 'Move failed'))
+        }
+      } catch (e) {
+        console.error('Failed to parse progress:', e)
+      }
+    }
+
+    eventSource.onerror = () => {
+      eventSource?.close()
+      reject(new Error('Connection error during move'))
+    }
+  })
+
+  return {
+    cancel: () => {
+      eventSource?.close()
+      if (rejectFn) rejectFn(new Error('Operation cancelled'))
+    },
+    promise
+  }
+}
+
+// Copy file or folder with streaming progress
+export function copyItemStream(
+  path: string,
+  destination: string,
+  onProgress: (progress: TransferProgress) => void
+): { cancel: () => void; promise: Promise<string> } {
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path
+  const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
+  const encodedDest = encodeURIComponent(destination)
+
+  const token = getAuthToken()
+  const url = `${API_BASE}/files/copy-stream/${encodedPath}?destination=${encodedDest}${token ? `&token=${token}` : ''}`
+
+  let eventSource: EventSource | null = null
+  let rejectFn: ((reason: Error) => void) | null = null
+
+  const promise = new Promise<string>((resolve, reject) => {
+    rejectFn = reject
+    eventSource = new EventSource(url)
+
+    eventSource.onmessage = (event) => {
+      try {
+        const progress: TransferProgress = JSON.parse(event.data)
+        onProgress(progress)
+
+        if (progress.status === 'completed') {
+          eventSource?.close()
+          resolve(progress.newPath || '')
+        } else if (progress.status === 'error') {
+          eventSource?.close()
+          reject(new Error(progress.error || 'Copy failed'))
+        }
+      } catch (e) {
+        console.error('Failed to parse progress:', e)
+      }
+    }
+
+    eventSource.onerror = () => {
+      eventSource?.close()
+      reject(new Error('Connection error during copy'))
+    }
+  })
+
+  return {
+    cancel: () => {
+      eventSource?.close()
+      if (rejectFn) rejectFn(new Error('Operation cancelled'))
+    },
+    promise
+  }
+}
+
 // Search files
 export type MatchType = 'all' | 'name' | 'tag' | 'description'
 

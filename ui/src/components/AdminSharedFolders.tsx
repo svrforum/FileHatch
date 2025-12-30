@@ -118,6 +118,26 @@ function AdminSharedFolders() {
     loadFolders()
   }, [loadFolders])
 
+  // ESC key to close modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showDeleteConfirm) {
+          setShowDeleteConfirm(false)
+          setDeletingFolder(null)
+        } else if (showMembersModal) {
+          setShowMembersModal(false)
+          setSelectedFolder(null)
+        } else if (showModal) {
+          setShowModal(false)
+          setEditingFolder(null)
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [showModal, showMembersModal, showDeleteConfirm])
+
   // Filter folders
   const filteredFolders = folders.filter(folder =>
     folder.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

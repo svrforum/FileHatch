@@ -115,6 +115,17 @@ function EditUserModal({ isOpen, user, currentUserId, onClose, onUpdated }: Edit
     }
   }, [user, isOpen])
 
+  // ESC key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
   // Filter folders based on search
   const filteredFolderPermissions = folderPermissions.filter(fp =>
     fp.folderName.toLowerCase().includes(folderSearch.toLowerCase())

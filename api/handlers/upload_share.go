@@ -18,10 +18,11 @@ import (
 
 // UploadShareHandler handles upload share functionality
 type UploadShareHandler struct {
-	db           *sql.DB
-	dataRoot     string
-	auditHandler *AuditHandler
-	tusHandler   *tusd.UnroutedHandler
+	db                  *sql.DB
+	dataRoot            string
+	auditHandler        *AuditHandler
+	notificationService *NotificationService
+	tusHandler          *tusd.UnroutedHandler
 }
 
 // UploadShareInfo represents upload share access information
@@ -40,7 +41,7 @@ type UploadShareInfo struct {
 }
 
 // NewUploadShareHandler creates a new UploadShareHandler
-func NewUploadShareHandler(db *sql.DB, dataRoot string, auditHandler *AuditHandler) (*UploadShareHandler, error) {
+func NewUploadShareHandler(db *sql.DB, dataRoot string, auditHandler *AuditHandler, notificationService *NotificationService) (*UploadShareHandler, error) {
 	// Create upload temp directory for share uploads
 	uploadDir := filepath.Join(dataRoot, ".share-uploads")
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
@@ -55,9 +56,10 @@ func NewUploadShareHandler(db *sql.DB, dataRoot string, auditHandler *AuditHandl
 	store.UseIn(composer)
 
 	h := &UploadShareHandler{
-		db:           db,
-		dataRoot:     dataRoot,
-		auditHandler: auditHandler,
+		db:                  db,
+		dataRoot:            dataRoot,
+		auditHandler:        auditHandler,
+		notificationService: notificationService,
 	}
 
 	// Create TUS handler with pre-upload validation
@@ -424,6 +426,46 @@ func (h *UploadShareHandler) handleCompletedUploads() {
 			"shareOwner":    ownerUsername,
 			"uploadedVia":   "공유 링크",
 		})
+
+		// Send notification to share owner
+		if h.notificationService != nil && ownerID != "" {
+			title := "업로드 링크로 파일이 업로드되었습니다"
+			message := fmt.Sprintf("누군가가 '%s' 파일을 업로드했습니다 (%s)", filepath.Base(finalPath), formatFileSize(event.Upload.Size))
+			link := "/" + destPath
+			h.notificationService.Create(
+				ownerID,
+				NotifUploadLinkReceived,
+				title,
+				message,
+				link,
+				nil,
+				map[string]interface{}{
+					"shareToken": shareToken,
+					"filename":   filepath.Base(finalPath),
+					"size":       event.Upload.Size,
+					"clientIP":   clientIP,
+				},
+			)
+		}
+	}
+}
+
+// formatFileSize formats file size in human-readable format
+func formatFileSize(size int64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+	)
+	switch {
+	case size >= GB:
+		return fmt.Sprintf("%.1f GB", float64(size)/float64(GB))
+	case size >= MB:
+		return fmt.Sprintf("%.1f MB", float64(size)/float64(MB))
+	case size >= KB:
+		return fmt.Sprintf("%.1f KB", float64(size)/float64(KB))
+	default:
+		return fmt.Sprintf("%d bytes", size)
 	}
 }
 

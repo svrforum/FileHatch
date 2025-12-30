@@ -36,6 +36,8 @@ interface ContextMenuProps {
   onView: (file: FileInfo) => void
   onRename: (file: FileInfo) => void
   onCopy: (file: FileInfo) => void
+  onMoveTo: (paths: string[]) => void
+  onCopyTo: (paths: string[]) => void
   onCompress: (paths: string[]) => void
   onExtract: (file: FileInfo) => void
   onShare: (file: FileInfo) => void
@@ -73,6 +75,8 @@ function ContextMenu({
   onView,
   onRename,
   onCopy,
+  onMoveTo,
+  onCopyTo,
   onCompress,
   onExtract,
   onShare,
@@ -345,6 +349,31 @@ function ContextMenu({
             </svg>
             복사
           </button>
+          <div className="context-menu-divider" />
+          <button className="context-menu-item" onClick={() => {
+            onMoveTo(contextMenu.selectedPaths.length > 0 ? contextMenu.selectedPaths : [contextMenu.file.path])
+            onClose()
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M5 9L2 12L5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M9 12H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H11C10.4696 21 9.96086 20.7893 9.58579 20.4142C9.21071 20.0391 9 19.5304 9 19V5C9 4.46957 9.21071 3.96086 9.58579 3.58579C9.96086 3.21071 10.4696 3 11 3H16L22 9V19Z" stroke="currentColor" strokeWidth="2"/>
+              <path d="M16 3V9H22" stroke="currentColor" strokeWidth="2"/>
+            </svg>
+            {contextMenu.selectedPaths.length > 1 ? `${contextMenu.selectedPaths.length}개 이동...` : '이동...'}
+          </button>
+          <button className="context-menu-item" onClick={() => {
+            onCopyTo(contextMenu.selectedPaths.length > 0 ? contextMenu.selectedPaths : [contextMenu.file.path])
+            onClose()
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="2"/>
+              <path d="M5 15H4C2.89543 15 2 14.1046 2 13V4C2 2.89543 2.89543 2 4 2H13C14.1046 2 15 2.89543 15 4V5" stroke="currentColor" strokeWidth="2"/>
+              <path d="M12 14V18M10 16H14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            {contextMenu.selectedPaths.length > 1 ? `${contextMenu.selectedPaths.length}개 복사...` : '복사...'}
+          </button>
+          <div className="context-menu-divider" />
           <button className="context-menu-item" onClick={() => {
             onCompress(contextMenu.selectedPaths)
           }}>

@@ -55,17 +55,19 @@ type SharedFolderWithPermission struct {
 
 // SharedFolderHandler handles shared folder operations
 type SharedFolderHandler struct {
-	db           *sql.DB
-	dataRoot     string
-	auditHandler *AuditHandler
+	db                  *sql.DB
+	dataRoot            string
+	auditHandler        *AuditHandler
+	notificationService *NotificationService
 }
 
 // NewSharedFolderHandler creates a new SharedFolderHandler
-func NewSharedFolderHandler(db *sql.DB, dataRoot string) *SharedFolderHandler {
+func NewSharedFolderHandler(db *sql.DB, dataRoot string, notificationService *NotificationService) *SharedFolderHandler {
 	return &SharedFolderHandler{
-		db:           db,
-		dataRoot:     dataRoot,
-		auditHandler: NewAuditHandler(db, dataRoot),
+		db:                  db,
+		dataRoot:            dataRoot,
+		auditHandler:        NewAuditHandler(db, dataRoot),
+		notificationService: notificationService,
 	}
 }
 
@@ -544,6 +546,30 @@ func (h *SharedFolderHandler) AddMember(c echo.Context) error {
 			"permissionLevel": req.PermissionLevel,
 		})
 
+	// Send notification to the invited user
+	if h.notificationService != nil {
+		permLabel := "읽기"
+		if req.PermissionLevel == PermissionReadWrite {
+			permLabel = "읽기/쓰기"
+		}
+		title := "공유 폴더에 초대되었습니다"
+		message := claims.Username + "님이 '" + folderName + "' 폴더에 초대했습니다 (" + permLabel + " 권한)"
+		link := "/shared/" + folderID
+		h.notificationService.Create(
+			req.UserID,
+			NotifSharedFolderInvited,
+			title,
+			message,
+			link,
+			&claims.UserID,
+			map[string]interface{}{
+				"folderId":        folderID,
+				"folderName":      folderName,
+				"permissionLevel": req.PermissionLevel,
+			},
+		)
+	}
+
 	return c.JSON(http.StatusOK, map[string]string{"message": "Member added successfully"})
 }
 
@@ -636,6 +662,24 @@ func (h *SharedFolderHandler) RemoveMember(c echo.Context) error {
 		map[string]interface{}{
 			"memberUserId": userID,
 		})
+
+	// Send notification to the removed user
+	if h.notificationService != nil {
+		title := "공유 폴더에서 제외되었습니다"
+		message := "'" + folderName + "' 폴더에서 제외되었습니다"
+		h.notificationService.Create(
+			userID,
+			NotifSharedFolderRemoved,
+			title,
+			message,
+			"",
+			&claims.UserID,
+			map[string]interface{}{
+				"folderId":   folderID,
+				"folderName": folderName,
+			},
+		)
+	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Member removed successfully"})
 }

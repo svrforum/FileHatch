@@ -25,6 +25,7 @@ const AdminSSOSettings = lazy(() => import('./components/AdminSSOSettings'))
 const AdminLogs = lazy(() => import('./components/AdminLogs'))
 const AdminSharedFolders = lazy(() => import('./components/AdminSharedFolders'))
 const MyActivity = lazy(() => import('./components/MyActivity'))
+const NotificationCenter = lazy(() => import('./components/NotificationCenter'))
 
 // Admin loading skeleton
 function AdminSkeleton() {
@@ -90,6 +91,36 @@ function App() {
   useEffect(() => {
     refreshProfile()
   }, [refreshProfile])
+
+  // Sync currentPath based on URL location (especially for shared-drive routes)
+  useEffect(() => {
+    const pathname = location.pathname
+
+    // Handle shared-drive routes: /shared-drive/{folderName}/... -> /shared/{folderName}/...
+    if (pathname.startsWith('/shared-drive/')) {
+      const pathAfterPrefix = pathname.substring('/shared-drive/'.length) // Remove '/shared-drive/'
+      const newPath = `/shared/${pathAfterPrefix}`
+      if (currentPath !== newPath) {
+        setCurrentPath(newPath)
+      }
+    }
+    // Handle special share views
+    else if (pathname === '/shared-with-me' || pathname === '/shared-by-me' || pathname === '/link-shares') {
+      if (currentPath !== pathname) {
+        setCurrentPath(pathname)
+      }
+    }
+    // Handle /files route - keep existing currentPath if it's a valid path
+    else if (pathname === '/files' || pathname === '/') {
+      // Only reset to /home if currentPath is a special view that shouldn't persist
+      if (currentPath.startsWith('/shared-with-me') ||
+          currentPath.startsWith('/shared-by-me') ||
+          currentPath.startsWith('/link-shares') ||
+          currentPath.startsWith('/shared/')) {
+        setCurrentPath('/home')
+      }
+    }
+  }, [location.pathname, currentPath])
 
   // Handle share access page (public route, no auth required)
   if (location.pathname.startsWith('/s/')) {
@@ -243,6 +274,11 @@ function App() {
               <Route path="/my-activity" element={
                 <Suspense fallback={<FileListSkeleton />}>
                   <MyActivity onNavigate={handleNavigate} onFileSelect={handleFileSelect} />
+                </Suspense>
+              } />
+              <Route path="/notifications" element={
+                <Suspense fallback={<FileListSkeleton />}>
+                  <NotificationCenter />
                 </Suspense>
               } />
               <Route path="/scvadmin/users" element={

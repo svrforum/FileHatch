@@ -10,11 +10,33 @@ interface FileChangeEvent {
   timestamp: number
 }
 
+interface NotificationEventData {
+  id: number
+  userId: string
+  type: string
+  title: string
+  message?: string
+  link?: string
+  actorId?: string
+  actorName?: string
+  isRead: boolean
+  createdAt: string
+  metadata?: Record<string, unknown>
+}
+
+interface NotificationEvent {
+  type: 'notification'
+  data: NotificationEventData
+}
+
+type WebSocketMessage = FileChangeEvent | NotificationEvent
+
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 
 interface UseFileWatcherOptions {
   watchPaths?: string[]
   onFileChange?: (event: FileChangeEvent) => void
+  onNotification?: (notification: NotificationEventData) => void
   onConnectionStateChange?: (state: ConnectionState) => void
 }
 
@@ -24,7 +46,7 @@ const MAX_RETRY_DELAY = 30000     // 30 seconds
 const MAX_RETRY_ATTEMPTS = 10
 
 export function useFileWatcher(options: UseFileWatcherOptions = {}) {
-  const { watchPaths = ['/home', '/shared'], onFileChange, onConnectionStateChange } = options
+  const { watchPaths = ['/home', '/shared'], onFileChange, onNotification, onConnectionStateChange } = options
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isConnectingRef = useRef(false)
@@ -41,11 +63,16 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
 
   // Store callbacks in refs to avoid dependency changes
   const onFileChangeRef = useRef(onFileChange)
+  const onNotificationRef = useRef(onNotification)
   const watchPathsRef = useRef(watchPaths)
 
   useEffect(() => {
     onFileChangeRef.current = onFileChange
   }, [onFileChange])
+
+  useEffect(() => {
+    onNotificationRef.current = onNotification
+  }, [onNotification])
 
   useEffect(() => {
     watchPathsRef.current = watchPaths
@@ -105,7 +132,19 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
 
         ws.onmessage = (event) => {
           try {
-            const data: FileChangeEvent = JSON.parse(event.data)
+            const message: WebSocketMessage = JSON.parse(event.data)
+
+            // Handle notification events
+            if (message.type === 'notification') {
+              console.log('[WebSocket] Notification:', message.data)
+              if (onNotificationRef.current) {
+                onNotificationRef.current(message.data)
+              }
+              return
+            }
+
+            // Handle file change events
+            const data = message as FileChangeEvent
             console.log('[WebSocket] File change:', data)
 
             // Call custom handler if provided

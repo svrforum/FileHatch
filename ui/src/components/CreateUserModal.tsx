@@ -48,6 +48,17 @@ function CreateUserModal({ isOpen, onClose, onCreated }: CreateUserModalProps) {
     }
   }, [isOpen])
 
+  // ESC key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
   const resetForm = () => {
     setUsername('')
     setEmail('')

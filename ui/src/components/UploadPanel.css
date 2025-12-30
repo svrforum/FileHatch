@@ -250,3 +250,119 @@
   background: rgba(244, 67, 54, 0.1);
   color: var(--color-error);
 }
+
+/* Transfer (move/copy) specific styles */
+.stat.transferring {
+  color: #F59E0B;
+}
+
+.stat.error {
+  color: var(--color-error);
+}
+
+.upload-panel-item.transfer {
+  border-left: 3px solid #F59E0B;
+}
+
+.upload-panel-item.transfer.move {
+  border-left-color: #F59E0B;
+}
+
+.upload-panel-item.transfer.copy {
+  border-left-color: #8B5CF6;
+}
+
+.upload-panel-item.transfer.completed {
+  border-left-color: var(--color-success);
+}
+
+.upload-panel-item.transfer.error {
+  border-left-color: var(--color-error);
+}
+
+.spinner-small.transfer {
+  border-top-color: #F59E0B;
+}
+
+.item-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.transfer-type-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #F59E0B;
+}
+
+.upload-panel-item.copy .transfer-type-icon {
+  color: #8B5CF6;
+}
+
+.item-dest {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transfer-status {
+  font-size: 12px;
+  color: #F59E0B;
+  font-weight: 500;
+}
+
+.transfer-status.pending {
+  color: var(--text-tertiary);
+}
+
+/* Progress bar for transfers */
+.progress-bar-mini.transfer {
+  flex: 1;
+  height: 4px;
+  background: var(--border-light);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill.move {
+  background: #F59E0B;
+}
+
+.progress-fill.copy {
+  background: #8B5CF6;
+}
+
+.speed-text.move {
+  background: rgba(245, 158, 11, 0.1);
+  color: #F59E0B;
+}
+
+.speed-text.copy {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8B5CF6;
+}
+
+.current-file {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.file-count {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.transfer-complete-info {
+  font-size: 11px;
+  color: var(--color-success);
+}

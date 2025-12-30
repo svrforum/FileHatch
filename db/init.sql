@@ -172,7 +172,24 @@ CREATE INDEX IF NOT EXISTS idx_file_metadata_user ON file_metadata(user_id);
 CREATE INDEX IF NOT EXISTS idx_file_metadata_path ON file_metadata(file_path);
 CREATE INDEX IF NOT EXISTS idx_file_metadata_tags ON file_metadata USING GIN(tags);
 
--- 10. SSO Providers (OAuth2/OIDC Configuration)
+-- 10. Notifications (In-app alerts)
+CREATE TABLE IF NOT EXISTS notifications (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,                -- 알림 타입 (share.received, share_link.accessed 등)
+    title VARCHAR(255) NOT NULL,              -- 알림 제목
+    message TEXT,                              -- 상세 메시지
+    link VARCHAR(500),                         -- 클릭 시 이동할 경로
+    actor_id UUID REFERENCES users(id) ON DELETE SET NULL,  -- 알림 발생시킨 사용자
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    metadata JSONB                             -- 추가 데이터
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
+
+-- 11. SSO Providers (OAuth2/OIDC Configuration)
 CREATE TABLE IF NOT EXISTS sso_providers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100) NOT NULL,              -- Display name (e.g., "Google", "Company Keycloak")
@@ -216,4 +233,5 @@ COMMENT ON TABLE shared_folder_members IS 'User access permissions for shared dr
 COMMENT ON TABLE file_shares IS 'User-to-user file/folder sharing with RO/RW permissions';
 COMMENT ON TABLE system_settings IS 'System-wide configuration settings';
 COMMENT ON TABLE file_metadata IS 'File descriptions and tags for organization';
+COMMENT ON TABLE notifications IS 'In-app notification alerts for users';
 COMMENT ON TABLE sso_providers IS 'OAuth2/OIDC SSO provider configurations';

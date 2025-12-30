@@ -68,6 +68,18 @@ function AdminSSOSettings() {
     }
   }, [currentUser?.isAdmin, token])
 
+  // ESC key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showProviderModal) {
+        setShowProviderModal(false)
+        setEditingProvider(null)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [showProviderModal])
+
   // Load SSO settings and providers
   const loadSsoData = async () => {
     if (!token) return

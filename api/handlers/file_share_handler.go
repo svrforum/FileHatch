@@ -36,15 +36,17 @@ type FileShare struct {
 
 // FileShareHandler handles file sharing operations
 type FileShareHandler struct {
-	db           *sql.DB
-	auditHandler *AuditHandler
+	db                  *sql.DB
+	auditHandler        *AuditHandler
+	notificationService *NotificationService
 }
 
 // NewFileShareHandler creates a new FileShareHandler
-func NewFileShareHandler(db *sql.DB) *FileShareHandler {
+func NewFileShareHandler(db *sql.DB, notificationService *NotificationService) *FileShareHandler {
 	return &FileShareHandler{
-		db:           db,
-		auditHandler: NewAuditHandler(db, "/data"),
+		db:                  db,
+		auditHandler:        NewAuditHandler(db, "/data"),
+		notificationService: notificationService,
 	}
 }
 
@@ -123,6 +125,35 @@ func (h *FileShareHandler) CreateFileShare(c echo.Context) error {
 		"permissionLevel": req.PermissionLevel,
 		"isFolder":        req.IsFolder,
 	})
+
+	// Send notification to the shared-with user
+	if h.notificationService != nil {
+		itemType := "파일"
+		if req.IsFolder {
+			itemType = "폴더"
+		}
+		permLabel := "읽기"
+		if req.PermissionLevel == FileShareReadWrite {
+			permLabel = "읽기/쓰기"
+		}
+		title := claims.Username + "님이 " + itemType + "을 공유했습니다"
+		message := "'" + req.ItemName + "' (" + permLabel + " 권한)"
+		link := "/shared-with-me"
+		h.notificationService.Create(
+			req.SharedWithID,
+			NotifShareReceived,
+			title,
+			message,
+			link,
+			&claims.UserID,
+			map[string]interface{}{
+				"itemPath":        req.ItemPath,
+				"itemName":        req.ItemName,
+				"isFolder":        req.IsFolder,
+				"permissionLevel": req.PermissionLevel,
+			},
+		)
+	}
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"id":      shareID,
@@ -243,8 +274,22 @@ func (h *FileShareHandler) UpdateFileShare(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid permission level"})
 	}
 
+	// Get share info before updating for notification
+	var sharedWithID, itemName string
+	var isFolder bool
+	err := h.db.QueryRow(`
+		SELECT shared_with_id, item_name, is_folder FROM file_shares
+		WHERE id = $1 AND owner_id = $2
+	`, shareID, claims.UserID).Scan(&sharedWithID, &itemName, &isFolder)
+	if err == sql.ErrNoRows {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "Share not found or not owned by you"})
+	}
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+	}
+
 	// Update the share (only owner can update)
-	result, err := h.db.Exec(`
+	_, err = h.db.Exec(`
 		UPDATE file_shares
 		SET permission_level = $1, updated_at = NOW()
 		WHERE id = $2 AND owner_id = $3
@@ -254,15 +299,34 @@ func (h *FileShareHandler) UpdateFileShare(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update share"})
 	}
 
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "Share not found or not owned by you"})
-	}
-
 	// Audit log
 	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file_share_update", shareID, map[string]interface{}{
 		"permissionLevel": req.PermissionLevel,
 	})
+
+	// Send notification to the shared-with user
+	if h.notificationService != nil {
+		permLabel := "읽기"
+		if req.PermissionLevel == FileShareReadWrite {
+			permLabel = "읽기/쓰기"
+		}
+		title := "공유 권한이 변경되었습니다"
+		message := claims.Username + "님이 '" + itemName + "' 권한을 " + permLabel + "(으)로 변경했습니다"
+		link := "/shared-with-me"
+		h.notificationService.Create(
+			sharedWithID,
+			NotifSharePermissionChanged,
+			title,
+			message,
+			link,
+			&claims.UserID,
+			map[string]interface{}{
+				"itemName":           itemName,
+				"isFolder":           isFolder,
+				"newPermissionLevel": req.PermissionLevel,
+			},
+		)
+	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Share updated successfully"})
 }
@@ -279,9 +343,13 @@ func (h *FileShareHandler) DeleteFileShare(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Share ID required"})
 	}
 
-	// Get share info before deleting for audit log
-	var itemPath string
-	err := h.db.QueryRow("SELECT item_path FROM file_shares WHERE id = $1 AND owner_id = $2", shareID, claims.UserID).Scan(&itemPath)
+	// Get share info before deleting for audit log and notification
+	var itemPath, itemName, sharedWithID string
+	var isFolder bool
+	err := h.db.QueryRow(`
+		SELECT item_path, item_name, shared_with_id, is_folder
+		FROM file_shares WHERE id = $1 AND owner_id = $2
+	`, shareID, claims.UserID).Scan(&itemPath, &itemName, &sharedWithID, &isFolder)
 	if err == sql.ErrNoRows {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "Share not found or not owned by you"})
 	}
@@ -297,6 +365,28 @@ func (h *FileShareHandler) DeleteFileShare(c echo.Context) error {
 
 	// Audit log
 	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file_share_delete", itemPath, nil)
+
+	// Send notification to the shared-with user
+	if h.notificationService != nil {
+		itemType := "파일"
+		if isFolder {
+			itemType = "폴더"
+		}
+		title := "공유가 취소되었습니다"
+		message := claims.Username + "님이 '" + itemName + "' " + itemType + " 공유를 취소했습니다"
+		h.notificationService.Create(
+			sharedWithID,
+			NotifShareRemoved,
+			title,
+			message,
+			"",
+			&claims.UserID,
+			map[string]interface{}{
+				"itemName": itemName,
+				"isFolder": isFolder,
+			},
+		)
+	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Share deleted successfully"})
 }

@@ -84,8 +84,14 @@ func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPR
 	username := hook.Upload.MetaData["username"]
 	uploadSize := hook.Upload.Size
 
+	// Debug logging
+	fmt.Printf("[TUS-PreUpload] Received metadata: path=%s, filename=%s, username=%s, size=%d\n",
+		destPath, filename, username, uploadSize)
+	fmt.Printf("[TUS-PreUpload] All metadata: %+v\n", hook.Upload.MetaData)
+
 	// Validate required metadata
 	if filename == "" {
+		fmt.Printf("[TUS-PreUpload] REJECTED: filename is empty\n")
 		resp.StatusCode = 400
 		resp.Body = `{"error":"Filename is required"}`
 		return resp, changes, tusd.ErrUploadRejectedByServer
@@ -97,6 +103,7 @@ func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPR
 
 	// Prevent uploads directly to /shared/ root (must upload inside a shared folder)
 	if destPath == "/shared" || destPath == "/shared/" {
+		fmt.Printf("[TUS-PreUpload] REJECTED: cannot upload to shared root\n")
 		resp.StatusCode = 403
 		resp.Body = `{"error":"공유 드라이브 루트에는 파일을 업로드할 수 없습니다"}`
 		return resp, changes, tusd.ErrUploadRejectedByServer
@@ -105,6 +112,7 @@ func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPR
 	// Validate path security
 	_, err := h.resolveVirtualPath(destPath, username)
 	if err != nil {
+		fmt.Printf("[TUS-PreUpload] REJECTED: path validation failed: %s\n", err.Error())
 		resp.StatusCode = 400
 		resp.Body = fmt.Sprintf(`{"error":"Invalid upload path: %s"}`, err.Error())
 		return resp, changes, tusd.ErrUploadRejectedByServer

@@ -4,6 +4,7 @@ import { fetchFiles, downloadFileWithProgress, getFolderStats, renameItem, copyI
 import { getMySharedFolders, SharedFolderWithPermission } from '../api/sharedFolders'
 import { getSharedWithMe, getSharedByMe, getMyShareLinks, SharedWithMeItem, SharedByMeItem, LinkShare, deleteFileShare, deleteShareLink } from '../api/fileShares'
 import { useUploadStore } from '../stores/uploadStore'
+import { useTransferStore } from '../stores/transferStore'
 import { useFileWatcher } from '../hooks/useFileWatcher'
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation'
 import { useMarqueeSelection } from '../hooks/useMarqueeSelection'
@@ -19,6 +20,7 @@ import ZipViewer from './ZipViewer'
 import OnlyOfficeEditor from './OnlyOfficeEditor'
 import ShareModal from './ShareModal'
 import LinkShareModal from './LinkShareModal'
+import FolderSelectModal from './FolderSelectModal'
 import {
   SortField, SortOrder, ViewMode, ContextMenuType,
   FileCard, MultiSelectBar, ContextMenu, FileInfoPanel,
@@ -80,6 +82,10 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [pathsToDownload, setPathsToDownload] = useState<string[]>([])
   const [downloadingAsZip, setDownloadingAsZip] = useState(false)
+  // Move/Copy modal state
+  const [showMoveModal, setShowMoveModal] = useState(false)
+  const [showCopyModal, setShowCopyModal] = useState(false)
+  const [pathsToTransfer, setPathsToTransfer] = useState<string[]>([])
   const fileRowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   // File metadata state (description and tags)
@@ -110,6 +116,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null)
   const uploadStore = useUploadStore()
+  const transferStore = useTransferStore()
   const downloadStore = uploadStore
 
   // Fetch shared folders for name resolution
@@ -712,6 +719,71 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     setShowCompressModal(true)
   }, [closeContextMenu])
 
+  // Move to handler - opens folder select modal
+  const handleMoveTo = useCallback((paths: string[]) => {
+    if (paths.length === 0) return
+    closeContextMenu()
+    setPathsToTransfer(paths)
+    setShowMoveModal(true)
+  }, [closeContextMenu])
+
+  // Copy to handler - opens folder select modal
+  const handleCopyTo = useCallback((paths: string[]) => {
+    if (paths.length === 0) return
+    closeContextMenu()
+    setPathsToTransfer(paths)
+    setShowCopyModal(true)
+  }, [closeContextMenu])
+
+  // Execute move
+  const handleMoveConfirm = useCallback((destination: string) => {
+    if (pathsToTransfer.length === 0) return
+    setShowMoveModal(false)
+    // Convert paths to TransferItemInfo
+    const transferInfos = pathsToTransfer.map(path => {
+      const file = displayFiles.find(f => f.path === path)
+      return {
+        path,
+        name: file?.name || path.split('/').pop() || path,
+        size: file?.size,
+        isDirectory: file?.isDir,
+      }
+    })
+    transferStore.addTransfer('move', transferInfos, destination)
+    transferStore.startTransfers()
+    // Invalidate queries after a short delay to allow transfers to complete
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+      queryClient.invalidateQueries({ queryKey: ['files', destination] })
+    }, 500)
+    setSelectedFiles(new Set())
+    setSelectedFile(null)
+  }, [pathsToTransfer, displayFiles, transferStore, queryClient, currentPath, setSelectedFiles, setSelectedFile])
+
+  // Execute copy to destination
+  const handleCopyToConfirm = useCallback((destination: string) => {
+    if (pathsToTransfer.length === 0) return
+    setShowCopyModal(false)
+    // Convert paths to TransferItemInfo
+    const transferInfos = pathsToTransfer.map(path => {
+      const file = displayFiles.find(f => f.path === path)
+      return {
+        path,
+        name: file?.name || path.split('/').pop() || path,
+        size: file?.size,
+        isDirectory: file?.isDir,
+      }
+    })
+    transferStore.addTransfer('copy', transferInfos, destination)
+    transferStore.startTransfers()
+    // Invalidate queries after a short delay to allow transfers to complete
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['files', destination] })
+    }, 500)
+    setSelectedFiles(new Set())
+    setSelectedFile(null)
+  }, [pathsToTransfer, displayFiles, transferStore, queryClient, setSelectedFiles, setSelectedFile])
+
   // Actually execute compression
   const handleCompressConfirm = useCallback(async () => {
     if (pathsToCompress.length === 0 || !compressFileName.trim()) return
@@ -1091,6 +1163,8 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     containerRef,
     fileRowRefs,
     modalsOpen,
+    canGoBack: canGoBack(),
+    onGoBack: goBack,
     onDoubleClick: handleItemDoubleClick,
     onDelete: (file) => setDeleteTarget(file),
     onBulkDelete: handleBulkDelete,
@@ -1407,6 +1481,8 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         onView={(file) => setViewingFile(file)}
         onRename={handleRenameClick}
         onCopy={handleCopyClick}
+        onMoveTo={handleMoveTo}
+        onCopyTo={handleCopyTo}
         onCompress={handleCompress}
         onExtract={handleExtract}
         onShare={(file) => setShareTarget(file)}
@@ -1603,6 +1679,25 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
           isFolder={linkShareTarget.isDir}
         />
       )}
+
+      {/* Move Modal */}
+      <FolderSelectModal
+        isOpen={showMoveModal}
+        onClose={() => setShowMoveModal(false)}
+        onSelect={handleMoveConfirm}
+        title="이동할 위치 선택"
+        actionLabel="이동"
+        excludePaths={pathsToTransfer}
+      />
+
+      {/* Copy Modal */}
+      <FolderSelectModal
+        isOpen={showCopyModal}
+        onClose={() => setShowCopyModal(false)}
+        onSelect={handleCopyToConfirm}
+        title="복사할 위치 선택"
+        actionLabel="복사"
+      />
     </div>
   )
 }

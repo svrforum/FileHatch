@@ -15,6 +15,9 @@ interface UseKeyboardNavigationProps {
   fileRowRefs: React.MutableRefObject<Map<string, HTMLDivElement>>
   // Modal states for ESC handling
   modalsOpen: boolean
+  // Navigation
+  canGoBack: boolean
+  onGoBack: () => void
   // Handlers
   onDoubleClick: (file: FileInfo) => void
   onDelete: (file: FileInfo) => void
@@ -39,6 +42,8 @@ export function useKeyboardNavigation({
   containerRef,
   fileRowRefs,
   modalsOpen,
+  canGoBack,
+  onGoBack,
   onDoubleClick,
   onDelete,
   onBulkDelete,
@@ -198,8 +203,21 @@ export function useKeyboardNavigation({
           }
           break
         case 'Delete':
+          e.preventDefault()
+          if (selectedFiles.size > 0) {
+            const filesToDelete = files.filter(f => selectedFiles.has(f.path))
+            if (filesToDelete.length === 1) {
+              onDelete(filesToDelete[0])
+            } else if (filesToDelete.length > 1) {
+              onBulkDelete()
+            }
+          } else if (selectedFile) {
+            onDelete(selectedFile)
+          }
+          break
         case 'Backspace':
-          if (e.key === 'Delete' || (e.key === 'Backspace' && e.metaKey)) {
+          // Cmd/Ctrl+Backspace: Delete files
+          if (e.metaKey || e.ctrlKey) {
             e.preventDefault()
             if (selectedFiles.size > 0) {
               const filesToDelete = files.filter(f => selectedFiles.has(f.path))
@@ -211,6 +229,10 @@ export function useKeyboardNavigation({
             } else if (selectedFile) {
               onDelete(selectedFile)
             }
+          } else if (canGoBack) {
+            // Plain Backspace: Go to parent folder
+            e.preventDefault()
+            onGoBack()
           }
           break
         case 'Escape':
@@ -269,9 +291,9 @@ export function useKeyboardNavigation({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [
     displayFiles, focusedIndex, selectedFile, selectedFiles, viewMode,
-    containerRef, modalsOpen,
+    containerRef, modalsOpen, canGoBack,
     setFocusedIndex, setSelectedFile, setSelectedFiles,
     onDoubleClick, onDelete, onBulkDelete, onRename,
-    onCopy, onCut, onPaste, onUndo, onRedo
+    onCopy, onCut, onPaste, onUndo, onRedo, onGoBack
   ])
 }

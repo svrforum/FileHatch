@@ -96,6 +96,7 @@ type FileChangeEvent struct {
 type Client struct {
 	conn       *websocket.Conn
 	send       chan []byte
+	userID     string   // User ID for notification targeting
 	username   string
 	watchPaths []string // Virtual paths this client is watching
 }
@@ -185,6 +186,36 @@ func BroadcastFileChange(event FileChangeEvent) {
 	}
 }
 
+// NotificationEvent represents a notification message for WebSocket
+type NotificationEvent struct {
+	Type string       `json:"type"` // Always "notification"
+	Data *Notification `json:"data"`
+}
+
+// BroadcastNotification sends a notification to a specific user
+func BroadcastNotification(userID string, notif *Notification) {
+	event := NotificationEvent{
+		Type: "notification",
+		Data: notif,
+	}
+
+	data := mustMarshal(event)
+
+	hub.mu.RLock()
+	defer hub.mu.RUnlock()
+
+	for client := range hub.clients {
+		if client.userID == userID {
+			select {
+			case client.send <- data:
+				log.Printf("[WebSocket] Notification sent to user %s: %s", client.username, notif.Type)
+			default:
+				log.Printf("[WebSocket] Notification buffer full for user %s", client.username)
+			}
+		}
+	}
+}
+
 // HandleWebSocket handles WebSocket connections for file change notifications
 func (h *Handler) HandleWebSocket(c echo.Context) error {
 	// Get token from query parameter (WebSocket connections can't use Authorization header)
@@ -221,6 +252,7 @@ func (h *Handler) HandleWebSocket(c echo.Context) error {
 	client := &Client{
 		conn:       conn,
 		send:       make(chan []byte, 256),
+		userID:     claims.UserID,
 		username:   claims.Username,
 		watchPaths: []string{"/home", "/shared"}, // Default watch paths
 	}

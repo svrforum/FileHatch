@@ -179,20 +179,24 @@ func main() {
 	// Create TOTP handler for 2FA
 	totpHandler := handlers.NewTOTPHandler(db, auditHandler)
 
+	// Create Notification service and handler (must be before handlers that use it)
+	notificationService := handlers.NewNotificationService(db)
+	notificationHandler := handlers.NewNotificationHandler(notificationService)
+
 	// Create Share handler
-	shareHandler := handlers.NewShareHandler(db, dataRoot, auditHandler)
+	shareHandler := handlers.NewShareHandler(db, dataRoot, auditHandler, notificationService)
 
 	// Create Upload Share handler
-	uploadShareHandler, err := handlers.NewUploadShareHandler(db, dataRoot, auditHandler)
+	uploadShareHandler, err := handlers.NewUploadShareHandler(db, dataRoot, auditHandler, notificationService)
 	if err != nil {
 		log.Fatalf("Failed to create upload share handler: %v", err)
 	}
 
 	// Create Shared Folder handler
-	sharedFolderHandler := handlers.NewSharedFolderHandler(db, dataRoot)
+	sharedFolderHandler := handlers.NewSharedFolderHandler(db, dataRoot, notificationService)
 
 	// Create File Share handler
-	fileShareHandler := handlers.NewFileShareHandler(db)
+	fileShareHandler := handlers.NewFileShareHandler(db, notificationService)
 
 	// Create File Metadata handler (descriptions and tags)
 	fileMetadataHandler := handlers.NewFileMetadataHandler(db)
@@ -257,6 +261,8 @@ func main() {
 	api.PUT("/files/rename/*", h.RenameItem, authHandler.OptionalJWTMiddleware)
 	api.PUT("/files/move/*", h.MoveItem, authHandler.OptionalJWTMiddleware)
 	api.POST("/files/copy/*", h.CopyItem, authHandler.OptionalJWTMiddleware)
+	api.GET("/files/move-stream/*", h.MoveItemStream, authHandler.OptionalJWTMiddleware)
+	api.GET("/files/copy-stream/*", h.CopyItemStream, authHandler.OptionalJWTMiddleware)
 	api.POST("/folders", h.CreateFolder, authHandler.OptionalJWTMiddleware)
 	api.DELETE("/folders/*", h.DeleteFolder, authHandler.OptionalJWTMiddleware)
 	api.GET("/folders/stats/*", h.GetFolderStats, authHandler.OptionalJWTMiddleware)
@@ -312,6 +318,14 @@ func main() {
 
 	// Recent files API (protected)
 	authApi.GET("/files/recent", auditHandler.GetRecentFiles)
+
+	// Notifications API (protected)
+	authApi.GET("/notifications", notificationHandler.List)
+	authApi.GET("/notifications/unread-count", notificationHandler.GetUnreadCount)
+	authApi.PUT("/notifications/:id/read", notificationHandler.MarkAsRead)
+	authApi.PUT("/notifications/read-all", notificationHandler.MarkAllAsRead)
+	authApi.DELETE("/notifications/:id", notificationHandler.Delete)
+	authApi.DELETE("/notifications", notificationHandler.DeleteAllRead)
 
 	// Share API (protected for management)
 	authApi.POST("/shares", shareHandler.CreateShare)

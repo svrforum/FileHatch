@@ -14,16 +14,18 @@ import (
 )
 
 type ShareHandler struct {
-	db           *sql.DB
-	dataRoot     string
-	auditHandler *AuditHandler
+	db                  *sql.DB
+	dataRoot            string
+	auditHandler        *AuditHandler
+	notificationService *NotificationService
 }
 
-func NewShareHandler(db *sql.DB, dataRoot string, auditHandler *AuditHandler) *ShareHandler {
+func NewShareHandler(db *sql.DB, dataRoot string, auditHandler *AuditHandler, notificationService *NotificationService) *ShareHandler {
 	return &ShareHandler{
-		db:           db,
-		dataRoot:     dataRoot,
-		auditHandler: auditHandler,
+		db:                  db,
+		dataRoot:            dataRoot,
+		auditHandler:        auditHandler,
+		notificationService: notificationService,
 	}
 }
 
@@ -455,11 +457,12 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 	var accessCount int
 	var isActive bool
 	var requireLogin bool
+	var createdBy string
 
 	err := h.db.QueryRow(`
-		SELECT path, password_hash, expires_at, access_count, max_access, is_active, require_login
+		SELECT path, password_hash, expires_at, access_count, max_access, is_active, require_login, created_by
 		FROM shares WHERE token = $1
-	`, token).Scan(&path, &passwordHash, &expiresAt, &accessCount, &maxAccess, &isActive, &requireLogin)
+	`, token).Scan(&path, &passwordHash, &expiresAt, &accessCount, &maxAccess, &isActive, &requireLogin, &createdBy)
 
 	if err == sql.ErrNoRows {
 		return c.JSON(http.StatusNotFound, map[string]string{
@@ -514,8 +517,10 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 
 	// Log audit event for shared link download
 	var userID *string
+	var accessorUsername string
 	if claims, ok := c.Get("user").(*JWTClaims); ok && claims != nil {
 		userID = &claims.UserID
+		accessorUsername = claims.Username
 	}
 	h.auditHandler.LogEvent(userID, c.RealIP(), EventShareAccess, path, map[string]interface{}{
 		"action":   "download",
@@ -523,6 +528,32 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 		"filename": info.Name(),
 		"size":     info.Size(),
 	})
+
+	// Send notification to the share owner
+	if h.notificationService != nil {
+		title := "공유 링크가 접속되었습니다"
+		var message string
+		if accessorUsername != "" {
+			message = accessorUsername + "님이 '" + info.Name() + "' 파일을 다운로드했습니다"
+		} else {
+			message = "누군가가 '" + info.Name() + "' 파일을 다운로드했습니다 (IP: " + c.RealIP() + ")"
+		}
+		link := "/shared-by-me"
+		h.notificationService.Create(
+			createdBy,
+			NotifShareLinkAccessed,
+			title,
+			message,
+			link,
+			userID,
+			map[string]interface{}{
+				"token":    token,
+				"filename": info.Name(),
+				"size":     info.Size(),
+				"clientIP": c.RealIP(),
+			},
+		)
+	}
 
 	c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, info.Name()))
 	return c.File(fullPath)

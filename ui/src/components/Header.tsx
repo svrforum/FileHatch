@@ -3,6 +3,7 @@ import { useAuthStore } from '../stores/authStore'
 import { searchFiles, FileInfo, formatFileSize } from '../api/files'
 import { getMySharedFolders, SharedFolderWithPermission } from '../api/sharedFolders'
 import SearchModal from './SearchModal'
+import { NotificationBell } from './NotificationBell'
 import './Header.css'
 
 interface HeaderProps {
@@ -248,18 +249,7 @@ function Header({ onProfileClick, onNavigate, onFileSelect, currentPath = '/', i
         </div>
       )}
       <div className="header-right">
-        <button className="icon-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2"/>
-            <path d="M12 16V12M12 8H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-        </button>
-        <button className="icon-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M18 8C18 6.4087 17.3679 4.88258 16.2426 3.75736C15.1174 2.63214 13.5913 2 12 2C10.4087 2 8.88258 2.63214 7.75736 3.75736C6.63214 4.88258 6 6.4087 6 8C6 15 3 17 3 17H21C21 17 18 15 18 8Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M13.73 21C13.5542 21.3031 13.3019 21.5547 12.9982 21.7295C12.6946 21.9044 12.3504 21.9965 12 21.9965C11.6496 21.9965 11.3054 21.9044 11.0018 21.7295C10.6982 21.5547 10.4458 21.3031 10.27 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
+        <NotificationBell />
         {user && (
           <button className="avatar-btn" onClick={onProfileClick} title={user.username}>
             <div className="avatar">
