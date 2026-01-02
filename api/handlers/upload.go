@@ -156,6 +156,7 @@ func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPR
 }
 
 // checkUserQuota checks if user has enough storage quota for the upload
+// Quota is checked against home folder + trash usage (shared folders have separate quota)
 func (h *UploadHandler) checkUserQuota(username string, uploadSize int64) (bool, int64, error) {
 	// Get user quota from database (or use default)
 	var quota int64 = DefaultUserQuota
@@ -171,9 +172,12 @@ func (h *UploadHandler) checkUserQuota(username string, uploadSize int64) (bool,
 		return true, -1, nil
 	}
 
-	// Calculate current usage
+	// Calculate current usage (home folder + trash)
 	userPath := filepath.Join(h.dataRoot, "users", username)
+	trashPath := filepath.Join(h.dataRoot, "trash", username)
 	var currentUsage int64
+
+	// Count home folder usage
 	filepath.Walk(userPath, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
@@ -184,11 +188,28 @@ func (h *UploadHandler) checkUserQuota(username string, uploadSize int64) (bool,
 		return nil
 	})
 
+	// Count trash folder usage
+	filepath.Walk(trashPath, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			currentUsage += info.Size()
+		}
+		return nil
+	})
+
+	// Log for debugging
+	fmt.Printf("[QuotaCheck] User: %s, CurrentUsage: %d (home+trash), Quota: %d, UploadSize: %d\n",
+		username, currentUsage, quota, uploadSize)
+
 	remaining := quota - currentUsage
 	if uploadSize > remaining {
+		fmt.Printf("[QuotaCheck] REJECTED: remaining=%d < uploadSize=%d\n", remaining, uploadSize)
 		return false, remaining, nil
 	}
 
+	fmt.Printf("[QuotaCheck] ALLOWED: remaining=%d >= uploadSize=%d\n", remaining, uploadSize)
 	return true, remaining, nil
 }
 

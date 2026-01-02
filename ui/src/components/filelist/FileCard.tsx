@@ -133,6 +133,7 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(({
     <div
       ref={ref}
       className={classNames}
+      data-path={file.path}
       onClick={(e) => { onSelect(file, e); setFocusedIndex(index); }}
       onDoubleClick={() => onDoubleClick(file)}
       onContextMenu={(e) => onContextMenu(e, file)}

@@ -12,6 +12,31 @@ interface ShareInfo {
   expiresAt?: string
   requiresPassword?: boolean
   requiresLogin?: boolean
+  shareType?: string
+  editable?: boolean
+}
+
+interface OnlyOfficeConfig {
+  documentType: string
+  document: {
+    fileType: string
+    key: string
+    title: string
+    url: string
+  }
+  editorConfig: {
+    callbackUrl: string
+    user: {
+      id: string
+      name: string
+    }
+    lang: string
+    mode: string
+    customization: {
+      autosave: boolean
+      forcesave: boolean
+    }
+  }
 }
 
 type MediaType = 'video' | 'image' | 'audio' | 'text' | 'none'
@@ -19,8 +44,11 @@ type MediaType = 'video' | 'image' | 'audio' | 'text' | 'none'
 function ShareAccessPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  // Extract token from URL path: /s/:token
-  const token = location.pathname.split('/s/')[1]?.split('/')[0] || null
+  // Extract token from URL path: /s/:token or /e/:token (edit share)
+  const isEditShare = location.pathname.startsWith('/e/')
+  const token = isEditShare
+    ? location.pathname.split('/e/')[1]?.split('/')[0] || null
+    : location.pathname.split('/s/')[1]?.split('/')[0] || null
   const { token: authToken } = useAuthStore()
 
   const [loading, setLoading] = useState(true)
@@ -32,7 +60,31 @@ function ShareAccessPage() {
   const [showPreview, setShowPreview] = useState(false)
   const [textContent, setTextContent] = useState<string | null>(null)
   const [loadingText, setLoadingText] = useState(false)
+  const [showEditor, setShowEditor] = useState(false)
+  const [onlyOfficeConfig, setOnlyOfficeConfig] = useState<OnlyOfficeConfig | null>(null)
+  const [onlyOfficeAvailable, setOnlyOfficeAvailable] = useState(false)
+  const [onlyOfficePublicUrl, setOnlyOfficePublicUrl] = useState('')
   const videoRef = useRef<HTMLVideoElement>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
+
+  // Check OnlyOffice availability
+  useEffect(() => {
+    const checkOnlyOffice = async () => {
+      try {
+        const response = await fetch('/api/onlyoffice/settings')
+        const data = await response.json()
+        if (data.available) {
+          setOnlyOfficeAvailable(true)
+          setOnlyOfficePublicUrl(data.publicUrl)
+        }
+      } catch {
+        console.log('OnlyOffice not available')
+      }
+    }
+    if (isEditShare) {
+      checkOnlyOffice()
+    }
+  }, [isEditShare])
 
   const fetchShareInfo = useCallback(async (pwd?: string) => {
     if (!token) {
@@ -54,15 +106,19 @@ function ShareAccessPage() {
         headers['Authorization'] = `Bearer ${authToken}`
       }
 
-      const response = await fetch(`/api/s/${token}`, {
+      // Use different API path for edit shares
+      const apiPath = isEditShare ? `/api/e/${token}` : `/api/s/${token}`
+      const response = await fetch(apiPath, {
         method: 'POST',
         headers,
         body: JSON.stringify({ password: pwd || '' }),
       })
 
-      const data = await response.json()
+      const response_data = await response.json()
 
       if (response.ok) {
+        // API returns { success: true, data: {...} }
+        const data = response_data.data || response_data
         if (data.requiresPassword) {
           setNeedsPassword(true)
           setShareInfo(null)
@@ -75,14 +131,14 @@ function ShareAccessPage() {
           setNeedsLogin(false)
         }
       } else {
-        setError(data.error || '공유 링크에 접근할 수 없습니다')
+        setError(response_data.error || '공유 링크에 접근할 수 없습니다')
       }
     } catch {
       setError('공유 링크를 불러오는 중 오류가 발생했습니다')
     } finally {
       setLoading(false)
     }
-  }, [token, authToken])
+  }, [token, authToken, isEditShare])
 
   useEffect(() => {
     fetchShareInfo()
@@ -246,6 +302,67 @@ function ShareAccessPage() {
     }
   }
 
+  // Open OnlyOffice editor for editable shares
+  const handleOpenEditor = async () => {
+    if (!token || !onlyOfficeAvailable) return
+
+    try {
+      // Fetch OnlyOffice config from the edit share endpoint
+      let configUrl = `/api/e/${token}/config`
+      if (password) {
+        configUrl += `?password=${encodeURIComponent(password)}`
+      }
+
+      const response = await fetch(configUrl)
+      if (!response.ok) {
+        throw new Error('Failed to get editor config')
+      }
+
+      const config = await response.json()
+      setOnlyOfficeConfig(config)
+      setShowEditor(true)
+    } catch (err) {
+      console.error('Failed to open editor:', err)
+      setError('편집기를 열 수 없습니다')
+    }
+  }
+
+  // Initialize OnlyOffice editor when config is ready
+  useEffect(() => {
+    if (showEditor && onlyOfficeConfig && onlyOfficePublicUrl && editorRef.current) {
+      // Load OnlyOffice Document Server API
+      const script = document.createElement('script')
+      script.src = `${onlyOfficePublicUrl}/web-apps/apps/api/documents/api.js`
+      script.onload = () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const DocEditor = (window as any).DocsAPI?.DocEditor
+        if (DocEditor && editorRef.current) {
+          new DocEditor('share-onlyoffice-editor', onlyOfficeConfig)
+        }
+      }
+      document.head.appendChild(script)
+
+      return () => {
+        // Cleanup script when component unmounts
+        document.head.removeChild(script)
+      }
+    }
+  }, [showEditor, onlyOfficeConfig, onlyOfficePublicUrl])
+
+  const handleCloseEditor = () => {
+    setShowEditor(false)
+    setOnlyOfficeConfig(null)
+    // Refresh share info to get updated file info
+    fetchShareInfo(password)
+  }
+
+  // Check if file is editable with OnlyOffice
+  const isOnlyOfficeEditable = (filename: string): boolean => {
+    const ext = filename.split('.').pop()?.toLowerCase() || ''
+    const editableExts = ['doc', 'docx', 'odt', 'rtf', 'txt', 'xls', 'xlsx', 'ods', 'csv', 'ppt', 'pptx', 'odp', 'pdf']
+    return editableExts.includes(ext)
+  }
+
   // Loading state
   if (loading) {
     return (
@@ -360,6 +477,19 @@ function ShareAccessPage() {
 
             {!shareInfo.isDir && (
               <div className="share-action-buttons">
+                {/* Edit button for editable shares */}
+                {isEditShare && onlyOfficeAvailable && shareInfo.editable && isOnlyOfficeEditable(shareInfo.name) && (
+                  <button
+                    className="share-btn-primary share-edit-btn"
+                    onClick={handleOpenEditor}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" className="share-btn-icon">
+                      <path d="M11 4H4C3.44772 4 3 4.44772 3 5V20C3 20.5523 3.44772 21 4 21H19C19.5523 21 20 20.5523 20 20V13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      <path d="M18.5 2.5C18.8978 2.10217 19.4374 1.87868 20 1.87868C20.5626 1.87868 21.1022 2.10217 21.5 2.5C21.8978 2.89782 22.1213 3.43739 22.1213 4C22.1213 4.56261 21.8978 5.10217 21.5 5.5L12 15L8 16L9 12L18.5 2.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    편집
+                  </button>
+                )}
                 {canPreview && (
                   <button
                     className="share-btn-primary share-preview-btn"
@@ -481,6 +611,24 @@ function ShareAccessPage() {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* OnlyOffice Editor Overlay */}
+        {showEditor && onlyOfficeConfig && (
+          <div className="share-editor-overlay">
+            <div className="share-editor-header">
+              <span className="share-editor-title">{shareInfo.name}</span>
+              <button className="share-editor-close-btn" onClick={handleCloseEditor}>
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                닫기
+              </button>
+            </div>
+            <div className="share-editor-container">
+              <div id="share-onlyoffice-editor" ref={editorRef} style={{ width: '100%', height: '100%' }}></div>
             </div>
           </div>
         )}

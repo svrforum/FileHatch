@@ -1,3 +1,4 @@
+import { useModalKeyboard } from '../hooks/useModalKeyboard'
 import './UploadModal.css'
 
 interface ConfirmModalProps {
@@ -21,6 +22,12 @@ function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
+  const { confirmButtonRef } = useModalKeyboard({
+    isOpen,
+    onConfirm,
+    onCancel,
+  })
+
   if (!isOpen) return null
 
   return (
@@ -45,6 +52,7 @@ function ConfirmModal({
             {cancelText}
           </button>
           <button
+            ref={confirmButtonRef}
             className={danger ? 'btn-danger' : 'btn-primary'}
             onClick={onConfirm}
           >

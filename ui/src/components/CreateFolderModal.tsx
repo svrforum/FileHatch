@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { createFolder } from '../api/files'
 import './UploadModal.css'
 
@@ -13,6 +13,23 @@ function CreateFolderModal({ isOpen, onClose, currentPath, onCreated }: CreateFo
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Handle Escape key
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setName('')
+        setError('')
+        onClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()

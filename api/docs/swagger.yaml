@@ -1,0 +1,1608 @@
+basePath: /api
+definitions:
+  docs.AuditLog:
+    properties:
+      actorId:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      actorName:
+        example: admin
+        type: string
+      details: {}
+      eventType:
+        example: file.uploaded
+        type: string
+      id:
+        example: 1
+        type: integer
+      ipAddr:
+        example: 192.168.1.100
+        type: string
+      targetResource:
+        example: /home/admin/document.pdf
+        type: string
+      ts:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+    type: object
+  docs.AuditLogListResponse:
+    properties:
+      limit:
+        example: 100
+        type: integer
+      logs:
+        items:
+          $ref: '#/definitions/docs.AuditLog'
+        type: array
+      offset:
+        example: 0
+        type: integer
+      total:
+        example: 100
+        type: integer
+    type: object
+  docs.ErrorResponse:
+    properties:
+      error:
+        example: Error message
+        type: string
+      success:
+        example: false
+        type: boolean
+    type: object
+  docs.Notification:
+    properties:
+      actorName:
+        example: admin
+        type: string
+      createdAt:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      id:
+        example: 1
+        type: integer
+      isRead:
+        example: false
+        type: boolean
+      link:
+        example: /shared-with-me
+        type: string
+      message:
+        example: admin shared 'document.pdf' with you
+        type: string
+      title:
+        example: New file shared with you
+        type: string
+      type:
+        example: share.received
+        type: string
+    type: object
+  docs.NotificationListResponse:
+    properties:
+      limit:
+        example: 50
+        type: integer
+      notifications:
+        items:
+          $ref: '#/definitions/docs.Notification'
+        type: array
+      offset:
+        example: 0
+        type: integer
+      total:
+        example: 10
+        type: integer
+    type: object
+  docs.SuccessResponse:
+    properties:
+      data: {}
+      success:
+        example: true
+        type: boolean
+    type: object
+  docs.TrashItem:
+    properties:
+      deletedAt:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      deletedBy:
+        example: admin
+        type: string
+      id:
+        example: 1704067200000000000_document.pdf
+        type: string
+      isDir:
+        example: false
+        type: boolean
+      name:
+        example: document.pdf
+        type: string
+      originalPath:
+        example: /home/admin/document.pdf
+        type: string
+      size:
+        example: 1048576
+        type: integer
+    type: object
+  docs.TrashListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/docs.TrashItem'
+        type: array
+      total:
+        example: 5
+        type: integer
+      totalSize:
+        example: 5242880
+        type: integer
+    type: object
+  docs.TrashStatsResponse:
+    properties:
+      itemCount:
+        example: 10
+        type: integer
+      newestItem:
+        example: "2024-01-15T12:00:00Z"
+        type: string
+      oldestItem:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      oldestItemDaysLeft:
+        example: 15
+        type: integer
+      retentionDays:
+        example: 30
+        type: integer
+      totalSize:
+        example: 10485760
+        type: integer
+    type: object
+  docs.UnreadCountResponse:
+    properties:
+      unreadCount:
+        example: 5
+        type: integer
+    type: object
+  handlers.CopyProgress:
+    properties:
+      bytesPerSec:
+        type: integer
+      copiedBytes:
+        type: integer
+      copiedFiles:
+        type: integer
+      currentFile:
+        type: string
+      error:
+        type: string
+      newPath:
+        type: string
+      status:
+        description: '"started", "progress", "completed", "error"'
+        type: string
+      totalBytes:
+        type: integer
+      totalFiles:
+        type: integer
+    type: object
+  handlers.CopyRequest:
+    properties:
+      destination:
+        type: string
+    type: object
+  handlers.CreateFileShareRequest:
+    properties:
+      isFolder:
+        type: boolean
+      itemName:
+        type: string
+      itemPath:
+        type: string
+      message:
+        type: string
+      permissionLevel:
+        type: integer
+      sharedWithId:
+        type: string
+    type: object
+  handlers.CreateFolderRequest:
+    properties:
+      name:
+        type: string
+      path:
+        type: string
+    type: object
+  handlers.FileShare:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: integer
+      isFolder:
+        type: boolean
+      itemName:
+        type: string
+      itemPath:
+        type: string
+      message:
+        type: string
+      ownerId:
+        type: string
+      ownerUsername:
+        description: Additional fields for display
+        type: string
+      permissionLevel:
+        type: integer
+      sharedWithId:
+        type: string
+      sharedWithUsername:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  handlers.FolderStats:
+    properties:
+      fileCount:
+        type: integer
+      folderCount:
+        type: integer
+      path:
+        type: string
+      totalSize:
+        type: integer
+    type: object
+  handlers.MoveRequest:
+    properties:
+      destination:
+        type: string
+    type: object
+  handlers.RecentFile:
+    properties:
+      eventType:
+        type: string
+      isDir:
+        type: boolean
+      name:
+        type: string
+      path:
+        type: string
+      size:
+        type: integer
+      timestamp:
+        type: string
+    type: object
+  handlers.RenameRequest:
+    properties:
+      newName:
+        type: string
+    type: object
+  handlers.SharedFolderWithPermission:
+    properties:
+      createdAt:
+        type: string
+      createdBy:
+        type: string
+      creatorUsername:
+        description: Additional fields for display
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      isActive:
+        type: boolean
+      memberCount:
+        type: integer
+      name:
+        type: string
+      permissionLevel:
+        type: integer
+      storageQuota:
+        description: 0 = unlimited
+        type: integer
+      updatedAt:
+        type: string
+      usedStorage:
+        type: integer
+    type: object
+host: localhost:3080
+info:
+  contact:
+    email: support@simplecloudvault.io
+    name: API Support
+  description: |-
+    Enterprise-grade cloud file sharing and management API.
+    SimpleCloudVault provides comprehensive file management, sharing, and collaboration features.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  title: SimpleCloudVault API
+  version: "1.0"
+paths:
+  /audit/logs:
+    get:
+      consumes:
+      - application/json
+      description: Get audit logs with pagination and filtering by event type, category,
+        or resource
+      parameters:
+      - description: Filter by specific event type
+        in: query
+        name: eventType
+        type: string
+      - description: Filter by category (file, admin, user)
+        in: query
+        name: category
+        type: string
+      - description: Filter by target resource path
+        in: query
+        name: resource
+        type: string
+      - description: Maximum results (default 100, max 500)
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Audit logs
+          schema:
+            allOf:
+            - $ref: '#/definitions/docs.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/docs.AuditLogListResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List audit logs
+      tags:
+      - Audit
+  /audit/resource/{path}:
+    get:
+      consumes:
+      - application/json
+      description: Get audit history for a specific file or folder
+      parameters:
+      - description: Resource path
+        in: path
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Resource audit history
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get resource history
+      tags:
+      - Audit
+  /audit/system-logs:
+    get:
+      consumes:
+      - application/json
+      description: Get Docker container logs for the application (admin only)
+      parameters:
+      - description: Container name (api, ui, db, valkey)
+        in: query
+        name: container
+        type: string
+      - description: Log level filter (info, warn, error, fatal)
+        in: query
+        name: level
+        type: string
+      - description: Number of log lines (default 200, max 1000)
+        in: query
+        name: tail
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: System logs
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "403":
+          description: Forbidden (admin only)
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get system logs
+      tags:
+      - Audit
+  /copy-stream/{path}:
+    get:
+      description: Copy a file or folder with real-time progress updates via Server-Sent
+        Events
+      parameters:
+      - description: Source item path
+        in: path
+        name: path
+        required: true
+        type: string
+      - description: Destination folder path
+        in: query
+        name: destination
+        required: true
+        type: string
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE stream with progress updates
+          schema:
+            $ref: '#/definitions/handlers.CopyProgress'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "404":
+          description: Item not found
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Copy item with progress
+      tags:
+      - Files
+  /copy/{path}:
+    post:
+      consumes:
+      - application/json
+      description: Copy a file or folder to a new location
+      parameters:
+      - description: Source item path
+        in: path
+        name: path
+        required: true
+        type: string
+      - description: Destination path
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CopyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Item copied successfully
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "404":
+          description: Item not found
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Copy item
+      tags:
+      - Files
+  /file-shares:
+    post:
+      consumes:
+      - application/json
+      description: Share a file or folder with another user
+      parameters:
+      - description: File share request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateFileShareRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: File share created
+          schema:
+            allOf:
+            - $ref: '#/definitions/docs.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/handlers.FileShare'
+              type: object
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "409":
+          description: Share already exists
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create file share
+      tags:
+      - FileShares
+  /file/{path}:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently delete a file by path
+      parameters:
+      - description: File path
+        in: path
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: File deleted successfully
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: File not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete file
+      tags:
+      - Files
+    put:
+      consumes:
+      - text/plain
+      description: Save text content to an existing file (for text editor)
+      parameters:
+      - description: File path
+        in: path
+        name: path
+        required: true
+        type: string
+      - description: File content
+        in: body
+        name: content
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: File saved successfully
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: File not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Save file content
+      tags:
+      - Files
+  /files/{path}:
+    get:
+      description: Download a file by path. Supports both inline viewing and forced
+        download.
+      parameters:
+      - description: File path
+        in: path
+        name: path
+        required: true
+        type: string
+      - description: Force download with Content-Disposition attachment
+        in: query
+        name: download
+        type: boolean
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: File content
+          schema:
+            type: file
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: File not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Download file
+      tags:
+      - Download
+  /files/exists:
+    get:
+      consumes:
+      - application/json
+      description: Check if a file exists at the given path
+      parameters:
+      - description: Parent folder path
+        in: query
+        name: path
+        type: string
+      - description: Filename to check
+        in: query
+        name: filename
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: File existence status
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Check file exists
+      tags:
+      - Files
+  /files/recent:
+    get:
+      consumes:
+      - application/json
+      description: Get list of recently accessed files for the current user
+      parameters:
+      - description: Maximum results (default 100, max 500)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Recent files
+          schema:
+            allOf:
+            - $ref: '#/definitions/docs.SuccessResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/handlers.RecentFile'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get recent files
+      tags:
+      - Files
+  /folders:
+    post:
+      consumes:
+      - application/json
+      description: Create a new folder at the specified path
+      parameters:
+      - description: Folder creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateFolderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Folder created successfully
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Folder already exists
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create folder
+      tags:
+      - Files
+  /folders/{path}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a folder by path. Use force=true to delete non-empty folders.
+      parameters:
+      - description: Folder path
+        in: path
+        name: path
+        required: true
+        type: string
+      - description: Force delete non-empty folder
+        in: query
+        name: force
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Folder deleted successfully
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Folder not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Folder is not empty
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete folder
+      tags:
+      - Files
+  /folders/batch-stats:
+    post:
+      consumes:
+      - application/json
+      description: Get statistics for multiple folders in a single request (max 50
+        folders)
+      parameters:
+      - description: List of folder paths
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            paths:
+              items:
+                type: string
+              type: array
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Folder statistics by path
+          schema:
+            additionalProperties:
+              $ref: '#/definitions/handlers.FolderStats'
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Batch get folder statistics
+      tags:
+      - Files
+  /folders/stats/{path}:
+    get:
+      consumes:
+      - application/json
+      description: Get recursive statistics for a folder including file count, folder
+        count, and total size
+      parameters:
+      - description: Folder path
+        in: path
+        name: path
+        required: true
+        type: string
+      - description: Bypass cache and recompute stats
+        in: query
+        name: no-cache
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Folder statistics
+          schema:
+            $ref: '#/definitions/handlers.FolderStats'
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Path not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get folder statistics
+      tags:
+      - Files
+  /move-stream/{path}:
+    get:
+      description: Move a file or folder with real-time progress updates via Server-Sent
+        Events
+      parameters:
+      - description: Source item path
+        in: path
+        name: path
+        required: true
+        type: string
+      - description: Destination folder path
+        in: query
+        name: destination
+        required: true
+        type: string
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE stream with progress updates
+          schema:
+            $ref: '#/definitions/handlers.CopyProgress'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "404":
+          description: Item not found
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Move item with progress
+      tags:
+      - Files
+  /move/{path}:
+    post:
+      consumes:
+      - application/json
+      description: Move a file or folder to a new location
+      parameters:
+      - description: Source item path
+        in: path
+        name: path
+        required: true
+        type: string
+      - description: Destination path
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.MoveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Item moved successfully
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "404":
+          description: Item not found
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "409":
+          description: Item already exists
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Move item
+      tags:
+      - Files
+  /notifications:
+    get:
+      consumes:
+      - application/json
+      description: Get paginated list of notifications for the current user
+      parameters:
+      - description: Maximum number of notifications to return (default 50, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset for pagination (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of notifications
+          schema:
+            allOf:
+            - $ref: '#/definitions/docs.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/docs.NotificationListResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List notifications
+      tags:
+      - Notifications
+  /notifications/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a specific notification
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Notification deleted
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "400":
+          description: Invalid notification ID
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete notification
+      tags:
+      - Notifications
+  /notifications/{id}/read:
+    put:
+      consumes:
+      - application/json
+      description: Mark a specific notification as read
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Notification marked as read
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "400":
+          description: Invalid notification ID
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark notification as read
+      tags:
+      - Notifications
+  /notifications/read:
+    delete:
+      consumes:
+      - application/json
+      description: Delete all read notifications for the current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Read notifications deleted
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete all read notifications
+      tags:
+      - Notifications
+  /notifications/read-all:
+    put:
+      consumes:
+      - application/json
+      description: Mark all notifications as read for the current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: All notifications marked as read
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark all notifications as read
+      tags:
+      - Notifications
+  /notifications/unread-count:
+    get:
+      consumes:
+      - application/json
+      description: Get the number of unread notifications for the current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Unread count
+          schema:
+            allOf:
+            - $ref: '#/definitions/docs.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/docs.UnreadCountResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get unread notification count
+      tags:
+      - Notifications
+  /rename/{path}:
+    post:
+      consumes:
+      - application/json
+      description: Rename a file or folder
+      parameters:
+      - description: Item path
+        in: path
+        name: path
+        required: true
+        type: string
+      - description: New name
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RenameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Item renamed successfully
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "404":
+          description: Item not found
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "409":
+          description: Item already exists
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Rename item
+      tags:
+      - Files
+  /shared-folders/my:
+    get:
+      consumes:
+      - application/json
+      description: Get list of shared folders the current user has access to
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of shared folders
+          schema:
+            allOf:
+            - $ref: '#/definitions/docs.SuccessResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/handlers.SharedFolderWithPermission'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List my shared folders
+      tags:
+      - SharedFolders
+  /trash:
+    get:
+      consumes:
+      - application/json
+      description: Get all items in the user's trash, sorted by deletion time (newest
+        first)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of trash items
+          schema:
+            allOf:
+            - $ref: '#/definitions/docs.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/docs.TrashListResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List trash items
+      tags:
+      - Trash
+  /trash/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently delete an item from trash (irreversible)
+      parameters:
+      - description: Trash item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Item permanently deleted
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "404":
+          description: Trash item not found
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete from trash
+      tags:
+      - Trash
+  /trash/{path}:
+    post:
+      consumes:
+      - application/json
+      description: Move a file or folder to the user's trash (soft delete)
+      parameters:
+      - description: Item path to move to trash
+        in: path
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Item moved to trash
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "404":
+          description: Item not found
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Move to trash
+      tags:
+      - Trash
+  /trash/empty:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently delete all items from trash (irreversible)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trash emptied
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Empty trash
+      tags:
+      - Trash
+  /trash/restore/{id}:
+    post:
+      consumes:
+      - application/json
+      description: Restore an item from trash to its original location
+      parameters:
+      - description: Trash item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Item restored successfully
+          schema:
+            $ref: '#/definitions/docs.SuccessResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "404":
+          description: Trash item not found
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Restore from trash
+      tags:
+      - Trash
+  /trash/stats:
+    get:
+      consumes:
+      - application/json
+      description: Get statistics about the user's trash including item count, total
+        size, and retention info
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trash statistics
+          schema:
+            allOf:
+            - $ref: '#/definitions/docs.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/docs.TrashStatsResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get trash statistics
+      tags:
+      - Trash
+securityDefinitions:
+  BearerAuth:
+    description: 'JWT Bearer token. Format: "Bearer {token}"'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

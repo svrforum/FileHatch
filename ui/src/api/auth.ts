@@ -1,4 +1,14 @@
-const API_BASE = '/api'
+/**
+ * Authentication API
+ *
+ * Handles user authentication, profile management, 2FA, and SSO operations.
+ */
+
+import { api } from './client'
+
+// =============================================================================
+// User Types
+// =============================================================================
 
 export interface User {
   id: string
@@ -33,7 +43,20 @@ export interface AuthResponse {
   userId?: string
 }
 
-// 2FA interfaces
+export interface UpdateProfileRequest {
+  email?: string
+  currentPassword?: string
+  newPassword?: string
+}
+
+export interface SetSMBPasswordRequest {
+  password: string
+}
+
+// =============================================================================
+// 2FA Types
+// =============================================================================
+
 export interface TwoFASetupResponse {
   secret: string
   qrCodeUrl: string
@@ -52,256 +75,10 @@ export interface TwoFAEnableResponse {
   backupCodes: string[]
 }
 
-export interface UpdateProfileRequest {
-  email?: string
-  currentPassword?: string
-  newPassword?: string
-}
-
-export interface SetSMBPasswordRequest {
-  password: string
-}
-
-export async function login(data: LoginRequest): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Login failed')
-  }
-
-  return response.json()
-}
-
-// Admin functions
-export async function listUsers(token: string): Promise<{ users: User[]; total: number }> {
-  const response = await fetch(`${API_BASE}/admin/users`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to list users')
-  }
-
-  return response.json()
-}
-
-export async function createUser(token: string, data: CreateUserRequest): Promise<{ id: string }> {
-  const response = await fetch(`${API_BASE}/admin/users`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to create user')
-  }
-
-  return response.json()
-}
-
-export async function updateUser(
-  token: string,
-  userId: string,
-  data: { email?: string; password?: string; isAdmin?: boolean; isActive?: boolean; storageQuota?: number }
-): Promise<void> {
-  const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to update user')
-  }
-}
-
-export async function deleteUser(token: string, userId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to delete user')
-  }
-}
-
-export async function getProfile(token: string): Promise<User> {
-  const response = await fetch(`${API_BASE}/auth/profile`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to get profile')
-  }
-
-  const data = await response.json()
-  return data.user
-}
-
-export async function updateProfile(
-  token: string,
-  data: UpdateProfileRequest
-): Promise<User> {
-  const response = await fetch(`${API_BASE}/auth/profile`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      email: data.email,
-      oldPassword: data.currentPassword,
-      newPassword: data.newPassword,
-    }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to update profile')
-  }
-
-  const result = await response.json()
-  return result.user
-}
-
-export async function setSMBPassword(
-  token: string,
-  password: string
-): Promise<void> {
-  const response = await fetch(`${API_BASE}/auth/smb-password`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ password }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to set SMB password')
-  }
-}
-
-// 2FA Functions
-export async function get2FAStatus(token: string): Promise<TwoFAStatusResponse> {
-  const response = await fetch(`${API_BASE}/auth/2fa/status`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to get 2FA status')
-  }
-
-  return response.json()
-}
-
-export async function setup2FA(token: string): Promise<TwoFASetupResponse> {
-  const response = await fetch(`${API_BASE}/auth/2fa/setup`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to setup 2FA')
-  }
-
-  return response.json()
-}
-
-export async function enable2FA(token: string, code: string): Promise<TwoFAEnableResponse> {
-  const response = await fetch(`${API_BASE}/auth/2fa/enable`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ code }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to enable 2FA')
-  }
-
-  return response.json()
-}
-
-export async function disable2FA(token: string, password: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/auth/2fa/disable`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ password }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to disable 2FA')
-  }
-}
-
-export async function verify2FA(userId: string, code: string): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE}/auth/2fa/verify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, code }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || '2FA verification failed')
-  }
-
-  return response.json()
-}
-
-export async function regenerateBackupCodes(token: string): Promise<{ backupCodes: string[] }> {
-  const response = await fetch(`${API_BASE}/auth/2fa/backup-codes`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to regenerate backup codes')
-  }
-
-  return response.json()
-}
-
-export async function adminReset2FA(token: string, userId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/admin/users/${userId}/2fa`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to reset 2FA')
-  }
-}
-
+// =============================================================================
 // SSO Types
+// =============================================================================
+
 export interface SSOProviderPublic {
   id: string
   name: string
@@ -345,121 +122,262 @@ export interface SSOSettings {
   sso_allowed_domains: string
 }
 
-// SSO Functions
-export async function getSSOProviders(): Promise<SSOProvidersResponse> {
-  const response = await fetch(`${API_BASE}/auth/sso/providers`)
+// =============================================================================
+// Authentication Functions
+// =============================================================================
 
-  if (!response.ok) {
-    throw new Error('Failed to fetch SSO providers')
-  }
-
-  return response.json()
+/**
+ * Login with username and password
+ */
+export async function login(data: LoginRequest): Promise<AuthResponse> {
+  return api.post<AuthResponse>('/auth/login', data, { noAuth: true })
 }
 
-export async function getSSOAuthURL(providerId: string): Promise<{ authUrl: string; state: string }> {
-  const response = await fetch(`${API_BASE}/auth/sso/auth/${providerId}`)
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to get SSO auth URL')
-  }
-
-  return response.json()
+/**
+ * Get current user profile
+ * @param _token - Deprecated, token is now handled automatically
+ */
+export async function getProfile(_token?: string): Promise<User> {
+  const data = await api.get<{ user: User }>('/auth/profile')
+  return data.user
 }
 
-// Admin SSO Functions
-export async function listSSOProviders(token: string): Promise<SSOProvider[]> {
-  const response = await fetch(`${API_BASE}/admin/sso/providers`, {
-    headers: { Authorization: `Bearer ${token}` },
+/**
+ * Update current user profile
+ * @param _tokenOrData - If string, deprecated token. Otherwise, profile data.
+ * @param data - Profile data (only when first param is token)
+ */
+export async function updateProfile(
+  _tokenOrData: string | UpdateProfileRequest,
+  data?: UpdateProfileRequest
+): Promise<User> {
+  const profileData = typeof _tokenOrData === 'string' ? data! : _tokenOrData
+  const result = await api.put<{ user: User }>('/auth/profile', {
+    email: profileData.email,
+    oldPassword: profileData.currentPassword,
+    newPassword: profileData.newPassword,
   })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch SSO providers')
-  }
-
-  return response.json()
+  return result.user
 }
 
-export async function createSSOProvider(
-  token: string,
-  data: Omit<SSOProvider, 'id' | 'createdAt' | 'updatedAt'>
+/**
+ * Set SMB/WebDAV password
+ * @param _tokenOrPassword - If called with 2 params, first is token (deprecated). Otherwise, password.
+ * @param password - Password (only when first param is token)
+ */
+export async function setSMBPassword(_tokenOrPassword: string, password?: string): Promise<void> {
+  const pass = password ?? _tokenOrPassword
+  await api.put('/auth/smb-password', { password: pass })
+}
+
+// =============================================================================
+// 2FA Functions
+// =============================================================================
+
+/**
+ * Get 2FA status for current user
+ * @param _token - Deprecated, token is now handled automatically
+ */
+export async function get2FAStatus(_token?: string): Promise<TwoFAStatusResponse> {
+  return api.get<TwoFAStatusResponse>('/auth/2fa/status')
+}
+
+/**
+ * Setup 2FA - get QR code and secret
+ * @param _token - Deprecated, token is now handled automatically
+ */
+export async function setup2FA(_token?: string): Promise<TwoFASetupResponse> {
+  return api.get<TwoFASetupResponse>('/auth/2fa/setup')
+}
+
+/**
+ * Enable 2FA with verification code
+ * @param _tokenOrCode - If called with 2 params, first is token (deprecated). Otherwise, verification code.
+ * @param code - Verification code (only when first param is token)
+ */
+export async function enable2FA(_tokenOrCode: string, code?: string): Promise<TwoFAEnableResponse> {
+  const verificationCode = code ?? _tokenOrCode
+  return api.post<TwoFAEnableResponse>('/auth/2fa/enable', { code: verificationCode })
+}
+
+/**
+ * Disable 2FA with password confirmation
+ * @param _tokenOrPassword - If called with 2 params, first is token (deprecated). Otherwise, password.
+ * @param password - Password (only when first param is token)
+ */
+export async function disable2FA(_tokenOrPassword: string, password?: string): Promise<void> {
+  const pass = password ?? _tokenOrPassword
+  await api.post('/auth/2fa/disable', { password: pass })
+}
+
+/**
+ * Verify 2FA code during login (no auth required)
+ */
+export async function verify2FA(userId: string, code: string): Promise<AuthResponse> {
+  return api.post<AuthResponse>('/auth/2fa/verify', { userId, code }, { noAuth: true })
+}
+
+/**
+ * Regenerate backup codes
+ * @param _token - Deprecated, token is now handled automatically
+ */
+export async function regenerateBackupCodes(_token?: string): Promise<{ backupCodes: string[] }> {
+  return api.post<{ backupCodes: string[] }>('/auth/2fa/backup-codes')
+}
+
+// =============================================================================
+// Admin User Functions
+// =============================================================================
+
+/**
+ * List all users (admin only)
+ * @param _token - Deprecated, token is now handled automatically
+ */
+export async function listUsers(_token?: string): Promise<{ users: User[]; total: number }> {
+  return api.get<{ users: User[]; total: number }>('/admin/users')
+}
+
+/**
+ * Create a new user (admin only)
+ * @param _tokenOrData - If string, deprecated token (ignored). If object, user data.
+ * @param data - User data (only when first param is token)
+ */
+export async function createUser(
+  _tokenOrData: string | CreateUserRequest,
+  data?: CreateUserRequest
 ): Promise<{ id: string }> {
-  const response = await fetch(`${API_BASE}/admin/sso/providers`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to create SSO provider')
-  }
-
-  return response.json()
+  const userData = typeof _tokenOrData === 'string' ? data! : _tokenOrData
+  return api.post<{ id: string }>('/admin/users', userData)
 }
 
+/**
+ * Update a user (admin only)
+ * @param _tokenOrUserId - If called with token (deprecated), pass token here. Otherwise, user ID.
+ * @param userIdOrData - User ID or update data
+ * @param data - Update data (only when first param is token)
+ */
+export async function updateUser(
+  _tokenOrUserId: string,
+  userIdOrData: string | { email?: string; password?: string; isAdmin?: boolean; isActive?: boolean; storageQuota?: number },
+  data?: { email?: string; password?: string; isAdmin?: boolean; isActive?: boolean; storageQuota?: number }
+): Promise<void> {
+  // If called with 3 params, first is token (deprecated)
+  if (data !== undefined) {
+    await api.put(`/admin/users/${userIdOrData}`, data)
+  } else {
+    // If called with 2 params, first is userId
+    await api.put(`/admin/users/${_tokenOrUserId}`, userIdOrData)
+  }
+}
+
+/**
+ * Delete a user (admin only)
+ * @param _tokenOrUserId - If called with 2 params, first is token (deprecated). Otherwise, user ID.
+ * @param userId - User ID (only when first param is token)
+ */
+export async function deleteUser(_tokenOrUserId: string, userId?: string): Promise<void> {
+  const id = userId ?? _tokenOrUserId
+  await api.delete(`/admin/users/${id}`)
+}
+
+/**
+ * Reset 2FA for a user (admin only)
+ * @param _tokenOrUserId - If called with 2 params, first is token (deprecated). Otherwise, user ID.
+ * @param userId - User ID (only when first param is token)
+ */
+export async function adminReset2FA(_tokenOrUserId: string, userId?: string): Promise<void> {
+  const id = userId ?? _tokenOrUserId
+  await api.delete(`/admin/users/${id}/2fa`)
+}
+
+// =============================================================================
+// SSO Functions
+// =============================================================================
+
+/**
+ * Get available SSO providers (public, no auth required)
+ */
+export async function getSSOProviders(): Promise<SSOProvidersResponse> {
+  return api.get<SSOProvidersResponse>('/auth/sso/providers', { noAuth: true })
+}
+
+/**
+ * Get SSO authorization URL for a provider
+ */
+export async function getSSOAuthURL(providerId: string): Promise<{ authUrl: string; state: string }> {
+  return api.get<{ authUrl: string; state: string }>(`/auth/sso/auth/${providerId}`, { noAuth: true })
+}
+
+// =============================================================================
+// Admin SSO Functions
+// =============================================================================
+
+/**
+ * List all SSO providers (admin only)
+ * @param _token - Deprecated, token is now handled automatically
+ */
+export async function listSSOProviders(_token?: string): Promise<SSOProvider[]> {
+  return api.get<SSOProvider[]>('/admin/sso/providers')
+}
+
+/**
+ * Create a new SSO provider (admin only)
+ * @param _tokenOrData - If string, deprecated token. Otherwise, provider data.
+ * @param data - Provider data (only when first param is token)
+ */
+export async function createSSOProvider(
+  _tokenOrData: string | Omit<SSOProvider, 'id' | 'createdAt' | 'updatedAt'>,
+  data?: Omit<SSOProvider, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<{ id: string }> {
+  const providerData = typeof _tokenOrData === 'string' ? data! : _tokenOrData
+  return api.post<{ id: string }>('/admin/sso/providers', providerData)
+}
+
+/**
+ * Update an SSO provider (admin only)
+ * @param _tokenOrId - If called with 3 params, first is token (deprecated). Otherwise, provider ID.
+ * @param idOrData - Provider ID or update data
+ * @param data - Update data (only when first param is token)
+ */
 export async function updateSSOProvider(
-  token: string,
-  id: string,
-  data: Partial<Omit<SSOProvider, 'id' | 'createdAt' | 'updatedAt'>>
+  _tokenOrId: string,
+  idOrData: string | Partial<Omit<SSOProvider, 'id' | 'createdAt' | 'updatedAt'>>,
+  data?: Partial<Omit<SSOProvider, 'id' | 'createdAt' | 'updatedAt'>>
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/admin/sso/providers/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to update SSO provider')
+  if (data !== undefined) {
+    await api.put(`/admin/sso/providers/${idOrData}`, data)
+  } else {
+    await api.put(`/admin/sso/providers/${_tokenOrId}`, idOrData)
   }
 }
 
-export async function deleteSSOProvider(token: string, id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/admin/sso/providers/${id}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to delete SSO provider')
-  }
+/**
+ * Delete an SSO provider (admin only)
+ * @param _tokenOrId - If called with 2 params, first is token (deprecated). Otherwise, provider ID.
+ * @param id - Provider ID (only when first param is token)
+ */
+export async function deleteSSOProvider(_tokenOrId: string, id?: string): Promise<void> {
+  const providerId = id ?? _tokenOrId
+  await api.delete(`/admin/sso/providers/${providerId}`)
 }
 
-export async function getSSOSettings(token: string): Promise<SSOSettings> {
-  const response = await fetch(`${API_BASE}/admin/sso/settings`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch SSO settings')
-  }
-
-  return response.json()
+/**
+ * Get SSO settings (admin only)
+ * @param _token - Deprecated, token is now handled automatically
+ */
+export async function getSSOSettings(_token?: string): Promise<SSOSettings> {
+  return api.get<SSOSettings>('/admin/sso/settings')
 }
 
+/**
+ * Update SSO settings (admin only)
+ * @param _tokenOrSettings - If string, deprecated token. Otherwise, settings.
+ * @param settings - Settings (only when first param is token)
+ */
 export async function updateSSOSettings(
-  token: string,
-  settings: Partial<SSOSettings>
+  _tokenOrSettings: string | Partial<SSOSettings>,
+  settings?: Partial<SSOSettings>
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/admin/sso/settings`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(settings),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to update SSO settings')
-  }
+  const settingsData = typeof _tokenOrSettings === 'string' ? settings! : _tokenOrSettings
+  await api.put('/admin/sso/settings', settingsData)
 }

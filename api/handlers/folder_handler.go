@@ -24,6 +24,20 @@ type FolderStats struct {
 }
 
 // CreateFolder handles folder creation requests
+// @Summary		Create folder
+// @Description	Create a new folder at the specified path
+// @Tags		Files
+// @Accept		json
+// @Produce		json
+// @Param		request	body		CreateFolderRequest	true	"Folder creation request"
+// @Success		201		{object}	docs.SuccessResponse	"Folder created successfully"
+// @Failure		400		{object}	map[string]string	"Bad request"
+// @Failure		401		{object}	map[string]string	"Unauthorized"
+// @Failure		403		{object}	map[string]string	"Forbidden"
+// @Failure		409		{object}	map[string]string	"Folder already exists"
+// @Failure		500		{object}	map[string]string	"Internal server error"
+// @Security	BearerAuth
+// @Router		/folders [post]
 func (h *Handler) CreateFolder(c echo.Context) error {
 	var req CreateFolderRequest
 	if err := c.Bind(&req); err != nil {
@@ -134,6 +148,22 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 }
 
 // DeleteFolder handles folder deletion requests
+// @Summary		Delete folder
+// @Description	Delete a folder by path. Use force=true to delete non-empty folders.
+// @Tags		Files
+// @Accept		json
+// @Produce		json
+// @Param		path	path		string	true	"Folder path"
+// @Param		force	query		bool	false	"Force delete non-empty folder"
+// @Success		200		{object}	docs.SuccessResponse	"Folder deleted successfully"
+// @Failure		400		{object}	map[string]string	"Bad request"
+// @Failure		401		{object}	map[string]string	"Unauthorized"
+// @Failure		403		{object}	map[string]string	"Forbidden"
+// @Failure		404		{object}	map[string]string	"Folder not found"
+// @Failure		409		{object}	map[string]string	"Folder is not empty"
+// @Failure		500		{object}	map[string]string	"Internal server error"
+// @Security	BearerAuth
+// @Router		/folders/{path} [delete]
 func (h *Handler) DeleteFolder(c echo.Context) error {
 	requestPath := c.Param("*")
 	if requestPath == "" {
@@ -254,6 +284,21 @@ func (h *Handler) DeleteFolder(c echo.Context) error {
 
 // GetFolderStats returns statistics for a folder (recursive file/folder count and total size)
 // Uses caching for improved performance
+// @Summary		Get folder statistics
+// @Description	Get recursive statistics for a folder including file count, folder count, and total size
+// @Tags		Files
+// @Accept		json
+// @Produce		json
+// @Param		path		path		string	true	"Folder path"
+// @Param		no-cache	query		bool	false	"Bypass cache and recompute stats"
+// @Success		200		{object}	FolderStats	"Folder statistics"
+// @Failure		400		{object}	map[string]string	"Bad request"
+// @Failure		401		{object}	map[string]string	"Unauthorized"
+// @Failure		403		{object}	map[string]string	"Forbidden"
+// @Failure		404		{object}	map[string]string	"Path not found"
+// @Failure		500		{object}	map[string]string	"Internal server error"
+// @Security	BearerAuth
+// @Router		/folders/stats/{path} [get]
 func (h *Handler) GetFolderStats(c echo.Context) error {
 	requestPath := c.Param("*")
 	if requestPath == "" {
@@ -401,6 +446,16 @@ func (h *Handler) computeFolderStatsInternal(realPath string) (*CachedFolderStat
 }
 
 // BatchGetFolderStats returns statistics for multiple folders at once
+// @Summary		Batch get folder statistics
+// @Description	Get statistics for multiple folders in a single request (max 50 folders)
+// @Tags		Files
+// @Accept		json
+// @Produce		json
+// @Param		request	body		object{paths=[]string}	true	"List of folder paths"
+// @Success		200		{object}	map[string]FolderStats	"Folder statistics by path"
+// @Failure		400		{object}	map[string]string	"Bad request"
+// @Security	BearerAuth
+// @Router		/folders/batch-stats [post]
 func (h *Handler) BatchGetFolderStats(c echo.Context) error {
 	var req struct {
 		Paths []string `json:"paths"`

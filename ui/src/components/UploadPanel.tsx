@@ -67,20 +67,30 @@ function UploadPanel() {
     switch (item.status) {
       case 'completed':
         return (
-          <svg className="status-icon success" width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <svg className="status-icon success" width="20" height="20" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
             <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         )
       case 'error':
         return (
-          <svg className="status-icon error" width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <svg className="status-icon error" width="20" height="20" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
             <path d="M15 9L9 15M9 9L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
           </svg>
         )
       case 'uploading':
         return <div className="spinner-small" />
+      case 'paused':
+        return (
+          <div className="paused-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+              <rect x="9" y="8" width="2" height="8" rx="0.5" fill="currentColor"/>
+              <rect x="13" y="8" width="2" height="8" rx="0.5" fill="currentColor"/>
+            </svg>
+          </div>
+        )
       default:
         return null
     }
@@ -90,14 +100,14 @@ function UploadPanel() {
     switch (item.status) {
       case 'completed':
         return (
-          <svg className="status-icon success" width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <svg className="status-icon success" width="20" height="20" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
             <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         )
       case 'error':
         return (
-          <svg className="status-icon error" width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <svg className="status-icon error" width="20" height="20" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
             <path d="M15 9L9 15M9 9L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
           </svg>
@@ -131,8 +141,9 @@ function UploadPanel() {
   }
 
   return (
-    <div className="upload-panel">
-      <div className="upload-panel-header">
+    <div className="upload-panel-overlay" onClick={closePanel}>
+      <div className="upload-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="upload-panel-header">
         <h3>전송 현황</h3>
         <div className="upload-panel-actions">
           {totalCompletedCount > 0 && (
@@ -158,6 +169,14 @@ function UploadPanel() {
       </div>
 
       <div className="upload-panel-list">
+        {!hasItems && (
+          <div className="upload-panel-empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span>진행 중인 전송이 없습니다</span>
+          </div>
+        )}
         {items.map((item) => (
           <div key={item.id} className={`upload-panel-item ${item.status}`}>
             <div className="item-info">
@@ -178,6 +197,16 @@ function UploadPanel() {
                     {item.uploadSpeed && item.uploadSpeed > 0 && (
                       <span className="speed-text">{formatSpeed(item.uploadSpeed)}</span>
                     )}
+                  </div>
+                </>
+              )}
+              {item.status === 'paused' && (
+                <>
+                  <div className="progress-bar-mini paused">
+                    <div className="progress-fill paused" style={{ width: `${item.progress}%` }} />
+                  </div>
+                  <div className="progress-info">
+                    <span className="progress-text paused">{item.progress}% 일시정지</span>
                   </div>
                 </>
               )}
@@ -281,6 +310,7 @@ function UploadPanel() {
             </div>
           </div>
         ))}
+      </div>
       </div>
     </div>
   )

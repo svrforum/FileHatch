@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { useModalKeyboard } from '../hooks/useModalKeyboard'
 import * as tus from 'tus-js-client'
 import { formatFileSize, checkFileExists } from '../api/files'
 import { useAuthStore } from '../stores/authStore'
+import { useToastStore, parseUploadError } from '../stores/toastStore'
 import './UploadModal.css'
 
 // Helper to get auth token
@@ -131,10 +133,16 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
           overwrite: overwrite ? 'true' : 'false',
         },
         onError: (error) => {
+          // Parse error message for user-friendly display
+          const errorMessage = parseUploadError(error.message)
+
+          // Show toast notification for the error
+          useToastStore.getState().showError(errorMessage)
+
           setFiles((prev) =>
             prev.map((f) =>
               f.id === uploadFile.id
-                ? { ...f, status: 'error', error: error.message }
+                ? { ...f, status: 'error', error: errorMessage }
                 : f
             )
           )
@@ -268,6 +276,13 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
     setDuplicateInfo(null)
     onClose()
   }, [files, onClose])
+
+  // Handle keyboard shortcuts (Escape to close)
+  useModalKeyboard({
+    isOpen,
+    onCancel: handleClose,
+    hasInput: true,  // Has file inputs
+  })
 
   // Auto-close when all uploads are completed
   useEffect(() => {

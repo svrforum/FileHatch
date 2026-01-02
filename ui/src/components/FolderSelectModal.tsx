@@ -1,5 +1,6 @@
 // 폴더 선택 모달 - 파일 이동/복사 시 대상 폴더 선택
 import { useState, useEffect, useCallback } from 'react'
+import { useModalKeyboard } from '../hooks/useModalKeyboard'
 import { fetchFiles } from '../api/files'
 import { getMySharedFolders } from '../api/sharedFolders'
 import './FolderSelectModal.css'
@@ -132,6 +133,19 @@ export default function FolderSelectModal({
       return node
     })
   }
+
+  // Handle keyboard shortcuts
+  const handleConfirm = useCallback(() => {
+    if (selectedPath) {
+      onSelect(selectedPath)
+    }
+  }, [selectedPath, onSelect])
+
+  const { confirmButtonRef } = useModalKeyboard({
+    isOpen,
+    onConfirm: handleConfirm,
+    onCancel: onClose,
+  })
 
   // 초기 로드
   useEffect(() => {
@@ -316,6 +330,7 @@ export default function FolderSelectModal({
           <div className="modal-actions">
             <button className="cancel-btn" onClick={onClose}>취소</button>
             <button
+              ref={confirmButtonRef}
               className="confirm-btn"
               disabled={!selectedPath}
               onClick={() => selectedPath && onSelect(selectedPath)}

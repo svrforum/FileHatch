@@ -1,4 +1,7 @@
-// File Shares API (User-to-User Sharing)
+/**
+ * File Shares API (User-to-User Sharing & Link Sharing)
+ */
+import { api } from './client'
 
 export interface FileShare {
   id: number
@@ -33,24 +36,6 @@ export interface UserSearchResult {
 export const PERMISSION_READ_ONLY = 1
 export const PERMISSION_READ_WRITE = 2
 
-const API_BASE = '/api'
-
-// Helper to get auth headers
-function getAuthHeaders(): HeadersInit {
-  const stored = localStorage.getItem('scv-auth')
-  if (stored) {
-    try {
-      const { state } = JSON.parse(stored)
-      if (state?.token) {
-        return { 'Authorization': `Bearer ${state.token}` }
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }
-  return {}
-}
-
 // ========== File Sharing API ==========
 
 /**
@@ -64,53 +49,23 @@ export async function createFileShare(data: {
   permissionLevel: number
   message?: string
 }): Promise<{ id: number }> {
-  const response = await fetch(`${API_BASE}/file-shares`, {
-    method: 'POST',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to create file share')
-  }
-
-  return response.json()
+  return api.post<{ id: number }>('/file-shares', data)
 }
 
 /**
  * Get files shared by the current user
  */
 export async function getSharedByMe(): Promise<SharedByMeItem[]> {
-  const response = await fetch(`${API_BASE}/file-shares/shared-by-me`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch shared files')
-  }
-
-  const data = await response.json()
-  return data.shares
+  const response = await api.get<{ data: { shares: SharedByMeItem[] } }>('/file-shares/shared-by-me')
+  return response.data?.shares || []
 }
 
 /**
  * Get files shared with the current user
  */
 export async function getSharedWithMe(): Promise<SharedWithMeItem[]> {
-  const response = await fetch(`${API_BASE}/file-shares/shared-with-me`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch shared files')
-  }
-
-  const data = await response.json()
-  return data.shares
+  const response = await api.get<{ data: { shares: SharedWithMeItem[] } }>('/file-shares/shared-with-me')
+  return response.data?.shares || []
 }
 
 /**
@@ -118,38 +73,16 @@ export async function getSharedWithMe(): Promise<SharedWithMeItem[]> {
  */
 export async function updateFileShare(
   shareId: number,
-  data: {
-    permissionLevel: number
-  }
+  data: { permissionLevel: number }
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/file-shares/${shareId}`, {
-    method: 'PUT',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to update file share')
-  }
+  await api.put(`/file-shares/${shareId}`, data)
 }
 
 /**
  * Delete a file share
  */
 export async function deleteFileShare(shareId: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/file-shares/${shareId}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to delete file share')
-  }
+  await api.delete(`/file-shares/${shareId}`)
 }
 
 /**
@@ -157,32 +90,18 @@ export async function deleteFileShare(shareId: number): Promise<void> {
  */
 export async function getFileShareInfo(itemPath: string): Promise<FileShare[]> {
   const encodedPath = encodeURIComponent(itemPath)
-  const response = await fetch(`${API_BASE}/file-shares/file/${encodedPath}`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch file share info')
-  }
-
-  const data = await response.json()
-  return data.shares
+  const response = await api.get<{ data: { shares: FileShare[] } }>(`/file-shares/file/${encodedPath}`)
+  return response.data?.shares || []
 }
 
 /**
  * Search users by username or email
  */
 export async function searchUsers(query: string): Promise<UserSearchResult[]> {
-  const response = await fetch(`${API_BASE}/users/search?q=${encodeURIComponent(query)}`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to search users')
-  }
-
-  const data = await response.json()
-  return data.users
+  const response = await api.get<{ data: { users: UserSearchResult[] } }>(
+    `/users/search?q=${encodeURIComponent(query)}`
+  )
+  return response.data?.users || []
 }
 
 // ========== Link Sharing API (Public Links) ==========
@@ -204,8 +123,9 @@ export interface LinkShare {
   size: number
   isDir: boolean
   name: string
-  // Upload share fields
-  shareType: 'download' | 'upload'
+  // Share type fields
+  shareType: 'download' | 'upload' | 'edit'
+  editable?: boolean
   maxFileSize?: number
   allowedExtensions?: string
   uploadCount?: number
@@ -244,52 +164,23 @@ export async function createShareLink(data: {
   allowedExtensions?: string // comma-separated list
   maxTotalSize?: number // max total upload size in bytes
 }): Promise<{ id: string; token: string; url: string; shareType: string }> {
-  const response = await fetch(`${API_BASE}/shares`, {
-    method: 'POST',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to create share link')
-  }
-
-  return response.json()
+  const response = await api.post<{ data: { id: string; token: string; url: string; shareType: string } }>('/shares', data)
+  return response.data
 }
 
 /**
  * Get all share links created by the current user
  */
 export async function getMyShareLinks(): Promise<LinkShare[]> {
-  const response = await fetch(`${API_BASE}/shares`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch share links')
-  }
-
-  const data = await response.json()
-  return data.shares
+  const response = await api.get<{ data: { shares: LinkShare[] } }>('/shares')
+  return response.data?.shares || []
 }
 
 /**
  * Delete a share link
  */
 export async function deleteShareLink(shareId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/shares/${shareId}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to delete share link')
-  }
+  await api.delete(`/shares/${shareId}`)
 }
 
 /**
@@ -307,20 +198,16 @@ export async function accessShareLink(
   expiresAt?: string
   requiresPassword?: boolean
 }> {
-  const response = await fetch(`${API_BASE}/s/${token}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ password }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to access share')
-  }
-
-  return response.json()
+  const response = await api.post<{ data: {
+    token: string
+    path: string
+    name: string
+    isDir: boolean
+    size: number
+    expiresAt?: string
+    requiresPassword?: boolean
+  } }>(`/s/${token}`, { password }, { noAuth: true })
+  return response.data
 }
 
 /**
@@ -330,20 +217,8 @@ export async function accessUploadShare(
   token: string,
   password?: string
 ): Promise<UploadShareInfo> {
-  const response = await fetch(`${API_BASE}/u/${token}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ password }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to access upload share')
-  }
-
-  return response.json()
+  const response = await api.post<{ data: UploadShareInfo }>(`/u/${token}`, { password }, { noAuth: true })
+  return response.data
 }
 
 /**

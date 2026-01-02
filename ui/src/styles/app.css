@@ -16,4 +16,6 @@
   overflow-y: auto;
   overflow-x: hidden;
   min-height: calc(100vh - 60px);
+  /* Make room for fixed sidebar */
+  margin-left: 260px;
 }

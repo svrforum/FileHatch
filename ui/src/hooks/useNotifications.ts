@@ -9,6 +9,7 @@ import {
   deleteAllRead,
 } from '../api/notifications';
 import { useAuthStore } from '../stores/authStore';
+import { useNotificationStore } from '../stores/notificationStore';
 
 interface UseNotificationsReturn {
   notifications: Notification[];
@@ -31,6 +32,7 @@ export const useNotifications = (): UseNotificationsReturn => {
   const { token } = useAuthStore();
   const isAuthenticated = !!token;
   const isMounted = useRef(true);
+  const refreshTrigger = useNotificationStore((state) => state.refreshTrigger);
 
   const fetchNotifications = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -60,7 +62,7 @@ export const useNotifications = (): UseNotificationsReturn => {
     }
   }, [isAuthenticated]);
 
-  // Initial fetch
+  // Initial fetch and refresh on trigger
   useEffect(() => {
     isMounted.current = true;
     fetchNotifications();
@@ -68,7 +70,7 @@ export const useNotifications = (): UseNotificationsReturn => {
     return () => {
       isMounted.current = false;
     };
-  }, [fetchNotifications]);
+  }, [fetchNotifications, refreshTrigger]);
 
   // Periodic refresh (every 60 seconds)
   useEffect(() => {

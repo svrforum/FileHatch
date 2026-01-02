@@ -110,6 +110,7 @@ type StorageUsageCache struct {
 type StorageUsageData struct {
 	HomeUsed   int64 `json:"homeUsed"`
 	SharedUsed int64 `json:"sharedUsed"`
+	TrashUsed  int64 `json:"trashUsed"`
 	TotalUsed  int64 `json:"totalUsed"`
 	Quota      int64 `json:"quota"`
 	CachedAt   int64 `json:"cachedAt"`

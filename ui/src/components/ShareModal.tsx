@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useModalKeyboard } from '../hooks/useModalKeyboard'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   createFileShare,
@@ -57,6 +58,13 @@ function ShareModal({ isOpen, onClose, itemPath, itemName, isFolder }: ShareModa
       setLoadingShares(false)
     }
   }, [itemPath])
+
+  // Handle keyboard shortcuts
+  useModalKeyboard({
+    isOpen,
+    onCancel: onClose,
+    hasInput: true,  // Has search input, disable auto-focus on button
+  })
 
   useEffect(() => {
     if (isOpen) {

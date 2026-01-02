@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"database/sql"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -224,7 +223,7 @@ func (h *SMBAuditHandler) GetSMBAuditLogs(c echo.Context) error {
 		LIMIT 100
 	`)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error: " + err.Error()})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 	defer rows.Close()
 
@@ -266,7 +265,7 @@ func (h *SMBAuditHandler) GetSMBAuditLogs(c echo.Context) error {
 		logs = append(logs, log)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return RespondSuccess(c, map[string]interface{}{
 		"logs":  logs,
 		"total": len(logs),
 	})
@@ -276,13 +275,10 @@ func (h *SMBAuditHandler) GetSMBAuditLogs(c echo.Context) error {
 func (h *SMBAuditHandler) SyncSMBAuditLogs(c echo.Context) error {
 	count, err := h.ProcessAuditLog()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": fmt.Sprintf("Failed to process audit log: %v", err),
-		})
+		return RespondError(c, ErrOperationFailed("process audit log", err))
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success":   true,
+	return RespondSuccess(c, map[string]interface{}{
 		"processed": count,
 		"message":   fmt.Sprintf("Processed %d SMB audit entries", count),
 	})

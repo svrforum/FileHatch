@@ -506,6 +506,7 @@ export async function searchFiles(
 export interface StorageUsage {
   homeUsed: number
   sharedUsed: number
+  trashUsed: number
   totalUsed: number
   quota: number
 }
@@ -889,7 +890,8 @@ export async function getRecentFiles(limit: number = 10): Promise<RecentFile[]> 
     throw new Error('Failed to get recent files')
   }
 
-  return response.json()
+  const result = await response.json()
+  return result.data || []
 }
 
 // Compress files/folders into a zip archive

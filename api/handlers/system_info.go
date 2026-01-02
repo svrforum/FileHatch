@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -81,9 +80,9 @@ type FolderStat struct {
 // GetSystemInfo returns system information
 func (h *Handler) GetSystemInfo(c echo.Context) error {
 	// Check admin permission
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil || !claims.IsAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "Admin access required"})
+	_, err := RequireAdmin(c)
+	if err != nil {
+		return err
 	}
 
 	hostname, _ := os.Hostname()
@@ -122,15 +121,15 @@ func (h *Handler) GetSystemInfo(c echo.Context) error {
 		FolderTree:  folderTree,
 	}
 
-	return c.JSON(http.StatusOK, info)
+	return RespondSuccess(c, info)
 }
 
 // GetFolderTreeAPI returns folder tree for a specific path
 func (h *Handler) GetFolderTreeAPI(c echo.Context) error {
 	// Check admin permission
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil || !claims.IsAdmin {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "Admin access required"})
+	_, err := RequireAdmin(c)
+	if err != nil {
+		return err
 	}
 
 	path := c.QueryParam("path")
@@ -139,21 +138,21 @@ func (h *Handler) GetFolderTreeAPI(c echo.Context) error {
 	}
 
 	// Validate path is within data root
-	absPath, err := filepath.Abs(path)
-	if err != nil || !strings.HasPrefix(absPath, h.dataRoot) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid path"})
+	absPath, pathErr := filepath.Abs(path)
+	if pathErr != nil || !strings.HasPrefix(absPath, h.dataRoot) {
+		return RespondError(c, ErrInvalidPath("Path must be within data root"))
 	}
 
 	depthStr := c.QueryParam("depth")
 	depth := 1
 	if depthStr != "" {
-		if d, err := strconv.Atoi(depthStr); err == nil && d > 0 && d <= 5 {
+		if d, parseErr := strconv.Atoi(depthStr); parseErr == nil && d > 0 && d <= 5 {
 			depth = d
 		}
 	}
 
 	tree := h.getFolderTree(absPath, depth)
-	return c.JSON(http.StatusOK, tree)
+	return RespondSuccess(c, tree)
 }
 
 var startTime = time.Now()

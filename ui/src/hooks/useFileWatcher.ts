@@ -10,7 +10,7 @@ interface FileChangeEvent {
   timestamp: number
 }
 
-interface NotificationEventData {
+export interface NotificationEventData {
   id: number
   userId: string
   type: string

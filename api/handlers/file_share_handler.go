@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -61,26 +60,40 @@ type CreateFileShareRequest struct {
 }
 
 // CreateFileShare creates a new file share
+// @Summary		Create file share
+// @Description	Share a file or folder with another user
+// @Tags		FileShares
+// @Accept		json
+// @Produce		json
+// @Param		request	body		CreateFileShareRequest	true	"File share request"
+// @Success		200		{object}	docs.SuccessResponse{data=FileShare}	"File share created"
+// @Failure		400		{object}	docs.ErrorResponse	"Bad request"
+// @Failure		401		{object}	docs.ErrorResponse	"Unauthorized"
+// @Failure		404		{object}	docs.ErrorResponse	"User not found"
+// @Failure		409		{object}	docs.ErrorResponse	"Share already exists"
+// @Failure		500		{object}	docs.ErrorResponse	"Internal server error"
+// @Security	BearerAuth
+// @Router		/file-shares [post]
 func (h *FileShareHandler) CreateFileShare(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	var req CreateFileShareRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
+		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
 
 	// Validate request
 	if req.ItemPath == "" || req.ItemName == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Item path and name are required"})
+		return RespondError(c, ErrBadRequest("Item path and name are required"))
 	}
 	if req.SharedWithID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Shared with user ID is required"})
+		return RespondError(c, ErrBadRequest("Shared with user ID is required"))
 	}
 	if req.SharedWithID == claims.UserID {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Cannot share with yourself"})
+		return RespondError(c, ErrBadRequest("Cannot share with yourself"))
 	}
 
 	// Validate permission level
@@ -90,9 +103,9 @@ func (h *FileShareHandler) CreateFileShare(c echo.Context) error {
 
 	// Check if target user exists
 	var userExists bool
-	err := h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.SharedWithID).Scan(&userExists)
-	if err != nil || !userExists {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
+	dbErr := h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.SharedWithID).Scan(&userExists)
+	if dbErr != nil || !userExists {
+		return RespondError(c, ErrNotFound("User"))
 	}
 
 	// Verify owner has access to the file (must be in their home folder or they have write access)
@@ -102,12 +115,12 @@ func (h *FileShareHandler) CreateFileShare(c echo.Context) error {
 	isSharedFolder := strings.HasPrefix(req.ItemPath, "/shared/")
 
 	if !isHomeFolder && !isSharedFolder {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "You can only share files from your home folder or shared drives"})
+		return RespondError(c, ErrForbidden("You can only share files from your home folder or shared drives"))
 	}
 
 	// Insert the share
 	var shareID int64
-	err = h.db.QueryRow(`
+	insertErr := h.db.QueryRow(`
 		INSERT INTO file_shares (item_path, item_name, is_folder, owner_id, shared_with_id, permission_level, message)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (item_path, owner_id, shared_with_id)
@@ -115,8 +128,8 @@ func (h *FileShareHandler) CreateFileShare(c echo.Context) error {
 		RETURNING id
 	`, req.ItemPath, req.ItemName, req.IsFolder, claims.UserID, req.SharedWithID, req.PermissionLevel, req.Message).Scan(&shareID)
 
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create share"})
+	if insertErr != nil {
+		return RespondError(c, ErrOperationFailed("create share", insertErr))
 	}
 
 	// Audit log
@@ -155,7 +168,7 @@ func (h *FileShareHandler) CreateFileShare(c echo.Context) error {
 		)
 	}
 
-	return c.JSON(http.StatusCreated, map[string]interface{}{
+	return RespondCreated(c, map[string]interface{}{
 		"id":      shareID,
 		"message": "File shared successfully",
 	})
@@ -163,9 +176,9 @@ func (h *FileShareHandler) CreateFileShare(c echo.Context) error {
 
 // ListSharedByMe returns files shared by the current user
 func (h *FileShareHandler) ListSharedByMe(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	query := `
@@ -179,7 +192,7 @@ func (h *FileShareHandler) ListSharedByMe(c echo.Context) error {
 
 	rows, err := h.db.Query(query, claims.UserID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 	defer rows.Close()
 
@@ -187,11 +200,10 @@ func (h *FileShareHandler) ListSharedByMe(c echo.Context) error {
 	for rows.Next() {
 		var s FileShare
 		var message sql.NullString
-		err := rows.Scan(
+		if scanErr := rows.Scan(
 			&s.ID, &s.ItemPath, &s.ItemName, &s.IsFolder, &s.OwnerID, &s.SharedWithID,
 			&s.PermissionLevel, &message, &s.CreatedAt, &s.UpdatedAt, &s.SharedWithUsername,
-		)
-		if err != nil {
+		); scanErr != nil {
 			continue
 		}
 		if message.Valid {
@@ -200,7 +212,7 @@ func (h *FileShareHandler) ListSharedByMe(c echo.Context) error {
 		shares = append(shares, s)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return RespondSuccess(c, map[string]interface{}{
 		"shares": shares,
 		"total":  len(shares),
 	})
@@ -208,9 +220,9 @@ func (h *FileShareHandler) ListSharedByMe(c echo.Context) error {
 
 // ListSharedWithMe returns files shared with the current user
 func (h *FileShareHandler) ListSharedWithMe(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	query := `
@@ -224,7 +236,7 @@ func (h *FileShareHandler) ListSharedWithMe(c echo.Context) error {
 
 	rows, err := h.db.Query(query, claims.UserID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 	defer rows.Close()
 
@@ -232,11 +244,10 @@ func (h *FileShareHandler) ListSharedWithMe(c echo.Context) error {
 	for rows.Next() {
 		var s FileShare
 		var message sql.NullString
-		err := rows.Scan(
+		if scanErr := rows.Scan(
 			&s.ID, &s.ItemPath, &s.ItemName, &s.IsFolder, &s.OwnerID, &s.SharedWithID,
 			&s.PermissionLevel, &message, &s.CreatedAt, &s.UpdatedAt, &s.OwnerUsername,
-		)
-		if err != nil {
+		); scanErr != nil {
 			continue
 		}
 		if message.Valid {
@@ -245,7 +256,7 @@ func (h *FileShareHandler) ListSharedWithMe(c echo.Context) error {
 		shares = append(shares, s)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return RespondSuccess(c, map[string]interface{}{
 		"shares": shares,
 		"total":  len(shares),
 	})
@@ -253,50 +264,50 @@ func (h *FileShareHandler) ListSharedWithMe(c echo.Context) error {
 
 // UpdateFileShare updates a file share's permission level
 func (h *FileShareHandler) UpdateFileShare(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	shareID := c.Param("id")
 	if shareID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Share ID required"})
+		return RespondError(c, ErrMissingParameter("share ID"))
 	}
 
 	var req struct {
 		PermissionLevel int `json:"permissionLevel"`
 	}
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
+		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
 
 	if req.PermissionLevel < 1 || req.PermissionLevel > 2 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid permission level"})
+		return RespondError(c, ErrBadRequest("Invalid permission level"))
 	}
 
 	// Get share info before updating for notification
 	var sharedWithID, itemName string
 	var isFolder bool
-	err := h.db.QueryRow(`
+	queryErr := h.db.QueryRow(`
 		SELECT shared_with_id, item_name, is_folder FROM file_shares
 		WHERE id = $1 AND owner_id = $2
 	`, shareID, claims.UserID).Scan(&sharedWithID, &itemName, &isFolder)
-	if err == sql.ErrNoRows {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "Share not found or not owned by you"})
+	if queryErr == sql.ErrNoRows {
+		return RespondError(c, ErrNotFound("Share"))
 	}
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+	if queryErr != nil {
+		return RespondError(c, ErrInternal("Database error"))
 	}
 
 	// Update the share (only owner can update)
-	_, err = h.db.Exec(`
+	_, updateErr := h.db.Exec(`
 		UPDATE file_shares
 		SET permission_level = $1, updated_at = NOW()
 		WHERE id = $2 AND owner_id = $3
 	`, req.PermissionLevel, shareID, claims.UserID)
 
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update share"})
+	if updateErr != nil {
+		return RespondError(c, ErrOperationFailed("update share", updateErr))
 	}
 
 	// Audit log
@@ -328,39 +339,39 @@ func (h *FileShareHandler) UpdateFileShare(c echo.Context) error {
 		)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"message": "Share updated successfully"})
+	return RespondSuccess(c, map[string]string{"message": "Share updated successfully"})
 }
 
 // DeleteFileShare removes a file share
 func (h *FileShareHandler) DeleteFileShare(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	shareID := c.Param("id")
 	if shareID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Share ID required"})
+		return RespondError(c, ErrMissingParameter("share ID"))
 	}
 
 	// Get share info before deleting for audit log and notification
 	var itemPath, itemName, sharedWithID string
 	var isFolder bool
-	err := h.db.QueryRow(`
+	queryErr := h.db.QueryRow(`
 		SELECT item_path, item_name, shared_with_id, is_folder
 		FROM file_shares WHERE id = $1 AND owner_id = $2
 	`, shareID, claims.UserID).Scan(&itemPath, &itemName, &sharedWithID, &isFolder)
-	if err == sql.ErrNoRows {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "Share not found or not owned by you"})
+	if queryErr == sql.ErrNoRows {
+		return RespondError(c, ErrNotFound("Share"))
 	}
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+	if queryErr != nil {
+		return RespondError(c, ErrInternal("Database error"))
 	}
 
 	// Delete the share
-	_, err = h.db.Exec("DELETE FROM file_shares WHERE id = $1 AND owner_id = $2", shareID, claims.UserID)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to delete share"})
+	_, deleteErr := h.db.Exec("DELETE FROM file_shares WHERE id = $1 AND owner_id = $2", shareID, claims.UserID)
+	if deleteErr != nil {
+		return RespondError(c, ErrOperationFailed("delete share", deleteErr))
 	}
 
 	// Audit log
@@ -388,20 +399,20 @@ func (h *FileShareHandler) DeleteFileShare(c echo.Context) error {
 		)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"message": "Share deleted successfully"})
+	return RespondSuccess(c, map[string]string{"message": "Share deleted successfully"})
 }
 
 // GetFileShareInfo returns sharing information for a specific file
 func (h *FileShareHandler) GetFileShareInfo(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	paramPath := c.Param("*")
 	// URL-decode the path parameter
-	decodedPath, err := url.QueryUnescape(paramPath)
-	if err != nil {
+	decodedPath, decodeErr := url.QueryUnescape(paramPath)
+	if decodeErr != nil {
 		decodedPath = paramPath
 	}
 	// Handle paths - ensure it starts with /
@@ -410,7 +421,7 @@ func (h *FileShareHandler) GetFileShareInfo(c echo.Context) error {
 		itemPath = "/" + decodedPath
 	}
 	if itemPath == "/" || itemPath == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Item path required"})
+		return RespondError(c, ErrMissingParameter("item path"))
 	}
 
 	query := `
@@ -424,7 +435,7 @@ func (h *FileShareHandler) GetFileShareInfo(c echo.Context) error {
 
 	rows, err := h.db.Query(query, itemPath, claims.UserID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 	defer rows.Close()
 
@@ -432,11 +443,10 @@ func (h *FileShareHandler) GetFileShareInfo(c echo.Context) error {
 	for rows.Next() {
 		var s FileShare
 		var message sql.NullString
-		err := rows.Scan(
+		if scanErr := rows.Scan(
 			&s.ID, &s.ItemPath, &s.ItemName, &s.IsFolder, &s.OwnerID, &s.SharedWithID,
 			&s.PermissionLevel, &message, &s.CreatedAt, &s.UpdatedAt, &s.SharedWithUsername,
-		)
-		if err != nil {
+		); scanErr != nil {
 			continue
 		}
 		if message.Valid {
@@ -445,7 +455,7 @@ func (h *FileShareHandler) GetFileShareInfo(c echo.Context) error {
 		shares = append(shares, s)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return RespondSuccess(c, map[string]interface{}{
 		"itemPath": itemPath,
 		"shares":   shares,
 		"total":    len(shares),
@@ -454,14 +464,14 @@ func (h *FileShareHandler) GetFileShareInfo(c echo.Context) error {
 
 // SearchUsers searches for users by username or email (for sharing UI)
 func (h *FileShareHandler) SearchUsers(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	query := c.QueryParam("q")
 	if len(query) < 2 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Search query must be at least 2 characters"})
+		return RespondError(c, ErrBadRequest("Search query must be at least 2 characters"))
 	}
 
 	limitStr := c.QueryParam("limit")
@@ -484,7 +494,7 @@ func (h *FileShareHandler) SearchUsers(c echo.Context) error {
 
 	rows, err := h.db.Query(searchQuery, claims.UserID, "%"+query+"%", limit)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 	defer rows.Close()
 
@@ -498,7 +508,7 @@ func (h *FileShareHandler) SearchUsers(c echo.Context) error {
 	for rows.Next() {
 		var u UserResult
 		var email sql.NullString
-		if err := rows.Scan(&u.ID, &u.Username, &email); err != nil {
+		if scanErr := rows.Scan(&u.ID, &u.Username, &email); scanErr != nil {
 			continue
 		}
 		if email.Valid {
@@ -507,7 +517,7 @@ func (h *FileShareHandler) SearchUsers(c echo.Context) error {
 		users = append(users, u)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return RespondSuccess(c, map[string]interface{}{
 		"users": users,
 		"total": len(users),
 	})

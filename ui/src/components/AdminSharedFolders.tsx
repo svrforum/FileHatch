@@ -15,6 +15,7 @@ import {
   PERMISSION_READ_ONLY,
   PERMISSION_READ_WRITE,
 } from '../api/sharedFolders'
+import { api } from '../api/client'
 import './AdminSharedFolders.css'
 
 interface User {
@@ -32,20 +33,7 @@ interface InitialMember {
 }
 
 async function getUsers(): Promise<User[]> {
-  const stored = localStorage.getItem('scv-auth')
-  let headers: HeadersInit = {}
-  if (stored) {
-    try {
-      const { state } = JSON.parse(stored)
-      if (state?.token) {
-        headers = { 'Authorization': `Bearer ${state.token}` }
-      }
-    } catch {}
-  }
-
-  const response = await fetch('/api/admin/users', { headers })
-  if (!response.ok) throw new Error('Failed to fetch users')
-  const data = await response.json()
+  const data = await api.get<{ users: User[] }>('/admin/users')
   return data.users
 }
 

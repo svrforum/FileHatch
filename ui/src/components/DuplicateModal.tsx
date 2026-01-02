@@ -1,8 +1,24 @@
+import { useEffect } from 'react'
 import { useUploadStore } from '../stores/uploadStore'
 import './UploadModal.css'
 
 function DuplicateModal() {
   const { duplicateFile, resolveDuplicate, items } = useUploadStore()
+
+  // Handle Escape key
+  useEffect(() => {
+    if (!duplicateFile) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        resolveDuplicate('cancel')
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [duplicateFile, resolveDuplicate])
 
   if (!duplicateFile) return null
 

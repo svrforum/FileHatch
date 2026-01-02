@@ -197,12 +197,16 @@ export function useKeyboardNavigation({
           }
           break
         case 'Enter':
+          // Don't handle Enter when a modal is open (modal handles its own Enter)
+          if (modalsOpen) return
           e.preventDefault()
           if (focusedIndex >= 0 && focusedIndex < files.length) {
             onDoubleClick(files[focusedIndex])
           }
           break
         case 'Delete':
+          // Don't handle Delete when a modal is open
+          if (modalsOpen) return
           e.preventDefault()
           if (selectedFiles.size > 0) {
             const filesToDelete = files.filter(f => selectedFiles.has(f.path))

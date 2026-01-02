@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"database/sql"
 	"encoding/json"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -136,11 +135,30 @@ func (h *AuditHandler) LogEventFromContext(c echo.Context, eventType, targetReso
 }
 
 // ListAuditLogs returns audit logs with pagination and filtering
+// @Summary		List audit logs
+// @Description	Get audit logs with pagination and filtering by event type, category, date range, or resource
+// @Tags		Audit
+// @Accept		json
+// @Produce		json
+// @Param		eventType	query		string	false	"Filter by specific event type"
+// @Param		category	query		string	false	"Filter by category (file, admin, user)"
+// @Param		resource	query		string	false	"Filter by target resource path"
+// @Param		startDate	query		string	false	"Filter logs from this date (YYYY-MM-DD format)"
+// @Param		endDate		query		string	false	"Filter logs until this date (YYYY-MM-DD format)"
+// @Param		limit		query		int		false	"Maximum results (default 100, max 500)"
+// @Param		offset		query		int		false	"Pagination offset"
+// @Success		200		{object}	docs.SuccessResponse{data=docs.AuditLogListResponse}	"Audit logs"
+// @Failure		401		{object}	docs.ErrorResponse	"Unauthorized"
+// @Failure		500		{object}	docs.ErrorResponse	"Internal server error"
+// @Security	BearerAuth
+// @Router		/audit/logs [get]
 func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 	// Parse query parameters
 	eventType := c.QueryParam("eventType")
 	category := c.QueryParam("category") // file, admin
 	targetResource := c.QueryParam("resource")
+	startDateStr := c.QueryParam("startDate")
+	endDateStr := c.QueryParam("endDate")
 	limitStr := c.QueryParam("limit")
 	offsetStr := c.QueryParam("offset")
 
@@ -153,6 +171,21 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 		offset = o
 	}
 
+	// Parse date filters
+	var startDate, endDate *time.Time
+	if startDateStr != "" {
+		if t, err := time.Parse("2006-01-02", startDateStr); err == nil {
+			startDate = &t
+		}
+	}
+	if endDateStr != "" {
+		if t, err := time.Parse("2006-01-02", endDateStr); err == nil {
+			// Add 1 day to include the entire end date
+			t = t.Add(24 * time.Hour)
+			endDate = &t
+		}
+	}
+
 	// Build query
 	query := `
 		SELECT al.id, al.ts, al.actor_id, u.username, al.ip_addr,
@@ -161,29 +194,59 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 		LEFT JOIN users u ON al.actor_id = u.id
 		WHERE 1=1
 	`
+	countQuery := `SELECT COUNT(*) FROM audit_logs al WHERE 1=1`
 	args := []interface{}{}
+	countArgs := []interface{}{}
 	argCount := 1
+	countArgCount := 1
 
 	// Category filter
+	categoryFilter := ""
 	if category == "file" {
 		// Include both smb.% (legacy watcher) and smb_% (vfs_full_audit)
-		query += " AND (al.event_type LIKE 'file.%' OR al.event_type LIKE 'folder.%' OR al.event_type LIKE 'smb.%' OR al.event_type LIKE 'smb\\_%')"
+		categoryFilter = " AND (al.event_type LIKE 'file.%' OR al.event_type LIKE 'folder.%' OR al.event_type LIKE 'smb.%' OR al.event_type LIKE 'smb\\_%')"
 	} else if category == "admin" {
-		query += " AND al.event_type LIKE 'admin.%'"
+		categoryFilter = " AND al.event_type LIKE 'admin.%'"
 	} else if category == "user" {
-		query += " AND (al.event_type LIKE 'user.%' OR al.event_type LIKE 'share.%')"
+		categoryFilter = " AND (al.event_type LIKE 'user.%' OR al.event_type LIKE 'share.%')"
 	}
+	query += categoryFilter
+	countQuery += categoryFilter
 
 	if eventType != "" {
 		query += " AND al.event_type = $" + strconv.Itoa(argCount)
+		countQuery += " AND al.event_type = $" + strconv.Itoa(countArgCount)
 		args = append(args, eventType)
+		countArgs = append(countArgs, eventType)
 		argCount++
+		countArgCount++
 	}
 
 	if targetResource != "" {
 		query += " AND al.target_resource LIKE $" + strconv.Itoa(argCount)
+		countQuery += " AND al.target_resource LIKE $" + strconv.Itoa(countArgCount)
 		args = append(args, "%"+targetResource+"%")
+		countArgs = append(countArgs, "%"+targetResource+"%")
 		argCount++
+		countArgCount++
+	}
+
+	// Date range filter
+	if startDate != nil {
+		query += " AND al.ts >= $" + strconv.Itoa(argCount)
+		countQuery += " AND al.ts >= $" + strconv.Itoa(countArgCount)
+		args = append(args, *startDate)
+		countArgs = append(countArgs, *startDate)
+		argCount++
+		countArgCount++
+	}
+	if endDate != nil {
+		query += " AND al.ts < $" + strconv.Itoa(argCount)
+		countQuery += " AND al.ts < $" + strconv.Itoa(countArgCount)
+		args = append(args, *endDate)
+		countArgs = append(countArgs, *endDate)
+		argCount++
+		countArgCount++
 	}
 
 	query += " ORDER BY al.ts DESC LIMIT $" + strconv.Itoa(argCount) + " OFFSET $" + strconv.Itoa(argCount+1)
@@ -191,9 +254,7 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 
 	rows, err := h.db.Query(query, args...)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to query audit logs",
-		})
+		return RespondError(c, ErrInternal("Failed to query audit logs"))
 	}
 	defer rows.Close()
 
@@ -235,21 +296,15 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 		logs = append(logs, log)
 	}
 
-	// Get total count
-	countQuery := `SELECT COUNT(*) FROM audit_logs al WHERE 1=1`
-	if category == "file" {
-		// Include both smb.% (legacy watcher) and smb_% (vfs_full_audit)
-		countQuery += " AND (al.event_type LIKE 'file.%' OR al.event_type LIKE 'folder.%' OR al.event_type LIKE 'smb.%' OR al.event_type LIKE 'smb\\_%')"
-	} else if category == "admin" {
-		countQuery += " AND al.event_type LIKE 'admin.%'"
-	} else if category == "user" {
-		countQuery += " AND (al.event_type LIKE 'user.%' OR al.event_type LIKE 'share.%')"
+	// Get total count with same filters
+	var total int
+	if len(countArgs) > 0 {
+		h.db.QueryRow(countQuery, countArgs...).Scan(&total)
+	} else {
+		h.db.QueryRow(countQuery).Scan(&total)
 	}
 
-	var total int
-	h.db.QueryRow(countQuery).Scan(&total)
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return RespondSuccess(c, map[string]interface{}{
 		"logs":   logs,
 		"total":  total,
 		"limit":  limit,
@@ -258,12 +313,22 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 }
 
 // GetResourceHistory returns audit history for a specific resource
+// @Summary		Get resource history
+// @Description	Get audit history for a specific file or folder
+// @Tags		Audit
+// @Accept		json
+// @Produce		json
+// @Param		path	path		string	true	"Resource path"
+// @Success		200		{object}	docs.SuccessResponse	"Resource audit history"
+// @Failure		400		{object}	docs.ErrorResponse	"Bad request"
+// @Failure		401		{object}	docs.ErrorResponse	"Unauthorized"
+// @Failure		500		{object}	docs.ErrorResponse	"Internal server error"
+// @Security	BearerAuth
+// @Router		/audit/resource/{path} [get]
 func (h *AuditHandler) GetResourceHistory(c echo.Context) error {
 	resource := c.Param("*")
 	if resource == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Resource path required",
-		})
+		return RespondError(c, ErrMissingParameter("resource path"))
 	}
 
 	rows, err := h.db.Query(`
@@ -277,9 +342,7 @@ func (h *AuditHandler) GetResourceHistory(c echo.Context) error {
 	`, "/"+resource, "/"+resource+"/%")
 
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to query resource history",
-		})
+		return RespondError(c, ErrInternal("Failed to query resource history"))
 	}
 	defer rows.Close()
 
@@ -316,7 +379,7 @@ func (h *AuditHandler) GetResourceHistory(c echo.Context) error {
 		logs = append(logs, log)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return RespondSuccess(c, map[string]interface{}{
 		"resource": "/" + resource,
 		"logs":     logs,
 		"total":    len(logs),
@@ -332,6 +395,20 @@ type SystemLogEntry struct {
 }
 
 // GetSystemLogs returns docker container logs
+// @Summary		Get system logs
+// @Description	Get Docker container logs for the application (admin only)
+// @Tags		Audit
+// @Accept		json
+// @Produce		json
+// @Param		container	query		string	false	"Container name (api, ui, db, valkey)"
+// @Param		level		query		string	false	"Log level filter (info, warn, error, fatal)"
+// @Param		tail		query		int		false	"Number of log lines (default 200, max 1000)"
+// @Success		200		{object}	docs.SuccessResponse	"System logs"
+// @Failure		401		{object}	docs.ErrorResponse	"Unauthorized"
+// @Failure		403		{object}	docs.ErrorResponse	"Forbidden (admin only)"
+// @Failure		500		{object}	docs.ErrorResponse	"Internal server error"
+// @Security	BearerAuth
+// @Router		/audit/system-logs [get]
 func (h *AuditHandler) GetSystemLogs(c echo.Context) error {
 	container := c.QueryParam("container") // api, ui, db, valkey
 	level := c.QueryParam("level")         // info, warn, error, fatal
@@ -377,7 +454,7 @@ func (h *AuditHandler) GetSystemLogs(c echo.Context) error {
 		allLogs = allLogs[:tail]
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return RespondSuccess(c, map[string]interface{}{
 		"logs":  allLogs,
 		"total": len(allLogs),
 	})
@@ -468,11 +545,22 @@ type RecentFile struct {
 }
 
 // GetRecentFiles returns recently accessed files for the current user
+// @Summary		Get recent files
+// @Description	Get list of recently accessed files for the current user
+// @Tags		Files
+// @Accept		json
+// @Produce		json
+// @Param		limit	query		int		false	"Maximum results (default 100, max 500)"
+// @Success		200		{object}	docs.SuccessResponse{data=[]RecentFile}	"Recent files"
+// @Failure		401		{object}	docs.ErrorResponse	"Unauthorized"
+// @Failure		500		{object}	docs.ErrorResponse	"Internal server error"
+// @Security	BearerAuth
+// @Router		/files/recent [get]
 func (h *AuditHandler) GetRecentFiles(c echo.Context) error {
 	// Get user claims from context
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	userIDStr := claims.UserID
@@ -504,7 +592,7 @@ func (h *AuditHandler) GetRecentFiles(c echo.Context) error {
 		LIMIT $2
 	`, userIDStr, limit)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 	defer rows.Close()
 
@@ -530,17 +618,19 @@ func (h *AuditHandler) GetRecentFiles(c echo.Context) error {
 			name = path[idx+1:]
 		}
 
-		// Determine if it's a directory based on event type
-		isDir := eventType == "folder.create"
+		// Convert display path to real path and verify file exists
+		realPath := h.resolveDisplayPath(path, claims.Username)
+		info, err := os.Stat(realPath)
+		if err != nil {
+			// File doesn't exist anymore (deleted, moved, etc.) - skip it
+			continue
+		}
 
-		// Get file size from filesystem
+		// Get actual isDir and size from filesystem
+		isDir := info.IsDir()
 		var fileSize int64 = 0
 		if !isDir {
-			// Convert display path to real path
-			realPath := h.resolveDisplayPath(path, claims.Username)
-			if info, err := os.Stat(realPath); err == nil && !info.IsDir() {
-				fileSize = info.Size()
-			}
+			fileSize = info.Size()
 		}
 
 		files = append(files, RecentFile{
@@ -553,5 +643,5 @@ func (h *AuditHandler) GetRecentFiles(c echo.Context) error {
 		})
 	}
 
-	return c.JSON(http.StatusOK, files)
+	return RespondSuccess(c, files)
 }

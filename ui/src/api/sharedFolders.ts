@@ -1,4 +1,7 @@
-// Shared Folders API
+/**
+ * Shared Folders API
+ */
+import { api } from './client'
 
 export interface SharedFolder {
   id: string
@@ -32,58 +35,33 @@ export interface SharedFolderMember {
 export const PERMISSION_READ_ONLY = 1
 export const PERMISSION_READ_WRITE = 2
 
-const API_BASE = '/api'
-
-// Helper to get auth headers
-function getAuthHeaders(): HeadersInit {
-  const stored = localStorage.getItem('scv-auth')
-  if (stored) {
-    try {
-      const { state } = JSON.parse(stored)
-      if (state?.token) {
-        return { 'Authorization': `Bearer ${state.token}` }
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }
-  return {}
-}
-
 // ========== User API ==========
 
 /**
  * Get shared folders the current user has access to
  */
 export async function getMySharedFolders(): Promise<SharedFolderWithPermission[]> {
-  const response = await fetch(`${API_BASE}/shared-folders`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch shared folders')
-  }
-
-  const data = await response.json()
-  return data.folders
+  const response = await api.get<{ data: { folders: SharedFolderWithPermission[] } }>('/shared-folders')
+  return response.data?.folders || []
 }
 
 /**
  * Get current user's permission level for a shared folder
  */
-export async function getMyPermission(folderId: string): Promise<{ permissionLevel: number; canWrite: boolean }> {
-  const response = await fetch(`${API_BASE}/shared-folders/${folderId}/permission`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    if (response.status === 403) {
+export async function getMyPermission(
+  folderId: string
+): Promise<{ permissionLevel: number; canWrite: boolean }> {
+  try {
+    return await api.get<{ permissionLevel: number; canWrite: boolean }>(
+      `/shared-folders/${folderId}/permission`
+    )
+  } catch (error) {
+    // Return no permission if forbidden
+    if (error instanceof Error && 'status' in error && (error as { status: number }).status === 403) {
       return { permissionLevel: 0, canWrite: false }
     }
-    throw new Error('Failed to fetch permission')
+    throw error
   }
-
-  return response.json()
 }
 
 // ========== Admin API ==========
@@ -92,16 +70,8 @@ export async function getMyPermission(folderId: string): Promise<{ permissionLev
  * Get all shared folders (admin only)
  */
 export async function getAllSharedFolders(): Promise<SharedFolder[]> {
-  const response = await fetch(`${API_BASE}/admin/shared-folders`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch shared folders')
-  }
-
-  const data = await response.json()
-  return data.folders
+  const response = await api.get<{ data: { folders: SharedFolder[] } }>('/admin/shared-folders')
+  return response.data?.folders || []
 }
 
 /**
@@ -112,21 +82,7 @@ export async function createSharedFolder(data: {
   description?: string
   storageQuota?: number
 }): Promise<{ id: string }> {
-  const response = await fetch(`${API_BASE}/admin/shared-folders`, {
-    method: 'POST',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to create shared folder')
-  }
-
-  return response.json()
+  return api.post<{ id: string }>('/admin/shared-folders', data)
 }
 
 /**
@@ -141,34 +97,14 @@ export async function updateSharedFolder(
     isActive?: boolean
   }
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/admin/shared-folders/${folderId}`, {
-    method: 'PUT',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to update shared folder')
-  }
+  await api.put(`/admin/shared-folders/${folderId}`, data)
 }
 
 /**
  * Delete a shared folder (admin only)
  */
 export async function deleteSharedFolder(folderId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/admin/shared-folders/${folderId}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to delete shared folder')
-  }
+  await api.delete(`/admin/shared-folders/${folderId}`)
 }
 
 // ========== Member Management (Admin) ==========
@@ -177,16 +113,10 @@ export async function deleteSharedFolder(folderId: string): Promise<void> {
  * Get members of a shared folder (admin only)
  */
 export async function getSharedFolderMembers(folderId: string): Promise<SharedFolderMember[]> {
-  const response = await fetch(`${API_BASE}/admin/shared-folders/${folderId}/members`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch members')
-  }
-
-  const data = await response.json()
-  return data.members
+  const response = await api.get<{ data: { members: SharedFolderMember[] } }>(
+    `/admin/shared-folders/${folderId}/members`
+  )
+  return response.data?.members || []
 }
 
 /**
@@ -197,19 +127,7 @@ export async function addSharedFolderMember(
   userId: string,
   permissionLevel: number
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/admin/shared-folders/${folderId}/members`, {
-    method: 'POST',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ userId, permissionLevel }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to add member')
-  }
+  await api.post(`/admin/shared-folders/${folderId}/members`, { userId, permissionLevel })
 }
 
 /**
@@ -220,34 +138,14 @@ export async function updateMemberPermission(
   userId: string,
   permissionLevel: number
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/admin/shared-folders/${folderId}/members/${userId}`, {
-    method: 'PUT',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ permissionLevel }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to update permission')
-  }
+  await api.put(`/admin/shared-folders/${folderId}/members/${userId}`, { permissionLevel })
 }
 
 /**
  * Remove a member from a shared folder (admin only)
  */
 export async function removeSharedFolderMember(folderId: string, userId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/admin/shared-folders/${folderId}/members/${userId}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to remove member')
-  }
+  await api.delete(`/admin/shared-folders/${folderId}/members/${userId}`)
 }
 
 // ========== Helper Functions ==========

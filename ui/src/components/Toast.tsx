@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
+import { useToastStore, ToastMessage as StoreToastMessage } from '../stores/toastStore'
 import './Toast.css'
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning'
@@ -66,10 +67,31 @@ interface ToastProps {
 }
 
 function Toast({ toasts, onRemove }: ToastProps) {
+  // Also get toasts from zustand store for global toast notifications
+  const storeToasts = useToastStore((state) => state.toasts)
+  const removeStoreToast = useToastStore((state) => state.removeToast)
+
+  // Combine context toasts and store toasts
+  const allToasts: ToastMessage[] = [
+    ...toasts,
+    ...storeToasts.map((t: StoreToastMessage) => ({
+      id: t.id,
+      type: t.type,
+      message: t.message,
+      duration: t.duration,
+    })),
+  ]
+
+  const handleRemove = (id: string) => {
+    // Try to remove from both sources
+    onRemove(id)
+    removeStoreToast(id)
+  }
+
   return (
     <div className="toast-container">
-      {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onRemove={onRemove} />
+      {allToasts.map((toast) => (
+        <ToastItem key={toast.id} toast={toast} onRemove={handleRemove} />
       ))}
     </div>
   )

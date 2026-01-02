@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#3b82f6"/>
+  <g transform="translate(56, 96)">
+    <!-- Cloud -->
+    <path d="M320 160c-3.2-38.4-35.2-68.8-75.2-68.8-16 0-30.4 4.8-43.2 13.6-22.4-43.2-68-73.6-120-70.4C15.2 38.4-30.4 91.2-31.2 156c-20 12.8-36.8 40-36.8 72 0 44.8 36.8 81.6 82.4 81.6h286.4c53.6 0 97.6-43.2 97.6-97.6 0-32-16-60.8-40-78.4-8.8-5.6-22.4-6.4-38.4 26.4z" fill="white" transform="translate(68, 8) scale(0.85)"/>
+    <!-- Folder/Document -->
+    <rect x="140" y="130" width="120" height="100" rx="12" fill="#1e40af"/>
+    <path d="M140 155c0-13.8 11.2-25 25-25h35l15 20h45c13.8 0 25 11.2 25 25v55c0 13.8-11.2 25-25 25h-95c-13.8 0-25-11.2-25-25v-75z" fill="#2563eb"/>
+    <!-- Lines on document -->
+    <line x1="165" y1="175" x2="235" y2="175" stroke="white" stroke-width="6" stroke-linecap="round"/>
+    <line x1="165" y1="195" x2="220" y2="195" stroke="white" stroke-width="6" stroke-linecap="round"/>
+    <line x1="165" y1="215" x2="205" y2="215" stroke="white" stroke-width="6" stroke-linecap="round"/>
+  </g>
+</svg>

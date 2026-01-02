@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -72,95 +71,6 @@ func GenerateJWT(userID, username string, isAdmin bool) (string, error) {
 func ValidateJWTToken(tokenString string) (*jwt.Token, error) {
 	return jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return sharedJWTSecret, nil
-	})
-}
-
-// ensureUserHomeDir creates the home directory for a user
-func (h *AuthHandler) ensureUserHomeDir(username string) error {
-	userDir := h.dataRoot + "/users/" + username
-	return os.MkdirAll(userDir, 0755)
-}
-
-// calculateStorageUsed calculates the total storage used by a user
-// Uses cache for performance optimization
-func (h *AuthHandler) calculateStorageUsed(username string) int64 {
-	cache := GetStorageCache()
-
-	// Try to get from cache first
-	if data, ok := cache.GetUserUsage(username); ok {
-		return data.HomeUsed
-	}
-
-	// Calculate fresh value
-	userDir := h.dataRoot + "/users/" + username
-	var totalSize int64
-
-	filepath.Walk(userDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		// Skip .trash directory
-		if info.IsDir() && info.Name() == ".trash" {
-			return filepath.SkipDir
-		}
-		if !info.IsDir() {
-			totalSize += info.Size()
-		}
-		return nil
-	})
-
-	// Cache the result
-	cache.SetUserUsage(username, &StorageUsageData{
-		HomeUsed:  totalSize,
-		TotalUsed: totalSize,
-	})
-
-	return totalSize
-}
-
-// invalidateStorageCache invalidates the storage cache for a user
-func (h *AuthHandler) invalidateStorageCache(username string) {
-	cache := GetStorageCache()
-	cache.InvalidateUserUsage(username)
-}
-
-// GetUserQuotaInfo returns quota info for a user by username
-func (h *AuthHandler) GetUserQuotaInfo(username string) (quota int64, used int64, err error) {
-	err = h.db.QueryRow("SELECT COALESCE(storage_quota, 0) FROM users WHERE username = $1", username).Scan(&quota)
-	if err != nil {
-		return 0, 0, err
-	}
-	used = h.calculateStorageUsed(username)
-	return quota, used, nil
-}
-
-// CheckQuota checks if a user can upload a file of given size
-// Returns true if upload is allowed, false if quota would be exceeded
-func (h *AuthHandler) CheckQuota(username string, fileSize int64) (bool, int64, int64) {
-	quota, used, err := h.GetUserQuotaInfo(username)
-	if err != nil {
-		// If we can't get quota info, allow the upload
-		return true, 0, 0
-	}
-	// quota = 0 means unlimited
-	if quota == 0 {
-		return true, quota, used
-	}
-	return (used + fileSize) <= quota, quota, used
-}
-
-// GetMyStorageUsage returns the current user's storage usage
-func (h *AuthHandler) GetMyStorageUsage(c echo.Context) error {
-	claims := c.Get("user").(*JWTClaims)
-	quota, used, err := h.GetUserQuotaInfo(claims.Username)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to get storage info",
-		})
-	}
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"quota": quota,
-		"used":  used,
 	})
 }
 
@@ -275,6 +185,19 @@ func (h *AuthHandler) Register(c echo.Context) error {
 }
 
 // Login authenticates a user and returns a JWT token
+// Login godoc
+// @Summary User login
+// @Description Authenticate user with username and password. If 2FA is enabled, returns requires2fa=true.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body LoginRequest true "Login credentials"
+// @Success 200 {object} LoginResponse "Successful login or 2FA required"
+// @Failure 400 {object} map[string]string "Invalid request"
+// @Failure 401 {object} map[string]string "Invalid credentials"
+// @Failure 403 {object} map[string]string "Account disabled"
+// @Router /auth/login [post]
+
 func (h *AuthHandler) Login(c echo.Context) error {
 	var req LoginRequest
 	if err := c.Bind(&req); err != nil {
@@ -371,6 +294,17 @@ func (h *AuthHandler) Login(c echo.Context) error {
 }
 
 // GetProfile returns the current user's profile
+// GetProfile godoc
+// @Summary Get current user profile
+// @Description Returns the authenticated user's profile information including storage usage
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "User profile"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Router /auth/profile [get]
+
 func (h *AuthHandler) GetProfile(c echo.Context) error {
 	claims := c.Get("user").(*JWTClaims)
 
@@ -719,253 +653,5 @@ func (h *AuthHandler) AdminMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		return next(c)
 	}
-}
-
-// CreateUserRequest represents admin user creation request
-type CreateUserRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	IsAdmin  bool   `json:"isAdmin"`
-}
-
-// ListUsers returns all users (admin only)
-func (h *AuthHandler) ListUsers(c echo.Context) error {
-	rows, err := h.db.Query(`
-		SELECT id, username, email, provider, is_admin, is_active, smb_hash,
-		       COALESCE(totp_enabled, false), storage_quota, created_at, updated_at
-		FROM users
-		ORDER BY created_at DESC
-	`)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Database error",
-		})
-	}
-	defer rows.Close()
-
-	users := []User{}
-	for rows.Next() {
-		var user User
-		var email sql.NullString
-		var provider sql.NullString
-		var smbHash sql.NullString
-		var totpEnabled bool
-		var storageQuota sql.NullInt64
-
-		err := rows.Scan(&user.ID, &user.Username, &email, &provider, &user.IsAdmin,
-			&user.IsActive, &smbHash, &totpEnabled, &storageQuota, &user.CreatedAt, &user.UpdatedAt)
-		if err != nil {
-			continue
-		}
-
-		if email.Valid {
-			user.Email = email.String
-		}
-		if provider.Valid {
-			user.Provider = provider.String
-		} else {
-			user.Provider = "local"
-		}
-		user.HasSMB = smbHash.Valid && smbHash.String != ""
-		user.Has2FA = totpEnabled
-		if storageQuota.Valid {
-			user.StorageQuota = storageQuota.Int64
-		}
-		// Calculate storage used
-		user.StorageUsed = h.calculateStorageUsed(user.Username)
-
-		users = append(users, user)
-	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"users": users,
-		"total": len(users),
-	})
-}
-
-// CreateUser creates a new user (admin only)
-func (h *AuthHandler) CreateUser(c echo.Context) error {
-	var req CreateUserRequest
-	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request",
-		})
-	}
-
-	// Validate input
-	if len(req.Username) < 3 || len(req.Username) > 50 {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Username must be between 3 and 50 characters",
-		})
-	}
-
-	if len(req.Password) < 8 {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Password must be at least 8 characters",
-		})
-	}
-
-	// Check if username already exists
-	var exists bool
-	err := h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", req.Username).Scan(&exists)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Database error",
-		})
-	}
-	if exists {
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error": "Username already exists",
-		})
-	}
-
-	// Hash password
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to hash password",
-		})
-	}
-
-	// Create user
-	var userID string
-	err = h.db.QueryRow(`
-		INSERT INTO users (username, email, password_hash, is_admin, is_active)
-		VALUES ($1, $2, $3, $4, true)
-		RETURNING id
-	`, req.Username, req.Email, string(passwordHash), req.IsAdmin).Scan(&userID)
-
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create user",
-		})
-	}
-
-	// Create user's home directory
-	var warnings []string
-	if err := h.ensureUserHomeDir(req.Username); err != nil {
-		log.Printf("WARNING: Failed to create home directory for user %s: %v", req.Username, err)
-		warnings = append(warnings, "Home directory creation failed - will be created on first access")
-	}
-
-	response := map[string]interface{}{
-		"success": true,
-		"id":      userID,
-		"message": "User created successfully",
-	}
-	if len(warnings) > 0 {
-		response["warnings"] = warnings
-	}
-	return c.JSON(http.StatusCreated, response)
-}
-
-// UpdateUserRequest represents admin user update request
-type UpdateUserRequest struct {
-	Email        string `json:"email"`
-	Password     string `json:"password"`
-	IsAdmin      bool   `json:"isAdmin"`
-	IsActive     bool   `json:"isActive"`
-	StorageQuota *int64 `json:"storageQuota,omitempty"` // nil = don't change, 0 = unlimited
-}
-
-// UpdateUser updates a user (admin only)
-func (h *AuthHandler) UpdateUser(c echo.Context) error {
-	userID := c.Param("id")
-
-	var req UpdateUserRequest
-	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request",
-		})
-	}
-
-	// Build update query
-	updates := []string{"is_admin = $1", "is_active = $2", "updated_at = NOW()"}
-	args := []interface{}{req.IsAdmin, req.IsActive}
-	argCount := 3
-
-	if req.Email != "" {
-		updates = append(updates, fmt.Sprintf("email = $%d", argCount))
-		args = append(args, req.Email)
-		argCount++
-	}
-
-	if req.Password != "" {
-		if len(req.Password) < 8 {
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Password must be at least 8 characters",
-			})
-		}
-		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to hash password",
-			})
-		}
-		updates = append(updates, fmt.Sprintf("password_hash = $%d", argCount))
-		args = append(args, string(passwordHash))
-		argCount++
-	}
-
-	if req.StorageQuota != nil {
-		updates = append(updates, fmt.Sprintf("storage_quota = $%d", argCount))
-		args = append(args, *req.StorageQuota)
-		argCount++
-	}
-
-	args = append(args, userID)
-	query := "UPDATE users SET " + strings.Join(updates, ", ") + fmt.Sprintf(" WHERE id = $%d", argCount)
-
-	result, err := h.db.Exec(query, args...)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to update user",
-		})
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "User not found",
-		})
-	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "User updated successfully",
-	})
-}
-
-// DeleteUser deletes a user (admin only)
-func (h *AuthHandler) DeleteUser(c echo.Context) error {
-	userID := c.Param("id")
-	claims := c.Get("user").(*JWTClaims)
-
-	// Prevent self-deletion
-	if userID == claims.UserID {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Cannot delete your own account",
-		})
-	}
-
-	result, err := h.db.Exec("DELETE FROM users WHERE id = $1", userID)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to delete user",
-		})
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "User not found",
-		})
-	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "User deleted successfully",
-	})
 }
 

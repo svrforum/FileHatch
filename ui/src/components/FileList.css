@@ -5,11 +5,13 @@
   min-height: calc(100vh - 60px - 48px);
   gap: 0;
   align-items: flex-start;
-  transition: padding-right 0.2s ease;
+  /* Always reserve space for info panel to prevent layout shift */
+  padding-right: 320px;
 }
 
+/* panel-open class no longer needed for layout, kept for compatibility */
 .file-list-wrapper.panel-open {
-  padding-right: 320px;
+  /* No change - space is always reserved */
 }
 
 .file-list-container {
@@ -689,6 +691,33 @@
   }
 }
 
+/* Empty state for details panel */
+.file-details-panel.empty {
+  animation: none;
+  justify-content: center;
+  align-items: center;
+}
+
+.details-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: var(--spacing-xl);
+}
+
+.details-empty-state svg {
+  opacity: 0.5;
+}
+
+.details-empty-state p {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
 .details-header {
   display: flex;
   align-items: center;
@@ -1094,6 +1123,17 @@
   padding: var(--spacing-lg);
   flex: 1;
   align-content: flex-start;
+}
+
+/* Virtual Grid - 가상 스크롤링 활성화 시 */
+.file-grid-virtual {
+  display: block;
+  overflow-y: auto;
+  padding: var(--spacing-lg) 0;
+}
+
+.file-grid-virtual-row {
+  box-sizing: border-box;
 }
 
 .file-card {

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { accessUploadShare, getUploadShareTusUrl, UploadShareInfo } from '../api/fileShares'
 import * as tus from 'tus-js-client'
+import { useToastStore, parseUploadError } from '../stores/toastStore'
 import './UploadShareAccessPage.css'
 
 interface UploadFile {
@@ -174,7 +175,13 @@ function UploadShareAccessPage() {
       },
       onError: (err) => {
         console.error('Upload error:', err)
-        updateFile({ progress: 0, status: 'error', error: err.message || 'Upload failed', uploadInstance: undefined })
+        // Parse error message for user-friendly display
+        const errorMessage = parseUploadError(err.message || 'Upload failed')
+
+        // Show toast notification for the error
+        useToastStore.getState().showError(errorMessage)
+
+        updateFile({ progress: 0, status: 'error', error: errorMessage, uploadInstance: undefined })
       },
       onProgress: (bytesUploaded, bytesTotal) => {
         const now = Date.now()

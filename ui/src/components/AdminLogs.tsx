@@ -4,6 +4,7 @@ import './AdminLogs.css'
 
 type LogTab = 'file' | 'user' | 'admin' | 'system'
 type LogLevel = 'all' | 'info' | 'warn' | 'error' | 'fatal'
+type DatePreset = 'all' | 'today' | 'yesterday' | 'week' | 'month' | 'custom'
 
 interface AuditLogEntry {
   id: number
@@ -30,6 +31,39 @@ interface SystemLogEntry {
 
 const ITEMS_PER_PAGE = 50
 
+// Helper to format date to YYYY-MM-DD
+const formatDateForInput = (date: Date): string => {
+  return date.toISOString().split('T')[0]
+}
+
+// Get date range for presets
+const getDateRange = (preset: DatePreset): { startDate: string; endDate: string } => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  switch (preset) {
+    case 'today':
+      return { startDate: formatDateForInput(today), endDate: formatDateForInput(today) }
+    case 'yesterday': {
+      const yesterday = new Date(today)
+      yesterday.setDate(yesterday.getDate() - 1)
+      return { startDate: formatDateForInput(yesterday), endDate: formatDateForInput(yesterday) }
+    }
+    case 'week': {
+      const weekAgo = new Date(today)
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      return { startDate: formatDateForInput(weekAgo), endDate: formatDateForInput(today) }
+    }
+    case 'month': {
+      const monthAgo = new Date(today)
+      monthAgo.setMonth(monthAgo.getMonth() - 1)
+      return { startDate: formatDateForInput(monthAgo), endDate: formatDateForInput(today) }
+    }
+    default:
+      return { startDate: '', endDate: '' }
+  }
+}
+
 function AdminLogs() {
   const { user: currentUser, token } = useAuthStore()
   const [activeTab, setActiveTab] = useState<LogTab>(() => {
@@ -43,6 +77,11 @@ function AdminLogs() {
   const [logLevel, setLogLevel] = useState<LogLevel>('all')
   const [container, setContainer] = useState<string>('all')
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('all')
+
+  // Date range filter
+  const [datePreset, setDatePreset] = useState<DatePreset>('all')
+  const [startDate, setStartDate] = useState<string>('')
+  const [endDate, setEndDate] = useState<string>('')
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
@@ -60,7 +99,30 @@ function AdminLogs() {
     setCurrentPage(1)
     setSearchQuery('')
     setEventTypeFilter('all')
+    setDatePreset('all')
+    setStartDate('')
+    setEndDate('')
     localStorage.setItem('admin-logs-tab', tab)
+  }
+
+  const handleDatePresetChange = (preset: DatePreset) => {
+    setDatePreset(preset)
+    if (preset !== 'custom') {
+      const range = getDateRange(preset)
+      setStartDate(range.startDate)
+      setEndDate(range.endDate)
+    }
+    setCurrentPage(1)
+  }
+
+  const handleCustomDateChange = (type: 'start' | 'end', value: string) => {
+    if (type === 'start') {
+      setStartDate(value)
+    } else {
+      setEndDate(value)
+    }
+    setDatePreset('custom')
+    setCurrentPage(1)
   }
 
   const loadAuditLogs = useCallback(async () => {
@@ -72,6 +134,14 @@ function AdminLogs() {
 
       if (eventTypeFilter !== 'all') {
         url += `&eventType=${encodeURIComponent(eventTypeFilter)}`
+      }
+
+      // Add date range filter
+      if (startDate) {
+        url += `&startDate=${startDate}`
+      }
+      if (endDate) {
+        url += `&endDate=${endDate}`
       }
 
       const response = await fetch(url, {
@@ -108,7 +178,7 @@ function AdminLogs() {
     } finally {
       setLoading(false)
     }
-  }, [activeTab, token, currentPage, eventTypeFilter])
+  }, [activeTab, token, currentPage, eventTypeFilter, startDate, endDate])
 
   const loadSystemLogs = useCallback(async () => {
     setLoading(true)
@@ -444,6 +514,58 @@ function AdminLogs() {
               <option key={type} value={type}>{getEventTypeLabel(type)}</option>
             ))}
           </select>
+        )}
+
+        {activeTab !== 'system' && (
+          <div className="date-filter-group">
+            <select
+              className="log-filter date-preset"
+              value={datePreset}
+              onChange={(e) => handleDatePresetChange(e.target.value as DatePreset)}
+            >
+              <option value="all">전체 기간</option>
+              <option value="today">오늘</option>
+              <option value="yesterday">어제</option>
+              <option value="week">최근 7일</option>
+              <option value="month">최근 30일</option>
+              <option value="custom">직접 선택</option>
+            </select>
+            {(datePreset === 'custom' || startDate || endDate) && (
+              <div className="date-range-inputs">
+                <input
+                  type="date"
+                  className="date-input"
+                  value={startDate}
+                  onChange={(e) => handleCustomDateChange('start', e.target.value)}
+                  placeholder="시작일"
+                />
+                <span className="date-separator">~</span>
+                <input
+                  type="date"
+                  className="date-input"
+                  value={endDate}
+                  onChange={(e) => handleCustomDateChange('end', e.target.value)}
+                  placeholder="종료일"
+                />
+                {(startDate || endDate) && (
+                  <button
+                    className="clear-date-btn"
+                    onClick={() => {
+                      setStartDate('')
+                      setEndDate('')
+                      setDatePreset('all')
+                      setCurrentPage(1)
+                    }}
+                    title="날짜 필터 초기화"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {activeTab === 'system' && (

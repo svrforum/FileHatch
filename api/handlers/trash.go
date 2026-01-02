@@ -63,6 +63,20 @@ func (h *Handler) saveTrashMeta(username string, items map[string]TrashItem) err
 }
 
 // MoveToTrash moves a file or folder to trash instead of deleting permanently
+// @Summary		Move to trash
+// @Description	Move a file or folder to the user's trash (soft delete)
+// @Tags		Trash
+// @Accept		json
+// @Produce		json
+// @Param		path	path		string	true	"Item path to move to trash"
+// @Success		200		{object}	docs.SuccessResponse	"Item moved to trash"
+// @Failure		400		{object}	docs.ErrorResponse	"Bad request"
+// @Failure		401		{object}	docs.ErrorResponse	"Unauthorized"
+// @Failure		403		{object}	docs.ErrorResponse	"Forbidden"
+// @Failure		404		{object}	docs.ErrorResponse	"Item not found"
+// @Failure		500		{object}	docs.ErrorResponse	"Internal server error"
+// @Security	BearerAuth
+// @Router		/trash/{path} [post]
 func (h *Handler) MoveToTrash(c echo.Context) error {
 	requestPath := c.Param("*")
 	if requestPath == "" {
@@ -149,6 +163,16 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 }
 
 // ListTrash lists items in the user's trash
+// @Summary		List trash items
+// @Description	Get all items in the user's trash, sorted by deletion time (newest first)
+// @Tags		Trash
+// @Accept		json
+// @Produce		json
+// @Success		200		{object}	docs.SuccessResponse{data=docs.TrashListResponse}	"List of trash items"
+// @Failure		401		{object}	docs.ErrorResponse	"Unauthorized"
+// @Failure		500		{object}	docs.ErrorResponse	"Internal server error"
+// @Security	BearerAuth
+// @Router		/trash [get]
 func (h *Handler) ListTrash(c echo.Context) error {
 	claims, ok := c.Get("user").(*JWTClaims)
 	if !ok || claims == nil {
@@ -180,6 +204,19 @@ func (h *Handler) ListTrash(c echo.Context) error {
 }
 
 // RestoreFromTrash restores an item from trash
+// @Summary		Restore from trash
+// @Description	Restore an item from trash to its original location
+// @Tags		Trash
+// @Accept		json
+// @Produce		json
+// @Param		id		path		string	true	"Trash item ID"
+// @Success		200		{object}	docs.SuccessResponse	"Item restored successfully"
+// @Failure		400		{object}	docs.ErrorResponse	"Bad request"
+// @Failure		401		{object}	docs.ErrorResponse	"Unauthorized"
+// @Failure		404		{object}	docs.ErrorResponse	"Trash item not found"
+// @Failure		500		{object}	docs.ErrorResponse	"Internal server error"
+// @Security	BearerAuth
+// @Router		/trash/restore/{id} [post]
 func (h *Handler) RestoreFromTrash(c echo.Context) error {
 	trashID := c.Param("id")
 	if trashID == "" {
@@ -231,6 +268,11 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 	delete(meta, trashID)
 	h.saveTrashMeta(claims.Username, meta)
 
+	// Log restore event for recent files tracking
+	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", item.OriginalPath, map[string]interface{}{
+		"trashId": trashID,
+	})
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success":      true,
 		"restoredPath": item.OriginalPath,
@@ -238,6 +280,19 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 }
 
 // DeleteFromTrash permanently deletes an item from trash
+// @Summary		Delete from trash
+// @Description	Permanently delete an item from trash (irreversible)
+// @Tags		Trash
+// @Accept		json
+// @Produce		json
+// @Param		id		path		string	true	"Trash item ID"
+// @Success		200		{object}	docs.SuccessResponse	"Item permanently deleted"
+// @Failure		400		{object}	docs.ErrorResponse	"Bad request"
+// @Failure		401		{object}	docs.ErrorResponse	"Unauthorized"
+// @Failure		404		{object}	docs.ErrorResponse	"Trash item not found"
+// @Failure		500		{object}	docs.ErrorResponse	"Internal server error"
+// @Security	BearerAuth
+// @Router		/trash/{id} [delete]
 func (h *Handler) DeleteFromTrash(c echo.Context) error {
 	trashID := c.Param("id")
 	if trashID == "" {
@@ -274,6 +329,16 @@ func (h *Handler) DeleteFromTrash(c echo.Context) error {
 }
 
 // EmptyTrash permanently deletes all items from trash
+// @Summary		Empty trash
+// @Description	Permanently delete all items from trash (irreversible)
+// @Tags		Trash
+// @Accept		json
+// @Produce		json
+// @Success		200		{object}	docs.SuccessResponse	"Trash emptied"
+// @Failure		401		{object}	docs.ErrorResponse	"Unauthorized"
+// @Failure		500		{object}	docs.ErrorResponse	"Internal server error"
+// @Security	BearerAuth
+// @Router		/trash/empty [delete]
 func (h *Handler) EmptyTrash(c echo.Context) error {
 	claims, ok := c.Get("user").(*JWTClaims)
 	if !ok || claims == nil {
@@ -402,6 +467,16 @@ func (h *Handler) runTrashCleanup(retentionDays int) {
 }
 
 // GetTrashStats returns statistics about trash usage
+// @Summary		Get trash statistics
+// @Description	Get statistics about the user's trash including item count, total size, and retention info
+// @Tags		Trash
+// @Accept		json
+// @Produce		json
+// @Success		200		{object}	docs.SuccessResponse{data=docs.TrashStatsResponse}	"Trash statistics"
+// @Failure		401		{object}	docs.ErrorResponse	"Unauthorized"
+// @Failure		500		{object}	docs.ErrorResponse	"Internal server error"
+// @Security	BearerAuth
+// @Router		/trash/stats [get]
 func (h *Handler) GetTrashStats(c echo.Context) error {
 	claims, ok := c.Get("user").(*JWTClaims)
 	if !ok || claims == nil {

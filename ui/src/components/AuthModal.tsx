@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import './AuthModal.css'
 
@@ -13,7 +13,27 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
   const { login, isLoading, error, clearError } = useAuthStore()
 
-  if (!isOpen) return null
+  const handleClose = useCallback(() => {
+    setUsername('')
+    setPassword('')
+    clearError()
+    onClose()
+  }, [clearError, onClose])
+
+  // Handle Escape key
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        handleClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, handleClose])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,12 +46,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
     }
   }
 
-  const handleClose = () => {
-    setUsername('')
-    setPassword('')
-    clearError()
-    onClose()
-  }
+  if (!isOpen) return null
 
   return (
     <div className="modal-overlay" onClick={handleClose}>

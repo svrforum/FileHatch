@@ -3,7 +3,6 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -142,10 +141,20 @@ func sanitizeFolderName(name string) string {
 // --- User API ---
 
 // ListMySharedFolders returns shared folders the current user has access to
+// @Summary		List my shared folders
+// @Description	Get list of shared folders the current user has access to
+// @Tags		SharedFolders
+// @Accept		json
+// @Produce		json
+// @Success		200		{object}	docs.SuccessResponse{data=[]SharedFolderWithPermission}	"List of shared folders"
+// @Failure		401		{object}	docs.ErrorResponse	"Unauthorized"
+// @Failure		500		{object}	docs.ErrorResponse	"Internal server error"
+// @Security	BearerAuth
+// @Router		/shared-folders/my [get]
 func (h *SharedFolderHandler) ListMySharedFolders(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	query := `
@@ -159,7 +168,7 @@ func (h *SharedFolderHandler) ListMySharedFolders(c echo.Context) error {
 
 	rows, err := h.db.Query(query, claims.UserID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 	defer rows.Close()
 
@@ -167,11 +176,10 @@ func (h *SharedFolderHandler) ListMySharedFolders(c echo.Context) error {
 	for rows.Next() {
 		var f SharedFolderWithPermission
 		var createdBy sql.NullString
-		err := rows.Scan(
+		if scanErr := rows.Scan(
 			&f.ID, &f.Name, &f.Description, &f.StorageQuota, &createdBy,
 			&f.CreatedAt, &f.UpdatedAt, &f.IsActive, &f.PermissionLevel,
-		)
-		if err != nil {
+		); scanErr != nil {
 			continue
 		}
 		if createdBy.Valid {
@@ -182,7 +190,7 @@ func (h *SharedFolderHandler) ListMySharedFolders(c echo.Context) error {
 		folders = append(folders, f)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return RespondSuccess(c, map[string]interface{}{
 		"folders": folders,
 		"total":   len(folders),
 	})
@@ -190,32 +198,32 @@ func (h *SharedFolderHandler) ListMySharedFolders(c echo.Context) error {
 
 // GetMyPermission returns the current user's permission level for a shared folder
 func (h *SharedFolderHandler) GetMyPermission(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	folderID := c.Param("id")
 	if folderID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Folder ID required"})
+		return RespondError(c, ErrMissingParameter("folder ID"))
 	}
 
 	var permissionLevel int
-	err := h.db.QueryRow(`
+	queryErr := h.db.QueryRow(`
 		SELECT sfm.permission_level
 		FROM shared_folder_members sfm
 		INNER JOIN shared_folders sf ON sf.id = sfm.shared_folder_id
 		WHERE sfm.shared_folder_id = $1 AND sfm.user_id = $2 AND sf.is_active = TRUE
 	`, folderID, claims.UserID).Scan(&permissionLevel)
 
-	if err == sql.ErrNoRows {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "No access to this folder"})
+	if queryErr == sql.ErrNoRows {
+		return RespondError(c, ErrForbidden("No access to this folder"))
 	}
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+	if queryErr != nil {
+		return RespondError(c, ErrInternal("Database error"))
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return RespondSuccess(c, map[string]interface{}{
 		"permissionLevel": permissionLevel,
 		"canWrite":        permissionLevel >= PermissionReadWrite,
 	})
@@ -236,7 +244,7 @@ func (h *SharedFolderHandler) ListAllSharedFolders(c echo.Context) error {
 
 	rows, err := h.db.Query(query)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 	defer rows.Close()
 
@@ -244,11 +252,10 @@ func (h *SharedFolderHandler) ListAllSharedFolders(c echo.Context) error {
 	for rows.Next() {
 		var f SharedFolder
 		var createdBy, creatorUsername sql.NullString
-		err := rows.Scan(
+		if scanErr := rows.Scan(
 			&f.ID, &f.Name, &f.Description, &f.StorageQuota, &createdBy,
 			&f.CreatedAt, &f.UpdatedAt, &f.IsActive, &creatorUsername, &f.MemberCount,
-		)
-		if err != nil {
+		); scanErr != nil {
 			continue
 		}
 		if createdBy.Valid {
@@ -262,7 +269,7 @@ func (h *SharedFolderHandler) ListAllSharedFolders(c echo.Context) error {
 		folders = append(folders, f)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return RespondSuccess(c, map[string]interface{}{
 		"folders": folders,
 		"total":   len(folders),
 	})
@@ -270,9 +277,9 @@ func (h *SharedFolderHandler) ListAllSharedFolders(c echo.Context) error {
 
 // CreateSharedFolder creates a new shared folder (admin only)
 func (h *SharedFolderHandler) CreateSharedFolder(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	var req struct {
@@ -281,38 +288,38 @@ func (h *SharedFolderHandler) CreateSharedFolder(c echo.Context) error {
 		StorageQuota int64  `json:"storageQuota"` // bytes, 0 = unlimited
 	}
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
+		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
 
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Name is required"})
+		return RespondError(c, ErrBadRequest("Name is required"))
 	}
 
 	// Check if folder with same name already exists
 	var existingCount int
 	h.db.QueryRow("SELECT COUNT(*) FROM shared_folders WHERE name = $1", req.Name).Scan(&existingCount)
 	if existingCount > 0 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Folder with this name already exists"})
+		return RespondError(c, ErrAlreadyExists("Folder with this name"))
 	}
 
 	// Create folder in database
 	var folderID string
-	err := h.db.QueryRow(`
+	insertErr := h.db.QueryRow(`
 		INSERT INTO shared_folders (name, description, storage_quota, created_by)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id
 	`, req.Name, req.Description, req.StorageQuota, claims.UserID).Scan(&folderID)
 
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create shared folder"})
+	if insertErr != nil {
+		return RespondError(c, ErrOperationFailed("create shared folder", insertErr))
 	}
 
 	// Create directory on filesystem using folder name
-	if err := h.EnsureSharedFolderDir(req.Name); err != nil {
+	if dirErr := h.EnsureSharedFolderDir(req.Name); dirErr != nil {
 		// Rollback database entry
 		h.db.Exec("DELETE FROM shared_folders WHERE id = $1", folderID)
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create folder directory"})
+		return RespondError(c, ErrOperationFailed("create folder directory", dirErr))
 	}
 
 	// Audit log
@@ -324,7 +331,7 @@ func (h *SharedFolderHandler) CreateSharedFolder(c echo.Context) error {
 			"storageQuota": req.StorageQuota,
 		})
 
-	return c.JSON(http.StatusCreated, map[string]interface{}{
+	return RespondCreated(c, map[string]interface{}{
 		"id":      folderID,
 		"name":    req.Name,
 		"message": "Shared folder created successfully",
@@ -333,14 +340,14 @@ func (h *SharedFolderHandler) CreateSharedFolder(c echo.Context) error {
 
 // UpdateSharedFolder updates a shared folder (admin only)
 func (h *SharedFolderHandler) UpdateSharedFolder(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	folderID := c.Param("id")
 	if folderID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Folder ID required"})
+		return RespondError(c, ErrMissingParameter("folder ID"))
 	}
 
 	var req struct {
@@ -350,12 +357,12 @@ func (h *SharedFolderHandler) UpdateSharedFolder(c echo.Context) error {
 		IsActive     *bool  `json:"isActive"`
 	}
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
+		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
 
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Name is required"})
+		return RespondError(c, ErrBadRequest("Name is required"))
 	}
 
 	query := `
@@ -372,14 +379,14 @@ func (h *SharedFolderHandler) UpdateSharedFolder(c echo.Context) error {
 		args = append(args, folderID)
 	}
 
-	result, err := h.db.Exec(query, args...)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update shared folder"})
+	result, updateErr := h.db.Exec(query, args...)
+	if updateErr != nil {
+		return RespondError(c, ErrOperationFailed("update shared folder", updateErr))
 	}
 
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "Shared folder not found"})
+		return RespondError(c, ErrNotFound("Shared folder"))
 	}
 
 	// Audit log
@@ -391,32 +398,32 @@ func (h *SharedFolderHandler) UpdateSharedFolder(c echo.Context) error {
 			"storageQuota": req.StorageQuota,
 		})
 
-	return c.JSON(http.StatusOK, map[string]string{"message": "Shared folder updated successfully"})
+	return RespondSuccess(c, map[string]string{"message": "Shared folder updated successfully"})
 }
 
 // DeleteSharedFolder deletes a shared folder (admin only)
 func (h *SharedFolderHandler) DeleteSharedFolder(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	folderID := c.Param("id")
 	if folderID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Folder ID required"})
+		return RespondError(c, ErrMissingParameter("folder ID"))
 	}
 
 	// Get folder name before deleting
 	var folderName string
-	err := h.db.QueryRow("SELECT name FROM shared_folders WHERE id = $1", folderID).Scan(&folderName)
-	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "Shared folder not found"})
+	queryErr := h.db.QueryRow("SELECT name FROM shared_folders WHERE id = $1", folderID).Scan(&folderName)
+	if queryErr != nil {
+		return RespondError(c, ErrNotFound("Shared folder"))
 	}
 
 	// Delete from database (cascades to members)
-	_, err = h.db.Exec("DELETE FROM shared_folders WHERE id = $1", folderID)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to delete shared folder"})
+	_, deleteErr := h.db.Exec("DELETE FROM shared_folders WHERE id = $1", folderID)
+	if deleteErr != nil {
+		return RespondError(c, ErrOperationFailed("delete shared folder", deleteErr))
 	}
 
 	// Delete directory from filesystem using folder name
@@ -428,7 +435,7 @@ func (h *SharedFolderHandler) DeleteSharedFolder(c echo.Context) error {
 	h.auditHandler.LogEvent(&userID, c.RealIP(), "shared_folder_delete",
 		fmt.Sprintf("/shared/%s", sanitizeFolderName(folderName)), nil)
 
-	return c.JSON(http.StatusOK, map[string]string{"message": "Shared folder deleted successfully"})
+	return RespondSuccess(c, map[string]string{"message": "Shared folder deleted successfully"})
 }
 
 // --- Member Management ---
@@ -437,7 +444,7 @@ func (h *SharedFolderHandler) DeleteSharedFolder(c echo.Context) error {
 func (h *SharedFolderHandler) ListMembers(c echo.Context) error {
 	folderID := c.Param("id")
 	if folderID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Folder ID required"})
+		return RespondError(c, ErrMissingParameter("folder ID"))
 	}
 
 	query := `
@@ -452,7 +459,7 @@ func (h *SharedFolderHandler) ListMembers(c echo.Context) error {
 
 	rows, err := h.db.Query(query, folderID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database error"})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 	defer rows.Close()
 
@@ -460,11 +467,10 @@ func (h *SharedFolderHandler) ListMembers(c echo.Context) error {
 	for rows.Next() {
 		var m SharedFolderMember
 		var addedBy, addedByUsername sql.NullString
-		err := rows.Scan(
+		if scanErr := rows.Scan(
 			&m.ID, &m.SharedFolderID, &m.UserID, &m.PermissionLevel,
 			&addedBy, &m.CreatedAt, &m.Username, &addedByUsername,
-		)
-		if err != nil {
+		); scanErr != nil {
 			continue
 		}
 		if addedBy.Valid {
@@ -476,7 +482,7 @@ func (h *SharedFolderHandler) ListMembers(c echo.Context) error {
 		members = append(members, m)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return RespondSuccess(c, map[string]interface{}{
 		"members": members,
 		"total":   len(members),
 	})
@@ -484,14 +490,14 @@ func (h *SharedFolderHandler) ListMembers(c echo.Context) error {
 
 // AddMember adds a user to a shared folder (admin only)
 func (h *SharedFolderHandler) AddMember(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	folderID := c.Param("id")
 	if folderID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Folder ID required"})
+		return RespondError(c, ErrMissingParameter("folder ID"))
 	}
 
 	var req struct {
@@ -499,11 +505,11 @@ func (h *SharedFolderHandler) AddMember(c echo.Context) error {
 		PermissionLevel int    `json:"permissionLevel"` // 1=read, 2=read-write
 	}
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
+		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
 
 	if req.UserID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "User ID is required"})
+		return RespondError(c, ErrBadRequest("User ID is required"))
 	}
 	if req.PermissionLevel < 1 || req.PermissionLevel > 2 {
 		req.PermissionLevel = PermissionReadOnly
@@ -513,26 +519,26 @@ func (h *SharedFolderHandler) AddMember(c echo.Context) error {
 	var folderExists bool
 	h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM shared_folders WHERE id = $1)", folderID).Scan(&folderExists)
 	if !folderExists {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "Shared folder not found"})
+		return RespondError(c, ErrNotFound("Shared folder"))
 	}
 
 	// Check if user exists
 	var userExists bool
 	h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.UserID).Scan(&userExists)
 	if !userExists {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
+		return RespondError(c, ErrNotFound("User"))
 	}
 
 	// Insert or update member
-	_, err := h.db.Exec(`
+	_, insertErr := h.db.Exec(`
 		INSERT INTO shared_folder_members (shared_folder_id, user_id, permission_level, added_by)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (shared_folder_id, user_id)
 		DO UPDATE SET permission_level = EXCLUDED.permission_level
 	`, folderID, req.UserID, req.PermissionLevel, claims.UserID)
 
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to add member"})
+	if insertErr != nil {
+		return RespondError(c, ErrOperationFailed("add member", insertErr))
 	}
 
 	// Audit log - get folder name for path
@@ -570,46 +576,46 @@ func (h *SharedFolderHandler) AddMember(c echo.Context) error {
 		)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"message": "Member added successfully"})
+	return RespondSuccess(c, map[string]string{"message": "Member added successfully"})
 }
 
 // UpdateMemberPermission updates a member's permission level (admin only)
 func (h *SharedFolderHandler) UpdateMemberPermission(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	folderID := c.Param("id")
 	userID := c.Param("userId")
 	if folderID == "" || userID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Folder ID and User ID required"})
+		return RespondError(c, ErrBadRequest("Folder ID and User ID required"))
 	}
 
 	var req struct {
 		PermissionLevel int `json:"permissionLevel"`
 	}
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
+		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
 
 	if req.PermissionLevel < 1 || req.PermissionLevel > 2 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid permission level"})
+		return RespondError(c, ErrBadRequest("Invalid permission level"))
 	}
 
-	result, err := h.db.Exec(`
+	result, updateErr := h.db.Exec(`
 		UPDATE shared_folder_members
 		SET permission_level = $1
 		WHERE shared_folder_id = $2 AND user_id = $3
 	`, req.PermissionLevel, folderID, userID)
 
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to update permission"})
+	if updateErr != nil {
+		return RespondError(c, ErrOperationFailed("update permission", updateErr))
 	}
 
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "Member not found"})
+		return RespondError(c, ErrNotFound("Member"))
 	}
 
 	// Audit log - get folder name for path
@@ -623,34 +629,34 @@ func (h *SharedFolderHandler) UpdateMemberPermission(c echo.Context) error {
 			"permissionLevel": req.PermissionLevel,
 		})
 
-	return c.JSON(http.StatusOK, map[string]string{"message": "Permission updated successfully"})
+	return RespondSuccess(c, map[string]string{"message": "Permission updated successfully"})
 }
 
 // RemoveMember removes a user from a shared folder (admin only)
 func (h *SharedFolderHandler) RemoveMember(c echo.Context) error {
-	claims, ok := c.Get("user").(*JWTClaims)
-	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
 	}
 
 	folderID := c.Param("id")
 	userID := c.Param("userId")
 	if folderID == "" || userID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Folder ID and User ID required"})
+		return RespondError(c, ErrBadRequest("Folder ID and User ID required"))
 	}
 
-	result, err := h.db.Exec(`
+	result, deleteErr := h.db.Exec(`
 		DELETE FROM shared_folder_members
 		WHERE shared_folder_id = $1 AND user_id = $2
 	`, folderID, userID)
 
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to remove member"})
+	if deleteErr != nil {
+		return RespondError(c, ErrOperationFailed("remove member", deleteErr))
 	}
 
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "Member not found"})
+		return RespondError(c, ErrNotFound("Member"))
 	}
 
 	// Audit log - get folder name for path
@@ -681,7 +687,7 @@ func (h *SharedFolderHandler) RemoveMember(c echo.Context) error {
 		)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"message": "Member removed successfully"})
+	return RespondSuccess(c, map[string]string{"message": "Member removed successfully"})
 }
 
 // --- Permission Checking Helpers ---

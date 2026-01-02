@@ -12,6 +12,20 @@ import (
 )
 
 // GetFile handles file download requests
+// @Summary		Download file
+// @Description	Download a file by path. Supports both inline viewing and forced download.
+// @Tags		Download
+// @Produce		octet-stream
+// @Param		path		path		string	true	"File path"
+// @Param		download	query		bool	false	"Force download with Content-Disposition attachment"
+// @Success		200		{file}		binary	"File content"
+// @Failure		400		{object}	map[string]string	"Bad request"
+// @Failure		401		{object}	map[string]string	"Unauthorized"
+// @Failure		403		{object}	map[string]string	"Forbidden"
+// @Failure		404		{object}	map[string]string	"File not found"
+// @Failure		500		{object}	map[string]string	"Internal server error"
+// @Security	BearerAuth
+// @Router		/files/{path} [get]
 func (h *Handler) GetFile(c echo.Context) error {
 	requestPath := c.Param("*")
 	if requestPath == "" {
@@ -123,6 +137,20 @@ func (h *Handler) GetFile(c echo.Context) error {
 }
 
 // DeleteFile handles file deletion requests
+// @Summary		Delete file
+// @Description	Permanently delete a file by path
+// @Tags		Files
+// @Accept		json
+// @Produce		json
+// @Param		path	path		string	true	"File path"
+// @Success		200		{object}	docs.SuccessResponse	"File deleted successfully"
+// @Failure		400		{object}	map[string]string	"Bad request"
+// @Failure		401		{object}	map[string]string	"Unauthorized"
+// @Failure		403		{object}	map[string]string	"Forbidden"
+// @Failure		404		{object}	map[string]string	"File not found"
+// @Failure		500		{object}	map[string]string	"Internal server error"
+// @Security	BearerAuth
+// @Router		/file/{path} [delete]
 func (h *Handler) DeleteFile(c echo.Context) error {
 	requestPath := c.Param("*")
 	if requestPath == "" {
@@ -198,6 +226,21 @@ func (h *Handler) DeleteFile(c echo.Context) error {
 }
 
 // SaveFileContent saves text content to a file
+// @Summary		Save file content
+// @Description	Save text content to an existing file (for text editor)
+// @Tags		Files
+// @Accept		text/plain
+// @Produce		json
+// @Param		path	path		string	true	"File path"
+// @Param		content	body		string	true	"File content"
+// @Success		200		{object}	docs.SuccessResponse	"File saved successfully"
+// @Failure		400		{object}	map[string]string	"Bad request"
+// @Failure		401		{object}	map[string]string	"Unauthorized"
+// @Failure		403		{object}	map[string]string	"Forbidden"
+// @Failure		404		{object}	map[string]string	"File not found"
+// @Failure		500		{object}	map[string]string	"Internal server error"
+// @Security	BearerAuth
+// @Router		/file/{path} [put]
 func (h *Handler) SaveFileContent(c echo.Context) error {
 	requestPath := c.Param("*")
 	if requestPath == "" {
@@ -326,6 +369,17 @@ func (h *Handler) SaveFileContent(c echo.Context) error {
 }
 
 // CheckFileExists checks if a file exists at the given path
+// @Summary		Check file exists
+// @Description	Check if a file exists at the given path
+// @Tags		Files
+// @Accept		json
+// @Produce		json
+// @Param		path		query		string	false	"Parent folder path"
+// @Param		filename	query		string	true	"Filename to check"
+// @Success		200		{object}	map[string]interface{}	"File existence status"
+// @Failure		400		{object}	map[string]string	"Bad request"
+// @Security	BearerAuth
+// @Router		/files/exists [get]
 func (h *Handler) CheckFileExists(c echo.Context) error {
 	requestPath := c.QueryParam("path")
 	filename := c.QueryParam("filename")

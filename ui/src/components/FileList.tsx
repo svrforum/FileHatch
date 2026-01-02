@@ -1,17 +1,21 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchFiles, downloadFileWithProgress, getFolderStats, renameItem, copyItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, getFileMetadata, updateFileMetadata, getUserTags, FileMetadata, compressFiles, extractZip, downloadAsZip, searchFiles } from '../api/files'
+import { fetchFiles, downloadFileWithProgress, getFolderStats, renameItem, copyItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, compressFiles, extractZip, downloadAsZip } from '../api/files'
 import { getMySharedFolders, SharedFolderWithPermission } from '../api/sharedFolders'
 import { getSharedWithMe, getSharedByMe, getMyShareLinks, SharedWithMeItem, SharedByMeItem, LinkShare, deleteFileShare, deleteShareLink } from '../api/fileShares'
 import { useUploadStore } from '../stores/uploadStore'
 import { useTransferStore } from '../stores/transferStore'
-import { useFileWatcher } from '../hooks/useFileWatcher'
+import { useNotificationStore } from '../stores/notificationStore'
+import { useFileWatcher, NotificationEventData } from '../hooks/useFileWatcher'
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation'
 import { useMarqueeSelection } from '../hooks/useMarqueeSelection'
 import { useFileHistory } from '../hooks/useFileHistory'
 import { useClipboard } from '../hooks/useClipboard'
 import { useFileUploadDragDrop } from '../hooks/useFileUploadDragDrop'
 import { useFileDragMove } from '../hooks/useFileDragMove'
+import { useToast } from '../hooks/useToast'
+import { useLocalSearch } from '../hooks/useLocalSearch'
+import { useFileMetadata } from '../hooks/useFileMetadata'
 import ConfirmModal from './ConfirmModal'
 import Toast from './Toast'
 import TextEditor from './TextEditor'
@@ -23,9 +27,9 @@ import LinkShareModal from './LinkShareModal'
 import FolderSelectModal from './FolderSelectModal'
 import {
   SortField, SortOrder, ViewMode, ContextMenuType,
-  FileCard, MultiSelectBar, ContextMenu, FileInfoPanel,
+  MultiSelectBar, ContextMenu, FileInfoPanel,
   FileListHeader, RenameModal, NewFileModal, CompressModal, DownloadOptionsModal,
-  VirtualizedFileTable
+  VirtualizedFileTable, VirtualizedFileGrid
 } from './filelist'
 import { getFileIcon } from '../utils/fileIcons'
 import { formatRelativeDate, formatFullDateTime } from '../utils/dateUtils'
@@ -58,7 +62,6 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
   const [folderStats, setFolderStats] = useState<FolderStats | null>(null)
   const [loadingStats, setLoadingStats] = useState(false)
-  const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' | 'info' }[]>([])
   const [editingFile, setEditingFile] = useState<FileInfo | null>(null)
   const [viewingFile, setViewingFile] = useState<FileInfo | null>(null)
   const [zipViewingFile, setZipViewingFile] = useState<FileInfo | null>(null)
@@ -88,28 +91,25 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [pathsToTransfer, setPathsToTransfer] = useState<string[]>([])
   const fileRowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
-  // File metadata state (description and tags)
-  const [fileMetadata, setFileMetadata] = useState<FileMetadata | null>(null)
-  const [loadingMetadata, setLoadingMetadata] = useState(false)
-  const [editingDescription, setEditingDescription] = useState(false)
-  const [descriptionInput, setDescriptionInput] = useState('')
-  const [tagInput, setTagInput] = useState('')
-  const [allUserTags, setAllUserTags] = useState<string[]>([])
-  const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
+  // Toast hook
+  const { toasts, addToast, removeToast, showSuccess, showError, showInfo } = useToast()
 
-  // 로컬 검색 상태
-  const [localSearchQuery, setLocalSearchQuery] = useState('')
-  const [localSearchResults, setLocalSearchResults] = useState<FileInfo[]>([])
-  const [isSearching, setIsSearching] = useState(false)
-  const [showLocalSearch, setShowLocalSearch] = useState(false)
-  const localSearchInputRef = useRef<HTMLInputElement>(null)
-  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  // Check if current path is a special share view (needed for local search and other conditionals)
+  const isSharedWithMeView = currentPath === '/shared-with-me'
+  const isSharedByMeView = currentPath === '/shared-by-me'
+  const isLinkSharesView = currentPath === '/link-shares'
+  const isSpecialShareView = isSharedWithMeView || isSharedByMeView || isLinkSharesView
 
-  // Toast helper
-  const addToast = useCallback((message: string, type: 'success' | 'error' | 'info') => {
-    const id = Date.now().toString()
-    setToasts(prev => [...prev, { id, message, type }])
-  }, [])
+  // Local search hook
+  const {
+    query: localSearchQuery,
+    results: localSearchResults,
+    isSearching,
+    setQuery: handleLocalSearchChange,
+  } = useLocalSearch({
+    currentPath,
+    disabled: isSpecialShareView,
+  })
 
   const queryClient = useQueryClient()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -128,75 +128,16 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
 
   // Real-time file change notifications via WebSocket
   // Watch paths are stable to avoid reconnection loops
+  const triggerNotificationRefresh = useNotificationStore((state) => state.triggerRefresh)
   useFileWatcher({
     watchPaths: ['/home', '/shared'],
+    onNotification: useCallback((notification: NotificationEventData) => {
+      // Show toast notification
+      showInfo(notification.title + (notification.message ? ': ' + notification.message : ''))
+      // Trigger refresh of notification list and count
+      triggerNotificationRefresh()
+    }, [showInfo, triggerNotificationRefresh]),
   })
-
-  // 로컬 검색 핸들러 (디바운스 적용)
-  const handleLocalSearchChange = useCallback((query: string) => {
-    setLocalSearchQuery(query)
-
-    // 기존 타이머 취소
-    if (searchDebounceRef.current) {
-      clearTimeout(searchDebounceRef.current)
-    }
-
-    if (!query.trim()) {
-      setLocalSearchResults([])
-      setIsSearching(false)
-      return
-    }
-
-    setIsSearching(true)
-
-    // 300ms 디바운스
-    searchDebounceRef.current = setTimeout(async () => {
-      try {
-        const response = await searchFiles(query, {
-          path: currentPath,
-          limit: 100,
-          matchType: 'name',
-        })
-        setLocalSearchResults(response.results)
-      } catch (error) {
-        console.error('Search failed:', error)
-        setLocalSearchResults([])
-      } finally {
-        setIsSearching(false)
-      }
-    }, 300)
-  }, [currentPath])
-
-  // Check if current path is a special share view
-  const isSharedWithMeView = currentPath === '/shared-with-me'
-  const isSharedByMeView = currentPath === '/shared-by-me'
-  const isLinkSharesView = currentPath === '/link-shares'
-  const isSpecialShareView = isSharedWithMeView || isSharedByMeView || isLinkSharesView
-
-  // 경로 변경 시 검색 초기화
-  useEffect(() => {
-    setLocalSearchQuery('')
-    setLocalSearchResults([])
-    setShowLocalSearch(false)
-  }, [currentPath])
-
-  // Ctrl+F 단축키로 검색창 열기
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'f' && (e.ctrlKey || e.metaKey) && !isSpecialShareView) {
-        e.preventDefault()
-        setShowLocalSearch(true)
-        setTimeout(() => localSearchInputRef.current?.focus(), 50)
-      }
-      if (e.key === 'Escape' && showLocalSearch) {
-        setShowLocalSearch(false)
-        setLocalSearchQuery('')
-        setLocalSearchResults([])
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showLocalSearch, isSpecialShareView])
 
   // Regular file list query
   const { data, isLoading, error } = useQuery({
@@ -293,7 +234,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const { addToHistory, handleUndo, handleRedo } = useFileHistory({ addToast })
 
   // Clipboard hook for copy/cut/paste
-  const { clipboard, handleCopy, handleCut, handlePaste, isFileCut } = useClipboard({
+  const { clipboard, handleCopy, handleCut, handlePaste } = useClipboard({
     displayFiles,
     selectedFiles,
     selectedFile,
@@ -430,9 +371,12 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     }
   }, [uploadStore.items, currentPath, queryClient])
 
-  // Handle highlighted file from search
+  // Handle highlighted file from search or "Go to location"
   useEffect(() => {
-    if (highlightedFilePath && displayFiles.length > 0) {
+    if (!highlightedFilePath || isLoading) return
+
+    // Wait for files to load before trying to find the highlighted file
+    if (displayFiles.length > 0) {
       const file = displayFiles.find(f => f.path === highlightedFilePath)
       if (file) {
         setSelectedFile(file)
@@ -441,12 +385,17 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         const index = displayFiles.indexOf(file)
         if (index >= 0) {
           setFocusedIndex(index)
+          // Scroll into view after a short delay to ensure DOM is ready
+          setTimeout(() => {
+            const element = document.querySelector(`[data-path="${CSS.escape(file.path)}"]`)
+            element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }, 100)
         }
         // Clear the highlight after selecting
         onClearHighlight?.()
       }
     }
-  }, [highlightedFilePath, displayFiles, onClearHighlight])
+  }, [highlightedFilePath, displayFiles, isLoading, onClearHighlight])
 
   // Fetch folder stats when a folder is selected
   useEffect(() => {
@@ -493,99 +442,25 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     }
   }, [selectedFile])
 
-  // Load file metadata (description and tags) when file is selected
-  useEffect(() => {
-    if (!selectedFile) {
-      setFileMetadata(null)
-      setEditingDescription(false)
-      return
-    }
-
-    setLoadingMetadata(true)
-    getFileMetadata(selectedFile.path)
-      .then(metadata => {
-        setFileMetadata(metadata)
-        setDescriptionInput(metadata.description || '')
-      })
-      .catch(() => setFileMetadata(null))
-      .finally(() => setLoadingMetadata(false))
-  }, [selectedFile])
-
-  // Load all user tags for autocomplete
-  useEffect(() => {
-    getUserTags()
-      .then(({ tags }) => setAllUserTags(tags))
-      .catch(() => setAllUserTags([]))
-  }, [])
-
-  // Filter tag suggestions based on input
-  useEffect(() => {
-    if (!tagInput.trim()) {
-      setTagSuggestions([])
-      return
-    }
-    const query = tagInput.toLowerCase()
-    const currentTags = fileMetadata?.tags || []
-    const suggestions = allUserTags
-      .filter(tag => tag.toLowerCase().includes(query) && !currentTags.includes(tag))
-      .slice(0, 5)
-    setTagSuggestions(suggestions)
-  }, [tagInput, allUserTags, fileMetadata?.tags])
-
-  // Save file description
-  const handleSaveDescription = useCallback(async () => {
-    if (!selectedFile) return
-    try {
-      const updated = await updateFileMetadata(selectedFile.path, {
-        description: descriptionInput,
-        tags: fileMetadata?.tags || []
-      })
-      setFileMetadata(updated)
-      setEditingDescription(false)
-      setToasts(prev => [...prev, { id: Date.now().toString(), message: '설명이 저장되었습니다.', type: 'success' }])
-    } catch {
-      setToasts(prev => [...prev, { id: Date.now().toString(), message: '설명 저장에 실패했습니다.', type: 'error' }])
-    }
-  }, [selectedFile, descriptionInput, fileMetadata?.tags])
-
-  // Add tag to file
-  const handleAddTag = useCallback(async (tag: string) => {
-    if (!selectedFile || !tag.trim()) return
-    const newTag = tag.trim().toLowerCase()
-    const currentTags = fileMetadata?.tags || []
-    if (currentTags.includes(newTag)) {
-      setTagInput('')
-      return
-    }
-    try {
-      const updated = await updateFileMetadata(selectedFile.path, {
-        description: fileMetadata?.description || '',
-        tags: [...currentTags, newTag]
-      })
-      setFileMetadata(updated)
-      setTagInput('')
-      if (!allUserTags.includes(newTag)) {
-        setAllUserTags(prev => [...prev, newTag].sort())
-      }
-    } catch {
-      setToasts(prev => [...prev, { id: Date.now().toString(), message: '태그 추가에 실패했습니다.', type: 'error' }])
-    }
-  }, [selectedFile, fileMetadata, allUserTags])
-
-  // Remove tag from file
-  const handleRemoveTag = useCallback(async (tagToRemove: string) => {
-    if (!selectedFile || !fileMetadata) return
-    const newTags = fileMetadata.tags.filter(t => t !== tagToRemove)
-    try {
-      const updated = await updateFileMetadata(selectedFile.path, {
-        description: fileMetadata.description,
-        tags: newTags
-      })
-      setFileMetadata(updated)
-    } catch {
-      setToasts(prev => [...prev, { id: Date.now().toString(), message: '태그 삭제에 실패했습니다.', type: 'error' }])
-    }
-  }, [selectedFile, fileMetadata])
+  // File metadata hook (description and tags)
+  const {
+    metadata: fileMetadata,
+    isLoading: loadingMetadata,
+    editingDescription,
+    descriptionInput,
+    setEditingDescription,
+    setDescriptionInput,
+    saveDescription: handleSaveDescription,
+    tagInput,
+    setTagInput,
+    tagSuggestions,
+    addTag: handleAddTag,
+    removeTag: handleRemoveTag,
+  } = useFileMetadata({
+    selectedFile,
+    onSuccess: showSuccess,
+    onError: showError,
+  })
 
   // Check if file is editable (text-based)
   const isEditableFile = useCallback((file: FileInfo): boolean => {
@@ -624,10 +499,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       setOnlyOfficeConfig(config)
       setOnlyOfficeFile(file)
     } catch (err) {
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, { id, message: err instanceof Error ? err.message : 'OnlyOffice 설정을 불러올 수 없습니다.', type: 'error' }])
+      showError(err instanceof Error ? err.message : 'OnlyOffice 설정을 불러올 수 없습니다.')
     }
-  }, [])
+  }, [showError])
 
   const isZipFile = useCallback((file: FileInfo) => {
     const ext = file.extension?.toLowerCase() || file.name.split('.').pop()?.toLowerCase()
@@ -690,11 +564,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
       queryClient.invalidateQueries({ queryKey: ['trash'] })
       setSelectedFile(null)
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, { id, message: `"${deleteTarget.name}"이(가) 휴지통으로 이동되었습니다`, type: 'success' }])
+      showSuccess(`"${deleteTarget.name}"이(가) 휴지통으로 이동되었습니다`)
     } catch (err) {
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, { id, message: err instanceof Error ? err.message : '휴지통으로 이동에 실패했습니다', type: 'error' }])
+      showError(err instanceof Error ? err.message : '휴지통으로 이동에 실패했습니다')
     }
     setDeleteTarget(null)
   }, [deleteTarget, currentPath, queryClient])
@@ -795,20 +667,10 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         : `${compressFileName.trim()}.zip`
       const result = await compressFiles(pathsToCompress, outputName)
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, {
-        id,
-        message: `${pathsToCompress.length}개 항목이 "${result.outputName}"으로 압축되었습니다`,
-        type: 'success'
-      }])
+      showSuccess(`${pathsToCompress.length}개 항목이 "${result.outputName}"으로 압축되었습니다`)
       setSelectedFiles(new Set())
     } catch (err) {
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, {
-        id,
-        message: err instanceof Error ? err.message : '압축에 실패했습니다',
-        type: 'error'
-      }])
+      showError(err instanceof Error ? err.message : '압축에 실패했습니다')
     }
     setPathsToCompress([])
     setCompressFileName('')
@@ -821,21 +683,11 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     try {
       const result = await extractZip(file.path)
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, {
-        id,
-        message: `${result.extractedCount}개 파일이 "${result.extractedPath}"에 압축해제되었습니다`,
-        type: 'success'
-      }])
+      showSuccess(`${result.extractedCount}개 파일이 "${result.extractedPath}"에 압축해제되었습니다`)
     } catch (err) {
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, {
-        id,
-        message: err instanceof Error ? err.message : '압축해제에 실패했습니다',
-        type: 'error'
-      }])
+      showError(err instanceof Error ? err.message : '압축해제에 실패했습니다')
     }
-  }, [closeContextMenu, currentPath, queryClient])
+  }, [closeContextMenu, currentPath, queryClient, showSuccess, showError])
 
   // Multiple file download handler - opens modal for download options
   const handleMultiDownload = useCallback((paths: string[]) => {
@@ -855,23 +707,13 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       setShowDownloadModal(false)
       setPathsToDownload([])
       setSelectedFiles(new Set())
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, {
-        id,
-        message: `${pathsToDownload.length}개 파일을 ZIP으로 다운로드 중...`,
-        type: 'info'
-      }])
+      showInfo(`${pathsToDownload.length}개 파일을 ZIP으로 다운로드 중...`)
     } catch (err) {
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, {
-        id,
-        message: err instanceof Error ? err.message : 'ZIP 다운로드에 실패했습니다',
-        type: 'error'
-      }])
+      showError(err instanceof Error ? err.message : 'ZIP 다운로드에 실패했습니다')
     } finally {
       setDownloadingAsZip(false)
     }
-  }, [pathsToDownload])
+  }, [pathsToDownload, showInfo, showError])
 
   // Download files individually with delay between each to avoid browser blocking
   const handleDownloadIndividually = useCallback(async () => {
@@ -884,12 +726,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
 
     setPathsToDownload([])
     setSelectedFiles(new Set())
-    const id = Date.now().toString()
-    setToasts((prev) => [...prev, {
-      id,
-      message: `${filesToDownloadFiltered.length}개 파일 개별 다운로드 시작`,
-      type: 'info'
-    }])
+    showInfo(`${filesToDownloadFiltered.length}개 파일 개별 다운로드 시작`)
 
     // Download each file with a delay to prevent browser from blocking multiple downloads
     for (let i = 0; i < filesToDownloadFiltered.length; i++) {
@@ -933,11 +770,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
 
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
       setSelectedFile(null)
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, { id, message: `"${renameTarget.name}"이(가) "${trimmedName}"(으)로 이름이 변경되었습니다`, type: 'success' }])
+      showSuccess(`"${renameTarget.name}"이(가) "${trimmedName}"(으)로 이름이 변경되었습니다`)
     } catch (err) {
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, { id, message: err instanceof Error ? err.message : '이름 변경에 실패했습니다', type: 'error' }])
+      showError(err instanceof Error ? err.message : '이름 변경에 실패했습니다')
     }
     setRenameTarget(null)
     setNewName('')
@@ -954,11 +789,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     try {
       await copyItem(copyTarget.path, currentPath)
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, { id, message: `"${copyTarget.name}"이(가) 복사되었습니다`, type: 'success' }])
+      showSuccess(`"${copyTarget.name}"이(가) 복사되었습니다`)
     } catch (err) {
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, { id, message: err instanceof Error ? err.message : '복사에 실패했습니다', type: 'error' }])
+      showError(err instanceof Error ? err.message : '복사에 실패했습니다')
     }
     setCopyTarget(null)
   }, [copyTarget, currentPath, queryClient])
@@ -984,11 +817,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     try {
       await createFile(currentPath, newFileName.trim(), newFileType)
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, { id, message: `"${newFileName.trim()}"이(가) 생성되었습니다`, type: 'success' }])
+      showSuccess(`"${newFileName.trim()}"이(가) 생성되었습니다`)
     } catch (err) {
-      const id = Date.now().toString()
-      setToasts((prev) => [...prev, { id, message: err instanceof Error ? err.message : '파일 생성에 실패했습니다', type: 'error' }])
+      showError(err instanceof Error ? err.message : '파일 생성에 실패했습니다')
     }
     setShowNewFileModal(false)
     setNewFileName('')
@@ -1001,9 +832,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       try {
         await deleteFileShare(sharedFile.shareId)
         queryClient.invalidateQueries({ queryKey: ['shared-by-me'] })
-        setToasts(prev => [...prev, { id: Date.now().toString(), message: '공유가 해제되었습니다', type: 'success' }])
+        showSuccess('공유가 해제되었습니다')
       } catch {
-        setToasts(prev => [...prev, { id: Date.now().toString(), message: '공유 해제에 실패했습니다', type: 'error' }])
+        showError('공유 해제에 실패했습니다')
       }
     }
   }, [queryClient])
@@ -1012,7 +843,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const handleCopyShareLink = useCallback((sharedFile: { linkToken?: string }) => {
     if (sharedFile.linkToken) {
       navigator.clipboard.writeText(`${window.location.origin}/s/${sharedFile.linkToken}`)
-      setToasts(prev => [...prev, { id: Date.now().toString(), message: '링크가 클립보드에 복사되었습니다', type: 'success' }])
+      showSuccess('링크가 클립보드에 복사되었습니다')
     }
   }, [])
 
@@ -1022,9 +853,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       try {
         await deleteShareLink(sharedFile.linkId)
         queryClient.invalidateQueries({ queryKey: ['link-shares'] })
-        setToasts(prev => [...prev, { id: Date.now().toString(), message: '링크가 삭제되었습니다', type: 'success' }])
+        showSuccess('링크가 삭제되었습니다')
       } catch {
-        setToasts(prev => [...prev, { id: Date.now().toString(), message: '링크 삭제에 실패했습니다', type: 'error' }])
+        showError('링크 삭제에 실패했습니다')
       }
     }
   }, [queryClient])
@@ -1082,11 +913,10 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     setSelectedFiles(new Set())
     setSelectedFile(null)
 
-    const id = Date.now().toString()
     if (errorCount === 0) {
-      setToasts((prev) => [...prev, { id, message: `${successCount}개 항목이 휴지통으로 이동되었습니다`, type: 'success' }])
+      showSuccess(`${successCount}개 항목이 휴지통으로 이동되었습니다`)
     } else {
-      setToasts((prev) => [...prev, { id, message: `${successCount}개 이동 성공, ${errorCount}개 실패`, type: 'error' }])
+      showError(`${successCount}개 이동 성공, ${errorCount}개 실패`)
     }
   }, [selectedFiles, data, currentPath, queryClient])
 
@@ -1397,65 +1227,58 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       )}
 
       {(data || isSpecialShareView) && displayFiles.length > 0 && viewMode === 'grid' && (
-        <div className="file-grid">
-          {displayFiles.map((file, index) => (
-            <FileCard
-              key={file.path}
-              ref={(el) => { if (el) fileRowRefs.current.set(file.path, el); else fileRowRefs.current.delete(file.path); }}
-              file={file}
-              index={index}
-              isSelected={selectedFiles.has(file.path) || selectedFile?.path === file.path}
-              isFocused={focusedIndex === index}
-              isDropTarget={dropTargetPath === file.path}
-              isDragging={draggedFiles.some(f => f.path === file.path)}
-              isCut={isFileCut(file.path)}
-              onSelect={handleSelectFile}
-              onDoubleClick={handleItemDoubleClick}
-              onContextMenu={handleContextMenu}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onFolderDragOver={handleFolderDragOver}
-              onFolderDragLeave={handleFolderDragLeave}
-              onFolderDrop={handleFolderDrop}
-              getFileIcon={getFileIcon}
-              setFocusedIndex={setFocusedIndex}
-            />
-          ))}
-        </div>
+        <VirtualizedFileGrid
+          files={displayFiles}
+          selectedFiles={selectedFiles}
+          focusedIndex={focusedIndex}
+          dropTargetPath={dropTargetPath}
+          draggedFiles={draggedFiles}
+          clipboard={clipboard}
+          highlightedPath={highlightedFilePath}
+          onSelect={handleSelectFile}
+          onDoubleClick={handleItemDoubleClick}
+          onContextMenu={handleContextMenu}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onFolderDragOver={handleFolderDragOver}
+          onFolderDragLeave={handleFolderDragLeave}
+          onFolderDrop={handleFolderDrop}
+          getFileIcon={getFileIcon}
+          setFocusedIndex={setFocusedIndex}
+          fileRowRefs={fileRowRefs}
+        />
       )}
     </div>
     {/* End of file-list-container */}
 
-    {/* File Details Panel - Separate Sidebar */}
-    {selectedFile && (
-      <FileInfoPanel
-        selectedFile={selectedFile}
-        thumbnailUrl={thumbnailUrl}
-        folderStats={folderStats}
-        loadingStats={loadingStats}
-        fileMetadata={fileMetadata}
-        loadingMetadata={loadingMetadata}
-        editingDescription={editingDescription}
-        descriptionInput={descriptionInput}
-        tagInput={tagInput}
-        tagSuggestions={tagSuggestions}
-        isSpecialShareView={isSpecialShareView}
-        onClose={() => setSelectedFile(null)}
-        onView={(file) => setViewingFile(file)}
-        onDownload={(file) => downloadFileWithProgress(file.path, file.size, downloadStore)}
-        onShare={(file) => setShareTarget(file)}
-        onLinkShare={(file) => setLinkShareTarget(file)}
-        onDelete={(file) => setDeleteTarget(file)}
-        onDescriptionChange={(value) => setDescriptionInput(value)}
-        onDescriptionSave={handleSaveDescription}
-        onDescriptionEdit={(editing) => setEditingDescription(editing)}
-        onDescriptionInputChange={(value) => setDescriptionInput(value)}
-        onTagInputChange={(value) => setTagInput(value)}
-        onAddTag={handleAddTag}
-        onRemoveTag={handleRemoveTag}
-        getFileIcon={getFileIcon}
-      />
-    )}
+    {/* File Details Panel - Always visible to prevent layout shift */}
+    <FileInfoPanel
+      selectedFile={selectedFile}
+      thumbnailUrl={thumbnailUrl}
+      folderStats={folderStats}
+      loadingStats={loadingStats}
+      fileMetadata={fileMetadata}
+      loadingMetadata={loadingMetadata}
+      editingDescription={editingDescription}
+      descriptionInput={descriptionInput}
+      tagInput={tagInput}
+      tagSuggestions={tagSuggestions}
+      isSpecialShareView={isSpecialShareView}
+      onClose={() => setSelectedFile(null)}
+      onView={(file) => setViewingFile(file)}
+      onDownload={(file) => downloadFileWithProgress(file.path, file.size, downloadStore)}
+      onShare={(file) => setShareTarget(file)}
+      onLinkShare={(file) => setLinkShareTarget(file)}
+      onDelete={(file) => setDeleteTarget(file)}
+      onDescriptionChange={(value) => setDescriptionInput(value)}
+      onDescriptionSave={handleSaveDescription}
+      onDescriptionEdit={(editing) => setEditingDescription(editing)}
+      onDescriptionInputChange={(value) => setDescriptionInput(value)}
+      onTagInputChange={(value) => setTagInput(value)}
+      onAddTag={handleAddTag}
+      onRemoveTag={handleRemoveTag}
+      getFileIcon={getFileIcon}
+    />
 
       <ContextMenu
         contextMenu={contextMenu}
@@ -1492,23 +1315,23 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
           try {
             await deleteFileShare(shareId)
             queryClient.invalidateQueries({ queryKey: ['shared-by-me'] })
-            setToasts(prev => [...prev, { id: Date.now().toString(), message: '공유가 해제되었습니다', type: 'success' }])
+            showSuccess('공유가 해제되었습니다')
           } catch {
-            setToasts(prev => [...prev, { id: Date.now().toString(), message: '공유 해제에 실패했습니다', type: 'error' }])
+            showError('공유 해제에 실패했습니다')
           }
         }}
         onDeleteLink={async (linkId) => {
           try {
             await deleteShareLink(linkId)
             queryClient.invalidateQueries({ queryKey: ['link-shares'] })
-            setToasts(prev => [...prev, { id: Date.now().toString(), message: '링크가 삭제되었습니다', type: 'success' }])
+            showSuccess('링크가 삭제되었습니다')
           } catch {
-            setToasts(prev => [...prev, { id: Date.now().toString(), message: '링크 삭제에 실패했습니다', type: 'error' }])
+            showError('링크 삭제에 실패했습니다')
           }
         }}
         onCopyLink={(token) => {
           navigator.clipboard.writeText(`${window.location.origin}/s/${token}`)
-          setToasts(prev => [...prev, { id: Date.now().toString(), message: '링크가 클립보드에 복사되었습니다', type: 'success' }])
+          showSuccess('링크가 클립보드에 복사되었습니다')
         }}
         isEditableFile={isEditableFile}
         isViewableFile={isViewableFile}
@@ -1567,7 +1390,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
 
       <Toast
         toasts={toasts}
-        onRemove={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))}
+        onRemove={removeToast}
       />
 
       {/* Text Editor Modal */}
@@ -1578,8 +1401,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
           onClose={() => setEditingFile(null)}
           onSaved={() => {
             queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
-            const id = Date.now().toString()
-            setToasts((prev) => [...prev, { id, message: '파일이 저장되었습니다', type: 'success' }])
+            showSuccess('파일이 저장되었습니다')
           }}
         />
       )}
@@ -1604,8 +1426,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
           onClose={() => setZipViewingFile(null)}
           onExtract={() => {
             queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
-            const id = Date.now().toString()
-            setToasts((prev) => [...prev, { id, message: '압축이 해제되었습니다', type: 'success' }])
+            showSuccess('압축이 해제되었습니다')
           }}
         />
       )}
@@ -1621,8 +1442,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
             queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
           }}
           onError={(error) => {
-            const id = Date.now().toString()
-            setToasts((prev) => [...prev, { id, message: error, type: 'error' }])
+            showError(error)
           }}
         />
       )}

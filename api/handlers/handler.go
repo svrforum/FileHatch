@@ -45,6 +45,14 @@ type HealthResponse struct {
 }
 
 // HealthCheck handles health check requests
+// HealthCheck godoc
+// @Summary Health check
+// @Description Returns server health status and version information
+// @Tags System
+// @Produce json
+// @Success 200 {object} map[string]string "Health status"
+// @Router /health [get]
+
 func (h *Handler) HealthCheck(c echo.Context) error {
 	dbStatus := "connected"
 	if err := h.db.Ping(); err != nil {
@@ -239,6 +247,23 @@ func (h *Handler) InitializeStorage() error {
 }
 
 // ListFiles handles directory listing requests with optional pagination
+// ListFiles godoc
+// @Summary List files and folders
+// @Description Returns a list of files and folders in the specified path with pagination support
+// @Tags Files
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param path query string true "Directory path" example("/home/admin")
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Items per page" default(100)
+// @Param sortBy query string false "Sort field" Enums(name, size, modTime) default(name)
+// @Param sortOrder query string false "Sort order" Enums(asc, desc) default(asc)
+// @Success 200 {object} map[string]interface{} "File list with pagination"
+// @Failure 400 {object} map[string]string "Invalid path"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Router /files [get]
+
 func (h *Handler) ListFiles(c echo.Context) error {
 	requestPath := c.QueryParam("path")
 	if requestPath == "" {

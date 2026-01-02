@@ -612,3 +612,105 @@
   border-color: #3d3d3d;
   border-top-color: #228be6;
 }
+
+/* Edit Button */
+.share-edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #40c057 0%, #37b24d 100%);
+}
+
+.share-edit-btn:hover:not(:disabled) {
+  box-shadow: 0 8px 20px rgba(64, 192, 87, 0.3);
+}
+
+/* OnlyOffice Editor Overlay */
+.share-editor-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.share-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.share-editor-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  margin-right: 16px;
+}
+
+.share-editor-close-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #495057;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.share-editor-close-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.share-editor-close-btn:hover {
+  background: #f1f3f4;
+  border-color: #adb5bd;
+}
+
+.share-editor-container {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Dark mode for editor */
+[data-theme='dark'] .share-editor-overlay {
+  background: #1f1f1f;
+}
+
+[data-theme='dark'] .share-editor-header {
+  background: #2d2d2d;
+  border-bottom-color: #3d3d3d;
+}
+
+[data-theme='dark'] .share-editor-title {
+  color: #f8f9fa;
+}
+
+[data-theme='dark'] .share-editor-close-btn {
+  background: #3d3d3d;
+  border-color: #4d4d4d;
+  color: #f8f9fa;
+}
+
+[data-theme='dark'] .share-editor-close-btn:hover {
+  background: #4d4d4d;
+  border-color: #5d5d5d;
+}

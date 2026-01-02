@@ -146,6 +146,7 @@ const FileRow = React.forwardRef<HTMLDivElement, FileRowProps>(({
     <div
       ref={ref}
       className={classNames}
+      data-path={file.path}
       onClick={(e) => { onSelect(file, e); setFocusedIndex(index); }}
       onDoubleClick={() => onDoubleClick(file)}
       onContextMenu={(e) => onContextMenu(e, file)}

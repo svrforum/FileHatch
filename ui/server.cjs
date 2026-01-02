@@ -176,6 +176,27 @@ app.use('/api/ws', wsProxy);
 app.all('/webdav', webdavProxy);
 app.use('/webdav/', webdavProxy);
 
+// Route Swagger documentation
+const swaggerProxy = createProxyMiddleware({
+  target: API_URL,
+  changeOrigin: true,
+  pathRewrite: (path, req) => {
+    return '/swagger' + path;
+  },
+  on: {
+    proxyReq: (proxyReq, req, res) => {
+      console.log(`[Swagger] ${req.method} ${req.originalUrl} -> ${proxyReq.path}`);
+    },
+    error: (err, req, res) => {
+      console.error('[Swagger] Error:', err.message);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Swagger proxy error', message: err.message });
+      }
+    }
+  }
+});
+app.use('/swagger', swaggerProxy);
+
 // Route other /api and /health paths to general proxy
 app.use((req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/health')) {

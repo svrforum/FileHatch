@@ -6,9 +6,22 @@ import FileViewer from './FileViewer'
 import TextEditor from './TextEditor'
 import './MyActivity.css'
 
-type ActivityTab = 'all' | 'upload' | 'download' | 'edit' | 'folder'
+type FileTypeFilter = 'all' | 'document' | 'spreadsheet' | 'presentation' | 'image' | 'video' | 'audio' | 'archive' | 'folder'
 type SortOrder = 'newest' | 'oldest' | 'name-asc' | 'name-desc'
 type ViewMode = 'list' | 'grid'
+
+// File type filter definitions
+const fileTypeFilters: { id: FileTypeFilter; label: string; exts?: string[]; isDir?: boolean }[] = [
+  { id: 'all', label: '전체' },
+  { id: 'document', label: '문서', exts: ['doc', 'docx', 'pdf', 'txt', 'md', 'hwp', 'rtf', 'odt'] },
+  { id: 'spreadsheet', label: '스프레드시트', exts: ['xls', 'xlsx', 'csv', 'ods'] },
+  { id: 'presentation', label: '프레젠테이션', exts: ['ppt', 'pptx', 'odp'] },
+  { id: 'image', label: '이미지', exts: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff'] },
+  { id: 'video', label: '동영상', exts: ['mp4', 'mkv', 'avi', 'mov', 'webm', 'wmv', 'flv', 'm4v'] },
+  { id: 'audio', label: '오디오', exts: ['mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg', 'wma'] },
+  { id: 'archive', label: '압축파일', exts: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'] },
+  { id: 'folder', label: '폴더', isDir: true },
+]
 
 interface MyActivityProps {
   onNavigate: (path: string) => void
@@ -45,7 +58,7 @@ function toFileInfo(activity: RecentFile): FileInfo {
 function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
 
   // Activity data
-  const [activeTab, setActiveTab] = useState<ActivityTab>('all')
+  const [fileTypeFilter, setFileTypeFilter] = useState<FileTypeFilter>('all')
   const [activities, setActivities] = useState<RecentFile[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -204,22 +217,26 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
     return () => document.removeEventListener('click', handleClick)
   }, [])
 
-  const tabs: { id: ActivityTab; label: string }[] = [
-    { id: 'all', label: '전체' },
-    { id: 'upload', label: '업로드' },
-    { id: 'download', label: '다운로드' },
-    { id: 'edit', label: '편집' },
-    { id: 'folder', label: '폴더' },
-  ]
-
   // Convert activities to FileInfo and filter
   const displayFiles = useMemo(() => {
     let result = activities.filter(activity => {
-      if (activeTab === 'upload' && activity.eventType !== 'file.upload') return false
-      if (activeTab === 'download' && activity.eventType !== 'file.download') return false
-      if (activeTab === 'edit' && !['file.edit', 'file.view'].includes(activity.eventType)) return false
-      if (activeTab === 'folder' && !['folder.create', 'file.copy', 'file.move', 'file.rename', 'trash.restore'].includes(activity.eventType)) return false
+      // Apply file type filter
+      if (fileTypeFilter !== 'all') {
+        const filterDef = fileTypeFilters.find(f => f.id === fileTypeFilter)
+        if (filterDef) {
+          if (filterDef.isDir) {
+            // Folder filter
+            if (!activity.isDir) return false
+          } else if (filterDef.exts) {
+            // Extension-based filter
+            if (activity.isDir) return false
+            const ext = activity.name.includes('.') ? activity.name.split('.').pop()?.toLowerCase() : ''
+            if (!ext || !filterDef.exts.includes(ext)) return false
+          }
+        }
+      }
 
+      // Apply search query
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase()
         return activity.name.toLowerCase().includes(query) || activity.path.toLowerCase().includes(query)
@@ -238,7 +255,7 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
     })
 
     return result.map(toFileInfo)
-  }, [activities, activeTab, searchQuery, sortOrder])
+  }, [activities, fileTypeFilter, searchQuery, sortOrder])
 
   // Handlers
   const handleSelectFile = useCallback((file: FileInfo, e: React.MouseEvent) => {
@@ -372,10 +389,10 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
   const formatFullDateTime = (date: string) => new Date(date).toLocaleString('ko-KR')
 
   return (
-    <div className={`my-activity ${selectedFile ? 'panel-open' : ''}`}>
+    <div className="my-activity panel-open">
       <div className="my-activity-header">
-        <h1>내 작업</h1>
-        <p className="my-activity-subtitle">최근 파일 작업 기록</p>
+        <h1>최근 항목</h1>
+        <p className="my-activity-subtitle">최근에 사용하거나 수정한 파일 및 폴더</p>
       </div>
 
       <div className="my-activity-toolbar">
@@ -433,19 +450,27 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
         </div>
       </div>
 
-      <div className="my-activity-tabs">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            className={`my-activity-tab ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-            {activeTab === tab.id && (
-              <span className="tab-count">{displayFiles.length}</span>
-            )}
-          </button>
-        ))}
+      <div className="my-activity-filter-bar">
+        <div className="filter-label">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M22 3H2L10 12.46V19L14 21V12.46L22 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          파일 종류
+        </div>
+        <div className="file-type-filters">
+          {fileTypeFilters.map(filter => (
+            <button
+              key={filter.id}
+              className={`file-type-filter ${fileTypeFilter === filter.id ? 'active' : ''}`}
+              onClick={() => setFileTypeFilter(filter.id)}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+        <div className="results-count">
+          {displayFiles.length}개 항목
+        </div>
       </div>
 
       <div className="my-activity-content">
@@ -602,36 +627,34 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
         </div>
       )}
 
-      {/* File Details Panel */}
-      {selectedFile && (
-        <FileInfoPanel
-          selectedFile={selectedFile}
-          thumbnailUrl={thumbnailUrl}
-          folderStats={folderStats}
-          loadingStats={loadingStats}
-          fileMetadata={fileMetadata}
-          loadingMetadata={loadingMetadata}
-          editingDescription={editingDescription}
-          descriptionInput={descriptionInput}
-          tagInput={tagInput}
-          tagSuggestions={tagSuggestions}
-          isSpecialShareView={false}
-          onClose={() => setSelectedFile(null)}
-          onView={handleView}
-          onDownload={(file) => downloadFile(file.path)}
-          onShare={() => {}}
-          onLinkShare={() => {}}
-          onDelete={() => {}}
-          onDescriptionChange={setDescriptionInput}
-          onDescriptionSave={handleSaveDescription}
-          onDescriptionEdit={setEditingDescription}
-          onDescriptionInputChange={setDescriptionInput}
-          onTagInputChange={setTagInput}
-          onAddTag={handleAddTag}
-          onRemoveTag={handleRemoveTag}
-          getFileIcon={(file) => getFileIcon(file, 'large')}
-        />
-      )}
+      {/* File Details Panel - Always visible */}
+      <FileInfoPanel
+        selectedFile={selectedFile}
+        thumbnailUrl={thumbnailUrl}
+        folderStats={folderStats}
+        loadingStats={loadingStats}
+        fileMetadata={fileMetadata}
+        loadingMetadata={loadingMetadata}
+        editingDescription={editingDescription}
+        descriptionInput={descriptionInput}
+        tagInput={tagInput}
+        tagSuggestions={tagSuggestions}
+        isSpecialShareView={false}
+        onClose={() => setSelectedFile(null)}
+        onView={handleView}
+        onDownload={(file) => downloadFile(file.path)}
+        onShare={() => {}}
+        onLinkShare={() => {}}
+        onDelete={() => {}}
+        onDescriptionChange={setDescriptionInput}
+        onDescriptionSave={handleSaveDescription}
+        onDescriptionEdit={setEditingDescription}
+        onDescriptionInputChange={setDescriptionInput}
+        onTagInputChange={setTagInput}
+        onAddTag={handleAddTag}
+        onRemoveTag={handleRemoveTag}
+        getFileIcon={(file) => getFileIcon(file, 'large')}
+      />
 
       {/* Text Editor */}
       {editingFile && (

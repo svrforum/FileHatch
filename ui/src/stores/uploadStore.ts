@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import * as tus from 'tus-js-client'
-import { checkFileExists } from '../api/files'
+import { checkFileExists, getStorageUsage, formatFileSize } from '../api/files'
+import { useToastStore, parseUploadError } from './toastStore'
 
 // Helper to get auth info
 function getAuthInfo(): { token: string | null; username: string | null } {
@@ -17,14 +18,6 @@ function getAuthInfo(): { token: string | null; username: string | null } {
     }
   }
   return { token: null, username: null }
-}
-
-// No-op URL storage to prevent caching of internal URLs
-const noopUrlStorage: tus.UrlStorage = {
-  findAllUploads: async () => [],
-  findUploadsByFingerprint: async () => [],
-  removeUpload: async () => {},
-  addUpload: async () => '',
 }
 
 export interface UploadItem {
@@ -107,7 +100,7 @@ export const useUploadStore = create<UploadState>((set, get) => ({
     set((state) => ({ items: [...state.items, ...newItems] }))
   },
 
-  startUpload: (id, overwrite = false) => {
+  startUpload: async (id, overwrite = false) => {
     const item = get().items.find((i) => i.id === id)
     if (!item || item.status === 'uploading') return
 
@@ -116,7 +109,7 @@ export const useUploadStore = create<UploadState>((set, get) => ({
       endpoint: `${window.location.origin}/api/upload/`,
       retryDelays: [0, 1000, 3000, 5000],
       removeFingerprintOnSuccess: true,
-      urlStorage: noopUrlStorage,
+      // Use default localStorage-based URL storage for resumable uploads
       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       metadata: {
         filename: item.file.name,
@@ -126,7 +119,13 @@ export const useUploadStore = create<UploadState>((set, get) => ({
         overwrite: overwrite ? 'true' : 'false',
       },
       onError: (error) => {
-        get().setStatus(id, 'error', error.message)
+        // Parse error message for user-friendly display
+        const errorMessage = parseUploadError(error.message)
+
+        // Show toast notification for the error
+        useToastStore.getState().showError(errorMessage)
+
+        get().setStatus(id, 'error', errorMessage)
       },
       onProgress: (bytesUploaded, bytesTotal) => {
         const progress = Math.round((bytesUploaded / bytesTotal) * 100)
@@ -151,12 +150,41 @@ export const useUploadStore = create<UploadState>((set, get) => ({
 
     get().setUpload(id, upload)
     get().setStatus(id, 'uploading')
+
+    // Check for previous uploads and resume if found
+    try {
+      const previousUploads = await upload.findPreviousUploads()
+      if (previousUploads.length > 0) {
+        // Resume from the most recent previous upload
+        console.log('[TUS] Found previous upload, resuming...', previousUploads[0])
+        upload.resumeFromPreviousUpload(previousUploads[0])
+      }
+    } catch (e) {
+      console.log('[TUS] No previous uploads found or error:', e)
+    }
+
     upload.start()
   },
 
   checkAndStartUpload: async (id) => {
     const item = get().items.find((i) => i.id === id)
     if (!item || item.status === 'uploading') return
+
+    // Pre-upload quota check - show specific error before TUS upload starts
+    try {
+      const storage = await getStorageUsage()
+      const remaining = storage.quota - storage.totalUsed
+      console.log('[QuotaCheck] fileSize:', item.file.size, 'remaining:', remaining, 'quota:', storage.quota, 'totalUsed:', storage.totalUsed)
+      if (item.file.size > remaining) {
+        const errorMessage = `저장 공간이 부족합니다. 필요: ${formatFileSize(item.file.size)}, 남은 공간: ${formatFileSize(remaining)}`
+        useToastStore.getState().showError(errorMessage)
+        get().setStatus(id, 'error', errorMessage)
+        return
+      }
+    } catch (e) {
+      console.error('[QuotaCheck] Failed:', e)
+      // Continue with upload if quota check fails (backend will validate)
+    }
 
     try {
       const result = await checkFileExists(item.path, item.file.name)
@@ -225,10 +253,17 @@ export const useUploadStore = create<UploadState>((set, get) => ({
     }
   },
 
-  removeUpload: (id) => {
+  removeUpload: async (id) => {
     const item = get().items.find((i) => i.id === id)
-    if (item?.upload && item.status === 'uploading') {
-      item.upload.abort()
+    if (item?.upload) {
+      try {
+        // Abort with shouldTerminate=true to delete partial upload from server
+        await item.upload.abort(true)
+      } catch (e) {
+        console.log('[TUS] Error terminating upload:', e)
+        // Still try to abort even if terminate fails
+        item.upload.abort()
+      }
     }
     set((state) => ({ items: state.items.filter((i) => i.id !== id) }))
   },

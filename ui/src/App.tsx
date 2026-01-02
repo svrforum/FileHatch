@@ -24,6 +24,7 @@ const AdminSettings = lazy(() => import('./components/AdminSettings'))
 const AdminSSOSettings = lazy(() => import('./components/AdminSSOSettings'))
 const AdminLogs = lazy(() => import('./components/AdminLogs'))
 const AdminSharedFolders = lazy(() => import('./components/AdminSharedFolders'))
+const AdminSystemInfo = lazy(() => import('./components/AdminSystemInfo'))
 const MyActivity = lazy(() => import('./components/MyActivity'))
 const NotificationCenter = lazy(() => import('./components/NotificationCenter'))
 
@@ -62,6 +63,32 @@ function SharedDriveWrapper({ onNavigate, onUploadClick, onNewFolderClick, highl
   )
 }
 
+// Wrapper component for files routes with path in URL
+interface FilesWrapperProps {
+  onNavigate: (path: string) => void
+  onUploadClick: () => void
+  onNewFolderClick: () => void
+  highlightedFilePath: string | null
+  onClearHighlight: () => void
+}
+
+function FilesWrapper({ onNavigate, onUploadClick, onNewFolderClick, highlightedFilePath, onClearHighlight }: FilesWrapperProps) {
+  const { '*': subPath } = useParams()
+  // /files -> /home, /files/xxx -> /home/xxx
+  const currentPath = subPath ? `/home/${subPath}` : '/home'
+
+  return (
+    <FileList
+      currentPath={currentPath}
+      onNavigate={onNavigate}
+      onUploadClick={onUploadClick}
+      onNewFolderClick={onNewFolderClick}
+      highlightedFilePath={highlightedFilePath}
+      onClearHighlight={onClearHighlight}
+    />
+  )
+}
+
 function App() {
   const [currentPath, setCurrentPath] = useState('/home')
   const [isUploadModalOpen, setUploadModalOpen] = useState(false)
@@ -83,6 +110,7 @@ function App() {
     if (location.pathname === '/scvadmin/settings') return 'settings'
     if (location.pathname === '/scvadmin/sso') return 'sso'
     if (location.pathname === '/scvadmin/logs') return 'logs'
+    if (location.pathname === '/scvadmin/system-info') return 'system-info'
     return 'users'
   }
   const adminView = getAdminView()
@@ -92,14 +120,22 @@ function App() {
     refreshProfile()
   }, [refreshProfile])
 
-  // Sync currentPath based on URL location (especially for shared-drive routes)
+  // Sync currentPath based on URL location
   useEffect(() => {
     const pathname = location.pathname
 
     // Handle shared-drive routes: /shared-drive/{folderName}/... -> /shared/{folderName}/...
     if (pathname.startsWith('/shared-drive/')) {
-      const pathAfterPrefix = pathname.substring('/shared-drive/'.length) // Remove '/shared-drive/'
+      const pathAfterPrefix = pathname.substring('/shared-drive/'.length)
       const newPath = `/shared/${pathAfterPrefix}`
+      if (currentPath !== newPath) {
+        setCurrentPath(newPath)
+      }
+    }
+    // Handle files routes: /files/xxx -> /home/xxx
+    else if (pathname.startsWith('/files/')) {
+      const pathAfterPrefix = pathname.substring('/files/'.length)
+      const newPath = `/home/${pathAfterPrefix}`
       if (currentPath !== newPath) {
         setCurrentPath(newPath)
       }
@@ -110,13 +146,9 @@ function App() {
         setCurrentPath(pathname)
       }
     }
-    // Handle /files route - keep existing currentPath if it's a valid path
+    // Handle /files or / route -> /home
     else if (pathname === '/files' || pathname === '/') {
-      // Only reset to /home if currentPath is a special view that shouldn't persist
-      if (currentPath.startsWith('/shared-with-me') ||
-          currentPath.startsWith('/shared-by-me') ||
-          currentPath.startsWith('/link-shares') ||
-          currentPath.startsWith('/shared/')) {
+      if (currentPath !== '/home') {
         setCurrentPath('/home')
       }
     }
@@ -124,6 +156,11 @@ function App() {
 
   // Handle share access page (public route, no auth required)
   if (location.pathname.startsWith('/s/')) {
+    return <ShareAccessPage />
+  }
+
+  // Handle edit share access page (public route with OnlyOffice, no auth required)
+  if (location.pathname.startsWith('/e/')) {
     return <ShareAccessPage />
   }
 
@@ -154,8 +191,14 @@ function App() {
       navigate(path)
     } else if (path.startsWith('/shared/')) {
       // Shared drive paths: /shared/{folderName}/... -> /shared-drive/{folderName}/...
-      const sharedPath = path.substring(8) // Remove '/shared/'
+      const sharedPath = path.substring('/shared/'.length)
       navigate(`/shared-drive/${sharedPath}`)
+    } else if (path.startsWith('/home/')) {
+      // Home paths: /home/xxx -> /files/xxx
+      const subPath = path.substring('/home/'.length)
+      navigate(`/files/${subPath}`)
+    } else if (path === '/home') {
+      navigate('/files')
     } else {
       navigate('/files')
     }
@@ -164,7 +207,18 @@ function App() {
   const handleFileSelect = useCallback((filePath: string, parentPath: string) => {
     setCurrentPath(parentPath)
     setHighlightedFilePath(filePath)
-    navigate('/files')
+    // Navigate to appropriate route based on path type
+    if (parentPath.startsWith('/shared/')) {
+      // Shared drive folder - navigate to /shared-drive/:folderName/*
+      const sharedPath = parentPath.substring('/shared/'.length)
+      navigate(`/shared-drive/${sharedPath}`)
+    } else if (parentPath.startsWith('/home/')) {
+      // Home paths: /home/xxx -> /files/xxx
+      const subPath = parentPath.substring('/home/'.length)
+      navigate(`/files/${subPath}`)
+    } else {
+      navigate('/files')
+    }
   }, [navigate])
 
   const handleAdminClick = useCallback(() => {
@@ -201,8 +255,7 @@ function App() {
             <Suspense fallback={<FileListSkeleton />}>
               <Routes>
               <Route path="/" element={
-                <FileList
-                  currentPath={currentPath}
+                <FilesWrapper
                   onNavigate={handleNavigate}
                   onUploadClick={() => setUploadModalOpen(true)}
                   onNewFolderClick={() => setFolderModalOpen(true)}
@@ -211,8 +264,16 @@ function App() {
                 />
               } />
               <Route path="/files" element={
-                <FileList
-                  currentPath={currentPath}
+                <FilesWrapper
+                  onNavigate={handleNavigate}
+                  onUploadClick={() => setUploadModalOpen(true)}
+                  onNewFolderClick={() => setFolderModalOpen(true)}
+                  highlightedFilePath={highlightedFilePath}
+                  onClearHighlight={() => setHighlightedFilePath(null)}
+                />
+              } />
+              <Route path="/files/*" element={
+                <FilesWrapper
                   onNavigate={handleNavigate}
                   onUploadClick={() => setUploadModalOpen(true)}
                   onNewFolderClick={() => setFolderModalOpen(true)}
@@ -304,6 +365,11 @@ function App() {
               <Route path="/scvadmin/logs" element={
                 <Suspense fallback={<AdminSkeleton />}>
                   <AdminLogs />
+                </Suspense>
+              } />
+              <Route path="/scvadmin/system-info" element={
+                <Suspense fallback={<AdminSkeleton />}>
+                  <AdminSystemInfo />
                 </Suspense>
               } />
               <Route path="/scvadmin" element={

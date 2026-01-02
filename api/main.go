@@ -12,7 +12,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/svrforum/SimpleCloudVault/api/database"
+	_ "github.com/svrforum/SimpleCloudVault/api/docs" // Swagger docs
 	"github.com/svrforum/SimpleCloudVault/api/handlers"
+	echoSwagger "github.com/swaggo/echo-swagger"
 	"golang.org/x/time/rate"
 )
 
@@ -214,6 +216,9 @@ func main() {
 	e.GET("/health", h.HealthCheck)
 	e.GET("/api/health", h.HealthCheck)
 
+	// Swagger documentation
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
+
 	// API group
 	api := e.Group("/api")
 
@@ -337,6 +342,13 @@ func main() {
 	api.POST("/s/:token", shareHandler.AccessShare, authHandler.OptionalJWTMiddleware)
 	api.GET("/s/:token/download", shareHandler.DownloadShare, authHandler.OptionalJWTMiddleware)
 
+	// Edit share access (for OnlyOffice editable shares)
+	api.GET("/e/:token", shareHandler.AccessShare, authHandler.OptionalJWTMiddleware)
+	api.POST("/e/:token", shareHandler.AccessShare, authHandler.OptionalJWTMiddleware)
+	api.GET("/e/:token/config", shareHandler.GetShareOnlyOfficeConfig, authHandler.OptionalJWTMiddleware)
+	api.GET("/e/:token/file", shareHandler.GetShareFile, authHandler.OptionalJWTMiddleware)
+	api.POST("/e/:token/callback", shareHandler.ShareOnlyOfficeCallback)
+
 	// Upload share access (public, with optional auth for require_login check)
 	api.GET("/u/:token", uploadShareHandler.AccessUploadShare, authHandler.OptionalJWTMiddleware)
 	api.POST("/u/:token", uploadShareHandler.AccessUploadShare, authHandler.OptionalJWTMiddleware)
@@ -362,6 +374,10 @@ func main() {
 	// System Settings API (admin only)
 	adminApi.GET("/admin/settings", settingsHandler.GetAllSettings)
 	adminApi.PUT("/admin/settings", settingsHandler.UpdateSettings)
+
+	// System Info API (admin only)
+	adminApi.GET("/admin/system-info", h.GetSystemInfo)
+	adminApi.GET("/admin/system-info/tree", h.GetFolderTreeAPI)
 
 	// SSO Provider Management API (admin only)
 	adminApi.GET("/admin/sso/providers", ssoHandler.ListAllProviders)

@@ -43,6 +43,45 @@ type OnlyOfficeCallbackRequest struct {
 	} `json:"actions,omitempty"`
 }
 
+// checkSharedFileWritePermission checks if user can write to a shared file
+func (h *Handler) checkSharedFileWritePermission(userID, virtualPath string) bool {
+	// Check file_shares table for write permission
+	var permissionLevel int
+	err := h.db.QueryRow(`
+		SELECT permission_level FROM file_shares
+		WHERE item_path = $1 AND shared_with_id = $2
+	`, virtualPath, userID).Scan(&permissionLevel)
+
+	if err == nil {
+		return permissionLevel >= FileShareReadWrite
+	}
+
+	// Also check if the path is under a shared folder
+	rows, err := h.db.Query(`
+		SELECT item_path, permission_level FROM file_shares
+		WHERE shared_with_id = $1 AND is_folder = TRUE
+	`, userID)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var sharedPath string
+		var perm int
+		if err := rows.Scan(&sharedPath, &perm); err != nil {
+			continue
+		}
+		// Check if virtualPath is under sharedPath
+		if strings.HasPrefix(virtualPath, sharedPath+"/") || virtualPath == sharedPath {
+			if perm >= FileShareReadWrite {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // OnlyOfficeCallback handles document save callbacks from OnlyOffice
 // Status codes: 0 - no document with given key, 1 - editing, 2 - ready for saving,
 // 3 - save error, 4 - no changes, 6 - force save, 7 - force save error
@@ -91,8 +130,30 @@ func (h *Handler) OnlyOfficeCallback(c echo.Context) error {
 
 		// Resolve the virtual path to real path
 		realPath, storageType, _, err := h.resolvePath(decodedPath, claims)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]int{"error": 1})
+		isSharedFile := false
+		if err != nil || realPath == "" {
+			// Check if this is a shared file
+			if claims != nil {
+				sharedRealPath, _, shareErr := h.GetSharedFileOwnerPath(claims.UserID, decodedPath)
+				if shareErr == nil && h.CanWriteSharedFile(claims.UserID, decodedPath) {
+					realPath = sharedRealPath
+					storageType = "shared-with-me"
+					isSharedFile = true
+				} else {
+					log.Printf("[OnlyOffice] No write permission for shared file: %s, user: %s", decodedPath, claims.UserID)
+					return c.JSON(http.StatusForbidden, map[string]int{"error": 1})
+				}
+			} else {
+				return c.JSON(http.StatusBadRequest, map[string]int{"error": 1})
+			}
+		}
+
+		// For shared files, verify write permission
+		if isSharedFile && claims != nil {
+			if !h.CanWriteSharedFile(claims.UserID, decodedPath) {
+				log.Printf("[OnlyOffice] Write permission denied for shared file: %s", decodedPath)
+				return c.JSON(http.StatusForbidden, map[string]int{"error": 1})
+			}
 		}
 
 		// Convert external URL to internal Docker network URL
@@ -161,20 +222,45 @@ func (h *Handler) GetOnlyOfficeConfig(c echo.Context) error {
 		})
 	}
 
+	virtualPath := "/" + requestPath
+	isSharedFile := false
+	canEdit := true // By default, owner can edit
+
 	// Resolve path
-	realPath, _, _, err := h.resolvePath("/"+requestPath, claims)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+	realPath, _, _, err := h.resolvePath(virtualPath, claims)
+	if err != nil || realPath == "" {
+		// Check if this is a shared file
+		sharedRealPath, _, shareErr := h.GetSharedFileOwnerPath(claims.UserID, virtualPath)
+		if shareErr == nil {
+			realPath = sharedRealPath
+			isSharedFile = true
+			// Check if user has write permission for shared file
+			canEdit = h.CanWriteSharedFile(claims.UserID, virtualPath)
+		} else {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "File not found or no access",
+			})
+		}
 	}
 
 	// Check if file exists
 	info, err := statFile(realPath)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "File not found",
-		})
+		// Try shared file path again if not found
+		if !isSharedFile {
+			sharedRealPath, _, shareErr := h.GetSharedFileOwnerPath(claims.UserID, virtualPath)
+			if shareErr == nil {
+				realPath = sharedRealPath
+				isSharedFile = true
+				canEdit = h.CanWriteSharedFile(claims.UserID, virtualPath)
+				info, err = statFile(realPath)
+			}
+		}
+		if err != nil {
+			return c.JSON(http.StatusNotFound, map[string]string{
+				"error": "File not found",
+			})
+		}
 	}
 
 	if info.IsDir() {
@@ -193,7 +279,7 @@ func (h *Handler) GetOnlyOfficeConfig(c echo.Context) error {
 	}
 
 	// Generate unique key for this document (path + modtime for version control)
-	documentKey := encodeOnlyOfficePath("/"+requestPath) + "_" + fmt.Sprintf("%d", info.ModTime().Unix())
+	documentKey := encodeOnlyOfficePath(virtualPath) + "_" + fmt.Sprintf("%d", info.ModTime().Unix())
 
 	// Build the host URL - use internal Docker network address for OnlyOffice to access
 	// OnlyOffice container needs to reach API via Docker internal network
@@ -215,6 +301,30 @@ func (h *Handler) GetOnlyOfficeConfig(c echo.Context) error {
 		})
 	}
 
+	// Determine editor mode based on permissions
+	editorMode := "edit"
+	if !canEdit {
+		editorMode = "view"
+	}
+
+	editorConfig := map[string]interface{}{
+		"user": map[string]interface{}{
+			"id":   claims.UserID,
+			"name": claims.Username,
+		},
+		"lang": "ko",
+		"mode": editorMode,
+		"customization": map[string]interface{}{
+			"autosave":  canEdit,
+			"forcesave": canEdit,
+		},
+	}
+
+	// Only add callback URL if user can edit
+	if canEdit {
+		editorConfig["callbackUrl"] = fmt.Sprintf("%s/api/onlyoffice/callback?token=%s", internalBaseURL, token)
+	}
+
 	config := map[string]interface{}{
 		"documentType": documentType,
 		"document": map[string]interface{}{
@@ -223,18 +333,7 @@ func (h *Handler) GetOnlyOfficeConfig(c echo.Context) error {
 			"title":    info.Name(),
 			"url":      fmt.Sprintf("%s/api/files/%s?token=%s", internalBaseURL, requestPath, token),
 		},
-		"editorConfig": map[string]interface{}{
-			"callbackUrl": fmt.Sprintf("%s/api/onlyoffice/callback?token=%s", internalBaseURL, token),
-			"user": map[string]interface{}{
-				"id":   claims.UserID,
-				"name": claims.Username,
-			},
-			"lang": "ko",
-			"customization": map[string]interface{}{
-				"autosave":  true,
-				"forcesave": true,
-			},
-		},
+		"editorConfig": editorConfig,
 	}
 
 	return c.JSON(http.StatusOK, config)

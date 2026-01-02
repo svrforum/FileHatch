@@ -1,5 +1,6 @@
 // 파일 관련 모달 컴포넌트들
 
+import { useEffect } from 'react'
 import { FileInfo } from '../../api/files'
 import ConfirmModal from '../ConfirmModal'
 
@@ -200,6 +201,21 @@ export function DownloadOptionsModal({
   onDownloadAsZip,
   onClose
 }: DownloadOptionsModalProps) {
+  // Handle Escape key
+  useEffect(() => {
+    if (!isOpen || isDownloading) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, isDownloading, onClose])
+
   if (!isOpen) return null
 
   return (

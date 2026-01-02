@@ -1,4 +1,7 @@
-const API_BASE = '/api'
+/**
+ * Notifications API
+ */
+import { api, apiUrl } from './client'
 
 export interface Notification {
   id: number
@@ -25,97 +28,50 @@ export interface UnreadCountResponse {
   unreadCount: number
 }
 
-// Helper to get auth headers
-function getAuthHeaders(): HeadersInit {
-  const stored = localStorage.getItem('scv-auth')
-  if (stored) {
-    try {
-      const { state } = JSON.parse(stored)
-      if (state?.token) {
-        return { 'Authorization': `Bearer ${state.token}` }
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }
-  return {}
+/**
+ * Get notifications list
+ */
+export async function getNotifications(
+  limit = 50,
+  offset = 0
+): Promise<NotificationListResponse> {
+  const url = apiUrl.withParams('/notifications', { limit, offset })
+  const response = await api.get<{ data: NotificationListResponse }>(url)
+  return response.data
 }
 
-// Get notifications list
-export async function getNotifications(limit = 50, offset = 0): Promise<NotificationListResponse> {
-  const params = new URLSearchParams({
-    limit: String(limit),
-    offset: String(offset)
-  })
-  const response = await fetch(`${API_BASE}/notifications?${params}`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch notifications')
-  }
-
-  return response.json()
-}
-
-// Get unread notification count
+/**
+ * Get unread notification count
+ */
 export async function getUnreadCount(): Promise<number> {
-  const response = await fetch(`${API_BASE}/notifications/unread-count`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch unread count')
-  }
-
-  const data: UnreadCountResponse = await response.json()
-  return data.unreadCount
+  const response = await api.get<{ data: UnreadCountResponse }>('/notifications/unread-count')
+  return response.data.unreadCount
 }
 
-// Mark a notification as read
+/**
+ * Mark a notification as read
+ */
 export async function markAsRead(id: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/notifications/${id}/read`, {
-    method: 'PUT',
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to mark notification as read')
-  }
+  await api.put(`/notifications/${id}/read`)
 }
 
-// Mark all notifications as read
+/**
+ * Mark all notifications as read
+ */
 export async function markAllAsRead(): Promise<void> {
-  const response = await fetch(`${API_BASE}/notifications/read-all`, {
-    method: 'PUT',
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to mark all as read')
-  }
+  await api.put('/notifications/read-all')
 }
 
-// Delete a notification
+/**
+ * Delete a notification
+ */
 export async function deleteNotification(id: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/notifications/${id}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to delete notification')
-  }
+  await api.delete(`/notifications/${id}`)
 }
 
-// Delete all read notifications
+/**
+ * Delete all read notifications
+ */
 export async function deleteAllRead(): Promise<void> {
-  const response = await fetch(`${API_BASE}/notifications`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to delete read notifications')
-  }
+  await api.delete('/notifications')
 }

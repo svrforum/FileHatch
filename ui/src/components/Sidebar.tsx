@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useUploadStore } from '../stores/uploadStore'
 import { useTransferStore } from '../stores/transferStore'
 import { useAuthStore } from '../stores/authStore'
@@ -7,7 +8,7 @@ import { getStorageUsage, formatFileSize } from '../api/files'
 import { getMySharedFolders, SharedFolderWithPermission, PERMISSION_READ_WRITE } from '../api/sharedFolders'
 import './Sidebar.css'
 
-export type AdminView = 'users' | 'shared-folders' | 'settings' | 'sso' | 'logs'
+export type AdminView = 'users' | 'shared-folders' | 'settings' | 'sso' | 'logs' | 'system-info'
 
 interface SidebarProps {
   currentPath: string
@@ -115,33 +116,53 @@ const icons: Record<string, JSX.Element> = {
       <path d="M12 6V12L16 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   ),
+  server: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <rect x="2" y="2" width="20" height="8" rx="2" ry="2" stroke="currentColor" strokeWidth="2"/>
+      <rect x="2" y="14" width="20" height="8" rx="2" ry="2" stroke="currentColor" strokeWidth="2"/>
+      <circle cx="6" cy="6" r="1" fill="currentColor"/>
+      <circle cx="6" cy="18" r="1" fill="currentColor"/>
+    </svg>
+  ),
 }
 
 function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onAdminClick, isTrashView, isAdminMode, adminView, onExitAdminMode }: SidebarProps) {
-  const { items, downloads, togglePanel, isPanelOpen, clearCompleted, clearCompletedDownloads } = useUploadStore()
+  const { items, downloads, togglePanel, clearCompleted, clearCompletedDownloads } = useUploadStore()
   const { items: transferItems, clearCompleted: clearCompletedTransfers } = useTransferStore()
-  const { user } = useAuthStore()
+  const { user, token } = useAuthStore()
   const location = useLocation()
-  const [storageUsage, setStorageUsage] = useState({ totalUsed: 0, quota: 10 * 1024 * 1024 * 1024 })
+  const queryClient = useQueryClient()
   const [sharedFolders, setSharedFolders] = useState<SharedFolderWithPermission[]>([])
   const [sharedDrivesExpanded, setSharedDrivesExpanded] = useState(true)
   const [sharingExpanded, setSharingExpanded] = useState(true)
 
-  // Fetch storage usage
+  // Safe arrays to prevent undefined errors
+  const safeItems = items || []
+  const safeDownloads = downloads || []
+  const safeTransferItems = transferItems || []
+
+  // Fetch storage usage with React Query for real-time updates
+  const { data: storageUsage, isLoading: isStorageLoading } = useQuery({
+    queryKey: ['storage-usage'],
+    queryFn: getStorageUsage,
+    enabled: !!token,
+    refetchInterval: 30000, // Still refresh every 30 seconds as backup
+    staleTime: 5000, // Consider data stale after 5 seconds
+  })
+
+  // Default values when loading
+  const displayStorage = storageUsage ?? { totalUsed: 0, quota: 10 * 1024 * 1024 * 1024, homeUsed: 0, sharedUsed: 0, trashUsed: 0 }
+
+  // Refresh storage usage when uploads complete
+  const completedUploadCount = safeItems.filter(i => i.status === 'completed').length
+  const completedTransferCount = safeTransferItems.filter(t => t.status === 'completed').length
+
   useEffect(() => {
-    const fetchUsage = async () => {
-      try {
-        const usage = await getStorageUsage()
-        setStorageUsage(usage)
-      } catch {
-        // Ignore errors
-      }
+    if (completedUploadCount > 0 || completedTransferCount > 0) {
+      // Invalidate storage query when uploads/transfers complete
+      queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
     }
-    fetchUsage()
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchUsage, 30000)
-    return () => clearInterval(interval)
-  }, [])
+  }, [completedUploadCount, completedTransferCount, queryClient])
 
   // Fetch shared folders
   useEffect(() => {
@@ -149,27 +170,31 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
     const fetchSharedFolders = async () => {
       try {
         const folders = await getMySharedFolders()
-        setSharedFolders(folders)
+        setSharedFolders(folders || [])
       } catch {
         // Ignore errors
+        setSharedFolders([])
       }
     }
     fetchSharedFolders()
   }, [user])
 
-  const activeUploads = items.filter(i => i.status === 'uploading' || i.status === 'pending')
-  const activeDownloads = downloads.filter(d => d.status === 'downloading')
-  const activeMoveCopy = transferItems.filter(t => t.status === 'pending' || t.status === 'transferring')
-  const completedUploads = items.filter(i => i.status === 'completed')
-  const completedDownloads = downloads.filter(d => d.status === 'completed')
-  const completedMoveCopy = transferItems.filter(t => t.status === 'completed')
+  // Safe sharedFolders access
+  const safeSharedFolders = sharedFolders || []
+
+  const activeUploads = safeItems.filter(i => i.status === 'uploading' || i.status === 'pending')
+  const activeDownloads = safeDownloads.filter(d => d.status === 'downloading')
+  const activeMoveCopy = safeTransferItems.filter(t => t.status === 'pending' || t.status === 'transferring')
+  const completedUploads = safeItems.filter(i => i.status === 'completed')
+  const completedDownloads = safeDownloads.filter(d => d.status === 'completed')
+  const completedMoveCopy = safeTransferItems.filter(t => t.status === 'completed')
 
   const hasActiveTransfers = activeUploads.length > 0 || activeDownloads.length > 0 || activeMoveCopy.length > 0
   const hasCompletedTransfers = completedUploads.length > 0 || completedDownloads.length > 0 || completedMoveCopy.length > 0
-  const hasTransfers = items.length > 0 || downloads.length > 0 || transferItems.length > 0
+  const hasTransfers = safeItems.length > 0 || safeDownloads.length > 0 || safeTransferItems.length > 0
 
   // Debug logging for transfers
-  if (transferItems.length > 0) {
+  if (safeTransferItems.length > 0) {
     console.log('[Sidebar] Transfer items:', transferItems)
     console.log('[Sidebar] Active move/copy:', activeMoveCopy)
     console.log('[Sidebar] hasTransfers:', hasTransfers, 'hasActiveTransfers:', hasActiveTransfers)
@@ -239,7 +264,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
             )}
 
             {/* Shared Drives Section */}
-            {user && sharedFolders.length > 0 && (
+            {user && safeSharedFolders.length > 0 && (
               <div className="shared-section">
                 <div
                   className="shared-header"
@@ -259,7 +284,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                 </div>
                 {sharedDrivesExpanded && (
                   <div className="shared-list">
-                    {sharedFolders.map(folder => (
+                    {safeSharedFolders.map(folder => (
                       <Link
                         key={folder.id}
                         to={`/shared-drive/${encodeURIComponent(folder.name)}`}
@@ -382,6 +407,13 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
               {icons.logs}
               <span>감사 로그</span>
             </Link>
+            <Link
+              to="/scvadmin/system-info"
+              className={`nav-item ${adminView === 'system-info' ? 'active' : ''}`}
+            >
+              {icons.server}
+              <span>서버 정보</span>
+            </Link>
           </nav>
         </>
       )}
@@ -407,106 +439,123 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
           )
         )}
 
-        {/* Transfer Progress Section */}
-        {hasTransfers && (
-          <div className="transfer-section">
-            <div className="transfer-header" onClick={togglePanel}>
-              <span className="transfer-title">전송 현황</span>
-              {hasActiveTransfers && (
-                <span className="transfer-badge">{activeUploads.length + activeDownloads.length + activeMoveCopy.length}</span>
-              )}
-              <svg className={`transfer-chevron ${isPanelOpen ? 'open' : ''}`} width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-
-            {/* Active transfers mini view */}
+        {/* Transfer Progress Section - Always visible */}
+        <div className="transfer-section">
+          <div className="transfer-header" onClick={togglePanel}>
+            <svg className="transfer-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2V6M12 18V22M4.93 4.93L7.76 7.76M16.24 16.24L19.07 19.07M2 12H6M18 12H22M4.93 19.07L7.76 16.24M16.24 7.76L19.07 4.93" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="transfer-title">전송 현황</span>
             {hasActiveTransfers && (
-              <div className="transfer-mini">
-                {activeUploads.length > 0 && (
-                  <div className="transfer-mini-item">
-                    <div className="transfer-mini-icon upload">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                        <path d="M17 8L12 3L7 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path d="M12 3V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
-                    <div className="transfer-mini-info">
-                      <span className="transfer-mini-label">업로드 {activeUploads.length}개</span>
-                      <div className="transfer-mini-bar">
-                        <div className="transfer-mini-fill" style={{ width: `${uploadProgress}%` }} />
-                      </div>
-                    </div>
-                    <span className="transfer-mini-percent">{uploadProgress}%</span>
-                  </div>
-                )}
-                {activeDownloads.length > 0 && (
-                  <div className="transfer-mini-item">
-                    <div className="transfer-mini-icon download">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                        <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path d="M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
-                    <div className="transfer-mini-info">
-                      <span className="transfer-mini-label">다운로드 {activeDownloads.length}개</span>
-                      <div className="transfer-mini-bar">
-                        <div className="transfer-mini-fill download" style={{ width: `${downloadProgress}%` }} />
-                      </div>
-                    </div>
-                    <span className="transfer-mini-percent">{downloadProgress}%</span>
-                  </div>
-                )}
-                {activeMoveCopy.length > 0 && (() => {
-                  const transferringItems = activeMoveCopy.filter(t => t.status === 'transferring')
-                  const avgProgress = transferringItems.length > 0
-                    ? Math.round(transferringItems.reduce((sum, t) => sum + (t.progress || 0), 0) / transferringItems.length)
-                    : 0
-                  return (
-                    <div className="transfer-mini-item">
-                      <div className="transfer-mini-icon move-copy">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                          <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                      </div>
-                      <div className="transfer-mini-info">
-                        <span className="transfer-mini-label">
-                          {activeMoveCopy.filter(t => t.type === 'move').length > 0 && `이동 ${activeMoveCopy.filter(t => t.type === 'move').length}개`}
-                          {activeMoveCopy.filter(t => t.type === 'move').length > 0 && activeMoveCopy.filter(t => t.type === 'copy').length > 0 && ' / '}
-                          {activeMoveCopy.filter(t => t.type === 'copy').length > 0 && `복사 ${activeMoveCopy.filter(t => t.type === 'copy').length}개`}
-                        </span>
-                        <div className="transfer-mini-bar">
-                          <div className="transfer-mini-fill move-copy" style={{ width: `${avgProgress}%` }} />
-                        </div>
-                      </div>
-                      <span className="transfer-mini-percent">
-                        {transferringItems.length > 0 ? `${avgProgress}%` : '대기'}
-                      </span>
-                    </div>
-                  )
-                })()}
-              </div>
+              <span className="transfer-badge active">{activeUploads.length + activeDownloads.length + activeMoveCopy.length}</span>
             )}
-
-            {/* Completed notification */}
             {!hasActiveTransfers && hasCompletedTransfers && (
-              <div className="transfer-completed">
-                <span>완료 {completedUploads.length + completedDownloads.length + completedMoveCopy.length}개</span>
-                <button className="clear-btn" onClick={handleClearCompleted}>삭제</button>
-              </div>
+              <span className="transfer-badge completed">{completedUploads.length + completedDownloads.length + completedMoveCopy.length}</span>
             )}
           </div>
-        )}
+
+          {/* Active transfers mini view */}
+          {hasActiveTransfers && (
+            <div className="transfer-mini">
+              {activeUploads.length > 0 && (
+                <div className="transfer-mini-item">
+                  <div className="transfer-mini-icon upload">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                      <path d="M17 8L12 3L7 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M12 3V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                  <div className="transfer-mini-info">
+                    <span className="transfer-mini-label">업로드 {activeUploads.length}개</span>
+                    <div className="transfer-mini-bar">
+                      <div className="transfer-mini-fill" style={{ width: `${uploadProgress}%` }} />
+                    </div>
+                  </div>
+                  <span className="transfer-mini-percent">{uploadProgress}%</span>
+                </div>
+              )}
+              {activeDownloads.length > 0 && (
+                <div className="transfer-mini-item">
+                  <div className="transfer-mini-icon download">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                      <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                  <div className="transfer-mini-info">
+                    <span className="transfer-mini-label">다운로드 {activeDownloads.length}개</span>
+                    <div className="transfer-mini-bar">
+                      <div className="transfer-mini-fill download" style={{ width: `${downloadProgress}%` }} />
+                    </div>
+                  </div>
+                  <span className="transfer-mini-percent">{downloadProgress}%</span>
+                </div>
+              )}
+              {activeMoveCopy.length > 0 && (() => {
+                const transferringItems = activeMoveCopy.filter(t => t.status === 'transferring')
+                const avgProgress = transferringItems.length > 0
+                  ? Math.round(transferringItems.reduce((sum, t) => sum + (t.progress || 0), 0) / transferringItems.length)
+                  : 0
+                return (
+                  <div className="transfer-mini-item">
+                    <div className="transfer-mini-icon move-copy">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                        <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                    <div className="transfer-mini-info">
+                      <span className="transfer-mini-label">
+                        {activeMoveCopy.filter(t => t.type === 'move').length > 0 && `이동 ${activeMoveCopy.filter(t => t.type === 'move').length}개`}
+                        {activeMoveCopy.filter(t => t.type === 'move').length > 0 && activeMoveCopy.filter(t => t.type === 'copy').length > 0 && ' / '}
+                        {activeMoveCopy.filter(t => t.type === 'copy').length > 0 && `복사 ${activeMoveCopy.filter(t => t.type === 'copy').length}개`}
+                      </span>
+                      <div className="transfer-mini-bar">
+                        <div className="transfer-mini-fill move-copy" style={{ width: `${avgProgress}%` }} />
+                      </div>
+                    </div>
+                    <span className="transfer-mini-percent">
+                      {transferringItems.length > 0 ? `${avgProgress}%` : '대기'}
+                    </span>
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+
+          {/* Completed notification */}
+          {!hasActiveTransfers && hasCompletedTransfers && (
+            <div className="transfer-completed">
+              <span>완료 {completedUploads.length + completedDownloads.length + completedMoveCopy.length}개</span>
+              <button className="clear-btn" onClick={handleClearCompleted}>삭제</button>
+            </div>
+          )}
+
+          {/* Idle state */}
+          {!hasTransfers && (
+            <div className="transfer-idle" onClick={togglePanel}>
+              <span>진행 중인 전송 없음</span>
+            </div>
+          )}
+        </div>
 
         {/* Storage Info */}
         <div className="storage-info">
           <div className="storage-header">
             <span className="storage-label">저장 공간</span>
-            <span className="storage-value">{formatFileSize(storageUsage.totalUsed)} / {formatFileSize(storageUsage.quota)}</span>
+            <span className="storage-value">
+              {isStorageLoading ? '로딩...' : `${formatFileSize(displayStorage.totalUsed)} / ${formatFileSize(displayStorage.quota)}`}
+            </span>
           </div>
           <div className="storage-bar">
-            <div className="storage-bar-fill" style={{ width: `${Math.min(100, (storageUsage.totalUsed / storageUsage.quota) * 100)}%` }} />
+            <div className="storage-bar-fill" style={{ width: `${Math.min(100, (displayStorage.totalUsed / displayStorage.quota) * 100)}%` }} />
           </div>
+          {!isStorageLoading && displayStorage.trashUsed > 0 && (
+            <div className="storage-detail">
+              <span className="storage-detail-text">
+                휴지통: {formatFileSize(displayStorage.trashUsed)}
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </aside>
