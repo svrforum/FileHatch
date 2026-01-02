@@ -153,7 +153,8 @@ function AdminLogs() {
         },
       })
       if (response.ok) {
-        const data = await response.json()
+        const result = await response.json()
+        const data = result.data || result  // Handle both wrapped and unwrapped responses
         setAuditLogs(data.logs || [])
         setTotalItems(data.total || 0)
 
@@ -199,7 +200,8 @@ function AdminLogs() {
         },
       })
       if (response.ok) {
-        const data = await response.json()
+        const result = await response.json()
+        const data = result.data || result  // Handle both wrapped and unwrapped responses
         setSystemLogs(data.logs || [])
       }
     } catch (err) {
