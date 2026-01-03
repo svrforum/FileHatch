@@ -1,0 +1,138 @@
+# =============================================================================
+# SimpleCloudVault Production Override Example
+# =============================================================================
+# 이 파일을 docker-compose.override.yml로 복사하여 프로덕션 설정을 적용하세요.
+#
+# 사용법:
+#   cp docker-compose.override.example.yml docker-compose.override.yml
+#   # 필요한 설정 수정
+#   docker compose up -d
+#
+# docker-compose.override.yml은 자동으로 docker-compose.yml과 병합됩니다.
+# =============================================================================
+
+services:
+  # API 서버 프로덕션 설정
+  api:
+    environment:
+      # 프로덕션 환경 변수 (필수 - .env에서 설정)
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      # CORS 제한 (실제 도메인으로 변경)
+      - CORS_ALLOWED_ORIGINS=https://vault.example.com
+      # 로그 레벨
+      - LOG_LEVEL=info
+    # 리소스 제한 (필요시 조정)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    # 로그 설정
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # UI 서버 프로덕션 설정
+  ui:
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # 데이터베이스 프로덕션 설정
+  db:
+    # 성능 튜닝 (서버 스펙에 맞게 조정)
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=768MB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "default_statistics_target=100"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "work_mem=4MB"
+      - "-c"
+      - "min_wal_size=1GB"
+      - "-c"
+      - "max_wal_size=4GB"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # Valkey 프로덕션 설정
+  valkey:
+    # 메모리 제한 및 퇴거 정책
+    command:
+      - "valkey-server"
+      - "--maxmemory"
+      - "256mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+      - "--save"
+      - "900 1"
+      - "--save"
+      - "300 10"
+      - "--save"
+      - "60 10000"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    volumes:
+      - valkey_data:/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # Samba 프로덕션 설정
+  samba:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+volumes:
+  valkey_data:

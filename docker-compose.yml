@@ -9,24 +9,35 @@ services:
     extra_hosts:
       - "localhost:host-gateway"
     environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=scv_user
-      - DB_PASS=scv_password
-      - DB_NAME=scv_main
-      - VALKEY_HOST=valkey
-      - VALKEY_PORT=6379
-      - ONLYOFFICE_INTERNAL_URL=http://onlyoffice
+      - TZ=${TZ:-Asia/Seoul}
+      - DB_HOST=${DB_HOST:-db}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-scv_user}
+      - DB_PASS=${DB_PASS:-scv_password}
+      - DB_NAME=${DB_NAME:-scv_main}
+      - VALKEY_HOST=${VALKEY_HOST:-valkey}
+      - VALKEY_PORT=${VALKEY_PORT:-6379}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-*}
+      - ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_URL:-http://onlyoffice}
       - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
-      - ./data:/data
-      - ./config:/etc/scv
+      - ${DATA_PATH:-./data}:/data
+      - ${CONFIG_PATH:-./config}:/etc/scv
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       db:
         condition: service_healthy
       valkey:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # 2. Frontend (React + Express)
   ui:
@@ -36,13 +47,21 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "3080:3000"
+      - "${UI_PORT:-3080}:3000"
     environment:
+      - TZ=${TZ:-Asia/Seoul}
       - API_URL=http://api:8080
-      - ONLYOFFICE_URL=http://onlyoffice
+      - ONLYOFFICE_URL=${ONLYOFFICE_URL:-http://onlyoffice}
       - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # 3. SMB Service (Sidecar)
   samba:
@@ -53,12 +72,12 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
-      - TZ=Asia/Seoul
-      - WORKGROUP=WORKGROUP
+      - TZ=${TZ:-Asia/Seoul}
+      - WORKGROUP=${SMB_WORKGROUP:-WORKGROUP}
     volumes:
-      - ./data:/data
-      - ./config:/etc/scv
-      - ./config/smb.conf:/etc/samba/smb.conf:ro
+      - ${DATA_PATH:-./data}:/data
+      - ${CONFIG_PATH:-./config}:/etc/scv
+      - ${CONFIG_PATH:-./config}/smb.conf:/etc/samba/smb.conf:ro
 
   # 4. Database (PostgreSQL)
   db:
@@ -66,14 +85,15 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=scv_user
-      - POSTGRES_PASSWORD=scv_password
-      - POSTGRES_DB=scv_main
+      - TZ=${TZ:-Asia/Seoul}
+      - POSTGRES_USER=${DB_USER:-scv_user}
+      - POSTGRES_PASSWORD=${DB_PASS:-scv_password}
+      - POSTGRES_DB=${DB_NAME:-scv_main}
     volumes:
-      - ./database:/var/lib/postgresql/data
+      - ${DATABASE_PATH:-./database}:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U scv_user -d scv_main"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-scv_user} -d ${DB_NAME:-scv_main}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -83,6 +103,13 @@ services:
     container_name: scv-valkey
     image: valkey/valkey:8-alpine
     restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Asia/Seoul}
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   # 6. OnlyOffice Document Server (Optional - use: docker compose --profile office up -d)
   onlyoffice:
@@ -92,8 +119,9 @@ services:
     profiles:
       - office
     ports:
-      - "8088:80"
+      - "${ONLYOFFICE_PORT:-8088}:80"
     environment:
+      - TZ=${TZ:-Asia/Seoul}
       - JWT_ENABLED=false
       - ALLOW_PRIVATE_IP_ADDRESS=true
       - ALLOW_META_IP_ADDRESS=true

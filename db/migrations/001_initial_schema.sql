@@ -1,28 +1,6 @@
--- SimpleCloudVault Database Initialization
--- Version: 2.0.0
---
--- 이 파일은 Docker 컨테이너 첫 실행 시 자동으로 실행됩니다.
--- 마이그레이션 시스템을 사용하여 스키마를 관리합니다.
---
--- 수동 마이그레이션:
---   ./scripts/migrate.sh status   # 상태 확인
---   ./scripts/migrate.sh          # 마이그레이션 실행
-
--- =============================================================================
--- Migration Tracking Table
--- =============================================================================
-CREATE TABLE IF NOT EXISTS schema_migrations (
-    version VARCHAR(14) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    applied_at TIMESTAMPTZ DEFAULT NOW(),
-    checksum VARCHAR(64)
-);
-
-COMMENT ON TABLE schema_migrations IS 'Database migration version tracking';
-
--- =============================================================================
--- Initial Schema (Migration: 001)
--- =============================================================================
+-- Migration: 001_initial_schema
+-- Description: Initial database schema
+-- Version: 20240101000001
 
 -- 1. Users (Identity & Authentication)
 CREATE TABLE IF NOT EXISTS users (
@@ -65,7 +43,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     details JSONB
 );
 
--- 4. Shares (Public Links - Download, Upload, and Editable)
+-- 4. Shares (Public Links)
 CREATE TABLE IF NOT EXISTS shares (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     token VARCHAR(64) UNIQUE NOT NULL,
@@ -183,9 +161,7 @@ CREATE TABLE IF NOT EXISTS sso_providers (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- =============================================================================
 -- Indexes
--- =============================================================================
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_acl_path ON acl(path);
@@ -211,53 +187,6 @@ CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at
 CREATE INDEX IF NOT EXISTS idx_sso_providers_enabled ON sso_providers(is_enabled);
 CREATE INDEX IF NOT EXISTS idx_sso_providers_type ON sso_providers(provider_type);
 
--- =============================================================================
--- Default Data (Migration: 002)
--- =============================================================================
-
--- Create default admin account (password: admin1234)
-INSERT INTO users (username, email, password_hash, is_admin, is_active)
-VALUES ('admin', 'admin@localhost', '$2a$10$mRaibXXeo0eBpeg3gDgequkcQynn8GuvLflrbR9pRYAVDO/nf5pqW', TRUE, TRUE)
-ON CONFLICT (username) DO NOTHING;
-
--- Insert default settings
-INSERT INTO system_settings (key, value, description) VALUES
-    ('trash_retention_days', '30', '휴지통 자동 삭제 일수 (기본: 30일)'),
-    ('default_storage_quota', '10737418240', '기본 저장 공간 할당량 (바이트, 기본: 10GB)'),
-    ('max_file_size', '10737418240', '최대 파일 크기 (바이트, 기본: 10GB)'),
-    ('session_timeout_hours', '24', '세션 만료 시간 (시간, 기본: 24)'),
-    ('rate_limit_enabled', 'true', 'Rate Limiting 활성화 여부'),
-    ('rate_limit_rps', '100', '초당 요청 제한 (IP당)'),
-    ('security_headers_enabled', 'true', '보안 헤더 활성화 여부'),
-    ('xss_protection_enabled', 'true', 'XSS Protection 헤더 활성화'),
-    ('hsts_enabled', 'true', 'HSTS (HTTP Strict Transport Security) 활성화'),
-    ('csp_enabled', 'true', 'Content Security Policy 활성화'),
-    ('x_frame_options', 'SAMEORIGIN', 'X-Frame-Options 설정 (DENY, SAMEORIGIN, ALLOW-FROM)'),
-    ('sso_enabled', 'false', 'SSO 로그인 활성화 여부'),
-    ('sso_only_mode', 'false', 'SSO 전용 모드 (로컬 로그인 비활성화)'),
-    ('sso_auto_register', 'true', 'SSO 최초 로그인 시 자동 사용자 생성'),
-    ('sso_allowed_domains', '', 'SSO 허용 이메일 도메인 (쉼표로 구분, 비어있으면 모두 허용)')
-ON CONFLICT (key) DO NOTHING;
-
--- =============================================================================
--- Record Initial Migrations
--- =============================================================================
-INSERT INTO schema_migrations (version, name) VALUES
-    ('20240101000001', '001_initial_schema'),
-    ('20240101000002', '002_default_data')
+-- Record this migration
+INSERT INTO schema_migrations (version, name) VALUES ('20240101000001', '001_initial_schema')
 ON CONFLICT (version) DO NOTHING;
-
--- =============================================================================
--- Comments
--- =============================================================================
-COMMENT ON TABLE users IS 'User accounts for web and SMB authentication';
-COMMENT ON TABLE acl IS 'Access Control List for file/folder permissions';
-COMMENT ON TABLE audit_logs IS 'Immutable audit trail for all actions';
-COMMENT ON TABLE shares IS 'Public share links with optional password and expiry';
-COMMENT ON TABLE shared_folders IS 'Team shared drives with storage quotas';
-COMMENT ON TABLE shared_folder_members IS 'User access permissions for shared drives';
-COMMENT ON TABLE file_shares IS 'User-to-user file/folder sharing with RO/RW permissions';
-COMMENT ON TABLE system_settings IS 'System-wide configuration settings';
-COMMENT ON TABLE file_metadata IS 'File descriptions and tags for organization';
-COMMENT ON TABLE notifications IS 'In-app notification alerts for users';
-COMMENT ON TABLE sso_providers IS 'OAuth2/OIDC SSO provider configurations';

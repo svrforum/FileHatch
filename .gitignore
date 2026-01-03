@@ -33,6 +33,12 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# Docker Override (production settings)
+docker-compose.override.yml
+
+# Backups
+backups/
+
 # Logs
 *.log
 logs/
