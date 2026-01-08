@@ -29,9 +29,7 @@ import (
 func (h *Handler) GetFile(c echo.Context) error {
 	requestPath := c.Param("*")
 	if requestPath == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "File path required",
-		})
+		return RespondError(c, ErrMissingParameter("path"))
 	}
 
 	// URL decode the path for proper handling of special characters
@@ -50,22 +48,16 @@ func (h *Handler) GetFile(c echo.Context) error {
 	virtualPath := "/" + decodedPath
 	realPath, storageType, _, err := h.resolvePath(virtualPath, claims)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		return RespondError(c, ErrInvalidPath(err.Error()))
 	}
 
 	// Check shared permission
 	if storageType == StorageShared {
 		if claims == nil {
-			return c.JSON(http.StatusUnauthorized, map[string]string{
-				"error": "Authentication required",
-			})
+			return RespondError(c, ErrUnauthorized(""))
 		}
 		if !h.CanReadSharedDrive(claims.UserID, virtualPath) {
-			return c.JSON(http.StatusForbidden, map[string]string{
-				"error": "No permission to access this file",
-			})
+			return RespondError(c, ErrForbidden("No permission to access this file"))
 		}
 	}
 
@@ -98,20 +90,14 @@ func (h *Handler) GetFile(c echo.Context) error {
 		}
 		if err != nil {
 			if os.IsNotExist(err) {
-				return c.JSON(http.StatusNotFound, map[string]string{
-					"error": "File not found",
-				})
+				return RespondError(c, ErrNotFound("File"))
 			}
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to access file",
-			})
+			return RespondError(c, ErrOperationFailed("access file", err))
 		}
 	}
 
 	if info.IsDir() {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Path is a directory",
-		})
+		return RespondError(c, ErrBadRequest("Path is a directory"))
 	}
 
 	// Check if download is requested
@@ -126,7 +112,7 @@ func (h *Handler) GetFile(c echo.Context) error {
 		if claims != nil {
 			userID = &claims.UserID
 		}
-		h.auditHandler.LogEvent(userID, c.RealIP(), EventFileDownload, virtualPath, map[string]interface{}{
+		h.auditHandler.LogEvent(userID, c.RealIP(), EventFileDownload, virtualPath, map[string]any{
 			"filename":    info.Name(),
 			"size":        info.Size(),
 			"storageType": storageType,
@@ -154,9 +140,7 @@ func (h *Handler) GetFile(c echo.Context) error {
 func (h *Handler) DeleteFile(c echo.Context) error {
 	requestPath := c.Param("*")
 	if requestPath == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "File path required",
-		})
+		return RespondError(c, ErrMissingParameter("path"))
 	}
 
 	// Get user claims
@@ -168,58 +152,42 @@ func (h *Handler) DeleteFile(c echo.Context) error {
 	// Resolve path
 	realPath, storageType, displayPath, err := h.resolvePath("/"+requestPath, claims)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		return RespondError(c, ErrInvalidPath(err.Error()))
 	}
 
 	// Check permissions for home folder
 	if storageType == StorageHome && claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Authentication required",
-		})
+		return RespondError(c, ErrUnauthorized(""))
 	}
 
 	// Check shared write permission
 	virtualPath := "/" + requestPath
 	if storageType == StorageShared {
 		if claims == nil {
-			return c.JSON(http.StatusUnauthorized, map[string]string{
-				"error": "Authentication required",
-			})
+			return RespondError(c, ErrUnauthorized(""))
 		}
 		if !h.CanWriteSharedDrive(claims.UserID, virtualPath) {
-			return c.JSON(http.StatusForbidden, map[string]string{
-				"error": "No permission to delete files in this folder",
-			})
+			return RespondError(c, ErrForbidden("No permission to delete files in this folder"))
 		}
 	}
 
 	info, err := os.Stat(realPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "File not found",
-			})
+			return RespondError(c, ErrNotFound("File"))
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to access file",
-		})
+		return RespondError(c, ErrOperationFailed("access file", err))
 	}
 
 	if info.IsDir() {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Path is a directory, use DELETE /api/folders instead",
-		})
+		return RespondError(c, ErrBadRequest("Path is a directory, use DELETE /api/folders instead"))
 	}
 
 	if err := os.Remove(realPath); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to delete file",
-		})
+		return RespondError(c, ErrOperationFailed("delete file", err))
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"success": true,
 		"path":    displayPath,
 	})
@@ -244,9 +212,7 @@ func (h *Handler) DeleteFile(c echo.Context) error {
 func (h *Handler) SaveFileContent(c echo.Context) error {
 	requestPath := c.Param("*")
 	if requestPath == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "File path required",
-		})
+		return RespondError(c, ErrMissingParameter("path"))
 	}
 
 	// Get user claims
@@ -259,22 +225,16 @@ func (h *Handler) SaveFileContent(c echo.Context) error {
 	virtualPath := "/" + requestPath
 	realPath, storageType, _, err := h.resolvePath(virtualPath, claims)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		return RespondError(c, ErrInvalidPath(err.Error()))
 	}
 
 	// Check shared write permission
 	if storageType == StorageShared {
 		if claims == nil {
-			return c.JSON(http.StatusUnauthorized, map[string]string{
-				"error": "Authentication required",
-			})
+			return RespondError(c, ErrUnauthorized(""))
 		}
 		if !h.CanWriteSharedDrive(claims.UserID, virtualPath) {
-			return c.JSON(http.StatusForbidden, map[string]string{
-				"error": "No permission to edit files in this folder",
-			})
+			return RespondError(c, ErrForbidden("No permission to edit files in this folder"))
 		}
 	}
 
@@ -282,21 +242,15 @@ func (h *Handler) SaveFileContent(c echo.Context) error {
 	isSharedFile := false
 	if realPath == "" || storageType == StorageSharedWithMe {
 		if claims == nil {
-			return c.JSON(http.StatusUnauthorized, map[string]string{
-				"error": "Authentication required",
-			})
+			return RespondError(c, ErrUnauthorized(""))
 		}
 		// Check if user has write permission for this shared file
 		if !h.CanWriteSharedFile(claims.UserID, virtualPath) {
-			return c.JSON(http.StatusForbidden, map[string]string{
-				"error": "No permission to edit this shared file",
-			})
+			return RespondError(c, ErrForbidden("No permission to edit this shared file"))
 		}
 		sharedRealPath, _, err := h.GetSharedFileOwnerPath(claims.UserID, virtualPath)
 		if err != nil {
-			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "Shared file not found",
-			})
+			return RespondError(c, ErrNotFound("Shared file"))
 		}
 		realPath = sharedRealPath
 		isSharedFile = true
@@ -318,35 +272,25 @@ func (h *Handler) SaveFileContent(c echo.Context) error {
 		}
 		if err != nil {
 			if os.IsNotExist(err) {
-				return c.JSON(http.StatusNotFound, map[string]string{
-					"error": "File not found",
-				})
+				return RespondError(c, ErrNotFound("File"))
 			}
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to access file",
-			})
+			return RespondError(c, ErrOperationFailed("access file", err))
 		}
 	}
 
 	if info.IsDir() {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Path is a directory",
-		})
+		return RespondError(c, ErrBadRequest("Path is a directory"))
 	}
 
 	// Read request body
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Failed to read request body",
-		})
+		return RespondError(c, ErrBadRequest("Failed to read request body"))
 	}
 
 	// Write to file
 	if err := os.WriteFile(realPath, body, 0644); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to save file",
-		})
+		return RespondError(c, ErrOperationFailed("save file", err))
 	}
 
 	// Log the action
@@ -355,13 +299,13 @@ func (h *Handler) SaveFileContent(c echo.Context) error {
 		userID = &claims.UserID
 	}
 	clientIP := c.RealIP()
-	h.auditHandler.LogEvent(userID, clientIP, EventFileEdit, "/"+requestPath, map[string]interface{}{
+	h.auditHandler.LogEvent(userID, clientIP, EventFileEdit, "/"+requestPath, map[string]any{
 		"size":        len(body),
 		"storageType": storageType,
 		"isShared":    isSharedFile,
 	})
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"success": true,
 		"message": "File saved successfully",
 		"size":    len(body),
@@ -385,9 +329,7 @@ func (h *Handler) CheckFileExists(c echo.Context) error {
 	filename := c.QueryParam("filename")
 
 	if filename == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Filename required",
-		})
+		return RespondError(c, ErrMissingParameter("filename"))
 	}
 
 	if requestPath == "" {
@@ -403,15 +345,11 @@ func (h *Handler) CheckFileExists(c echo.Context) error {
 	// Resolve path
 	realPath, storageType, displayPath, err := h.resolvePath(requestPath, claims)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		return RespondError(c, ErrInvalidPath(err.Error()))
 	}
 
 	if storageType == "root" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Cannot check file at root",
-		})
+		return RespondError(c, ErrBadRequest("Cannot check file at root"))
 	}
 
 	fullPath := filepath.Join(realPath, filename)
@@ -419,7 +357,7 @@ func (h *Handler) CheckFileExists(c echo.Context) error {
 	_, err = os.Stat(fullPath)
 	exists := !os.IsNotExist(err)
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"exists":   exists,
 		"path":     filepath.Join(displayPath, filename),
 		"filename": filename,

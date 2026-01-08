@@ -40,6 +40,7 @@ export default function Trash({ onNavigate }: TrashProps) {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['trash'] })
       queryClient.invalidateQueries({ queryKey: ['files'] })
+      queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
       addToast('success', '복원되었습니다')
       // Navigate to the restored item's directory
       const parentPath = result.restoredPath.split('/').slice(0, -1).join('/') || '/'
@@ -54,6 +55,7 @@ export default function Trash({ onNavigate }: TrashProps) {
     mutationFn: deleteFromTrash,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trash'] })
+      queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
       addToast('success', '영구 삭제되었습니다')
       setShowDeleteConfirm(null)
     },
@@ -66,6 +68,7 @@ export default function Trash({ onNavigate }: TrashProps) {
     mutationFn: emptyTrash,
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['trash'] })
+      queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
       addToast('success', `${result.deletedCount}개 항목이 영구 삭제되었습니다`)
       setShowEmptyConfirm(false)
     },

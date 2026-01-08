@@ -1,3 +1,5 @@
+import { api, apiUrl, getAuthHeaders, getAuthToken as _getAuthToken } from './client'
+
 export interface FileInfo {
   name: string
   path: string
@@ -28,37 +30,12 @@ export interface ListFilesResponse {
 
 const API_BASE = '/api'
 
-// Helper to get auth headers
-function getAuthHeaders(): HeadersInit {
-  const stored = localStorage.getItem('scv-auth')
-  if (stored) {
-    try {
-      const { state } = JSON.parse(stored)
-      if (state?.token) {
-        return { 'Authorization': `Bearer ${state.token}` }
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }
-  return {}
-}
-
 export async function fetchFiles(
   path: string = '/',
   sort: string = 'name',
   order: string = 'asc'
 ): Promise<ListFilesResponse> {
-  const params = new URLSearchParams({ path, sort, order })
-  const response = await fetch(`${API_BASE}/files?${params}`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch files')
-  }
-
-  return response.json()
+  return api.get<ListFilesResponse>(apiUrl.withParams('/files', { path, sort, order }))
 }
 
 export async function downloadFile(
@@ -99,7 +76,7 @@ export async function downloadFile(
   // If we have a body reader, track progress
   if (response.body && totalSize > 0 && onProgress) {
     const reader = response.body.getReader()
-    const chunks: Uint8Array[] = []
+    const chunks: BlobPart[] = []
     let receivedLength = 0
 
     while (true) {
@@ -167,44 +144,18 @@ export async function downloadFileWithProgress(
 }
 
 export async function deleteFile(path: string): Promise<void> {
-  // Remove leading slash and encode each path segment separately
-  const cleanPath = path.startsWith('/') ? path.slice(1) : path
-  const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
-  const response = await fetch(`${API_BASE}/files/${encodedPath}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    const data = await response.json()
-    throw new Error(data.error || 'Failed to delete file')
-  }
+  await api.delete(`/files/${apiUrl.encodePath(path)}`)
 }
 
 export async function createFolder(path: string, name: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/folders`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ path, name }),
-  })
-
-  if (!response.ok) {
-    const data = await response.json()
-    throw new Error(data.error || 'Failed to create folder')
-  }
+  await api.post('/folders', { path, name })
 }
 
 export async function deleteFolder(path: string, force: boolean = false): Promise<void> {
-  // Remove leading slash and encode each path segment separately
-  const cleanPath = path.startsWith('/') ? path.slice(1) : path
-  const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
-  const url = `${API_BASE}/folders/${encodedPath}${force ? '?force=true' : ''}`
-  const response = await fetch(url, { method: 'DELETE', headers: getAuthHeaders() })
-
-  if (!response.ok) {
-    const data = await response.json()
-    throw new Error(data.error || 'Failed to delete folder')
-  }
+  const url = force
+    ? apiUrl.withParams(`/folders/${apiUrl.encodePath(path)}`, { force: true })
+    : `/folders/${apiUrl.encodePath(path)}`
+  await api.delete(url)
 }
 
 export interface PreviewData {
@@ -248,16 +199,7 @@ export interface FileExistsResponse {
 }
 
 export async function checkFileExists(path: string, filename: string): Promise<FileExistsResponse> {
-  const params = new URLSearchParams({ path, filename })
-  const response = await fetch(`${API_BASE}/files/check?${params}`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to check file existence')
-  }
-
-  return response.json()
+  return api.get<FileExistsResponse>(apiUrl.withParams('/files/check', { path, filename }))
 }
 
 export interface FolderStats {
@@ -268,17 +210,7 @@ export interface FolderStats {
 }
 
 export async function getFolderStats(path: string): Promise<FolderStats> {
-  const cleanPath = path.startsWith('/') ? path.slice(1) : path
-  const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
-  const response = await fetch(`${API_BASE}/folders/stats/${encodedPath}`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to get folder stats')
-  }
-
-  return response.json()
+  return api.get<FolderStats>(`/folders/stats/${apiUrl.encodePath(path)}`)
 }
 
 export function formatFileSize(bytes: number): string {
@@ -290,56 +222,17 @@ export function formatFileSize(bytes: number): string {
 
 // Rename file or folder
 export async function renameItem(path: string, newName: string): Promise<{ success: boolean; newPath: string }> {
-  const cleanPath = path.startsWith('/') ? path.slice(1) : path
-  const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
-  const response = await fetch(`${API_BASE}/files/rename/${encodedPath}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ newName }),
-  })
-
-  if (!response.ok) {
-    const data = await response.json()
-    throw new Error(data.error || 'Failed to rename item')
-  }
-
-  return response.json()
+  return api.put<{ success: boolean; newPath: string }>(`/files/rename/${apiUrl.encodePath(path)}`, { newName })
 }
 
 // Move file or folder
 export async function moveItem(path: string, destination: string): Promise<{ success: boolean; newPath: string }> {
-  const cleanPath = path.startsWith('/') ? path.slice(1) : path
-  const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
-  const response = await fetch(`${API_BASE}/files/move/${encodedPath}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ destination }),
-  })
-
-  if (!response.ok) {
-    const data = await response.json()
-    throw new Error(data.error || 'Failed to move item')
-  }
-
-  return response.json()
+  return api.put<{ success: boolean; newPath: string }>(`/files/move/${apiUrl.encodePath(path)}`, { destination })
 }
 
 // Copy file or folder
 export async function copyItem(path: string, destination: string): Promise<{ success: boolean; newPath: string }> {
-  const cleanPath = path.startsWith('/') ? path.slice(1) : path
-  const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
-  const response = await fetch(`${API_BASE}/files/copy/${encodedPath}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ destination }),
-  })
-
-  if (!response.ok) {
-    const data = await response.json()
-    throw new Error(data.error || 'Failed to copy item')
-  }
-
-  return response.json()
+  return api.post<{ success: boolean; newPath: string }>(`/files/copy/${apiUrl.encodePath(path)}`, { destination })
 }
 
 // Progress callback type for streaming operations
@@ -365,7 +258,7 @@ export function moveItemStream(
   const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
   const encodedDest = encodeURIComponent(destination)
 
-  const token = getAuthToken()
+  const token = _getAuthToken()
   const url = `${API_BASE}/files/move-stream/${encodedPath}?destination=${encodedDest}${token ? `&token=${token}` : ''}`
 
   let eventSource: EventSource | null = null
@@ -417,7 +310,7 @@ export function copyItemStream(
   const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
   const encodedDest = encodeURIComponent(destination)
 
-  const token = getAuthToken()
+  const token = _getAuthToken()
   const url = `${API_BASE}/files/copy-stream/${encodedPath}?destination=${encodedDest}${token ? `&token=${token}` : ''}`
 
   let eventSource: EventSource | null = null
@@ -484,22 +377,9 @@ export async function searchFiles(
   options: SearchOptions = {}
 ): Promise<SearchResponse> {
   const { path = '/', page = 1, limit = 20, matchType = 'all' } = options
-  const params = new URLSearchParams({
-    q: query,
-    path,
-    page: String(page),
-    limit: String(limit),
-    matchType,
-  })
-  const response = await fetch(`${API_BASE}/files/search?${params}`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to search files')
-  }
-
-  return response.json()
+  return api.get<SearchResponse>(
+    apiUrl.withParams('/files/search', { q: query, path, page, limit, matchType })
+  )
 }
 
 // Get storage usage
@@ -512,15 +392,7 @@ export interface StorageUsage {
 }
 
 export async function getStorageUsage(): Promise<StorageUsage> {
-  const response = await fetch(`${API_BASE}/storage/usage`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to get storage usage')
-  }
-
-  return response.json()
+  return api.get<StorageUsage>('/storage/usage')
 }
 
 // Trash types and functions
@@ -541,75 +413,27 @@ export interface TrashListResponse {
 
 // Move file or folder to trash
 export async function moveToTrash(path: string): Promise<{ success: boolean; trashId: string }> {
-  const cleanPath = path.startsWith('/') ? path.slice(1) : path
-  const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
-  const response = await fetch(`${API_BASE}/trash/${encodedPath}`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    const data = await response.json()
-    throw new Error(data.error || 'Failed to move to trash')
-  }
-
-  return response.json()
+  return api.post<{ success: boolean; trashId: string }>(`/trash/${apiUrl.encodePath(path)}`)
 }
 
 // List trash items
 export async function listTrash(): Promise<TrashListResponse> {
-  const response = await fetch(`${API_BASE}/trash`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to list trash')
-  }
-
-  return response.json()
+  return api.get<TrashListResponse>('/trash')
 }
 
 // Restore from trash
 export async function restoreFromTrash(trashId: string): Promise<{ success: boolean; restoredPath: string }> {
-  const response = await fetch(`${API_BASE}/trash/restore/${encodeURIComponent(trashId)}`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    const data = await response.json()
-    throw new Error(data.error || 'Failed to restore from trash')
-  }
-
-  return response.json()
+  return api.post<{ success: boolean; restoredPath: string }>(`/trash/restore/${encodeURIComponent(trashId)}`)
 }
 
 // Delete from trash permanently
 export async function deleteFromTrash(trashId: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/trash/${encodeURIComponent(trashId)}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    const data = await response.json()
-    throw new Error(data.error || 'Failed to delete from trash')
-  }
+  await api.delete(`/trash/${encodeURIComponent(trashId)}`)
 }
 
 // Empty trash
 export async function emptyTrash(): Promise<{ success: boolean; deletedCount: number }> {
-  const response = await fetch(`${API_BASE}/trash`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    const data = await response.json()
-    throw new Error(data.error || 'Failed to empty trash')
-  }
-
-  return response.json()
+  return api.delete<{ success: boolean; deletedCount: number }>('/trash')
 }
 
 // Read text file content
@@ -656,19 +480,8 @@ export function getFileUrl(path: string): string {
   return `${API_BASE}/files/${encodedPath}`
 }
 
-// Get auth token for file URLs
-export function getAuthToken(): string {
-  const stored = localStorage.getItem('scv-auth')
-  if (stored) {
-    try {
-      const { state } = JSON.parse(stored)
-      return state?.token || ''
-    } catch {
-      return ''
-    }
-  }
-  return ''
-}
+// Re-export getAuthToken from client for backwards compatibility
+export { getAuthToken } from './client'
 
 export function getFileTypeIcon(file: FileInfo): string {
   if (file.isDir) return 'folder'
@@ -736,18 +549,7 @@ export interface OnlyOfficeConfig {
 
 // Get OnlyOffice editor configuration for a file
 export async function getOnlyOfficeConfig(path: string): Promise<OnlyOfficeConfig> {
-  const cleanPath = path.startsWith('/') ? path.slice(1) : path
-  const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
-  const response = await fetch(`${API_BASE}/onlyoffice/config/${encodedPath}`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    const data = await response.json()
-    throw new Error(data.error || 'Failed to get OnlyOffice config')
-  }
-
-  return response.json()
+  return api.get<OnlyOfficeConfig>(`/onlyoffice/config/${apiUrl.encodePath(path)}`)
 }
 
 // Check if file type is supported by OnlyOffice
@@ -787,18 +589,7 @@ export const fileTypeOptions: FileTypeOption[] = [
 
 // Create a new file
 export async function createFile(path: string, filename: string, fileType: string): Promise<{ success: boolean; path: string }> {
-  const response = await fetch(`${API_BASE}/files/create`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ path, filename, fileType }),
-  })
-
-  if (!response.ok) {
-    const data = await response.json()
-    throw new Error(data.error || 'Failed to create file')
-  }
-
-  return response.json()
+  return api.post<{ success: boolean; path: string }>('/files/create', { path, filename, fileType })
 }
 
 // File Metadata types
@@ -813,16 +604,10 @@ export interface FileMetadata {
 
 // Get file metadata (description and tags)
 export async function getFileMetadata(filePath: string): Promise<FileMetadata> {
-  const encodedPath = encodeURIComponent(filePath).replace(/%2F/g, '/')
-  const response = await fetch(`${API_BASE}/file-metadata/${encodedPath}`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to get file metadata')
-  }
-
-  return response.json()
+  // Remove leading slash to avoid double slash in URL
+  const normalizedPath = filePath.startsWith('/') ? filePath.slice(1) : filePath
+  const encodedPath = encodeURIComponent(normalizedPath).replace(/%2F/g, '/')
+  return api.get<FileMetadata>(`/file-metadata/${encodedPath}`)
 }
 
 // Update file metadata
@@ -830,44 +615,22 @@ export async function updateFileMetadata(
   filePath: string,
   data: { description?: string; tags?: string[] }
 ): Promise<FileMetadata> {
-  const encodedPath = encodeURIComponent(filePath).replace(/%2F/g, '/')
-  const response = await fetch(`${API_BASE}/file-metadata/${encodedPath}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to update file metadata')
-  }
-
-  return response.json()
+  // Remove leading slash to avoid double slash in URL
+  const normalizedPath = filePath.startsWith('/') ? filePath.slice(1) : filePath
+  const encodedPath = encodeURIComponent(normalizedPath).replace(/%2F/g, '/')
+  return api.put<FileMetadata>(`/file-metadata/${encodedPath}`, data)
 }
 
 // Get all user tags for autocomplete
 export async function getUserTags(): Promise<{ tags: string[]; total: number }> {
-  const response = await fetch(`${API_BASE}/file-metadata/tags`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to get tags')
-  }
-
-  return response.json()
+  return api.get<{ tags: string[]; total: number }>('/file-metadata/tags')
 }
 
 // Search files by tag
 export async function searchByTag(tag: string): Promise<{ files: FileMetadata[]; total: number }> {
-  const response = await fetch(`${API_BASE}/file-metadata/search?tag=${encodeURIComponent(tag)}`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to search by tag')
-  }
-
-  return response.json()
+  return api.get<{ files: FileMetadata[]; total: number }>(
+    apiUrl.withParams('/file-metadata/search', { tag })
+  )
 }
 
 // Recent files
@@ -881,16 +644,7 @@ export interface RecentFile {
 }
 
 export async function getRecentFiles(limit: number = 10): Promise<RecentFile[]> {
-  const params = new URLSearchParams({ limit: String(limit) })
-  const response = await fetch(`${API_BASE}/files/recent?${params}`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to get recent files')
-  }
-
-  const result = await response.json()
+  const result = await api.get<{ data: RecentFile[] }>(apiUrl.withParams('/files/recent', { limit }))
   return result.data || []
 }
 
@@ -906,21 +660,7 @@ export async function compressFiles(
   paths: string[],
   outputName?: string
 ): Promise<CompressResponse> {
-  const response = await fetch(`${API_BASE}/files/compress`, {
-    method: 'POST',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ paths, outputName }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || 'Failed to compress files')
-  }
-
-  return response.json()
+  return api.post<CompressResponse>('/files/compress', { paths, outputName })
 }
 
 // Extract zip response
@@ -935,21 +675,7 @@ export async function extractZip(
   path: string,
   outputPath?: string
 ): Promise<ExtractResponse> {
-  const response = await fetch(`${API_BASE}/files/extract`, {
-    method: 'POST',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ path, outputPath }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || 'Failed to extract zip file')
-  }
-
-  return response.json()
+  return api.post<ExtractResponse>('/files/extract', { path, outputPath })
 }
 
 // ZIP preview types
@@ -971,17 +697,7 @@ export interface ZipPreviewResponse {
 
 // Preview ZIP file contents
 export async function previewZip(path: string): Promise<ZipPreviewResponse> {
-  const encodedPath = path.startsWith('/') ? path.slice(1) : path
-  const response = await fetch(`${API_BASE}/zip/preview/${encodedPath}`, {
-    headers: getAuthHeaders(),
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || 'Failed to preview zip file')
-  }
-
-  return response.json()
+  return api.get<ZipPreviewResponse>(`/zip/preview/${apiUrl.encodePath(path)}`)
 }
 
 // Download multiple files as ZIP archive
@@ -1020,7 +736,7 @@ export async function downloadAsZip(
     throw new Error('Failed to read response')
   }
 
-  const chunks: Uint8Array[] = []
+  const chunks: BlobPart[] = []
   let received = 0
 
   while (true) {

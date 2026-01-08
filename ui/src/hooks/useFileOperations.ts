@@ -66,6 +66,11 @@ export function useFileOperations({ currentPath, onToast }: UseFileOperationsOpt
     queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
   }, [queryClient, currentPath])
 
+  // Refresh storage usage (for sidebar storage display)
+  const refreshStorage = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
+  }, [queryClient])
+
   // Delete file/folder
   const deleteFile = useCallback(async (file: FileInfo) => {
     try {
@@ -76,12 +81,13 @@ export function useFileOperations({ currentPath, onToast }: UseFileOperationsOpt
       })
       onToast(`"${file.name}"이(가) 휴지통으로 이동되었습니다`, 'success')
       refreshFiles()
+      refreshStorage()
       return true
     } catch (error) {
       onToast('삭제에 실패했습니다', 'error')
       return false
     }
-  }, [addToHistory, onToast, refreshFiles])
+  }, [addToHistory, onToast, refreshFiles, refreshStorage])
 
   // Bulk delete
   const bulkDelete = useCallback(async (files: FileInfo[]) => {
@@ -93,12 +99,13 @@ export function useFileOperations({ currentPath, onToast }: UseFileOperationsOpt
       })
       onToast(`${files.length}개 항목이 휴지통으로 이동되었습니다`, 'success')
       refreshFiles()
+      refreshStorage()
       return true
     } catch (error) {
       onToast('일부 항목 삭제에 실패했습니다', 'error')
       return false
     }
-  }, [addToHistory, onToast, refreshFiles])
+  }, [addToHistory, onToast, refreshFiles, refreshStorage])
 
   // Rename file/folder
   const rename = useCallback(async (file: FileInfo, newName: string) => {
@@ -163,12 +170,13 @@ export function useFileOperations({ currentPath, onToast }: UseFileOperationsOpt
       }
 
       refreshFiles()
+      refreshStorage()
       return true
     } catch (error: any) {
       onToast(error.message || '붙여넣기에 실패했습니다', 'error')
       return false
     }
-  }, [clipboard, addToHistory, onToast, refreshFiles])
+  }, [clipboard, addToHistory, onToast, refreshFiles, refreshStorage])
 
   // Move files to folder
   const moveToFolder = useCallback(async (files: FileInfo[], destination: string) => {
@@ -186,12 +194,13 @@ export function useFileOperations({ currentPath, onToast }: UseFileOperationsOpt
 
       onToast(`${files.length}개 항목이 이동되었습니다`, 'success')
       refreshFiles()
+      refreshStorage()
       return true
     } catch (error: any) {
       onToast(error.message || '이동에 실패했습니다', 'error')
       return false
     }
-  }, [addToHistory, onToast, refreshFiles])
+  }, [addToHistory, onToast, refreshFiles, refreshStorage])
 
   // Create new file
   const createNewFile = useCallback(async (path: string, filename: string, fileType: string) => {
@@ -199,12 +208,13 @@ export function useFileOperations({ currentPath, onToast }: UseFileOperationsOpt
       await createFile(path, filename, fileType)
       onToast(`"${filename}" 파일이 생성되었습니다`, 'success')
       refreshFiles()
+      refreshStorage()
       return true
     } catch (error: any) {
       onToast(error.message || '파일 생성에 실패했습니다', 'error')
       return false
     }
-  }, [onToast, refreshFiles])
+  }, [onToast, refreshFiles, refreshStorage])
 
   // Compress files
   const compress = useCallback(async (paths: string[], zipName: string) => {
@@ -212,12 +222,13 @@ export function useFileOperations({ currentPath, onToast }: UseFileOperationsOpt
       await compressFiles(paths, zipName)
       onToast(`"${zipName}.zip" 파일이 생성되었습니다`, 'success')
       refreshFiles()
+      refreshStorage()
       return true
     } catch (error: any) {
       onToast(error.message || '압축에 실패했습니다', 'error')
       return false
     }
-  }, [onToast, refreshFiles])
+  }, [onToast, refreshFiles, refreshStorage])
 
   // Download single file
   const download = useCallback((file: FileInfo) => {
