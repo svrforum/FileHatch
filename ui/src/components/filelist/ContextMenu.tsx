@@ -49,6 +49,14 @@ interface ContextMenuProps {
   isEditableFile: (file: FileInfo) => boolean
   isViewableFile: (file: FileInfo) => boolean
   isOnlyOfficeSupported: (ext?: string) => boolean
+  // Star functionality
+  isStarred?: (path: string) => boolean
+  onToggleStar?: (file: FileInfo) => void
+  // Lock functionality
+  isLocked?: (path: string) => boolean
+  isLockedByMe?: (path: string) => boolean
+  onLockFile?: (file: FileInfo) => void
+  onUnlockFile?: (file: FileInfo) => void
 }
 
 function ContextMenu({
@@ -88,6 +96,12 @@ function ContextMenu({
   isEditableFile,
   isViewableFile,
   isOnlyOfficeSupported,
+  isStarred,
+  onToggleStar,
+  isLocked,
+  isLockedByMe,
+  onLockFile,
+  onUnlockFile,
 }: ContextMenuProps) {
   if (!contextMenu) return null
 
@@ -349,6 +363,40 @@ function ContextMenu({
             </svg>
             복사
           </button>
+          {/* Star/Favorite button */}
+          {onToggleStar && !contextMenu.file.isDir && (
+            <button className="context-menu-item" onClick={() => { onToggleStar(contextMenu.file); onClose(); }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill={isStarred?.(contextMenu.file.path) ? 'currentColor' : 'none'}>
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {isStarred?.(contextMenu.file.path) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+            </button>
+          )}
+          {/* Lock/Unlock button */}
+          {!contextMenu.file.isDir && (
+            isLocked?.(contextMenu.file.path) ? (
+              // Show unlock only if user owns the lock
+              isLockedByMe?.(contextMenu.file.path) && onUnlockFile && (
+                <button className="context-menu-item" onClick={() => { onUnlockFile(contextMenu.file); onClose(); }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M7 11V7a5 5 0 019.9-1" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  잠금 해제
+                </button>
+              )
+            ) : (
+              onLockFile && (
+                <button className="context-menu-item" onClick={() => { onLockFile(contextMenu.file); onClose(); }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                  파일 잠금
+                </button>
+              )
+            )
+          )}
           <div className="context-menu-divider" />
           <button className="context-menu-item" onClick={() => {
             onMoveTo(contextMenu.selectedPaths.length > 0 ? contextMenu.selectedPaths : [contextMenu.file.path])

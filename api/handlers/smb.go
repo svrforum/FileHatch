@@ -274,7 +274,7 @@ func (h *SMBHandler) GetSMBConfig(c echo.Context) error {
 	// Parse simple values from config
 	config := SMBConfig{
 		Workgroup:   "WORKGROUP",
-		ServerName:  "SimpleCloudVault SMB Server",
+		ServerName:  "FileHatch SMB Server",
 		GuestAccess: false,
 	}
 
@@ -306,7 +306,7 @@ func (h *SMBHandler) UpdateSMBConfig(c echo.Context) error {
 		config.Workgroup = "WORKGROUP"
 	}
 	if config.ServerName == "" {
-		config.ServerName = "SimpleCloudVault SMB Server"
+		config.ServerName = "FileHatch SMB Server"
 	}
 
 	// Generate new smb.conf

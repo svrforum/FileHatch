@@ -1,11 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchFiles, downloadFileWithProgress, getFolderStats, renameItem, copyItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, compressFiles, extractZip, downloadAsZip } from '../api/files'
-import { getMySharedFolders, SharedFolderWithPermission } from '../api/sharedFolders'
+import { useSharedFolders } from '../hooks/useSharedFolders'
 import { getSharedWithMe, getSharedByMe, getMyShareLinks, SharedWithMeItem, SharedByMeItem, LinkShare, deleteFileShare, deleteShareLink } from '../api/fileShares'
 import { useUploadStore } from '../stores/uploadStore'
 import { useTransferStore } from '../stores/transferStore'
 import { useNotificationStore } from '../stores/notificationStore'
+import { useAuthStore } from '../stores/authStore'
 import { useFileWatcher, NotificationEventData } from '../hooks/useFileWatcher'
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation'
 import { useMarqueeSelection } from '../hooks/useMarqueeSelection'
@@ -16,6 +17,7 @@ import { useFileDragMove } from '../hooks/useFileDragMove'
 import { useToast } from '../hooks/useToast'
 import { useLocalSearch } from '../hooks/useLocalSearch'
 import { useFileMetadata } from '../hooks/useFileMetadata'
+import { useStarredAndLocked } from '../hooks/useStarredAndLocked'
 import ConfirmModal from './ConfirmModal'
 import Toast from './Toast'
 import TextEditor from './TextEditor'
@@ -76,7 +78,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [showNewFileSubmenu, setShowNewFileSubmenu] = useState(false)
   const [shareTarget, setShareTarget] = useState<FileInfo | null>(null)
   const [linkShareTarget, setLinkShareTarget] = useState<FileInfo | null>(null)
-  const [sharedFolders, setSharedFolders] = useState<SharedFolderWithPermission[]>([])
+  const { sharedFolders } = useSharedFolders()
   // Compress modal state
   const [showCompressModal, setShowCompressModal] = useState(false)
   const [compressFileName, setCompressFileName] = useState('')
@@ -117,14 +119,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null)
   const uploadStore = useUploadStore()
   const transferStore = useTransferStore()
+  const user = useAuthStore((state) => state.user)
   const downloadStore = uploadStore
 
-  // Fetch shared folders for name resolution
-  useEffect(() => {
-    getMySharedFolders()
-      .then(setSharedFolders)
-      .catch(() => {})
-  }, [])
 
   // Real-time file change notifications via WebSocket
   // Watch paths are stable to avoid reconnection loops
@@ -144,6 +141,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     queryKey: ['files', currentPath, sortBy, sortOrder],
     queryFn: () => fetchFiles(currentPath, sortBy, sortOrder),
     enabled: !isSpecialShareView,
+    staleTime: 30000, // Consider data fresh for 30 seconds
   })
 
   // Shared with me query
@@ -462,6 +460,36 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     onError: showError,
   })
 
+  // Starred and locked files status (only query when files are loaded)
+  const filePaths = displayFiles.map(f => f.path)
+  const {
+    starred: starredFiles,
+    locks: lockedFiles,
+    toggleStar,
+    lockFile,
+    unlockFile,
+    isLocked,
+    isLockedByMe,
+  } = useStarredAndLocked({
+    filePaths,
+    currentUserId: user?.id,
+    enabled: !isSpecialShareView && filePaths.length > 0,
+  })
+
+  // Wrapper for toggle star to accept FileInfo
+  const handleToggleStar = useCallback((file: FileInfo) => {
+    toggleStar(file.path)
+  }, [toggleStar])
+
+  // Handlers for file lock
+  const handleLockFile = useCallback((file: FileInfo) => {
+    lockFile(file.path)
+  }, [lockFile])
+
+  const handleUnlockFile = useCallback((file: FileInfo) => {
+    unlockFile(file.path)
+  }, [unlockFile])
+
   // Check if file is editable (text-based)
   const isEditableFile = useCallback((file: FileInfo): boolean => {
     const ext = file.extension?.toLowerCase() || ''
@@ -563,6 +591,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       await moveToTrash(deleteTarget.path)
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
       queryClient.invalidateQueries({ queryKey: ['trash'] })
+      queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
       setSelectedFile(null)
       showSuccess(`"${deleteTarget.name}"이(가) 휴지통으로 이동되었습니다`)
     } catch (err) {
@@ -910,6 +939,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
 
     queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
     queryClient.invalidateQueries({ queryKey: ['trash'] })
+    queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
     setSelectedFiles(new Set())
     setSelectedFile(null)
 
@@ -1206,6 +1236,8 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
             isSharedByMeView={isSharedByMeView}
             isLinkSharesView={isLinkSharesView}
             highlightedPath={highlightedFilePath}
+            starredFiles={starredFiles}
+            lockedFiles={lockedFiles}
             onSelect={handleSelectFile}
             onDoubleClick={handleItemDoubleClick}
             onContextMenu={handleContextMenu}
@@ -1217,6 +1249,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
             onUnshare={handleUnshare}
             onCopyLink={handleCopyShareLink}
             onDeleteLink={handleDeleteShareLink}
+            onToggleStar={handleToggleStar}
             getFileIcon={getFileIcon}
             formatDate={formatRelativeDate}
             getFullDateTime={formatFullDateTime}
@@ -1336,6 +1369,12 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         isEditableFile={isEditableFile}
         isViewableFile={isViewableFile}
         isOnlyOfficeSupported={isOnlyOfficeSupported}
+        isStarred={(path) => starredFiles[path] ?? false}
+        onToggleStar={handleToggleStar}
+        isLocked={isLocked}
+        isLockedByMe={isLockedByMe}
+        onLockFile={handleLockFile}
+        onUnlockFile={handleUnlockFile}
       />
 
       {/* Multi-select action bar */}

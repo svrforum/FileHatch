@@ -45,7 +45,7 @@ func (h *WebDAVHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Authenticate user
 	username, password, ok := r.BasicAuth()
 	if !ok {
-		w.Header().Set("WWW-Authenticate", `Basic realm="SimpleCloudVault WebDAV"`)
+		w.Header().Set("WWW-Authenticate", `Basic realm="FileHatch WebDAV"`)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -53,7 +53,7 @@ func (h *WebDAVHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Verify credentials using application password (same as SMB)
 	user, err := h.authenticateUser(username, password)
 	if err != nil {
-		w.Header().Set("WWW-Authenticate", `Basic realm="SimpleCloudVault WebDAV"`)
+		w.Header().Set("WWW-Authenticate", `Basic realm="FileHatch WebDAV"`)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}

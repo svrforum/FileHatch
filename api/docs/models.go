@@ -214,7 +214,7 @@ type TwoFASetupResponse struct {
 	Success bool `json:"success" example:"true"`
 	Data    struct {
 		Secret    string `json:"secret" example:"JBSWY3DPEHPK3PXP"`
-		QRCodeURL string `json:"qrCodeUrl" example:"otpauth://totp/SimpleCloudVault:admin?secret=JBSWY3DPEHPK3PXP&issuer=SimpleCloudVault"`
+		QRCodeURL string `json:"qrCodeUrl" example:"otpauth://totp/FileHatch:admin?secret=JBSWY3DPEHPK3PXP&issuer=FileHatch"`
 		QRCodeB64 string `json:"qrCodeB64" example:"data:image/png;base64,iVBORw0KGgo..."`
 	} `json:"data"`
 }

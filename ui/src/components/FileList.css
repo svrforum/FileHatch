@@ -437,6 +437,54 @@
   white-space: nowrap;
 }
 
+/* Star button */
+.star-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.file-row:hover .star-btn,
+.file-card:hover .star-btn,
+.star-btn.starred {
+  opacity: 1;
+}
+
+.star-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--color-warning);
+}
+
+.star-btn.starred {
+  color: var(--color-warning);
+}
+
+/* Lock indicator */
+.lock-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  margin-left: var(--spacing-xs);
+}
+
+.lock-indicator svg {
+  width: 14px;
+  height: 14px;
+}
+
 .col-size,
 .col-date {
   display: flex;

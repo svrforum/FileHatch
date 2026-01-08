@@ -291,7 +291,7 @@ function SMBSettings({ isOpen, onClose }: SMBSettingsProps) {
                     type="text"
                     value={serverName}
                     onChange={(e) => setServerName(e.target.value)}
-                    placeholder="SimpleCloudVault SMB Server"
+                    placeholder="FileHatch SMB Server"
                   />
                 </div>
 

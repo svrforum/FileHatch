@@ -762,3 +762,95 @@ export async function downloadAsZip(
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
+
+// ==========================================
+// Starred Files API
+// ==========================================
+
+export interface StarredFile {
+  id: string
+  filePath: string
+  starredAt: string
+}
+
+// Toggle star status for a file
+export async function toggleStar(path: string): Promise<{ starred: boolean; path: string }> {
+  return api.post<{ starred: boolean; path: string }>('/starred/toggle', { path })
+}
+
+// Get all starred files
+export async function getStarredFiles(): Promise<{ starred: StarredFile[]; total: number }> {
+  return api.get<{ starred: StarredFile[]; total: number }>('/starred')
+}
+
+// Check starred status for multiple files
+export async function checkStarred(paths: string[]): Promise<{ starred: Record<string, boolean> }> {
+  return api.post<{ starred: Record<string, boolean> }>('/starred/check', { paths })
+}
+
+// ==========================================
+// File Locks API
+// ==========================================
+
+export interface FileLock {
+  id: string
+  filePath: string
+  lockedBy: string
+  username: string
+  lockedAt: string
+  expiresAt?: string
+  lockType: string
+  reason?: string
+}
+
+export interface LockResponse {
+  locked: boolean
+  path: string
+  lockId?: string
+  expiresAt?: string
+  extended?: boolean
+  error?: string
+  lockedBy?: string
+  lockedAt?: string
+}
+
+// Lock a file
+export async function lockFile(
+  path: string,
+  duration?: number,
+  reason?: string
+): Promise<LockResponse> {
+  return api.post<LockResponse>('/files/lock', { path, duration, reason })
+}
+
+// Unlock a file
+export async function unlockFile(
+  path: string,
+  force: boolean = false
+): Promise<{ unlocked: boolean; path: string; message?: string }> {
+  return api.post<{ unlocked: boolean; path: string; message?: string }>('/files/unlock', { path, force })
+}
+
+// Get lock status for a single file
+export async function getFileLock(path: string): Promise<{ locked: boolean; path: string; lock?: FileLock }> {
+  return api.get<{ locked: boolean; path: string; lock?: FileLock }>(
+    apiUrl.withParams('/files/lock', { path })
+  )
+}
+
+// Check lock status for multiple files
+export interface FileLockInfo {
+  lockedBy: string
+  username: string
+  lockedAt: string
+  expiresAt?: string
+}
+
+export async function checkFileLocks(paths: string[]): Promise<{ locks: Record<string, FileLockInfo> }> {
+  return api.post<{ locks: Record<string, FileLockInfo> }>('/files/locks/check', { paths })
+}
+
+// Get all my locks
+export async function getMyLocks(): Promise<{ locks: FileLock[]; total: number }> {
+  return api.get<{ locks: FileLock[]; total: number }>('/files/locks/my')
+}

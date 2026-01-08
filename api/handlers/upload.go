@@ -397,6 +397,21 @@ func (h *UploadHandler) handleCompletedUploads() {
 
 		fmt.Printf("Upload completed: %s -> %s (overwrite: %v)\n", filename, finalPath, overwrite)
 
+		// Update storage tracking for the user
+		if username != "" && h.auditHandler != nil && h.auditHandler.db != nil {
+			// Get file size after upload
+			fileSize := event.Upload.Size
+			_, err := h.auditHandler.db.Exec(`
+				UPDATE users
+				SET storage_used = GREATEST(0, COALESCE(storage_used, 0) + $1),
+				    updated_at = NOW()
+				WHERE username = $2
+			`, fileSize, username)
+			if err != nil {
+				fmt.Printf("[Storage] Failed to update storage for %s: %v\n", username, err)
+			}
+		}
+
 		// Log audit event for file upload
 		// Get client IP from the tracker (stored when upload was created)
 		ipAddr := GetTusIPTracker().GetIP(event.Upload.ID)

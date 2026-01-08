@@ -27,6 +27,7 @@ export interface User {
 export interface LoginRequest {
   username: string
   password: string
+  rememberMe?: boolean
 }
 
 export interface CreateUserRequest {
@@ -213,8 +214,15 @@ export async function disable2FA(_tokenOrPassword: string, password?: string): P
 /**
  * Verify 2FA code during login (no auth required)
  */
-export async function verify2FA(userId: string, code: string): Promise<AuthResponse> {
-  return api.post<AuthResponse>('/auth/2fa/verify', { userId, code }, { noAuth: true })
+export async function verify2FA(userId: string, code: string, rememberMe?: boolean): Promise<AuthResponse> {
+  return api.post<AuthResponse>('/auth/2fa/verify', { userId, code, rememberMe }, { noAuth: true })
+}
+
+/**
+ * Refresh the authentication token
+ */
+export async function refreshToken(): Promise<{ token: string }> {
+  return api.post<{ token: string }>('/auth/refresh')
 }
 
 /**

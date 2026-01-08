@@ -1,8 +1,8 @@
 #!/bin/bash
 # =============================================================================
-# SimpleCloudVault Initial Setup Script
+# FileHatch Initial Setup Script
 # =============================================================================
-# 이 스크립트는 SimpleCloudVault를 처음 설치할 때 실행합니다.
+# 이 스크립트는 FileHatch를 처음 설치할 때 실행합니다.
 #
 # 기능:
 #   - 환경 설정 파일 생성 (.env)
@@ -30,7 +30,7 @@ cd "$PROJECT_DIR"
 
 echo ""
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║          SimpleCloudVault 초기 설정 스크립트                      ║${NC}"
+echo -e "${CYAN}║          FileHatch 초기 설정 스크립트                      ║${NC}"
 echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -140,7 +140,7 @@ if [ ! -f "config/smb.conf" ]; then
     cat > config/smb.conf << 'EOF'
 [global]
     workgroup = WORKGROUP
-    server string = SimpleCloudVault
+    server string = FileHatch
     security = user
     map to guest = Bad User
     load printers = no
@@ -198,7 +198,7 @@ echo -e "${CYAN}╔════════════════════�
 echo -e "${CYAN}║                    설정 완료!                                    ║${NC}"
 echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${GREEN}SimpleCloudVault가 성공적으로 시작되었습니다!${NC}"
+echo -e "${GREEN}FileHatch가 성공적으로 시작되었습니다!${NC}"
 echo ""
 echo -e "${YELLOW}접속 정보:${NC}"
 echo -e "  웹 UI:    ${BLUE}http://localhost:3080${NC}"
@@ -215,9 +215,18 @@ echo -e "${YELLOW}유용한 명령어:${NC}"
 echo -e "  로그 확인:        ${BLUE}docker compose logs -f${NC}"
 echo -e "  서비스 중지:      ${BLUE}docker compose down${NC}"
 echo -e "  서비스 재시작:    ${BLUE}docker compose restart${NC}"
-echo -e "  마이그레이션:     ${BLUE}./scripts/migrate.sh${NC}"
+echo -e "  마이그레이션 상태: ${BLUE}./scripts/migrate.sh status${NC}"
 echo -e "  백업:            ${BLUE}./scripts/backup.sh${NC}"
 echo ""
-echo -e "${YELLOW}OnlyOffice 문서 편집기를 사용하려면:${NC}"
-echo -e "  ${BLUE}docker compose --profile office up -d${NC}"
+echo -e "${GREEN}참고: 데이터베이스 마이그레이션은 API 서버 시작 시 자동으로 실행됩니다.${NC}"
+echo ""
+echo -e "${YELLOW}선택적 기능:${NC}"
+echo -e "  OnlyOffice (문서 편집): ${BLUE}docker compose --profile office up -d${NC}"
+echo -e "  Keycloak SSO:          ${BLUE}docker compose --profile sso up -d${NC}"
+echo -e "  모든 기능:              ${BLUE}docker compose --profile office --profile sso up -d${NC}"
+echo ""
+echo -e "${YELLOW}Keycloak SSO 설정 시:${NC}"
+echo -e "  1. 컨테이너 시작:      ${BLUE}docker compose --profile sso up -d${NC}"
+echo -e "  2. 2분 대기 후 설정:   ${BLUE}./scripts/setup-keycloak.sh${NC}"
+echo -e "  3. 관리자 콘솔:        ${BLUE}http://localhost:8180/auth${NC}"
 echo ""

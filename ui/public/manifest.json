@@ -1,6 +1,6 @@
 {
-  "name": "SimpleCloudVault",
-  "short_name": "SCV",
+  "name": "FileHatch",
+  "short_name": "FH",
   "description": "Enterprise-grade cloud file sharing and management platform",
   "start_url": "/",
   "display": "standalone",

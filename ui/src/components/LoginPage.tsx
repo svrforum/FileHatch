@@ -33,6 +33,7 @@ const providerIcons: Record<string, JSX.Element> = {
 function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [otpCode, setOtpCode] = useState('')
   const [ssoProviders, setSSOProviders] = useState<SSOProviderPublic[]>([])
   const [ssoEnabled, setSSOEnabled] = useState(false)
@@ -84,7 +85,7 @@ function LoginPage() {
     setSSOError(null)
 
     try {
-      const needs2FA = await login({ username, password })
+      const needs2FA = await login({ username, password, rememberMe })
       if (!needs2FA) {
         // Force page reload to ensure state is properly updated
         window.location.reload()
@@ -221,7 +222,7 @@ function LoginPage() {
               <path d="M7 11V7C7 5.67392 7.52678 4.40215 8.46447 3.46447C9.40215 2.52678 10.6739 2 12 2C13.3261 2 14.5979 2.52678 15.5355 3.46447C16.4732 4.40215 17 5.67392 17 7V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
-          <h1>SimpleCloudVault</h1>
+          <h1>FileHatch</h1>
           <p>안전한 파일 저장소에 로그인하세요</p>
         </div>
 
@@ -283,6 +284,17 @@ function LoginPage() {
                 required
                 autoComplete="current-password"
               />
+            </div>
+
+            <div className="form-group remember-me">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <span className="checkbox-text">로그인 유지 (30일)</span>
+              </label>
             </div>
 
             <button

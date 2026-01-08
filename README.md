@@ -1,4 +1,4 @@
-# SimpleCloudVault
+# FileHatch
 
 **엔터프라이즈급 클라우드 파일 공유 시스템**
 
@@ -10,7 +10,7 @@
 
 ## 개요
 
-SimpleCloudVault는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍부한 자체 호스팅 클라우드 스토리지 솔루션입니다. Dropbox, OneDrive, ShareFile과 같은 상용 솔루션을 대체할 수 있으며, 데이터에 대한 완전한 제어권을 유지합니다.
+FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍부한 자체 호스팅 클라우드 스토리지 솔루션입니다. Dropbox, OneDrive, ShareFile과 같은 상용 솔루션을 대체할 수 있으며, 데이터에 대한 완전한 제어권을 유지합니다.
 
 ### 주요 특징
 
@@ -243,12 +243,23 @@ SimpleCloudVault는 기업 환경에서 사용할 수 있는 안전하고 기능
 - 최소 4GB RAM
 - 사용 가능한 포트: 3080 (웹), 445/139 (SMB)
 
-### 기본 설치
+### 기본 설치 (권장)
 
 ```bash
 # 저장소 클론
-git clone https://github.com/your-org/SimpleCloudVault.git
-cd SimpleCloudVault
+git clone https://github.com/your-org/FileHatch.git
+cd FileHatch
+
+# 자동 설정 스크립트 실행 (환경설정, 보안키 생성, 빌드, 시작)
+./scripts/setup.sh
+```
+
+또는 수동 설치:
+
+```bash
+# 환경 변수 설정
+cp .env.example .env
+# .env 파일을 편집하여 JWT_SECRET, ENCRYPTION_KEY 등 설정
 
 # 모든 서비스 빌드 및 시작
 docker compose up -d --build
@@ -259,6 +270,8 @@ docker compose ps
 # 로그 확인
 docker compose logs -f
 ```
+
+> 💡 **참고**: 데이터베이스 마이그레이션은 API 서버 시작 시 자동으로 실행됩니다.
 
 ### 접속 정보
 
@@ -281,6 +294,33 @@ docker compose logs -f
 
 ---
 
+## 실행 옵션
+
+### Docker Compose 프로필
+
+FileHatch는 Docker Compose 프로필을 사용하여 선택적 기능을 활성화합니다.
+
+| 실행 명령 | 포함 서비스 | 용도 |
+|----------|------------|------|
+| `docker compose up -d` | API, UI, DB, Valkey, Samba | 기본 설치 |
+| `docker compose --profile office up -d` | 기본 + OnlyOffice | 문서 편집 기능 |
+| `docker compose --profile sso up -d` | 기본 + Keycloak | SSO 인증 |
+| `docker compose --profile office --profile sso up -d` | 모든 서비스 | 전체 기능 |
+
+### 서비스별 포트
+
+| 서비스 | 포트 | 프로토콜 | 설명 |
+|--------|------|----------|------|
+| UI | 3080 | HTTP | 웹 인터페이스 |
+| SMB | 445, 139 | SMB/CIFS | Windows 파일 공유 |
+| WebDAV | 3080/webdav | HTTP | WebDAV 클라이언트 |
+| OnlyOffice | 8088 | HTTP | 문서 편집 서버 (--profile office) |
+| Keycloak | 8180 | HTTP | SSO 인증 서버 (--profile sso) |
+| PostgreSQL | 5432 | TCP | 데이터베이스 (내부) |
+| Valkey | 6379 | TCP | 캐시 서버 (내부) |
+
+---
+
 ## 고급 설정
 
 ### OnlyOffice 문서 편집기 (선택)
@@ -291,24 +331,80 @@ docker compose logs -f
 # OnlyOffice 포함하여 시작
 docker compose --profile office up -d
 
-# OnlyOffice는 포트 8088에서 실행됩니다
+# OnlyOffice 상태 확인
+docker compose logs onlyoffice
 ```
+
+OnlyOffice 설정:
+- 내부 URL: `http://onlyoffice` (Docker 네트워크)
+- 외부 URL: `http://서버IP:8088`
+- 외부 접근이 필요한 경우 `.env`에 `ONLYOFFICE_PUBLIC_URL` 설정
 
 ### SSO (Keycloak) 통합 (선택)
 
 OIDC 기반 Single Sign-On을 설정합니다.
 
 ```bash
-# SSO 프로필로 시작
-docker compose -f docker-compose.yml -f docker-compose-sso.yaml up -d
+# 1. SSO 프로필로 시작
+docker compose --profile sso up -d
 
-# Keycloak 초기 설정 (최초 1회)
+# 2. Keycloak이 준비될 때까지 대기 (약 2분)
+docker compose logs -f keycloak
+# "Running the server" 메시지가 나타나면 준비 완료
+
+# 3. Keycloak 초기 설정 (최초 1회)
 ./scripts/setup-keycloak.sh
 ```
 
 Keycloak 관리 콘솔: http://localhost:8180/auth
-- 사용자명: admin
-- 비밀번호: admin
+- 사용자명: `admin`
+- 비밀번호: `admin123` (`.env`에서 변경 가능)
+
+> ⚠️ **주의**: 프로덕션에서는 `KEYCLOAK_ADMIN_PASSWORD`를 반드시 변경하세요.
+
+### 모든 기능 활성화
+
+```bash
+# OnlyOffice + Keycloak 모두 사용
+docker compose --profile office --profile sso up -d
+
+# 상태 확인
+docker compose ps
+```
+
+### 유용한 명령어
+
+```bash
+# 서비스 상태 확인
+docker compose ps
+
+# 로그 확인 (실시간)
+docker compose logs -f
+
+# 특정 서비스 로그
+docker compose logs -f api
+
+# 서비스 재시작
+docker compose restart api
+
+# 전체 중지
+docker compose down
+
+# 볼륨 포함 전체 삭제 (데이터 삭제됨!)
+docker compose down -v
+
+# 이미지 재빌드
+docker compose build --no-cache
+
+# API 테스트 실행
+./scripts/test-api.sh
+
+# 마이그레이션 상태 확인
+./scripts/migrate.sh status
+
+# 백업
+./scripts/backup.sh
+```
 
 ### 환경 변수
 
@@ -338,7 +434,7 @@ Keycloak 관리 콘솔: http://localhost:8180/auth
 ## 디렉토리 구조
 
 ```
-SimpleCloudVault/
+FileHatch/
 ├── api/                          # Go 백엔드
 │   ├── handlers/                 # HTTP 핸들러 (~50개 파일)
 │   │   ├── auth.go               # 인증 (JWT, Login)
@@ -548,15 +644,62 @@ SimpleCloudVault/
 - 감사 로깅 (불변)
 - ACL 기반 접근 제어
 
-### 권장 프로덕션 설정
+### ⚠️ 배포 전 필수 변경 사항
+
+프로덕션 배포 전 반드시 아래 항목을 변경하세요:
+
+#### 1. 환경 변수 (.env)
+
+| 변수 | 기본값 | 설명 | 생성 방법 |
+|------|--------|------|----------|
+| `JWT_SECRET` | 개발용 기본값 | JWT 서명 키 (64자 이상 권장) | `openssl rand -hex 32` |
+| `ENCRYPTION_KEY` | 개발용 기본값 | AES-256 암호화 키 | `openssl rand -hex 32` |
+| `DB_PASS` | `scv_password` | PostgreSQL 비밀번호 | `openssl rand -base64 24` |
+| `KEYCLOAK_ADMIN_PASSWORD` | `admin123` | Keycloak 관리자 비밀번호 | 강력한 비밀번호 설정 |
+
+> 💡 **팁**: `./scripts/setup.sh` 실행 시 JWT_SECRET, ENCRYPTION_KEY, DB_PASS가 자동으로 안전한 값으로 생성됩니다.
+
+#### 2. 기본 관리자 계정
+
+| 항목 | 기본값 | 조치 |
+|------|--------|------|
+| 사용자명 | `admin` | 첫 로그인 후 새 관리자 계정 생성 권장 |
+| 비밀번호 | `admin1234` | **첫 로그인 후 즉시 변경 필수** |
+| 이메일 | `admin@localhost` | 실제 이메일로 변경 |
+
+#### 3. 보안 체크리스트
+
 ```bash
-# docker-compose.override.yml
+# 배포 전 확인 사항
+[ ] .env 파일의 모든 시크릿 값 변경 완료
+[ ] admin 비밀번호 변경 완료 (첫 로그인 후)
+[ ] CORS_ALLOWED_ORIGINS에 실제 도메인만 설정
+[ ] HTTPS 설정 완료 (리버스 프록시)
+[ ] 방화벽 설정 (필요한 포트만 개방)
+[ ] 백업 스크립트 설정
+```
+
+### 권장 프로덕션 설정
+
+```bash
+# .env 파일 예시 (프로덕션)
+JWT_SECRET=여기에_openssl_rand_hex_32_결과값
+ENCRYPTION_KEY=여기에_openssl_rand_hex_32_결과값
+DB_PASS=강력한_데이터베이스_비밀번호
+CORS_ALLOWED_ORIGINS=https://your-domain.com
+```
+
+```yaml
+# docker-compose.override.yml (선택)
 services:
   api:
     environment:
-      - JWT_SECRET=your-very-long-random-secret-key
-      - ENCRYPTION_KEY=your-32-byte-encryption-key
-      - CORS_ALLOWED_ORIGINS=https://your-domain.com
+      - LOG_LEVEL=warn
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
 ```
 
 ---

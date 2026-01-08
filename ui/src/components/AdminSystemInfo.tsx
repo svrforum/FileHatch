@@ -431,7 +431,7 @@ function AdminSystemInfo() {
             </div>
             <div className="si-section-text">
               <h2>프로젝트 통계</h2>
-              <p>SimpleCloudVault 사용 현황</p>
+              <p>FileHatch 사용 현황</p>
             </div>
           </div>
           <div className="si-section-content">

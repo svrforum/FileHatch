@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# SimpleCloudVault - Keycloak SSO Setup Script
+# FileHatch - Keycloak SSO Setup Script
 #
-# This script configures Keycloak and SimpleCloudVault for SSO integration.
+# This script configures Keycloak and FileHatch for SSO integration.
 #
 # Prerequisites:
 #   - Docker containers running:
@@ -51,7 +51,7 @@ if [ -z "$CLIENT_SECRET" ]; then
 fi
 
 echo -e "${BLUE}======================================${NC}"
-echo -e "${BLUE}SimpleCloudVault Keycloak SSO Setup${NC}"
+echo -e "${BLUE}FileHatch Keycloak SSO Setup${NC}"
 echo -e "${BLUE}======================================${NC}"
 echo ""
 echo -e "${YELLOW}Configuration:${NC}"
@@ -124,7 +124,7 @@ get_scv_token() {
 echo ""
 echo -e "${BLUE}[Step 1/6] Checking services...${NC}"
 wait_for_service "${KEYCLOAK_URL}/auth/" "Keycloak" || exit 1
-wait_for_service "${SCV_URL}/api/storage/usage" "SimpleCloudVault" || exit 1
+wait_for_service "${SCV_URL}/api/storage/usage" "FileHatch" || exit 1
 
 # Step 2: Get Keycloak admin token
 echo ""
@@ -146,7 +146,7 @@ REALM_RESULT=$(curl -sf -X POST "${KEYCLOAK_URL}/auth/admin/realms" \
     -d "{
         \"realm\": \"${REALM_NAME}\",
         \"enabled\": true,
-        \"displayName\": \"SimpleCloudVault\",
+        \"displayName\": \"FileHatch\",
         \"registrationAllowed\": false,
         \"loginWithEmailAllowed\": true,
         \"duplicateEmailsAllowed\": false,
@@ -172,7 +172,7 @@ CLIENT_RESULT=$(curl -sf -X POST "${KEYCLOAK_URL}/auth/admin/realms/${REALM_NAME
     -H "Content-Type: application/json" \
     -d "{
         \"clientId\": \"${CLIENT_ID}\",
-        \"name\": \"SimpleCloudVault\",
+        \"name\": \"FileHatch\",
         \"enabled\": true,
         \"publicClient\": false,
         \"secret\": \"${CLIENT_SECRET}\",
@@ -230,13 +230,13 @@ else
     echo -e "${GREEN}User '${TEST_USER}' created successfully${NC}"
 fi
 
-# Step 6: Configure SimpleCloudVault SSO
+# Step 6: Configure FileHatch SSO
 echo ""
-echo -e "${BLUE}[Step 6/6] Configuring SimpleCloudVault SSO...${NC}"
+echo -e "${BLUE}[Step 6/6] Configuring FileHatch SSO...${NC}"
 
 SCV_TOKEN=$(get_scv_token)
 if [ -z "$SCV_TOKEN" ]; then
-    echo -e "${RED}ERROR: Failed to get SimpleCloudVault admin token${NC}"
+    echo -e "${RED}ERROR: Failed to get FileHatch admin token${NC}"
     echo "Please check SCV admin credentials"
     exit 1
 fi
@@ -247,7 +247,7 @@ curl -sf -X PUT "${SCV_URL}/api/admin/sso/settings" \
     -H "Content-Type: application/json" \
     -d '{"sso_enabled":"true","sso_auto_register":"true"}' > /dev/null
 
-echo -e "${GREEN}SSO enabled in SimpleCloudVault${NC}"
+echo -e "${GREEN}SSO enabled in FileHatch${NC}"
 
 # Check if provider already exists
 EXISTING_PROVIDERS=$(curl -sf "${SCV_URL}/api/admin/sso/providers" \
@@ -329,8 +329,8 @@ echo "  Username: ${TEST_USER}"
 echo "  Password: ${TEST_PASSWORD}"
 echo "  Email:    ${TEST_EMAIL}"
 echo ""
-echo -e "${YELLOW}SimpleCloudVault:${NC}"
+echo -e "${YELLOW}FileHatch:${NC}"
 echo "  URL:      ${SCV_URL}"
 echo ""
-echo -e "${GREEN}You can now login to SimpleCloudVault using the 'Keycloak' button on the login page.${NC}"
+echo -e "${GREEN}You can now login to FileHatch using the 'Keycloak' button on the login page.${NC}"
 echo ""

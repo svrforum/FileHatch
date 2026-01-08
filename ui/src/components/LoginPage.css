@@ -98,6 +98,31 @@
   color: #9ca3af;
 }
 
+/* Remember Me Checkbox */
+.form-group.remember-me {
+  margin-bottom: 10px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-right: 10px;
+  accent-color: #3182f6;
+  cursor: pointer;
+}
+
+.checkbox-text {
+  font-size: 14px;
+  color: #4b5563;
+}
+
 .login-btn {
   width: 100%;
   padding: 16px;

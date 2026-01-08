@@ -136,6 +136,38 @@ services:
       timeout: 10s
       retries: 3
 
+  # 7. Keycloak SSO Server (Optional - use: docker compose --profile sso up -d)
+  keycloak:
+    container_name: scv-keycloak
+    image: quay.io/keycloak/keycloak:26.4.0
+    restart: unless-stopped
+    profiles:
+      - sso
+    ports:
+      - "${KEYCLOAK_PORT:-8180}:8080"
+    environment:
+      - TZ=${TZ:-Asia/Seoul}
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN:-admin}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin123}
+      - KC_HTTP_RELATIVE_PATH=/auth
+      - KC_HOSTNAME=${KEYCLOAK_HOSTNAME:-localhost}
+      - KC_HOSTNAME_PORT=${KEYCLOAK_PORT:-8180}
+      - KC_HOSTNAME_STRICT=false
+      - KC_HOSTNAME_STRICT_HTTPS=false
+      - KC_HTTP_ENABLED=true
+      - KC_PROXY_HEADERS=xforwarded
+    command:
+      - start-dev
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /auth/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && timeout 1 cat <&3 | grep -q '200\\|UP' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+
 volumes:
   onlyoffice_data:
   onlyoffice_log:
+  keycloak_data:

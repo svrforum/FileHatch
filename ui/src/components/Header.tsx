@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { searchFiles, FileInfo, formatFileSize } from '../api/files'
-import { getMySharedFolders, SharedFolderWithPermission } from '../api/sharedFolders'
+import { useSharedFolders } from '../hooks/useSharedFolders'
 import SearchModal from './SearchModal'
 import { NotificationBell } from './NotificationBell'
 import './Header.css'
@@ -20,19 +20,11 @@ function Header({ onProfileClick, onNavigate, onFileSelect, currentPath = '/', i
   const [searchResults, setSearchResults] = useState<FileInfo[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [showResults, setShowResults] = useState(false)
-  const [sharedFolders, setSharedFolders] = useState<SharedFolderWithPermission[]>([])
+  const { sharedFolders } = useSharedFolders()
   const [isSearchModalOpen, setSearchModalOpen] = useState(false)
   const [searchModalQuery, setSearchModalQuery] = useState('')
   const searchRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Fetch shared folders for breadcrumb display
-  useEffect(() => {
-    if (!user) return
-    getMySharedFolders()
-      .then(setSharedFolders)
-      .catch(() => {})
-  }, [user])
 
   // Handle search
   const handleSearch = useCallback(async (query: string) => {
@@ -158,7 +150,7 @@ function Header({ onProfileClick, onNavigate, onFileSelect, currentPath = '/', i
             <rect width="32" height="32" rx="8" fill="#3182F6"/>
             <path d="M10 16L14 20L22 12" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-          <span className="logo-text">SimpleCloudVault</span>
+          <span className="logo-text">FileHatch</span>
         </div>
         {breadcrumbs.length > 0 && (
           <nav className="header-breadcrumb">

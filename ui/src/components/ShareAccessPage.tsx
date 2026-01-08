@@ -540,7 +540,7 @@ function ShareAccessPage() {
             )}
           </div>
 
-          <p className="share-branding">SimpleCloudVault로 공유됨</p>
+          <p className="share-branding">FileHatch로 공유됨</p>
         </div>
 
         {/* Preview Overlay */}

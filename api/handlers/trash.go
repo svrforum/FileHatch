@@ -155,6 +155,11 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 		"trashId": trashID,
 	})
 
+	// Update storage tracking: move from home to trash
+	if err := h.UpdateStorageForMove(claims.UserID, size, true); err != nil {
+		fmt.Printf("[Storage] Failed to update storage for %s: %v\n", claims.Username, err)
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
 		"path":    displayPath,
@@ -273,6 +278,11 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 		"trashId": trashID,
 	})
 
+	// Update storage tracking: move from trash back to home
+	if err := h.UpdateStorageForMove(claims.UserID, item.Size, false); err != nil {
+		fmt.Printf("[Storage] Failed to update storage for %s: %v\n", claims.Username, err)
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success":      true,
 		"restoredPath": item.OriginalPath,
@@ -309,7 +319,8 @@ func (h *Handler) DeleteFromTrash(c echo.Context) error {
 		return RespondError(c, ErrOperationFailed("load trash", err))
 	}
 
-	if _, exists := meta[trashID]; !exists {
+	item, exists := meta[trashID]
+	if !exists {
 		return RespondError(c, ErrNotFound("Trash item"))
 	}
 
@@ -322,6 +333,11 @@ func (h *Handler) DeleteFromTrash(c echo.Context) error {
 	// Update metadata
 	delete(meta, trashID)
 	h.saveTrashMeta(claims.Username, meta)
+
+	// Update storage tracking: decrease trash used
+	if err := h.UpdateUserTrashStorage(claims.UserID, -item.Size); err != nil {
+		fmt.Printf("[Storage] Failed to update storage for %s: %v\n", claims.Username, err)
+	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -354,6 +370,11 @@ func (h *Handler) EmptyTrash(c echo.Context) error {
 
 	// Recreate empty trash directory
 	os.MkdirAll(trashPath, 0755)
+
+	// Update storage tracking: set trash to 0
+	if _, err := h.db.Exec(`UPDATE users SET trash_used = 0, updated_at = NOW() WHERE id = $1`, claims.UserID); err != nil {
+		fmt.Printf("[Storage] Failed to reset trash for %s: %v\n", claims.Username, err)
+	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,

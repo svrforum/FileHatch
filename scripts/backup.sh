@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# SimpleCloudVault Backup Script
+# FileHatch Backup Script
 # =============================================================================
 # 사용법:
 #   ./scripts/backup.sh              # 전체 백업 (DB + 파일)
@@ -90,7 +90,7 @@ done
 mkdir -p "$BACKUP_DIR"
 
 echo ""
-echo -e "${BLUE}=== SimpleCloudVault 백업 ===${NC}"
+echo -e "${BLUE}=== FileHatch 백업 ===${NC}"
 echo -e "시간: ${YELLOW}$(date)${NC}"
 echo -e "유형: ${YELLOW}$BACKUP_TYPE${NC}"
 echo -e "저장 경로: ${YELLOW}$BACKUP_DIR${NC}"

@@ -89,6 +89,16 @@ function FilesWrapper({ onNavigate, onUploadClick, onNewFolderClick, highlighted
   )
 }
 
+// Parse JWT token to get expiration time
+function getTokenExpiration(token: string): number | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return payload.exp ? payload.exp * 1000 : null // Convert to milliseconds
+  } catch {
+    return null
+  }
+}
+
 function App() {
   const [currentPath, setCurrentPath] = useState('/home')
   const [isUploadModalOpen, setUploadModalOpen] = useState(false)
@@ -96,7 +106,7 @@ function App() {
   const [isProfileOpen, setProfileOpen] = useState(false)
   const [highlightedFilePath, setHighlightedFilePath] = useState<string | null>(null)
   const queryClient = useQueryClient()
-  const { refreshProfile, token } = useAuthStore()
+  const { refreshProfile, refreshAuthToken, token, logout } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -119,6 +129,62 @@ function App() {
   useEffect(() => {
     refreshProfile()
   }, [refreshProfile])
+
+  // Automatic token refresh - refresh token 5 minutes before expiration
+  useEffect(() => {
+    if (!token) return
+
+    const expiration = getTokenExpiration(token)
+    if (!expiration) return
+
+    // Calculate time until we should refresh (5 minutes before expiration)
+    const refreshBuffer = 5 * 60 * 1000 // 5 minutes in ms
+    const now = Date.now()
+    const timeUntilRefresh = expiration - now - refreshBuffer
+
+    // If token is already expired or about to expire, try to refresh immediately
+    if (timeUntilRefresh <= 0) {
+      // Check if token is completely expired
+      if (expiration <= now) {
+        console.log('[Auth] Token expired, logging out')
+        logout()
+        return
+      }
+      // Token is about to expire, refresh immediately
+      console.log('[Auth] Token about to expire, refreshing now')
+      refreshAuthToken()
+      return
+    }
+
+    // Schedule token refresh
+    console.log(`[Auth] Scheduling token refresh in ${Math.round(timeUntilRefresh / 1000 / 60)} minutes`)
+    const refreshTimer = setTimeout(async () => {
+      console.log('[Auth] Refreshing token')
+      const success = await refreshAuthToken()
+      if (!success) {
+        console.log('[Auth] Token refresh failed')
+      }
+    }, timeUntilRefresh)
+
+    // Also set up periodic activity-based refresh (refresh on user activity if token is old)
+    const activityRefresh = () => {
+      const remaining = expiration - Date.now()
+      // If less than 50% of original duration remains, refresh on activity
+      if (remaining < (expiration - now) / 2 && remaining > refreshBuffer) {
+        refreshAuthToken()
+      }
+    }
+
+    // Listen for user activity events
+    window.addEventListener('mousedown', activityRefresh)
+    window.addEventListener('keydown', activityRefresh)
+
+    return () => {
+      clearTimeout(refreshTimer)
+      window.removeEventListener('mousedown', activityRefresh)
+      window.removeEventListener('keydown', activityRefresh)
+    }
+  }, [token, refreshAuthToken, logout])
 
   // Sync currentPath based on URL location
   useEffect(() => {

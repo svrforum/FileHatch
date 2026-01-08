@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { User, login, getProfile, LoginRequest, verify2FA } from '../api/auth'
+import { User, login, getProfile, LoginRequest, verify2FA, refreshToken } from '../api/auth'
 
 interface AuthState {
   token: string | null
@@ -10,11 +10,13 @@ interface AuthState {
   // 2FA state
   requires2FA: boolean
   pending2FAUserId: string | null
+  pendingRememberMe: boolean  // Store rememberMe during 2FA flow
   login: (data: LoginRequest) => Promise<boolean>  // returns true if 2FA is required
   verify2FACode: (code: string) => Promise<void>
   cancel2FA: () => void
   logout: () => void
   refreshProfile: () => Promise<void>
+  refreshAuthToken: () => Promise<boolean>  // returns true if refresh succeeded
   clearError: () => void
   setToken: (token: string) => void  // For SSO login
 }
@@ -28,9 +30,10 @@ export const useAuthStore = create<AuthState>()(
       error: null,
       requires2FA: false,
       pending2FAUserId: null,
+      pendingRememberMe: false,
 
       login: async (data) => {
-        set({ isLoading: true, error: null, requires2FA: false, pending2FAUserId: null })
+        set({ isLoading: true, error: null, requires2FA: false, pending2FAUserId: null, pendingRememberMe: false })
         try {
           const result = await login(data)
 
@@ -39,7 +42,8 @@ export const useAuthStore = create<AuthState>()(
             set({
               isLoading: false,
               requires2FA: true,
-              pending2FAUserId: result.userId
+              pending2FAUserId: result.userId,
+              pendingRememberMe: data.rememberMe || false  // Store for 2FA verification
             })
             return true  // 2FA required
           }
@@ -56,7 +60,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       verify2FACode: async (code: string) => {
-        const { pending2FAUserId } = get()
+        const { pending2FAUserId, pendingRememberMe } = get()
         if (!pending2FAUserId) {
           set({ error: 'No pending 2FA verification' })
           return
@@ -64,14 +68,15 @@ export const useAuthStore = create<AuthState>()(
 
         set({ isLoading: true, error: null })
         try {
-          const result = await verify2FA(pending2FAUserId, code)
+          const result = await verify2FA(pending2FAUserId, code, pendingRememberMe)
           if (result.token && result.user) {
             set({
               token: result.token,
               user: result.user,
               isLoading: false,
               requires2FA: false,
-              pending2FAUserId: null
+              pending2FAUserId: null,
+              pendingRememberMe: false
             })
           }
         } catch (err) {
@@ -87,6 +92,7 @@ export const useAuthStore = create<AuthState>()(
         set({
           requires2FA: false,
           pending2FAUserId: null,
+          pendingRememberMe: false,
           error: null
         })
       },
@@ -97,7 +103,8 @@ export const useAuthStore = create<AuthState>()(
           user: null,
           error: null,
           requires2FA: false,
-          pending2FAUserId: null
+          pending2FAUserId: null,
+          pendingRememberMe: false
         })
       },
 
@@ -111,6 +118,24 @@ export const useAuthStore = create<AuthState>()(
         } catch {
           // Token might be expired, logout
           set({ token: null, user: null })
+        }
+      },
+
+      refreshAuthToken: async () => {
+        const { token } = get()
+        if (!token) return false
+
+        try {
+          const result = await refreshToken()
+          if (result.token) {
+            set({ token: result.token })
+            return true
+          }
+          return false
+        } catch {
+          // Token refresh failed, don't logout automatically
+          // The user might want to continue with the current session
+          return false
         }
       },
 

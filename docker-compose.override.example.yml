@@ -1,5 +1,5 @@
 # =============================================================================
-# SimpleCloudVault Production Override Example
+# FileHatch Production Override Example
 # =============================================================================
 # 이 파일을 docker-compose.override.yml로 복사하여 프로덕션 설정을 적용하세요.
 #

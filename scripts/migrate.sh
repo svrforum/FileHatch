@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# SimpleCloudVault Database Migration Script
+# FileHatch Database Migration Script
 # =============================================================================
 # 사용법:
 #   ./scripts/migrate.sh           # 모든 대기 중인 마이그레이션 실행

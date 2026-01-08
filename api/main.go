@@ -11,9 +11,9 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/svrforum/SimpleCloudVault/api/database"
-	_ "github.com/svrforum/SimpleCloudVault/api/docs" // Swagger docs
-	"github.com/svrforum/SimpleCloudVault/api/handlers"
+	"github.com/svrforum/FileHatch/api/database"
+	_ "github.com/svrforum/FileHatch/api/docs" // Swagger docs
+	"github.com/svrforum/FileHatch/api/handlers"
 	echoSwagger "github.com/swaggo/echo-swagger"
 	"golang.org/x/time/rate"
 )
@@ -66,6 +66,11 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
+
+	// Run database migrations automatically
+	if err := database.RunMigrations(db); err != nil {
+		log.Fatalf("Failed to run database migrations: %v", err)
+	}
 
 	// Create Settings handler early for middleware configuration
 	settingsHandler := handlers.NewSettingsHandler(db)
@@ -185,6 +190,10 @@ func main() {
 	notificationService := handlers.NewNotificationService(db)
 	notificationHandler := handlers.NewNotificationHandler(notificationService)
 
+	// Create share expiration checker (runs every hour to notify about expiring links)
+	shareExpirationChecker := handlers.NewShareExpirationChecker(db, notificationService)
+	shareExpirationChecker.StartBackgroundCheck(1 * time.Hour)
+
 	// Create Share handler
 	shareHandler := handlers.NewShareHandler(db, dataRoot, auditHandler, notificationService)
 
@@ -207,6 +216,9 @@ func main() {
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		jwtSecret = "scv-dev-secret-not-for-production-use"
+		log.Println("WARNING: JWT_SECRET not set, using insecure default. Set JWT_SECRET environment variable for production!")
+	} else if len(jwtSecret) < 32 {
+		log.Println("WARNING: JWT_SECRET is too short. Use at least 32 characters for security.")
 	}
 	ssoHandler := handlers.NewSSOHandler(db, jwtSecret, dataRoot)
 
@@ -236,6 +248,7 @@ func main() {
 	authApi.Use(authHandler.JWTMiddleware)
 	authApi.GET("/auth/profile", authHandler.GetProfile)
 	authApi.PUT("/auth/profile", authHandler.UpdateProfile)
+	authApi.POST("/auth/refresh", authHandler.RefreshToken)
 	authApi.PUT("/auth/smb-password", authHandler.SetMySMBPassword)
 	authApi.GET("/auth/storage", authHandler.GetMyStorageUsage)
 
@@ -404,6 +417,18 @@ func main() {
 	authApi.PUT("/file-metadata/*", fileMetadataHandler.UpdateFileMetadata)
 	authApi.DELETE("/file-metadata/*", fileMetadataHandler.DeleteFileMetadata)
 
+	// Starred Files API (protected)
+	authApi.POST("/starred/toggle", h.ToggleStar)
+	authApi.GET("/starred", h.GetStarredFiles)
+	authApi.POST("/starred/check", h.CheckStarred)
+
+	// File Locks API (protected)
+	authApi.POST("/files/lock", h.LockFile)
+	authApi.POST("/files/unlock", h.UnlockFile)
+	authApi.GET("/files/lock", h.GetFileLock)
+	authApi.POST("/files/locks/check", h.CheckFileLocks)
+	authApi.GET("/files/locks/my", h.GetMyLocks)
+
 	// Simple upload (non-resumable)
 	api.POST("/upload/simple", h.SimpleUpload, authHandler.OptionalJWTMiddleware)
 
@@ -506,6 +531,16 @@ func main() {
 	// Start web upload tracker cleanup routines
 	handlers.GetWebUploadTracker().StartCleanupRoutine()
 	handlers.GetTusIPTracker().StartCleanupRoutine()
+
+	// Initialize storage tracking for all users (background task with delay)
+	go func() {
+		// Wait 5 seconds before recalculating to avoid slowing down initial requests
+		time.Sleep(5 * time.Second)
+		log.Println("[Storage] Initializing storage tracking for users...")
+		if err := h.RecalculateAllUsersStorage(); err != nil {
+			log.Printf("[Storage] Warning: Failed to initialize storage: %v", err)
+		}
+	}()
 
 	// Start trash auto-cleanup (runs every 24 hours)
 	h.StartTrashAutoCleanup(handlers.DefaultTrashCleanupConfig())

@@ -13,6 +13,12 @@ const VIRTUALIZATION_THRESHOLD = 100
 // 행 높이 (px) - CSS의 .file-row 높이와 일치해야 함
 const ROW_HEIGHT = 44
 
+// File lock info interface
+interface FileLockInfo {
+  username: string
+  lockedAt: string
+}
+
 export interface VirtualizedFileTableProps {
   files: FileInfo[]
   selectedFiles: Set<string>
@@ -24,6 +30,9 @@ export interface VirtualizedFileTableProps {
   isSharedByMeView: boolean
   isLinkSharesView: boolean
   highlightedPath?: string | null
+  // Starred and lock status
+  starredFiles?: Record<string, boolean>
+  lockedFiles?: Record<string, FileLockInfo>
   // Handlers
   onSelect: (file: FileInfo, e: React.MouseEvent) => void
   onDoubleClick: (file: FileInfo) => void
@@ -36,6 +45,7 @@ export interface VirtualizedFileTableProps {
   onUnshare?: (file: SharedFileInfo) => void
   onCopyLink?: (file: SharedFileInfo) => void
   onDeleteLink?: (file: SharedFileInfo) => void
+  onToggleStar?: (file: FileInfo) => void
   // Utilities
   getFileIcon: (file: FileInfo) => React.ReactNode
   formatDate: (date: string) => string
@@ -56,6 +66,8 @@ export default function VirtualizedFileTable({
   isSharedByMeView,
   isLinkSharesView,
   highlightedPath,
+  starredFiles,
+  lockedFiles,
   onSelect,
   onDoubleClick,
   onContextMenu,
@@ -67,6 +79,7 @@ export default function VirtualizedFileTable({
   onUnshare,
   onCopyLink,
   onDeleteLink,
+  onToggleStar,
   getFileIcon,
   formatDate,
   getFullDateTime,
@@ -87,17 +100,6 @@ export default function VirtualizedFileTable({
 
   const virtualItems = virtualizer.getVirtualItems()
   const totalHeight = virtualizer.getTotalSize()
-
-  // 디버그 로그
-  console.log('[VirtualizedFileTable] files:', files.length, 'shouldVirtualize:', shouldVirtualize, 'virtualItems:', virtualItems.length, 'totalHeight:', totalHeight)
-
-  // scrollRef 디버그
-  useEffect(() => {
-    if (scrollRef.current) {
-      const rect = scrollRef.current.getBoundingClientRect()
-      console.log('[VirtualizedFileTable] scrollRef dimensions:', rect.width, 'x', rect.height)
-    }
-  })
 
   // 하이라이트된 파일로 스크롤
   useEffect(() => {
@@ -120,6 +122,9 @@ export default function VirtualizedFileTable({
     const isDropTarget = dropTargetPath === file.path
     const isDragging = draggedFiles.some(f => f.path === file.path)
     const isCut = clipboard?.mode === 'cut' && clipboard.files.some(f => f.path === file.path)
+    const isStarred = starredFiles?.[file.path] ?? false
+    const lockInfo = lockedFiles?.[file.path]
+    const isLocked = !!lockInfo
 
     return (
       <div
@@ -148,6 +153,9 @@ export default function VirtualizedFileTable({
           isSharedWithMeView={isSharedWithMeView}
           isSharedByMeView={isSharedByMeView}
           isLinkSharesView={isLinkSharesView}
+          isStarred={isStarred}
+          isLocked={isLocked}
+          lockInfo={lockInfo}
           onSelect={onSelect}
           onDoubleClick={onDoubleClick}
           onContextMenu={onContextMenu}
@@ -159,6 +167,7 @@ export default function VirtualizedFileTable({
           onUnshare={onUnshare}
           onCopyLink={onCopyLink}
           onDeleteLink={onDeleteLink}
+          onToggleStar={onToggleStar}
           getFileIcon={getFileIcon}
           formatDate={formatDate}
           getFullDateTime={getFullDateTime}
@@ -168,10 +177,10 @@ export default function VirtualizedFileTable({
     )
   }, [
     files, selectedFiles, focusedIndex, dropTargetPath, draggedFiles, clipboard,
-    isSharedWithMeView, isSharedByMeView, isLinkSharesView,
+    isSharedWithMeView, isSharedByMeView, isLinkSharesView, starredFiles, lockedFiles,
     onSelect, onDoubleClick, onContextMenu, onDragStart, onDragEnd,
     onFolderDragOver, onFolderDragLeave, onFolderDrop, onUnshare, onCopyLink,
-    onDeleteLink, getFileIcon, formatDate, getFullDateTime, setFocusedIndex, fileRowRefs,
+    onDeleteLink, onToggleStar, getFileIcon, formatDate, getFullDateTime, setFocusedIndex, fileRowRefs,
   ])
 
   // 가상화 비활성화 시 일반 렌더링
@@ -184,6 +193,9 @@ export default function VirtualizedFileTable({
           const isDropTarget = dropTargetPath === file.path
           const isDragging = draggedFiles.some(f => f.path === file.path)
           const isCut = clipboard?.mode === 'cut' && clipboard.files.some(f => f.path === file.path)
+          const isStarred = starredFiles?.[file.path] ?? false
+          const lockInfo = lockedFiles?.[file.path]
+          const isLocked = !!lockInfo
 
           return (
             <FileRow
@@ -202,6 +214,9 @@ export default function VirtualizedFileTable({
               isSharedWithMeView={isSharedWithMeView}
               isSharedByMeView={isSharedByMeView}
               isLinkSharesView={isLinkSharesView}
+              isStarred={isStarred}
+              isLocked={isLocked}
+              lockInfo={lockInfo}
               onSelect={onSelect}
               onDoubleClick={onDoubleClick}
               onContextMenu={onContextMenu}
@@ -213,6 +228,7 @@ export default function VirtualizedFileTable({
               onUnshare={onUnshare}
               onCopyLink={onCopyLink}
               onDeleteLink={onDeleteLink}
+              onToggleStar={onToggleStar}
               getFileIcon={getFileIcon}
               formatDate={formatDate}
               getFullDateTime={getFullDateTime}
@@ -239,24 +255,6 @@ export default function VirtualizedFileTable({
         }}
       >
         {virtualItems.map(renderVirtualRow)}
-      </div>
-
-      {/* 가상화 활성화 표시 (개발/디버깅용) */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: '80px',
-          right: '20px',
-          background: 'rgba(0, 0, 0, 0.7)',
-          color: '#fff',
-          padding: '4px 8px',
-          borderRadius: '4px',
-          fontSize: '11px',
-          zIndex: 1000,
-          pointerEvents: 'none',
-        }}
-      >
-        가상 스크롤 ({files.length}개 중 {virtualItems.length}개 렌더링)
       </div>
     </div>
   )

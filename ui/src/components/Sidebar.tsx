@@ -5,7 +5,8 @@ import { useUploadStore } from '../stores/uploadStore'
 import { useTransferStore } from '../stores/transferStore'
 import { useAuthStore } from '../stores/authStore'
 import { getStorageUsage, formatFileSize } from '../api/files'
-import { getMySharedFolders, SharedFolderWithPermission, PERMISSION_READ_WRITE } from '../api/sharedFolders'
+import { PERMISSION_READ_WRITE } from '../api/sharedFolders'
+import { useSharedFolders } from '../hooks/useSharedFolders'
 import './Sidebar.css'
 
 export type AdminView = 'users' | 'shared-folders' | 'settings' | 'sso' | 'logs' | 'system-info'
@@ -132,7 +133,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
   const { user, token } = useAuthStore()
   const location = useLocation()
   const queryClient = useQueryClient()
-  const [sharedFolders, setSharedFolders] = useState<SharedFolderWithPermission[]>([])
+  const { sharedFolders } = useSharedFolders()
   const [sharedDrivesExpanded, setSharedDrivesExpanded] = useState(true)
   const [sharingExpanded, setSharingExpanded] = useState(true)
 
@@ -163,24 +164,6 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
       queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
     }
   }, [completedUploadCount, completedTransferCount, queryClient])
-
-  // Fetch shared folders
-  useEffect(() => {
-    if (!user) return
-    const fetchSharedFolders = async () => {
-      try {
-        const folders = await getMySharedFolders()
-        setSharedFolders(folders || [])
-      } catch {
-        // Ignore errors
-        setSharedFolders([])
-      }
-    }
-    fetchSharedFolders()
-  }, [user])
-
-  // Safe sharedFolders access
-  const safeSharedFolders = sharedFolders || []
 
   const activeUploads = safeItems.filter(i => i.status === 'uploading' || i.status === 'pending')
   const activeDownloads = safeDownloads.filter(d => d.status === 'downloading')
@@ -264,7 +247,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
             )}
 
             {/* Shared Drives Section */}
-            {user && safeSharedFolders.length > 0 && (
+            {user && sharedFolders.length > 0 && (
               <div className="shared-section">
                 <div
                   className="shared-header"
@@ -284,7 +267,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                 </div>
                 {sharedDrivesExpanded && (
                   <div className="shared-list">
-                    {safeSharedFolders.map(folder => (
+                    {sharedFolders.map(folder => (
                       <Link
                         key={folder.id}
                         to={`/shared-drive/${encodeURIComponent(folder.name)}`}

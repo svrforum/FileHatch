@@ -246,6 +246,8 @@ func (h *Handler) MoveItem(c echo.Context) error {
 		"isDir":       srcInfo.IsDir(),
 	})
 
+	// Note: Move operation doesn't change total storage size, no update needed
+
 	return RespondSuccess(c, map[string]interface{}{
 		"oldPath": srcDisplayPath,
 		"newPath": newDisplayPath,
@@ -387,6 +389,14 @@ func (h *Handler) CopyItem(c echo.Context) error {
 		"destination": newDisplayPath,
 		"isDir":       srcInfo.IsDir(),
 	})
+
+	// Update storage tracking: add copied file size to user's storage
+	if claims != nil && destStorageType == StorageHome {
+		copiedSize, _ := GetFileSize(finalDestPath)
+		if copiedSize > 0 {
+			h.UpdateUserStorage(claims.UserID, copiedSize)
+		}
+	}
 
 	return RespondSuccess(c, map[string]interface{}{
 		"oldPath": srcDisplayPath,
@@ -731,6 +741,11 @@ func (h *Handler) CopyItemStream(c echo.Context) error {
 		"isDir":       srcInfo.IsDir(),
 	})
 
+	// Update storage tracking: add copied bytes to user's storage
+	if claims != nil && destStorageType == StorageHome {
+		h.UpdateUserStorage(claims.UserID, copiedBytes)
+	}
+
 	// Send completed event
 	elapsed := time.Since(startTime).Seconds()
 	var finalSpeed int64
@@ -1025,6 +1040,8 @@ func (h *Handler) MoveItemStream(c echo.Context) error {
 	h.auditHandler.LogEvent(userID, c.RealIP(), EventFileMove, srcDisplayPath, map[string]interface{}{
 		"destination": newDisplayPath,
 	})
+
+	// Note: Move operation doesn't change total storage size, no update needed
 
 	// Send completed event
 	elapsed := time.Since(startTime).Seconds()

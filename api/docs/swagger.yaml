@@ -313,11 +313,11 @@ info:
     name: API Support
   description: |-
     Enterprise-grade cloud file sharing and management API.
-    SimpleCloudVault provides comprehensive file management, sharing, and collaboration features.
+    FileHatch provides comprehensive file management, sharing, and collaboration features.
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
-  title: SimpleCloudVault API
+  title: FileHatch API
   version: "1.0"
 paths:
   /audit/logs:

@@ -1,4 +1,4 @@
-# SimpleCloudVault with Keycloak SSO
+# FileHatch with Keycloak SSO
 #
 # Usage:
 #   1. Set HOST_IP environment variable (or it will be auto-detected):

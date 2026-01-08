@@ -160,3 +160,23 @@ func (s *StorageUsageCache) InvalidateUserUsage(username string) {
 func (s *StorageUsageCache) InvalidateAllUsage() {
 	s.cache.DeletePrefix("storage:")
 }
+
+// GetSharedUsage retrieves cached shared storage usage
+func (s *StorageUsageCache) GetSharedUsage() (int64, bool) {
+	if value, ok := s.cache.Get("shared_storage"); ok {
+		if size, ok := value.(int64); ok {
+			return size, true
+		}
+	}
+	return 0, false
+}
+
+// SetSharedUsage caches shared storage usage (longer TTL - 5 minutes)
+func (s *StorageUsageCache) SetSharedUsage(size int64) {
+	s.cache.SetWithTTL("shared_storage", size, 5*time.Minute)
+}
+
+// InvalidateSharedUsage removes cached shared storage usage
+func (s *StorageUsageCache) InvalidateSharedUsage() {
+	s.cache.Delete("shared_storage")
+}

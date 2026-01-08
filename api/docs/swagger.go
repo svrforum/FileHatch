@@ -1,9 +1,9 @@
-// Package docs provides auto-generated Swagger documentation for SimpleCloudVault API.
+// Package docs provides auto-generated Swagger documentation for FileHatch API.
 //
-//	@title						SimpleCloudVault API
+//	@title						FileHatch API
 //	@version					1.0
 //	@description				Enterprise-grade cloud file sharing and management API.
-//	@description				SimpleCloudVault provides comprehensive file management, sharing, and collaboration features.
+//	@description				FileHatch provides comprehensive file management, sharing, and collaboration features.
 //
 //	@contact.name				API Support
 //	@contact.email				support@simplecloudvault.io

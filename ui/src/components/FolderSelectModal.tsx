@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useModalKeyboard } from '../hooks/useModalKeyboard'
 import { fetchFiles } from '../api/files'
-import { getMySharedFolders } from '../api/sharedFolders'
+import { useSharedFolders } from '../hooks/useSharedFolders'
 import './FolderSelectModal.css'
 
 interface FolderSelectModalProps {
@@ -33,11 +33,14 @@ export default function FolderSelectModal({
 }: FolderSelectModalProps) {
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [homeFolders, setHomeFolders] = useState<FolderNode[]>([])
-  const [sharedFolders, setSharedFolders] = useState<FolderNode[]>([])
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set(['/home']))
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set())
   const [homeExpanded, setHomeExpanded] = useState(true)
   const [sharedExpanded, setSharedExpanded] = useState(false)
+
+  // Use shared folders hook with caching
+  const { sharedFolders: sharedFoldersData } = useSharedFolders()
+  const [sharedFolderNodes, setSharedFolderNodes] = useState<FolderNode[]>([])
 
   // 홈 폴더 로드
   const loadHomeFolders = useCallback(async (path: string) => {
@@ -74,22 +77,17 @@ export default function FolderSelectModal({
     }
   }, [loadingPaths])
 
-  // 공유 폴더 로드
-  const loadSharedFolders = useCallback(async () => {
-    try {
-      const folders = await getMySharedFolders()
-      setSharedFolders(folders.map(f => ({
-        path: `/shared/${f.name}`,
-        name: f.name,
-        isExpanded: false,
-        isLoading: false,
-        children: [],
-        type: 'shared' as const,
-      })))
-    } catch (error) {
-      console.error('Failed to load shared folders:', error)
-    }
-  }, [])
+  // Initialize shared folder nodes from hook data
+  useEffect(() => {
+    setSharedFolderNodes(sharedFoldersData.map(f => ({
+      path: `/shared/${f.name}`,
+      name: f.name,
+      isExpanded: false,
+      isLoading: false,
+      children: [],
+      type: 'shared' as const,
+    })))
+  }, [sharedFoldersData])
 
   // 공유 폴더 하위 로드
   const loadSharedSubfolders = useCallback(async (path: string) => {
@@ -109,7 +107,7 @@ export default function FolderSelectModal({
           type: 'shared' as const,
         }))
 
-      setSharedFolders(prev => updateChildren(prev, path, folders))
+      setSharedFolderNodes(prev => updateChildren(prev, path, folders))
     } catch (error) {
       console.error('Failed to load folders:', error)
     } finally {
@@ -151,7 +149,6 @@ export default function FolderSelectModal({
   useEffect(() => {
     if (isOpen) {
       loadHomeFolders('/home')
-      loadSharedFolders()
       setSelectedPath(null)
     }
   }, [isOpen])
@@ -306,10 +303,10 @@ export default function FolderSelectModal({
             </div>
             {sharedExpanded && (
               <div className="section-content">
-                {sharedFolders.length === 0 ? (
+                {sharedFolderNodes.length === 0 ? (
                   <div className="empty-message">공유 드라이브가 없습니다</div>
                 ) : (
-                  sharedFolders.map(node => renderFolderNode(node, 1))
+                  sharedFolderNodes.map(node => renderFolderNode(node, 1))
                 )}
               </div>
             )}

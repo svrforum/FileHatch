@@ -1,4 +1,4 @@
--- SimpleCloudVault Database Initialization
+-- FileHatch Database Initialization
 -- Version: 2.0.0
 --
 -- 이 파일은 Docker 컨테이너 첫 실행 시 자동으로 실행됩니다.

@@ -136,8 +136,10 @@ func (h *Handler) CompressFiles(c echo.Context) error {
 		"outputSize":  finalSize,
 	})
 
-	// Invalidate storage cache
-	InvalidateStorageCache(claims.Username)
+	// Update storage tracking: add compressed file size
+	if finalSize > 0 {
+		h.UpdateUserStorage(claims.UserID, finalSize)
+	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success":    true,
@@ -321,14 +323,20 @@ func (h *Handler) ExtractZip(c echo.Context) error {
 		extractedCount++
 	}
 
+	// Calculate extracted size for storage tracking
+	extractedSize, _ := GetFileSize(extractDir)
+
 	// Log audit event
 	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file.extract", displayPath, map[string]interface{}{
 		"extractedTo":    extractDisplayPath,
 		"extractedCount": extractedCount,
+		"extractedSize":  extractedSize,
 	})
 
-	// Invalidate storage cache
-	InvalidateStorageCache(claims.Username)
+	// Update storage tracking: add extracted files size
+	if extractedSize > 0 {
+		h.UpdateUserStorage(claims.UserID, extractedSize)
+	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success":        true,

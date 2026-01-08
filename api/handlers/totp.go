@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/pquerna/otp"
@@ -81,7 +82,7 @@ func (h *TOTPHandler) Setup2FA(c echo.Context) error {
 
 	// Generate new TOTP key
 	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "SimpleCloudVault",
+		Issuer:      "FileHatch",
 		AccountName: claims.Username,
 		Period:      30,
 		Digits:      otp.DigitsSix,
@@ -116,7 +117,7 @@ func (h *TOTPHandler) Setup2FA(c echo.Context) error {
 		Secret:      key.Secret(),
 		QRCodeURL:   key.URL(),
 		AccountName: claims.Username,
-		Issuer:      "SimpleCloudVault",
+		Issuer:      "FileHatch",
 	})
 }
 
@@ -274,8 +275,9 @@ func (h *TOTPHandler) Disable2FA(c echo.Context) error {
 
 // Verify2FARequest represents the request to verify 2FA during login
 type Verify2FARequest struct {
-	UserID string `json:"userId"`
-	Code   string `json:"code"`
+	UserID     string `json:"userId"`
+	Code       string `json:"code"`
+	RememberMe bool   `json:"rememberMe"`
 }
 
 // Verify2FA verifies the 2FA code during login and returns JWT token
@@ -401,8 +403,15 @@ func (h *TOTPHandler) Verify2FA(c echo.Context) error {
 	}
 	user.HasSMB = smbHash.Valid && smbHash.String != ""
 
-	// Generate JWT token
-	token, err := GenerateJWT(user.ID, user.Username, user.IsAdmin)
+	// Determine token expiration based on rememberMe
+	// Default: 1 day, RememberMe: 30 days
+	expiration := 24 * time.Hour
+	if req.RememberMe {
+		expiration = 30 * 24 * time.Hour
+	}
+
+	// Generate JWT token with appropriate expiration
+	token, err := GenerateJWTWithExpiration(user.ID, user.Username, user.IsAdmin, req.RememberMe, expiration)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Failed to generate token",
@@ -411,9 +420,10 @@ func (h *TOTPHandler) Verify2FA(c echo.Context) error {
 
 	// Audit log
 	h.auditHandler.LogEvent(&user.ID, c.RealIP(), EventUserLogin, user.Username, map[string]interface{}{
-		"username": user.Username,
-		"isAdmin":  user.IsAdmin,
-		"via_2fa":  true,
+		"username":   user.Username,
+		"isAdmin":    user.IsAdmin,
+		"via_2fa":    true,
+		"rememberMe": req.RememberMe,
 	})
 
 	return c.JSON(http.StatusOK, LoginResponse{

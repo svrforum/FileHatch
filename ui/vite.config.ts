@@ -11,8 +11,14 @@ export default defineConfig({
       manifest: false, // We use our own manifest.json in public/
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        // Skip waiting and claim clients immediately for faster updates
+        skipWaiting: true,
+        clientsClaim: true,
+        // Clean old caches on update
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
+            // Only cache CDN fonts - static resources that rarely change
             urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
             handler: 'CacheFirst',
             options: {
@@ -25,23 +31,12 @@ export default defineConfig({
                 statuses: [0, 200]
               }
             }
-          },
-          {
-            urlPattern: /\/api\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 5 // 5 minutes
-              },
-              networkTimeoutSeconds: 10,
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
           }
-        ]
+          // API responses are NOT cached - always fetch from network
+          // This prevents stale data issues and authentication problems
+        ],
+        // Exclude API routes from precaching
+        navigateFallbackDenylist: [/^\/api\//]
       },
       devOptions: {
         enabled: false // Disable PWA in development

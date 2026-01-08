@@ -513,7 +513,7 @@ function UploadShareAccessPage() {
         )}
 
         {/* Branding */}
-        <p className="upload-share-branding">Powered by SimpleCloudVault</p>
+        <p className="upload-share-branding">Powered by FileHatch</p>
       </div>
     </div>
   )

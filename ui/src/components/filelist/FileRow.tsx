@@ -77,6 +77,9 @@ export interface FileRowProps {
   isSharedWithMeView: boolean
   isSharedByMeView: boolean
   isLinkSharesView: boolean
+  isStarred?: boolean
+  isLocked?: boolean
+  lockInfo?: { username: string; lockedAt: string }
   onSelect: (file: FileInfo, e: React.MouseEvent) => void
   onDoubleClick: (file: FileInfo) => void
   onContextMenu: (e: React.MouseEvent, file: FileInfo) => void
@@ -88,6 +91,7 @@ export interface FileRowProps {
   onUnshare?: (file: SharedFileInfo) => void
   onCopyLink?: (file: SharedFileInfo) => void
   onDeleteLink?: (file: SharedFileInfo) => void
+  onToggleStar?: (file: FileInfo) => void
   getFileIcon: (file: FileInfo) => React.ReactNode
   formatDate: (date: string) => string
   getFullDateTime?: (date: string) => string
@@ -105,6 +109,9 @@ const FileRow = React.forwardRef<HTMLDivElement, FileRowProps>(({
   isSharedWithMeView,
   isSharedByMeView,
   isLinkSharesView,
+  isStarred,
+  isLocked,
+  lockInfo,
   onSelect,
   onDoubleClick,
   onContextMenu,
@@ -116,6 +123,7 @@ const FileRow = React.forwardRef<HTMLDivElement, FileRowProps>(({
   onUnshare,
   onCopyLink,
   onDeleteLink,
+  onToggleStar,
   getFileIcon,
   formatDate,
   getFullDateTime,
@@ -170,6 +178,33 @@ const FileRow = React.forwardRef<HTMLDivElement, FileRowProps>(({
           getFileIcon(file)
         )}
         <span className="file-name">{file.name}</span>
+        {/* Lock indicator */}
+        {isLocked && (
+          <span
+            className="lock-indicator"
+            title={lockInfo ? `${lockInfo.username}님이 잠금` : '잠김'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" strokeWidth="2"/>
+              <path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" strokeWidth="2"/>
+            </svg>
+          </span>
+        )}
+        {/* Star button */}
+        {onToggleStar && !file.isDir && (
+          <button
+            className={`star-btn ${isStarred ? 'starred' : ''}`}
+            title={isStarred ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleStar(file)
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill={isStarred ? 'currentColor' : 'none'}>
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Shared with me - show who shared it */}

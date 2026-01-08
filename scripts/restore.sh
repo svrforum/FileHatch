@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# SimpleCloudVault Restore Script
+# FileHatch Restore Script
 # =============================================================================
 # 사용법:
 #   ./scripts/restore.sh                     # 대화형 복원
@@ -39,7 +39,7 @@ BACKUP_DIR="$PROJECT_DIR/backups"
 
 echo ""
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║              SimpleCloudVault 복원 스크립트                       ║${NC}"
+echo -e "${CYAN}║              FileHatch 복원 스크립트                       ║${NC}"
 echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 

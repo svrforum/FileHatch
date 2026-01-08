@@ -1,6 +1,6 @@
 [global]
    workgroup = WORKGROUP
-   server string = SimpleCloudVault SMB Server
+   server string = FileHatch SMB Server
    security = user
    map to guest = Never
    passdb backend = tdbsam

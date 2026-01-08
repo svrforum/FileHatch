@@ -1,5 +1,5 @@
 #!/bin/bash
-# SimpleCloudVault - Test Runner Script
+# FileHatch - Test Runner Script
 # 모든 기능 개선/추가 후 반드시 실행
 
 set -e
@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  SimpleCloudVault Test Runner${NC}"
+echo -e "${BLUE}  FileHatch Test Runner${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 

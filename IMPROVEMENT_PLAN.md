@@ -1,4 +1,4 @@
-# SimpleCloudVault 개발 로드맵 및 개선 계획
+# FileHatch 개발 로드맵 및 개선 계획
 
 ## 목차
 1. [완료된 개선 사항](#1-완료된-개선-사항)
@@ -391,7 +391,7 @@ API:
 ```go
 // swaggo/swag 사용
 // main.go에 주석 추가
-// @title SimpleCloudVault API
+// @title FileHatch API
 // @version 1.0
 // @description Enterprise cloud file sharing API
 
@@ -708,7 +708,7 @@ const { t } = useTranslation();
 
 ## 10. 결론
 
-SimpleCloudVault는 이미 엔터프라이즈급 기능을 갖춘 완성도 높은 프로젝트입니다.
+FileHatch는 이미 엔터프라이즈급 기능을 갖춘 완성도 높은 프로젝트입니다.
 위의 개선 계획을 통해 더욱 안정적이고 확장 가능한 시스템으로 발전시킬 수 있습니다.
 
 **핵심 우선순위:**

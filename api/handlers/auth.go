@@ -52,12 +52,19 @@ func NewAuthHandler(db *sql.DB) *AuthHandler {
 
 // GenerateJWT generates a JWT token for a user (exported for use by other handlers)
 func GenerateJWT(userID, username string, isAdmin bool) (string, error) {
+	return GenerateJWTWithExpiration(userID, username, isAdmin, false, 24*time.Hour)
+}
+
+
+// GenerateJWTWithExpiration generates a JWT token with custom expiration duration
+func GenerateJWTWithExpiration(userID, username string, isAdmin, rememberMe bool, expiration time.Duration) (string, error) {
 	claims := &JWTClaims{
-		UserID:   userID,
-		Username: username,
-		IsAdmin:  isAdmin,
+		UserID:     userID,
+		Username:   username,
+		IsAdmin:    isAdmin,
+		RememberMe: rememberMe,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "simplecloudvault",
 		},
@@ -92,16 +99,18 @@ type User struct {
 
 // JWTClaims represents JWT claims
 type JWTClaims struct {
-	UserID   string `json:"userId"`
-	Username string `json:"username"`
-	IsAdmin  bool   `json:"isAdmin"`
+	UserID     string `json:"userId"`
+	Username   string `json:"username"`
+	IsAdmin    bool   `json:"isAdmin"`
+	RememberMe bool   `json:"rememberMe,omitempty"`
 	jwt.RegisteredClaims
 }
 
 // LoginRequest represents login request
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	RememberMe bool   `json:"rememberMe"`
 }
 
 // RegisterRequest represents registration request
@@ -273,8 +282,15 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		})
 	}
 
-	// Generate JWT token
-	token, err := h.generateToken(user.ID, user.Username, user.IsAdmin)
+	// Determine token expiration based on rememberMe
+	// Default: 1 day, RememberMe: 30 days
+	expiration := 24 * time.Hour
+	if req.RememberMe {
+		expiration = 30 * 24 * time.Hour
+	}
+
+	// Generate JWT token with appropriate expiration
+	token, err := h.generateTokenWithExpiration(user.ID, user.Username, user.IsAdmin, req.RememberMe, expiration)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Failed to generate token",
@@ -283,13 +299,58 @@ func (h *AuthHandler) Login(c echo.Context) error {
 
 	// Log login event
 	h.auditHandler.LogEvent(&user.ID, c.RealIP(), EventUserLogin, user.Username, map[string]interface{}{
-		"username": user.Username,
-		"isAdmin":  user.IsAdmin,
+		"username":   user.Username,
+		"isAdmin":    user.IsAdmin,
+		"rememberMe": req.RememberMe,
 	})
 
 	return c.JSON(http.StatusOK, LoginResponse{
 		Token: token,
 		User:  user,
+	})
+}
+
+// RefreshToken refreshes the JWT token if it's still valid
+// The new token preserves the original session type (remember me or not)
+func (h *AuthHandler) RefreshToken(c echo.Context) error {
+	claims, ok := c.Get("user").(*JWTClaims)
+	if !ok || claims == nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{
+			"error": "Invalid token",
+		})
+	}
+
+	// Check if the user is still active
+	var isActive bool
+	err := h.db.QueryRow("SELECT is_active FROM users WHERE id = $1", claims.UserID).Scan(&isActive)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Database error",
+		})
+	}
+	if !isActive {
+		return c.JSON(http.StatusForbidden, map[string]string{
+			"error": "Account is disabled",
+		})
+	}
+
+	// Determine expiration based on rememberMe flag stored in claims
+	// Default: 1 day, RememberMe: 30 days
+	expiration := 24 * time.Hour
+	if claims.RememberMe {
+		expiration = 30 * 24 * time.Hour
+	}
+
+	// Generate new token with same session type
+	token, err := h.generateTokenWithExpiration(claims.UserID, claims.Username, claims.IsAdmin, claims.RememberMe, expiration)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to generate token",
+		})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"token": token,
 	})
 }
 
@@ -550,7 +611,12 @@ func (h *AuthHandler) updateSMBUserPassword(username, password string) error {
 // generateToken generates a JWT token for a user
 // This is a wrapper around GenerateJWT for backward compatibility
 func (h *AuthHandler) generateToken(userID, username string, isAdmin bool) (string, error) {
-	return GenerateJWT(userID, username, isAdmin)
+	return GenerateJWTWithExpiration(userID, username, isAdmin, false, 24*time.Hour)
+}
+
+// generateTokenWithExpiration generates a JWT token with custom expiration
+func (h *AuthHandler) generateTokenWithExpiration(userID, username string, isAdmin, rememberMe bool, expiration time.Duration) (string, error) {
+	return GenerateJWTWithExpiration(userID, username, isAdmin, rememberMe, expiration)
 }
 
 // JWTMiddleware validates JWT tokens

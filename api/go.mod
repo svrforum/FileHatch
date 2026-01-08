@@ -1,4 +1,4 @@
-module github.com/svrforum/SimpleCloudVault/api
+module github.com/svrforum/FileHatch/api
 
 go 1.22
 

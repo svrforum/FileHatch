@@ -1,8 +1,8 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "Enterprise-grade cloud file sharing and management API.\nSimpleCloudVault provides comprehensive file management, sharing, and collaboration features.",
-        "title": "SimpleCloudVault API",
+        "description": "Enterprise-grade cloud file sharing and management API.\nFileHatch provides comprehensive file management, sharing, and collaboration features.",
+        "title": "FileHatch API",
         "contact": {
             "name": "API Support",
             "email": "support@simplecloudvault.io"

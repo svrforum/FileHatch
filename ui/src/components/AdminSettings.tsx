@@ -167,7 +167,7 @@ function AdminSettings() {
         </div>
         <div className="as-header-text">
           <h1>시스템 설정</h1>
-          <p>SimpleCloudVault 시스템 설정을 관리합니다.</p>
+          <p>FileHatch 시스템 설정을 관리합니다.</p>
         </div>
       </div>
 
