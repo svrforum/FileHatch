@@ -105,6 +105,12 @@ function ContextMenu({
 }: ContextMenuProps) {
   if (!contextMenu) return null
 
+  // Filter out Office file types when OnlyOffice is not available
+  const officeTypes = ['docx', 'xlsx', 'pptx']
+  const filteredFileTypeOptions = onlyOfficeAvailable
+    ? fileTypeOptions
+    : fileTypeOptions.filter(option => !officeTypes.includes(option.type))
+
   const renderFileTypeIcon = (icon: string) => {
     switch (icon) {
       case 'text':
@@ -221,7 +227,7 @@ function ContextMenu({
               </svg>
               {showNewFileSubmenu && (
                 <div className="context-submenu">
-                  {fileTypeOptions.map((option) => (
+                  {filteredFileTypeOptions.map((option) => (
                     <button
                       key={option.type}
                       className="context-menu-item"
