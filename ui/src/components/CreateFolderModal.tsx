@@ -61,8 +61,8 @@ function CreateFolderModal({ isOpen, onClose, currentPath, onCreated }: CreateFo
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={handleClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+    <div className="upload-modal-overlay" onClick={handleClose}>
+      <div className="upload-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
         <div className="modal-header">
           <h2>새 폴더</h2>
           <button className="close-btn" onClick={handleClose}>
@@ -72,36 +72,24 @@ function CreateFolderModal({ isOpen, onClose, currentPath, onCreated }: CreateFo
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ padding: 'var(--spacing-lg)' }}>
-          <div style={{ marginBottom: 'var(--spacing-md)' }}>
-            <label style={{ display: 'block', marginBottom: 'var(--spacing-sm)', fontSize: 14, fontWeight: 500 }}>
-              폴더 이름
-            </label>
+        <form onSubmit={handleSubmit} className="create-folder-form">
+          <div className="form-group">
+            <label className="form-label">폴더 이름</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="새 폴더"
               autoFocus
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: '1px solid var(--border-light)',
-                borderRadius: 'var(--radius-md)',
-                fontSize: 14,
-                outline: 'none',
-                transition: 'border-color 0.2s',
-              }}
+              className="form-input"
             />
           </div>
 
           {error && (
-            <p style={{ color: 'var(--color-error)', fontSize: 13, marginBottom: 'var(--spacing-md)' }}>
-              {error}
-            </p>
+            <p className="form-error">{error}</p>
           )}
 
-          <div className="modal-actions" style={{ padding: 0, border: 'none' }}>
+          <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={handleClose}>
               취소
             </button>

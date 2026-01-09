@@ -1,9 +1,10 @@
-/* Apple + Toss Design System */
+/* Toss + Apple Design System */
 :root {
   /* Primary Colors */
   --color-primary: #3182F6;
   --color-primary-hover: #1B64DA;
-  --color-primary-light: rgba(49, 130, 246, 0.1);
+  --color-primary-light: rgba(49, 130, 246, 0.08);
+  --color-primary-muted: #5B9EF7;
   --color-primary-gradient: linear-gradient(135deg, #3182F6 0%, #1B64DA 100%);
 
   /* Status Colors */
@@ -15,14 +16,60 @@
   --color-warning-light: rgba(255, 149, 0, 0.1);
   --color-info: #007AFF;
 
-  /* Background - Apple-like layering */
+  /* Extended Colors - for component compatibility */
+  --color-admin-purple: #8B5CF6;
+  --color-admin-purple-light: rgba(139, 92, 246, 0.1);
+  --color-admin-purple-hover: rgba(139, 92, 246, 0.2);
+  --color-2fa-green: #10B981;
+  --color-2fa-green-dark: #059669;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-border: #bfdbfe;
+  --color-primary-lighter: #eff6ff;
+  --color-error-border: #fecaca;
+  --color-error-lighter: #fef2f2;
+  --color-error-dark: #c0392b;
+  --color-success-lighter: #f4fce3;
+  --color-disabled: #9ca3af;
+  --color-info-light: #e0f2fe;
+  --color-info-dark: #0369a1;
+  --color-warning-lighter: #fef3c7;
+  --color-warning-dark: #b45309;
+  --color-indigo: #6366f1;
+
+  /* Button Gradients */
+  --btn-primary-gradient: linear-gradient(135deg, #3182F6 0%, #1B64DA 100%);
+  --btn-2fa-gradient: linear-gradient(135deg, #10B981 0%, #059669 100%);
+
+  /* Additional Gradients */
+  --gradient-success: linear-gradient(135deg, #40c057 0%, #37b24d 100%);
+  --gradient-warning: linear-gradient(135deg, #fab005 0%, #f59f00 100%);
+  --gradient-purple: linear-gradient(135deg, #9969e5 0%, #7c4dff 100%);
+  --gradient-info-light: linear-gradient(135deg, #e8f4fd 0%, #dbeafe 100%);
+
+  /* Page Gradients */
+  --bg-page-gradient: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  --bg-secondary-gradient: linear-gradient(135deg, #f1f3f4 0%, #e9ecef 100%);
+
+  /* Form Colors */
+  --color-form-border: #E5E7EB;
+  --color-form-border-focus: var(--color-primary);
+  --color-form-placeholder: #9CA3AF;
+  --color-form-bg: #FFFFFF;
+  --color-form-bg-disabled: #F9FAFB;
+
+  /* Layout */
+  --sidebar-width: 260px;
+  --header-height: 60px;
+
+  /* Background - Apple/Toss-like layering */
   --bg-primary: #FFFFFF;
-  --bg-secondary: #F5F5F7;
-  --bg-tertiary: #FAFAFA;
+  --bg-secondary: #F9FAFB;
+  --bg-tertiary: #F3F4F6;
   --bg-elevated: #FFFFFF;
-  --bg-grouped: #F2F2F7;
+  --bg-grouped: #EFEFF4;
   --bg-overlay: rgba(0, 0, 0, 0.4);
   --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.06);
 
   /* Text - High contrast for readability */
   --text-primary: #1D1D1F;
@@ -36,37 +83,80 @@
   --border-medium: #D1D1D6;
   --border-dark: #C7C7CC;
 
-  /* Shadow - Apple-like depth */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
-  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.16);
-  --shadow-primary: 0 4px 14px rgba(49, 130, 246, 0.25);
-  --shadow-primary-lg: 0 8px 24px rgba(49, 130, 246, 0.35);
+  /* Shadow - Toss-style layered, soft shadows */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.02), 0 1px 3px rgba(0, 0, 0, 0.03);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.02), 0 4px 8px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.04), 0 16px 48px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 16px 32px rgba(0, 0, 0, 0.06), 0 32px 64px rgba(0, 0, 0, 0.12);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.02);
+  --shadow-modal: 0 24px 80px rgba(0, 0, 0, 0.12), 0 12px 32px rgba(0, 0, 0, 0.08);
+  --shadow-primary: 0 4px 14px rgba(49, 130, 246, 0.2);
+  --shadow-primary-lg: 0 8px 24px rgba(49, 130, 246, 0.3);
+  --shadow-focus: 0 0 0 4px rgba(49, 130, 246, 0.1);
 
-  /* Radius - Softer corners */
-  --radius-xs: 4px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-2xl: 24px;
+  /* Code Editor */
+  --bg-code-editor: #1e1e1e;
+  --color-code-text: #d4d4d4;
+  --bg-scrollbar-track: #2d2d2d;
+  --bg-scrollbar-thumb: #4a4a4a;
+  --bg-scrollbar-thumb-hover: #5a5a5a;
+
+  /* Dark Mode Theme Colors (used in dark theme overrides) */
+  --bg-dark-page-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  --bg-dark-card: #1f1f1f;
+  --bg-dark-input: #2d2d2d;
+  --bg-dark-hover: #3d3d3d;
+  --bg-dark-tertiary: #111827;
+  --bg-dark-secondary-gradient: linear-gradient(135deg, #2d2d2d 0%, #3d3d3d 100%);
+  --text-dark-primary: #f8f9fa;
+  --text-dark-secondary: #adb5bd;
+  --border-dark-hover: #4d4d4d;
+  --border-dark-active: #5d5d5d;
+
+  /* Radius - Toss/Apple soft corners */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-2xl: 36px;
   --radius-full: 9999px;
 
-  /* Spacing */
+  /* Spacing - Generous whitespace */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 16px;
   --spacing-lg: 24px;
   --spacing-xl: 32px;
   --spacing-2xl: 48px;
+  --spacing-3xl: 64px;
+  --spacing-4xl: 96px;
 
-  /* Transition - Apple-like smooth animations */
+  /* Content Padding */
+  --content-padding: 28px;
+  --card-padding: 24px;
+  --modal-padding: 32px;
+
+  /* Transition - Toss/Apple smooth animations */
   --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-spring: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  /* Animation Curves */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-expo: cubic-bezier(0.87, 0, 0.13, 1);
+  --spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --spring-gentle: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+  /* Animation Durations */
+  --duration-instant: 100ms;
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 350ms;
+  --duration-spring: 500ms;
 
   /* Typography */
   --font-size-xs: 11px;
@@ -83,8 +173,14 @@
   --font-weight-bold: 700;
 
   --line-height-tight: 1.2;
+  --line-height-snug: 1.35;
   --line-height-normal: 1.5;
-  --line-height-relaxed: 1.7;
+  --line-height-relaxed: 1.65;
+
+  /* Letter Spacing */
+  --letter-spacing-tight: -0.03em;
+  --letter-spacing-normal: -0.01em;
+  --letter-spacing-wide: 0.02em;
 }
 
 /* Dark Mode */
@@ -105,6 +201,24 @@
   --color-warning-light: rgba(251, 191, 36, 0.15);
   --color-info: #60A5FA;
   --color-danger: #F87171;
+
+  /* Extended Colors - for component compatibility */
+  --color-admin-purple: #A78BFA;
+  --color-admin-purple-light: rgba(167, 139, 250, 0.15);
+  --color-admin-purple-hover: rgba(167, 139, 250, 0.25);
+  --color-2fa-green: #34D399;
+  --color-2fa-green-dark: #10B981;
+
+  /* Button Gradients */
+  --btn-primary-gradient: linear-gradient(135deg, #4A9CFF 0%, #3182F6 100%);
+  --btn-2fa-gradient: linear-gradient(135deg, #34D399 0%, #10B981 100%);
+
+  /* Form Colors */
+  --color-form-border: #3A3A3C;
+  --color-form-border-focus: var(--color-primary);
+  --color-form-placeholder: #6E6E73;
+  --color-form-bg: #2C2C2E;
+  --color-form-bg-disabled: #3A3A3C;
 
   /* Background - Dark layering */
   --bg-primary: #1C1C1E;
@@ -127,12 +241,14 @@
   --border-medium: #48484A;
   --border-dark: #636366;
 
-  /* Shadow - More subtle in dark mode */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
-  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+  /* Shadow - Subtle glow in dark mode */
+  --shadow-xs: 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 16px 48px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 32px 64px rgba(0, 0, 0, 0.6);
+  --shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-modal: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 24px 80px rgba(0, 0, 0, 0.5);
   --shadow-primary: 0 4px 14px rgba(74, 156, 255, 0.25);
   --shadow-primary-lg: 0 8px 24px rgba(74, 156, 255, 0.35);
 
@@ -362,5 +478,130 @@ input::placeholder, textarea::placeholder {
   }
   100% {
     background-position: 200% 0;
+  }
+}
+
+/* OTP/Code Input - Shared Style */
+.code-input {
+  font-size: 24px;
+  text-align: center;
+  letter-spacing: 8px;
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  padding: 16px;
+}
+
+/* Responsive Utilities */
+@media (max-width: 768px) {
+  .hide-mobile {
+    display: none;
+  }
+}
+
+@media (min-width: 769px) {
+  .hide-desktop {
+    display: none;
+  }
+}
+
+/* Modal Overlay - Common styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-overlay);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s var(--ease-out-expo);
+}
+
+/* Modal content base */
+.modal-content {
+  background: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-modal);
+  max-width: 520px;
+  width: 90%;
+  max-height: 85vh;
+  overflow: hidden;
+  animation: modalEnter var(--duration-spring) var(--spring);
+}
+
+@keyframes modalEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes bottomSheetEnter {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Mobile bottom sheet alignment */
+@media (max-width: 480px) {
+  .modal-overlay {
+    align-items: flex-end;
+  }
+
+  .modal-content {
+    width: 100%;
+    max-width: none;
+    max-height: 90vh;
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+    animation: bottomSheetEnter var(--duration-spring) var(--ease-out-expo);
+  }
+
+  /* Bottom sheet handle indicator */
+  .modal-content::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    background: var(--border-medium);
+    border-radius: 2px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --border-light: #1D1D1F;
+    --text-secondary: #1D1D1F;
+  }
+
+  [data-theme='dark'] {
+    --border-light: #FFFFFF;
+    --text-secondary: #FFFFFF;
   }
 }

@@ -206,15 +206,15 @@ function ShareModal({ isOpen, onClose, itemPath, itemName, isFolder }: ShareModa
                   {searchResults.map((user) => (
                     <div
                       key={user.id}
-                      className="search-result-item"
+                      className="share-search-item"
                       onClick={() => handleSelectUser(user)}
                     >
-                      <div className="user-avatar">
+                      <div className="share-search-item__avatar">
                         {user.username.charAt(0).toUpperCase()}
                       </div>
-                      <div className="user-info">
-                        <span className="user-name">{user.username}</span>
-                        {user.email && <span className="user-email">{user.email}</span>}
+                      <div className="share-search-item__info">
+                        <span className="share-search-item__name">{user.username}</span>
+                        {user.email && <span className="share-search-item__email">{user.email}</span>}
                       </div>
                     </div>
                   ))}

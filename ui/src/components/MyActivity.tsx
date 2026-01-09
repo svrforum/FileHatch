@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { getRecentFiles, RecentFile, downloadFile, FileInfo, getFolderStats, FolderStats, getFileMetadata, FileMetadata, updateFileMetadata } from '../api/files'
+import { getRecentFiles, RecentFile, downloadFile, FileInfo, getFolderStats, FolderStats, getFileMetadata, FileMetadata, updateFileMetadata, getStarredFiles, StarredFile } from '../api/files'
 import { getFileIcon } from '../utils/fileIcons'
 import { FileRow, FileCard, VirtualizedFileTable, FileInfoPanel, VIRTUALIZATION_THRESHOLD } from './filelist'
 import FileViewer from './FileViewer'
@@ -9,6 +9,7 @@ import './MyActivity.css'
 type FileTypeFilter = 'all' | 'document' | 'spreadsheet' | 'presentation' | 'image' | 'video' | 'audio' | 'archive' | 'folder'
 type SortOrder = 'newest' | 'oldest' | 'name-asc' | 'name-desc'
 type ViewMode = 'list' | 'grid'
+type ActivityTab = 'starred' | 'recent'
 
 // File type filter definitions
 const fileTypeFilters: { id: FileTypeFilter; label: string; exts?: string[]; isDir?: boolean }[] = [
@@ -55,12 +56,30 @@ function toFileInfo(activity: RecentFile): FileInfo {
   }
 }
 
+// Convert StarredFile to FileInfo
+function starredToFileInfo(starred: StarredFile): FileInfo {
+  const pathParts = starred.filePath.split('/')
+  const name = pathParts.pop() || starred.filePath
+  const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined
+  return {
+    name,
+    path: normalizePath(starred.filePath),
+    isDir: starred.isDir,
+    size: 0,
+    modTime: starred.starredAt,
+    extension: ext,
+  }
+}
+
 function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
 
-  // Activity data
+  // Tab and Activity data
+  const [activeTab, setActiveTab] = useState<ActivityTab>('starred')
   const [fileTypeFilter, setFileTypeFilter] = useState<FileTypeFilter>('all')
   const [activities, setActivities] = useState<RecentFile[]>([])
   const [loading, setLoading] = useState(true)
+  const [starredFiles, setStarredFiles] = useState<StarredFile[]>([])
+  const [loadingStarred, setLoadingStarred] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest')
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -148,6 +167,20 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
     fetchActivities()
   }, [])
 
+  // Load starred files when starred tab is active
+  useEffect(() => {
+    if (activeTab === 'starred') {
+      setLoadingStarred(true)
+      getStarredFiles()
+        .then(res => setStarredFiles(res.starred))
+        .catch(err => {
+          console.error('Failed to fetch starred files:', err)
+          setStarredFiles([])
+        })
+        .finally(() => setLoadingStarred(false))
+    }
+  }, [activeTab])
+
   // Load folder stats when folder is selected
   useEffect(() => {
     if (selectedFile?.isDir) {
@@ -219,6 +252,47 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
 
   // Convert activities to FileInfo and filter
   const displayFiles = useMemo(() => {
+    // Starred tab: show starred files
+    if (activeTab === 'starred') {
+      let files = starredFiles.map(starredToFileInfo)
+
+      // Apply file type filter
+      if (fileTypeFilter !== 'all') {
+        const filterDef = fileTypeFilters.find(f => f.id === fileTypeFilter)
+        if (filterDef) {
+          if (filterDef.isDir) {
+            files = files.filter(f => f.isDir)
+          } else if (filterDef.exts) {
+            files = files.filter(f => {
+              if (f.isDir) return false
+              const ext = f.extension?.toLowerCase() || ''
+              return filterDef.exts!.includes(ext)
+            })
+          }
+        }
+      }
+
+      // Apply search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase()
+        files = files.filter(f => f.name.toLowerCase().includes(query) || f.path.toLowerCase().includes(query))
+      }
+
+      // Apply sort
+      files.sort((a, b) => {
+        switch (sortOrder) {
+          case 'newest': return new Date(b.modTime).getTime() - new Date(a.modTime).getTime()
+          case 'oldest': return new Date(a.modTime).getTime() - new Date(b.modTime).getTime()
+          case 'name-asc': return a.name.localeCompare(b.name, 'ko')
+          case 'name-desc': return b.name.localeCompare(a.name, 'ko')
+          default: return 0
+        }
+      })
+
+      return files
+    }
+
+    // Recent tab: show recent activities
     let result = activities.filter(activity => {
       // Apply file type filter
       if (fileTypeFilter !== 'all') {
@@ -255,7 +329,7 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
     })
 
     return result.map(toFileInfo)
-  }, [activities, fileTypeFilter, searchQuery, sortOrder])
+  }, [activeTab, activities, starredFiles, fileTypeFilter, searchQuery, sortOrder])
 
   // Handlers
   const handleSelectFile = useCallback((file: FileInfo, e: React.MouseEvent) => {
@@ -391,8 +465,42 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
   return (
     <div className="my-activity panel-open">
       <div className="my-activity-header">
-        <h1>최근 항목</h1>
-        <p className="my-activity-subtitle">최근에 사용하거나 수정한 파일 및 폴더</p>
+        <h1>{activeTab === 'starred' ? '즐겨찾기' : '최근 항목'}</h1>
+        <p className="my-activity-subtitle">
+          {activeTab === 'starred'
+            ? '별표 표시한 파일 및 폴더'
+            : '최근에 사용하거나 수정한 파일 및 폴더'}
+        </p>
+      </div>
+
+      <div className="my-activity-tabs">
+        <button
+          className={`my-activity-tab ${activeTab === 'starred' ? 'active' : ''}`}
+          onClick={() => setActiveTab('starred')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              fill={activeTab === 'starred' ? 'currentColor' : 'none'}/>
+          </svg>
+          즐겨찾기
+          {starredFiles.length > 0 && (
+            <span className="tab-count">{starredFiles.length}</span>
+          )}
+        </button>
+        <button
+          className={`my-activity-tab ${activeTab === 'recent' ? 'active' : ''}`}
+          onClick={() => setActiveTab('recent')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+            <polyline points="12,6 12,12 16,14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          최근 항목
+          {activities.length > 0 && (
+            <span className="tab-count">{activities.length}</span>
+          )}
+        </button>
       </div>
 
       <div className="my-activity-toolbar">
@@ -450,6 +558,7 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
         </div>
       </div>
 
+      {/* File type filter - for both tabs */}
       <div className="my-activity-filter-bar">
         <div className="filter-label">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -474,7 +583,7 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
       </div>
 
       <div className="my-activity-content">
-        {loading ? (
+        {(activeTab === 'starred' ? loadingStarred : loading) ? (
           <div className="my-activity-loading">
             <div className="loading-spinner" />
             <span>불러오는 중...</span>
@@ -482,10 +591,17 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
         ) : displayFiles.length === 0 ? (
           <div className="my-activity-empty">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-              <path d="M12 6V12L16 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              {activeTab === 'starred' ? (
+                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+              ) : (
+                <>
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                  <path d="M12 6V12L16 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </>
+              )}
             </svg>
-            <p>작업 기록이 없습니다</p>
+            <p>{activeTab === 'starred' ? '즐겨찾기한 파일이 없습니다' : '작업 기록이 없습니다'}</p>
           </div>
         ) : viewMode === 'list' ? (
           displayFiles.length >= VIRTUALIZATION_THRESHOLD ? (

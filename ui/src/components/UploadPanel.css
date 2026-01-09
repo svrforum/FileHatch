@@ -138,7 +138,7 @@
 .stat.error::before { background: var(--color-error); }
 
 .stat.uploading { color: var(--color-primary); }
-.stat.transferring { color: #F59E0B; }
+.stat.transferring { color: var(--color-warning); }
 .stat.pending { color: var(--text-tertiary); }
 .stat.completed { color: var(--color-success); }
 .stat.error { color: var(--color-error); }
@@ -240,7 +240,7 @@
   to { transform: rotate(360deg); }
 }
 
-.spinner-small.transfer { border-top-color: #F59E0B; }
+.spinner-small.transfer { border-top-color: var(--color-warning); }
 
 .item-details {
   flex: 1;
@@ -304,7 +304,7 @@
 }
 
 .progress-text.paused {
-  color: #F59E0B;
+  color: var(--color-warning);
 }
 
 .speed-text {
@@ -365,8 +365,8 @@
   padding-left: 12px;
 }
 
-.upload-panel-item.transfer.move { border-left-color: #F59E0B; }
-.upload-panel-item.transfer.copy { border-left-color: #8B5CF6; }
+.upload-panel-item.transfer.move { border-left-color: var(--color-warning); }
+.upload-panel-item.transfer.copy { border-left-color: var(--color-admin-purple); }
 .upload-panel-item.transfer.completed { border-left-color: var(--color-success); }
 .upload-panel-item.transfer.error { border-left-color: var(--color-error); }
 
@@ -380,11 +380,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #F59E0B;
+  color: var(--color-warning);
 }
 
 .upload-panel-item.copy .transfer-type-icon {
-  color: #8B5CF6;
+  color: var(--color-admin-purple);
 }
 
 .item-dest {
@@ -415,12 +415,12 @@
 
 .speed-text.move {
   background: rgba(245, 158, 11, 0.1);
-  color: #F59E0B;
+  color: var(--color-warning);
 }
 
 .speed-text.copy {
   background: rgba(139, 92, 246, 0.1);
-  color: #8B5CF6;
+  color: var(--color-admin-purple);
 }
 
 .current-file {
@@ -455,5 +455,5 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #F59E0B;
+  color: var(--color-warning);
 }

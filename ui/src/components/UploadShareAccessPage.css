@@ -5,7 +5,7 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  background: var(--bg-page-gradient);
 }
 
 .upload-share-card {
@@ -49,8 +49,8 @@
 .upload-share-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #e9ecef;
-  border-top-color: #228be6;
+  border: 3px solid var(--border-light);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -76,7 +76,7 @@
 .upload-share-error-icon {
   width: 64px;
   height: 64px;
-  color: #fa5252;
+  color: var(--color-error);
 }
 
 .upload-share-error h2 {
@@ -97,7 +97,7 @@
 .upload-share-lock-icon {
   width: 64px;
   height: 64px;
-  color: #228be6;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 
@@ -138,7 +138,7 @@
   width: 100%;
   padding: 16px 20px;
   font-size: 16px;
-  border: 2px solid #e9ecef;
+  border: 2px solid var(--border-light);
   border-radius: 14px;
   outline: none;
   transition: all 0.2s ease;
@@ -149,12 +149,12 @@
 }
 
 .upload-share-password-input:focus {
-  border-color: #228be6;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 4px rgba(34, 139, 230, 0.1);
 }
 
 .upload-share-password-error {
-  color: #fa5252;
+  color: var(--color-error);
   font-size: 14px;
   margin: 0;
 }
@@ -166,7 +166,7 @@
   font-size: 16px;
   font-weight: 600;
   color: white;
-  background: linear-gradient(135deg, #228be6 0%, #1c7ed6 100%);
+  background: var(--btn-primary-gradient);
   border: none;
   border-radius: 14px;
   cursor: pointer;
@@ -187,8 +187,8 @@
   padding: 14px 24px;
   font-size: 15px;
   font-weight: 600;
-  color: #495057;
-  background: #f1f3f4;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
   border: none;
   border-radius: 14px;
   cursor: pointer;
@@ -196,7 +196,7 @@
 }
 
 .upload-share-btn-secondary:hover {
-  background: #e9ecef;
+  background: var(--bg-hover);
 }
 
 /* Header */
@@ -207,7 +207,7 @@
 .upload-share-folder-icon {
   width: 80px;
   height: 80px;
-  background: linear-gradient(135deg, #fab005 0%, #f59f00 100%);
+  background: var(--gradient-warning);
   border-radius: 20px;
   display: flex;
   align-items: center;
@@ -249,11 +249,11 @@
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: #f1f3f4;
+  background: var(--bg-secondary);
   border-radius: 20px;
   font-size: 13px;
   font-weight: 500;
-  color: #495057;
+  color: var(--text-secondary);
 }
 
 .restriction-badge svg {
@@ -264,16 +264,16 @@
 
 .restriction-badge.expiry {
   background: rgba(34, 139, 230, 0.1);
-  color: #228be6;
+  color: var(--color-primary);
 }
 
 .restriction-badge.expiry svg {
-  color: #228be6;
+  color: var(--color-primary);
 }
 
 /* Drop zone */
 .upload-share-dropzone {
-  border: 2px dashed #dee2e6;
+  border: 2px dashed var(--border-light);
   border-radius: 16px;
   padding: 40px 24px;
   cursor: pointer;
@@ -283,19 +283,19 @@
 
 .upload-share-dropzone:hover,
 .upload-share-dropzone.active {
-  border-color: #228be6;
+  border-color: var(--color-primary);
   background: rgba(34, 139, 230, 0.05);
 }
 
 .upload-share-dropzone-icon {
   width: 48px;
   height: 48px;
-  color: #adb5bd;
+  color: var(--text-tertiary);
   margin-bottom: 12px;
 }
 
 .upload-share-dropzone.active .upload-share-dropzone-icon {
-  color: #228be6;
+  color: var(--color-primary);
 }
 
 .upload-share-dropzone-text {
@@ -319,17 +319,17 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border-radius: 12px;
   gap: 12px;
 }
 
 .upload-share-file-item.completed {
-  background: #e8f5e9;
+  background: var(--color-success-light);
 }
 
 .upload-share-file-item.error {
-  background: #ffebee;
+  background: var(--color-error-light);
 }
 
 .file-info {
@@ -379,7 +379,7 @@
 .remove-btn svg {
   width: 16px;
   height: 16px;
-  color: #495057;
+  color: var(--text-secondary);
 }
 
 .upload-progress-container {
@@ -400,7 +400,7 @@
 .progress-bar {
   flex: 1;
   height: 6px;
-  background: #228be6;
+  background: var(--color-primary);
   border-radius: 3px;
   transition: width 0.2s ease;
 }
@@ -408,7 +408,7 @@
 .progress-text {
   font-size: 12px;
   font-weight: 600;
-  color: #228be6;
+  color: var(--color-primary);
   min-width: 36px;
   text-align: right;
 }
@@ -423,7 +423,7 @@
 
 .upload-speed {
   font-size: 11px;
-  color: #868e96;
+  color: var(--text-tertiary);
   font-weight: 500;
 }
 
@@ -448,7 +448,7 @@
 .cancel-btn svg {
   width: 14px;
   height: 14px;
-  color: #fa5252;
+  color: var(--color-error);
 }
 
 .status-icon {
@@ -457,11 +457,11 @@
 }
 
 .status-icon.success {
-  color: #40c057;
+  color: var(--color-success);
 }
 
 .status-icon.error {
-  color: #fa5252;
+  color: var(--color-error);
 }
 
 .error-info {
@@ -472,7 +472,7 @@
 
 .error-text {
   font-size: 12px;
-  color: #fa5252;
+  color: var(--color-error);
   max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -490,24 +490,24 @@
 .upload-share-branding {
   margin-top: 24px;
   font-size: 13px;
-  color: #adb5bd;
+  color: var(--text-tertiary);
   font-weight: 500;
 }
 
 /* Dark mode support */
 [data-theme='dark'] .upload-share-page {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: var(--bg-dark-page-gradient);
 }
 
 [data-theme='dark'] .upload-share-card {
-  background: #1f1f1f;
+  background: var(--bg-dark-card);
 }
 
 [data-theme='dark'] .upload-share-error h2,
 [data-theme='dark'] .upload-share-login-required h2,
 [data-theme='dark'] .upload-share-password-form h2,
 [data-theme='dark'] .upload-share-header h1 {
-  color: #f8f9fa;
+  color: var(--text-dark-primary);
 }
 
 [data-theme='dark'] .upload-share-error p,
@@ -516,26 +516,26 @@
 [data-theme='dark'] .upload-share-loading p,
 [data-theme='dark'] .upload-share-subtitle,
 [data-theme='dark'] .upload-share-dropzone-text {
-  color: #adb5bd;
+  color: var(--text-dark-secondary);
 }
 
 [data-theme='dark'] .upload-share-password-input {
-  background: #2d2d2d;
-  border-color: #3d3d3d;
-  color: #f8f9fa;
+  background: var(--bg-dark-input);
+  border-color: var(--border-dark);
+  color: var(--text-dark-primary);
 }
 
 [data-theme='dark'] .upload-share-btn-secondary {
-  background: #2d2d2d;
-  color: #f8f9fa;
+  background: var(--bg-dark-input);
+  color: var(--text-dark-primary);
 }
 
 [data-theme='dark'] .upload-share-btn-secondary:hover {
-  background: #3d3d3d;
+  background: var(--bg-dark-hover);
 }
 
 [data-theme='dark'] .upload-share-dropzone {
-  border-color: #3d3d3d;
+  border-color: var(--border-dark);
 }
 
 [data-theme='dark'] .upload-share-dropzone:hover,
@@ -544,12 +544,12 @@
 }
 
 [data-theme='dark'] .restriction-badge {
-  background: #2d2d2d;
-  color: #f8f9fa;
+  background: var(--bg-dark-input);
+  color: var(--text-dark-primary);
 }
 
 [data-theme='dark'] .upload-share-file-item {
-  background: #2d2d2d;
+  background: var(--bg-dark-input);
 }
 
 [data-theme='dark'] .upload-share-file-item.completed {
@@ -561,12 +561,12 @@
 }
 
 [data-theme='dark'] .upload-share-page .file-name {
-  color: #f8f9fa;
+  color: var(--text-dark-primary);
 }
 
 [data-theme='dark'] .upload-share-spinner {
-  border-color: #3d3d3d;
-  border-top-color: #228be6;
+  border-color: var(--border-dark);
+  border-top-color: var(--color-primary);
 }
 
 /* Responsive */

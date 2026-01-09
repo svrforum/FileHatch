@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--bg-overlay);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -237,18 +237,18 @@
 }
 
 .search-item-badge.tag {
-  background: #e0f2fe;
-  color: #0369a1;
+  background: var(--color-info-light);
+  color: var(--color-info-dark);
 }
 
 .search-item-badge.description {
-  background: #fef3c7;
-  color: #b45309;
+  background: var(--color-warning-lighter);
+  color: var(--color-warning-dark);
 }
 
 .search-item-badge.trash {
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--color-error-light);
+  color: var(--color-error);
 }
 
 .search-item-path {
@@ -277,15 +277,15 @@
 
 .search-item-tag {
   font-size: 11px;
-  color: #0369a1;
-  background: #e0f2fe;
+  color: var(--color-info-dark);
+  background: var(--color-info-light);
   padding: 2px 6px;
   border-radius: 4px;
 }
 
 .search-item-deleted-at {
   font-size: 11px;
-  color: #dc2626;
+  color: var(--color-error);
   margin-top: 2px;
 }
 

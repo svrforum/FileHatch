@@ -12,9 +12,10 @@ interface HeaderProps {
   onFileSelect?: (filePath: string, parentPath: string) => void
   currentPath?: string
   isAdminMode?: boolean
+  onMenuClick?: () => void
 }
 
-function Header({ onProfileClick, onNavigate, onFileSelect, currentPath = '/', isAdminMode = false }: HeaderProps) {
+function Header({ onProfileClick, onNavigate, onFileSelect, currentPath = '/', isAdminMode = false, onMenuClick }: HeaderProps) {
   const { user } = useAuthStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<FileInfo[]>([])
@@ -145,6 +146,14 @@ function Header({ onProfileClick, onNavigate, onFileSelect, currentPath = '/', i
   return (
     <header className="header">
       <div className="header-left">
+        {/* Hamburger menu button - mobile only */}
+        {onMenuClick && (
+          <button className="hamburger-btn" onClick={onMenuClick} aria-label="메뉴 열기">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M3 12H21M3 6H21M3 18H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        )}
         <div className="logo">
           <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
             <rect width="32" height="32" rx="8" fill="#3182F6"/>

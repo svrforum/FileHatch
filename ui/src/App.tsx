@@ -105,6 +105,7 @@ function App() {
   const [isFolderModalOpen, setFolderModalOpen] = useState(false)
   const [isProfileOpen, setProfileOpen] = useState(false)
   const [highlightedFilePath, setHighlightedFilePath] = useState<string | null>(null)
+  const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const queryClient = useQueryClient()
   const { refreshProfile, refreshAuthToken, token, logout } = useAuthStore()
   const navigate = useNavigate()
@@ -304,6 +305,7 @@ function App() {
           onFileSelect={handleFileSelect}
           currentPath={currentPath}
           isAdminMode={isAdminMode}
+          onMenuClick={() => setMobileSidebarOpen(true)}
         />
         <div className="app-container">
           <Sidebar
@@ -316,6 +318,8 @@ function App() {
             isAdminMode={isAdminMode}
             adminView={adminView}
             onExitAdminMode={handleExitAdminMode}
+            isMobileOpen={isMobileSidebarOpen}
+            onMobileClose={() => setMobileSidebarOpen(false)}
           />
           <main className="main-content">
             <Suspense fallback={<FileListSkeleton />}>

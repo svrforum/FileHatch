@@ -21,6 +21,8 @@ interface SidebarProps {
   isAdminMode?: boolean
   adminView?: AdminView
   onExitAdminMode?: () => void
+  isMobileOpen?: boolean
+  onMobileClose?: () => void
 }
 
 const icons: Record<string, JSX.Element> = {
@@ -127,7 +129,7 @@ const icons: Record<string, JSX.Element> = {
   ),
 }
 
-function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onAdminClick, isTrashView, isAdminMode, adminView, onExitAdminMode }: SidebarProps) {
+function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onAdminClick, isTrashView, isAdminMode, adminView, onExitAdminMode, isMobileOpen, onMobileClose }: SidebarProps) {
   const { items, downloads, togglePanel, clearCompleted, clearCompletedDownloads } = useUploadStore()
   const { items: transferItems, clearCompleted: clearCompletedTransfers } = useTransferStore()
   const { user, token } = useAuthStore()
@@ -203,8 +205,20 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
     clearCompletedTransfers()
   }
 
+  // Handle navigation with mobile close
+  const handleNavigation = (path: string) => {
+    onNavigate(path)
+    onMobileClose?.()
+  }
+
   return (
-    <aside className={`sidebar ${isAdminMode ? 'admin-mode' : ''}`}>
+    <>
+      {/* Mobile overlay */}
+      <div
+        className={`sidebar-overlay ${isMobileOpen ? 'visible' : ''}`}
+        onClick={onMobileClose}
+      />
+      <aside className={`sidebar ${isAdminMode ? 'admin-mode' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}>
       {!isAdminMode ? (
         <>
           <div className="sidebar-actions">
@@ -228,7 +242,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
               <Link
                 to="/files"
                 className={`nav-item ${(location.pathname === '/files' || location.pathname === '/') && isActive('/home') ? 'active' : ''}`}
-                onClick={() => onNavigate('/home')}
+                onClick={() => handleNavigation('/home')}
               >
                 {icons.folder}
                 <span>내 파일</span>
@@ -240,6 +254,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
               <Link
                 to="/my-activity"
                 className={`nav-item ${location.pathname === '/my-activity' ? 'active' : ''}`}
+                onClick={() => onMobileClose?.()}
               >
                 {icons.recent}
                 <span>내 작업</span>
@@ -272,6 +287,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                         key={folder.id}
                         to={`/shared-drive/${encodeURIComponent(folder.name)}`}
                         className={`nav-item shared-drive-item ${location.pathname.startsWith(`/shared-drive/${encodeURIComponent(folder.name)}`) ? 'active' : ''}`}
+                        onClick={() => onMobileClose?.()}
                       >
                         <span className="drive-name">{folder.name}</span>
                         <span className={`permission-badge ${folder.permissionLevel === PERMISSION_READ_WRITE ? 'rw' : 'r'}`}>
@@ -308,6 +324,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                     <Link
                       to="/shared-with-me"
                       className={`nav-item shared-drive-item ${location.pathname === '/shared-with-me' ? 'active' : ''}`}
+                      onClick={() => onMobileClose?.()}
                     >
                       {icons.sharedWithMe}
                       <span>나에게 공유된 파일</span>
@@ -315,6 +332,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                     <Link
                       to="/shared-by-me"
                       className={`nav-item shared-drive-item ${location.pathname === '/shared-by-me' ? 'active' : ''}`}
+                      onClick={() => onMobileClose?.()}
                     >
                       {icons.sharedByMe}
                       <span>다른사용자에 공유된 파일</span>
@@ -322,6 +340,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                     <Link
                       to="/link-shares"
                       className={`nav-item shared-drive-item ${location.pathname === '/link-shares' ? 'active' : ''}`}
+                      onClick={() => onMobileClose?.()}
                     >
                       {icons.linkShare}
                       <span>링크로 공유된 파일</span>
@@ -335,6 +354,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
               <Link
                 to="/trash"
                 className={`nav-item ${isTrashView ? 'active' : ''}`}
+                onClick={() => onMobileClose?.()}
               >
                 {icons.trash}
                 <span>휴지통</span>
@@ -358,6 +378,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
             <Link
               to="/scvadmin/users"
               className={`nav-item ${adminView === 'users' ? 'active' : ''}`}
+              onClick={() => onMobileClose?.()}
             >
               {icons.users}
               <span>사용자 관리</span>
@@ -365,6 +386,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
             <Link
               to="/scvadmin/shared-folders"
               className={`nav-item ${adminView === 'shared-folders' ? 'active' : ''}`}
+              onClick={() => onMobileClose?.()}
             >
               {icons.sharedDrivesAdmin}
               <span>공유 드라이브</span>
@@ -372,6 +394,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
             <Link
               to="/scvadmin/settings"
               className={`nav-item ${adminView === 'settings' ? 'active' : ''}`}
+              onClick={() => onMobileClose?.()}
             >
               {icons.settings}
               <span>시스템 설정</span>
@@ -379,6 +402,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
             <Link
               to="/scvadmin/sso"
               className={`nav-item ${adminView === 'sso' ? 'active' : ''}`}
+              onClick={() => onMobileClose?.()}
             >
               {icons.sso}
               <span>SSO 설정</span>
@@ -386,6 +410,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
             <Link
               to="/scvadmin/logs"
               className={`nav-item ${adminView === 'logs' ? 'active' : ''}`}
+              onClick={() => onMobileClose?.()}
             >
               {icons.logs}
               <span>감사 로그</span>
@@ -393,6 +418,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
             <Link
               to="/scvadmin/system-info"
               className={`nav-item ${adminView === 'system-info' ? 'active' : ''}`}
+              onClick={() => onMobileClose?.()}
             >
               {icons.server}
               <span>서버 정보</span>
@@ -542,6 +568,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
         </div>
       </div>
     </aside>
+    </>
   )
 }
 

@@ -101,7 +101,7 @@
 .stat-card:hover {
   border-color: var(--border-default);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-md);
 }
 
 .stat-icon {
@@ -115,17 +115,17 @@
 
 .stat-icon.total {
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
-  color: #6366F1;
+  color: var(--color-admin-purple);
 }
 
 .stat-icon.today {
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(52, 211, 153, 0.15) 100%);
-  color: #10B981;
+  color: var(--color-2fa-green);
 }
 
 .stat-icon.week {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(96, 165, 250, 0.15) 100%);
-  color: #3B82F6;
+  color: var(--color-primary);
 }
 
 .stat-info {
@@ -180,7 +180,7 @@
 .tab-btn.active {
   background: var(--bg-primary);
   color: var(--text-primary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 .tab-btn svg {
@@ -211,8 +211,8 @@
 }
 
 .search-box:focus-within {
-  border-color: #228be6;
-  box-shadow: 0 0 0 3px rgba(34, 139, 230, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
 .search-box svg {
@@ -266,7 +266,7 @@
 
 .log-filter:focus {
   outline: none;
-  border-color: #228be6;
+  border-color: var(--color-primary);
 }
 
 .log-filter:hover {
@@ -301,7 +301,7 @@
 
 .date-input:focus {
   outline: none;
-  border-color: #228be6;
+  border-color: var(--color-primary);
 }
 
 .date-input:hover {
@@ -434,7 +434,7 @@
 
 .event-badge.action-login {
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(52, 211, 153, 0.15) 100%);
-  color: #10B981;
+  color: var(--color-2fa-green);
 }
 
 .event-badge.action-logout {
@@ -444,27 +444,27 @@
 
 .event-badge.action-upload {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(96, 165, 250, 0.15) 100%);
-  color: #3B82F6;
+  color: var(--color-primary);
 }
 
 .event-badge.action-download {
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(167, 139, 250, 0.15) 100%);
-  color: #8B5CF6;
+  color: var(--color-admin-purple);
 }
 
 .event-badge.action-delete {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(248, 113, 113, 0.15) 100%);
-  color: #EF4444;
+  color: var(--color-error);
 }
 
 .event-badge.action-share {
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(251, 191, 36, 0.15) 100%);
-  color: #F59E0B;
+  color: var(--color-warning);
 }
 
 .event-badge.action-smb {
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(129, 140, 248, 0.15) 100%);
-  color: #6366F1;
+  color: var(--color-admin-purple);
 }
 
 .event-badge.action-admin {
@@ -497,7 +497,7 @@
 
 .ip-cell .ip-address.smb {
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-  color: #6366F1;
+  color: var(--color-admin-purple);
   font-weight: 500;
 }
 
@@ -556,7 +556,7 @@
 }
 
 .page-btn.active {
-  background: linear-gradient(135deg, #228be6 0%, #1c7ed6 100%);
+  background: var(--btn-primary-gradient);
   border-color: transparent;
   color: white;
 }
@@ -592,19 +592,19 @@
 }
 
 .system-log-entry.level-fatal {
-  border-left: 4px solid #DC2626;
+  border-left: 4px solid var(--color-error);
 }
 
 .system-log-entry.level-error {
-  border-left: 4px solid #EF4444;
+  border-left: 4px solid var(--color-error);
 }
 
 .system-log-entry.level-warn {
-  border-left: 4px solid #F59E0B;
+  border-left: 4px solid var(--color-warning);
 }
 
 .system-log-entry.level-info {
-  border-left: 4px solid #3B82F6;
+  border-left: 4px solid var(--color-primary);
 }
 
 .system-log-entry.level-debug {
@@ -632,22 +632,22 @@
 }
 
 .log-level-badge.level-fatal {
-  background: #DC2626;
+  background: var(--color-error);
   color: white;
 }
 
 .log-level-badge.level-error {
-  background: #EF4444;
+  background: var(--color-error);
   color: white;
 }
 
 .log-level-badge.level-warn {
-  background: #F59E0B;
+  background: var(--color-warning);
   color: white;
 }
 
 .log-level-badge.level-info {
-  background: #3B82F6;
+  background: var(--color-primary);
   color: white;
 }
 
@@ -712,7 +712,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid var(--border-light);
-  border-top-color: #228be6;
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

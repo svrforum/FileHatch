@@ -13,9 +13,9 @@
 }
 
 .error-message {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #dc2626;
+  background: var(--color-error-light);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error);
   padding: 12px;
   border-radius: 8px;
   font-size: 14px;
@@ -32,7 +32,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: #3182f6;
+  background: var(--color-primary);
   color: white;
   border: none;
   padding: 8px 16px;
@@ -44,17 +44,17 @@
 }
 
 .create-user-btn:hover:not(:disabled) {
-  background: #1d6ce0;
+  background: var(--color-primary-hover);
 }
 
 .create-user-btn:disabled {
-  background: #9ca3af;
+  background: var(--color-disabled);
   cursor: not-allowed;
 }
 
 .user-form {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 20px;
@@ -64,7 +64,7 @@
   margin: 0 0 16px 0;
   font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .form-row {
@@ -86,22 +86,22 @@
 .user-form .form-group label {
   font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-secondary);
 }
 
 .user-form .form-group input[type="text"],
 .user-form .form-group input[type="email"],
 .user-form .form-group input[type="password"] {
   padding: 8px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-light);
   border-radius: 6px;
   font-size: 14px;
 }
 
 .user-form .form-group input:focus {
   outline: none;
-  border-color: #3182f6;
-  box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 .checkbox-group label {
@@ -115,7 +115,7 @@
 .checkbox-group input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  accent-color: #3182f6;
+  accent-color: var(--color-primary);
 }
 
 .form-actions {
@@ -126,9 +126,9 @@
 }
 
 .cancel-btn {
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  color: #374151;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
   padding: 8px 16px;
   border-radius: 6px;
   font-size: 14px;
@@ -137,7 +137,7 @@
 }
 
 .cancel-btn:hover {
-  background: #e5e7eb;
+  background: var(--bg-hover);
 }
 
 .users-list {
@@ -154,17 +154,17 @@
 .users-list td {
   padding: 12px;
   text-align: left;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .users-list th {
-  background: #f9fafb;
+  background: var(--bg-secondary);
   font-weight: 600;
-  color: #374151;
+  color: var(--text-secondary);
 }
 
 .users-list tr:hover td {
-  background: #f9fafb;
+  background: var(--bg-secondary);
 }
 
 .users-list tr.inactive td {
@@ -180,23 +180,23 @@
 }
 
 .badge.admin {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
 }
 
 .badge.user {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
 }
 
 .badge.active {
-  background: #d1fae5;
-  color: #059669;
+  background: var(--color-success-light);
+  color: var(--color-2fa-green-dark);
 }
 
 .badge.inactive {
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--color-error-light);
+  color: var(--color-error);
 }
 
 .actions {
@@ -214,23 +214,23 @@
 }
 
 .edit-btn {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #2563eb;
+  background: var(--color-primary-lighter);
+  border: 1px solid var(--color-primary-border);
+  color: var(--color-primary);
 }
 
 .edit-btn:hover:not(:disabled) {
-  background: #dbeafe;
+  background: var(--color-primary-light);
 }
 
 .delete-btn {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #dc2626;
+  background: var(--color-error-lighter);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error);
 }
 
 .delete-btn:hover:not(:disabled) {
-  background: #fee2e2;
+  background: var(--color-error-light);
 }
 
 .edit-btn:disabled,
@@ -242,5 +242,5 @@
 .loading {
   text-align: center;
   padding: 40px;
-  color: #6b7280;
+  color: var(--text-tertiary);
 }

@@ -57,7 +57,7 @@
 
 /* Created Link Section */
 .created-link-section {
-  background: linear-gradient(135deg, #e8f4fd 0%, #dbeafe 100%);
+  background: var(--gradient-info-light);
   padding: 20px;
   border-radius: 16px;
   margin-bottom: 24px;
@@ -67,7 +67,7 @@
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: #1d4ed8;
+  color: var(--color-primary-dark);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 12px;
@@ -94,7 +94,7 @@
   font-size: 14px;
   font-weight: 600;
   color: white;
-  background: linear-gradient(135deg, #228be6 0%, #1c7ed6 100%);
+  background: var(--btn-primary-gradient);
   border: none;
   border-radius: 12px;
   cursor: pointer;
@@ -104,11 +104,11 @@
 
 .copy-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(34, 139, 230, 0.3);
+  box-shadow: var(--shadow-primary);
 }
 
 .copy-btn.copied {
-  background: linear-gradient(135deg, #40c057 0%, #37b24d 100%);
+  background: var(--gradient-success);
 }
 
 /* Options Section */
@@ -144,11 +144,11 @@
   min-width: 20px;
   min-height: 20px;
   border-radius: 5px;
-  border: 2px solid #adb5bd;
+  border: 2px solid var(--text-tertiary);
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  background: #fff;
+  background: var(--bg-primary);
   transition: all 0.15s ease;
   position: relative;
   display: flex;
@@ -157,12 +157,12 @@
 }
 
 .checkbox-label input[type="checkbox"]:hover {
-  border-color: #228be6;
+  border-color: var(--color-primary);
 }
 
 .checkbox-label input[type="checkbox"]:checked {
-  background: #228be6;
-  border-color: #228be6;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 .checkbox-label input[type="checkbox"]:checked::after {
@@ -196,8 +196,8 @@
 
 .option-input:focus {
   outline: none;
-  border-color: #228be6;
-  box-shadow: 0 0 0 3px rgba(34, 139, 230, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
 .option-input.small {
@@ -233,22 +233,22 @@
 
 /* Messages */
 .error-message {
-  color: #fa5252;
+  color: var(--color-error);
   font-size: 14px;
   text-align: center;
   margin: 12px 0;
   padding: 12px;
-  background: #fff5f5;
+  background: var(--color-error-lighter);
   border-radius: 10px;
 }
 
 .success-message {
-  color: #40c057;
+  color: var(--color-success);
   font-size: 14px;
   text-align: center;
   margin: 12px 0;
   padding: 12px;
-  background: #f4fce3;
+  background: var(--color-success-lighter);
   border-radius: 10px;
 }
 
@@ -259,7 +259,7 @@
   font-size: 16px;
   font-weight: 600;
   color: white;
-  background: linear-gradient(135deg, #228be6 0%, #1c7ed6 100%);
+  background: var(--btn-primary-gradient);
   border: none;
   border-radius: 14px;
   cursor: pointer;
@@ -360,7 +360,7 @@
 }
 
 .link-url-input:focus {
-  border-color: #228be6;
+  border-color: var(--color-primary);
 }
 
 .link-copy-btn {
@@ -368,7 +368,7 @@
   font-size: 12px;
   font-weight: 600;
   color: white;
-  background: #228be6;
+  background: var(--color-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -377,13 +377,13 @@
 }
 
 .link-copy-btn:hover {
-  background: #1c7ed6;
+  background: var(--color-primary-hover);
 }
 
 .link-token {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
   font-size: 13px;
-  color: #228be6;
+  color: var(--color-primary);
   background: rgba(34, 139, 230, 0.1);
   padding: 4px 10px;
   border-radius: 6px;
@@ -394,7 +394,7 @@
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 600;
-  color: #fa5252;
+  color: var(--color-error);
   background: rgba(250, 82, 82, 0.1);
   border: none;
   border-radius: 8px;
@@ -403,7 +403,7 @@
 }
 
 .link-delete-btn:hover:not(:disabled) {
-  background: #fa5252;
+  background: var(--color-error);
   color: white;
 }
 
@@ -435,27 +435,27 @@
 
 .link-meta-badge.password {
   background: rgba(250, 176, 5, 0.1);
-  color: #fab005;
+  color: var(--color-warning);
 }
 
 .link-meta-badge.expiry {
   background: rgba(34, 139, 230, 0.1);
-  color: #228be6;
+  color: var(--color-primary);
 }
 
 .link-meta-badge.access {
   background: rgba(64, 192, 87, 0.1);
-  color: #40c057;
+  color: var(--color-success);
 }
 
 .link-meta-badge.login {
   background: rgba(153, 105, 229, 0.1);
-  color: #9969e5;
+  color: var(--color-admin-purple);
 }
 
 .link-meta-badge.inactive {
   background: rgba(173, 181, 189, 0.1);
-  color: #adb5bd;
+  color: var(--text-tertiary);
 }
 
 /* Close Button */
@@ -525,7 +525,7 @@
 
 .share-type-btn.active {
   color: white;
-  background: linear-gradient(135deg, #228be6 0%, #1c7ed6 100%);
+  background: var(--btn-primary-gradient);
   box-shadow: 0 2px 8px rgba(34, 139, 230, 0.3);
 }
 
@@ -556,12 +556,12 @@
 /* Upload link badge */
 .link-meta-badge.upload {
   background: rgba(34, 139, 230, 0.1);
-  color: #228be6;
+  color: var(--color-primary);
 }
 
 /* Upload link item styling */
 .link-item.upload-link {
-  border-left: 3px solid #228be6;
+  border-left: 3px solid var(--color-primary);
 }
 
 /* Responsive */

@@ -771,6 +771,7 @@ export interface StarredFile {
   id: string
   filePath: string
   starredAt: string
+  isDir: boolean
 }
 
 // Toggle star status for a file

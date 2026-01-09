@@ -17,8 +17,8 @@
 .file-list-container {
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  min-height: calc(100vh - 60px - 48px);
+  box-shadow: var(--shadow-card, var(--shadow-sm));
+  min-height: calc(100vh - 64px - 48px);
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -541,12 +541,12 @@
 
 .col-share-info .permission-tag.r {
   background: rgba(99, 102, 241, 0.1);
-  color: #6366f1;
+  color: var(--color-indigo);
 }
 
 .col-share-info .permission-tag.rw {
   background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
+  color: var(--color-2fa-green);
 }
 
 .col-share-options {
@@ -578,27 +578,27 @@
 
 .share-option.password {
   background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .share-option.login {
   background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+  color: var(--color-primary);
 }
 
 .share-option.expiry {
   background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .share-option.access {
   background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
+  color: var(--color-2fa-green);
 }
 
 .share-option.public {
   background: rgba(107, 114, 128, 0.1);
-  color: #6b7280;
+  color: var(--text-tertiary);
 }
 
 .col-unshare {
@@ -837,7 +837,7 @@
   transform: translate(-50%, -50%);
   width: 48px;
   height: 48px;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--bg-overlay);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1023,7 +1023,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1603,12 +1603,12 @@
 
 .share-badge.expiry {
   background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
+  color: var(--color-warning);
 }
 
 .share-badge.access {
   background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  color: var(--color-2fa-green);
 }
 
 /* Download Options Modal */

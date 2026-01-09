@@ -32,7 +32,7 @@
   font-size: 11px;
   font-weight: 600;
   color: white;
-  background: #ef4444;
+  background: var(--color-error);
   border-radius: 9px;
   display: flex;
   align-items: center;
@@ -45,8 +45,8 @@
   right: 0;
   width: 360px;
   max-height: 480px;
-  background: var(--card-bg, #ffffff);
-  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
   border-radius: 12px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
   z-index: 2000;
@@ -57,13 +57,13 @@
 
 /* Ensure solid background in all themes */
 [data-theme="light"] .notification-dropdown {
-  background: #ffffff;
-  border-color: #e5e7eb;
+  background: var(--bg-primary);
+  border-color: var(--border-light);
 }
 
 [data-theme="dark"] .notification-dropdown {
-  background: #1f2937;
-  border-color: #374151;
+  background: var(--bg-dark-card);
+  border-color: var(--border-dark);
 }
 
 .notification-dropdown__header {
@@ -132,8 +132,8 @@
 .notification-item {
   display: flex;
   align-items: flex-start;
-  border-bottom: 1px solid var(--border-color, #e5e7eb);
-  background: var(--card-bg, #ffffff);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-primary);
   transition: background 0.2s;
 }
 
@@ -142,25 +142,25 @@
 }
 
 .notification-item:hover {
-  background: var(--hover-bg, #f3f4f6);
+  background: var(--bg-hover);
 }
 
 [data-theme="light"] .notification-item {
-  background: #ffffff;
-  border-color: #e5e7eb;
+  background: var(--bg-primary);
+  border-color: var(--border-light);
 }
 
 [data-theme="light"] .notification-item:hover {
-  background: #f3f4f6;
+  background: var(--bg-hover);
 }
 
 [data-theme="dark"] .notification-item {
-  background: #1f2937;
-  border-color: #374151;
+  background: var(--bg-dark-card);
+  border-color: var(--border-dark);
 }
 
 [data-theme="dark"] .notification-item:hover {
-  background: #374151;
+  background: var(--bg-dark-hover);
 }
 
 .notification-item--read {
@@ -270,25 +270,25 @@
 /* Footer */
 .notification-dropdown__footer {
   padding: 12px 16px;
-  border-top: 1px solid var(--border-color, #e5e7eb);
-  background: var(--card-bg, #ffffff);
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-primary);
 }
 
 [data-theme="light"] .notification-dropdown__footer {
-  background: #f9fafb;
-  border-color: #e5e7eb;
+  background: var(--bg-secondary);
+  border-color: var(--border-light);
 }
 
 [data-theme="dark"] .notification-dropdown__footer {
-  background: #111827;
-  border-color: #374151;
+  background: var(--bg-dark-tertiary);
+  border-color: var(--border-dark);
 }
 
 .notification-dropdown__view-all {
   width: 100%;
   padding: 8px 16px;
   border: none;
-  background: var(--primary-color, #3182F6);
+  background: var(--color-primary);
   color: white;
   font-size: 14px;
   font-weight: 500;
@@ -298,7 +298,7 @@
 }
 
 .notification-dropdown__view-all:hover {
-  background: var(--primary-hover, #1a6de3);
+  background: var(--color-primary-hover);
 }
 
 /* Scrollbar styling */

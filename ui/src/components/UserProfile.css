@@ -410,12 +410,13 @@
   border: 1px solid var(--border-light);
 }
 
-.verify-code-input {
-  font-size: 24px !important;
+/* OTP/Code input - higher specificity to override .form-group input */
+.profile-content .form-group .verify-code-input {
+  font-size: 24px;
   text-align: center;
   letter-spacing: 8px;
-  font-family: monospace;
-  padding: 16px !important;
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  padding: 16px;
 }
 
 .form-actions {

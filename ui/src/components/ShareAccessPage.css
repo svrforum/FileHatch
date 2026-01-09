@@ -5,7 +5,7 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  background: var(--bg-page-gradient);
 }
 
 .share-access-card {
@@ -44,8 +44,8 @@
 .share-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #e9ecef;
-  border-top-color: #228be6;
+  border: 3px solid var(--border-light);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -71,7 +71,7 @@
 .share-error-icon {
   width: 64px;
   height: 64px;
-  color: #fa5252;
+  color: var(--color-error);
 }
 
 .share-error h2 {
@@ -92,7 +92,7 @@
 .share-lock-icon {
   width: 64px;
   height: 64px;
-  color: #228be6;
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 
@@ -152,7 +152,7 @@
   width: 100%;
   padding: 16px 20px;
   font-size: 16px;
-  border: 2px solid #e9ecef;
+  border: 2px solid var(--border-light);
   border-radius: 14px;
   outline: none;
   transition: all 0.2s ease;
@@ -163,17 +163,17 @@
 }
 
 .share-password-input:focus {
-  border-color: #228be6;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 4px rgba(34, 139, 230, 0.1);
 }
 
 .share-password-input::placeholder {
   letter-spacing: normal;
-  color: #adb5bd;
+  color: var(--text-tertiary);
 }
 
 .share-password-error {
-  color: #fa5252;
+  color: var(--color-error);
   font-size: 14px;
   margin: 0;
 }
@@ -185,7 +185,7 @@
   font-size: 16px;
   font-weight: 600;
   color: white;
-  background: linear-gradient(135deg, #228be6 0%, #1c7ed6 100%);
+  background: var(--btn-primary-gradient);
   border: none;
   border-radius: 14px;
   cursor: pointer;
@@ -214,8 +214,8 @@
   padding: 14px 24px;
   font-size: 15px;
   font-weight: 600;
-  color: #495057;
-  background: #f1f3f4;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
   border: none;
   border-radius: 14px;
   cursor: pointer;
@@ -224,7 +224,7 @@
 }
 
 .share-btn-secondary:hover {
-  background: #e9ecef;
+  background: var(--bg-hover);
 }
 
 /* Success State */
@@ -235,7 +235,7 @@
 .share-file-preview {
   width: 100px;
   height: 100px;
-  background: linear-gradient(135deg, #f1f3f4 0%, #e9ecef 100%);
+  background: var(--bg-secondary-gradient);
   border-radius: 24px;
   display: flex;
   align-items: center;
@@ -249,11 +249,11 @@
 }
 
 .share-file-icon.folder {
-  color: #fab005;
+  color: var(--color-warning);
 }
 
 .share-file-icon.file {
-  color: #228be6;
+  color: var(--color-primary);
 }
 
 .share-file-info {
@@ -302,14 +302,14 @@
 
 .share-expiry {
   font-size: 13px;
-  color: #adb5bd;
+  color: var(--text-tertiary);
   margin: 0;
 }
 
 .share-branding {
   margin-top: 32px;
   font-size: 13px;
-  color: #adb5bd;
+  color: var(--text-tertiary);
   font-weight: 500;
 }
 
@@ -344,15 +344,15 @@
 
 /* File Icon Types */
 .share-file-icon.video {
-  color: #fa5252;
+  color: var(--color-error);
 }
 
 .share-file-icon.image {
-  color: #40c057;
+  color: var(--color-success);
 }
 
 .share-file-icon.audio {
-  color: #9969e5;
+  color: var(--color-admin-purple);
 }
 
 /* Preview Overlay */
@@ -379,7 +379,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--bg-overlay);
 }
 
 .share-preview-title {
@@ -460,7 +460,7 @@
 .share-audio-icon {
   width: 120px;
   height: 120px;
-  background: linear-gradient(135deg, #9969e5 0%, #7c4dff 100%);
+  background: var(--gradient-purple);
   border-radius: 24px;
   display: flex;
   align-items: center;
@@ -507,7 +507,7 @@
   height: 100%;
   max-width: 900px;
   max-height: 80vh;
-  background: #1e1e1e;
+  background: var(--bg-code-editor);
   border-radius: 12px;
   overflow: hidden;
   display: flex;
@@ -521,7 +521,7 @@
   justify-content: center;
   height: 300px;
   gap: 16px;
-  color: #adb5bd;
+  color: var(--text-tertiary);
 }
 
 .share-text-content {
@@ -530,8 +530,8 @@
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   font-size: 13px;
   line-height: 1.6;
-  color: #d4d4d4;
-  background: #1e1e1e;
+  color: var(--color-code-text);
+  background: var(--bg-code-editor);
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow: auto;
@@ -545,72 +545,72 @@
 }
 
 .share-text-content::-webkit-scrollbar-track {
-  background: #2d2d2d;
+  background: var(--bg-scrollbar-track);
 }
 
 .share-text-content::-webkit-scrollbar-thumb {
-  background: #4a4a4a;
+  background: var(--bg-scrollbar-thumb);
   border-radius: 5px;
 }
 
 .share-text-content::-webkit-scrollbar-thumb:hover {
-  background: #5a5a5a;
+  background: var(--bg-scrollbar-thumb-hover);
 }
 
 /* Text file icon color */
 .share-file-icon.text {
-  color: #74c0fc;
+  color: var(--color-info);
 }
 
 /* Dark mode support */
 [data-theme='dark'] .share-access-page {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: var(--bg-dark-page-gradient);
 }
 
 [data-theme='dark'] .share-access-card {
-  background: #1f1f1f;
+  background: var(--bg-dark-card);
 }
 
 [data-theme='dark'] .share-error h2,
 [data-theme='dark'] .share-login-required h2,
 [data-theme='dark'] .share-password-form h2,
 [data-theme='dark'] .share-file-name {
-  color: #f8f9fa;
+  color: var(--text-dark-primary);
 }
 
 [data-theme='dark'] .share-error p,
 [data-theme='dark'] .share-login-required p,
 [data-theme='dark'] .share-password-form p,
 [data-theme='dark'] .share-loading p {
-  color: #adb5bd;
+  color: var(--text-dark-secondary);
 }
 
 [data-theme='dark'] .share-password-input {
-  background: #2d2d2d;
-  border-color: #3d3d3d;
-  color: #f8f9fa;
+  background: var(--bg-dark-input);
+  border-color: var(--border-dark);
+  color: var(--text-dark-primary);
 }
 
 [data-theme='dark'] .share-password-input:focus {
-  border-color: #228be6;
+  border-color: var(--color-primary);
 }
 
 [data-theme='dark'] .share-btn-secondary {
-  background: #2d2d2d;
-  color: #f8f9fa;
+  background: var(--bg-dark-input);
+  color: var(--text-dark-primary);
 }
 
 [data-theme='dark'] .share-btn-secondary:hover {
-  background: #3d3d3d;
+  background: var(--bg-dark-hover);
 }
 
 [data-theme='dark'] .share-file-preview {
-  background: linear-gradient(135deg, #2d2d2d 0%, #3d3d3d 100%);
+  background: var(--bg-dark-secondary-gradient);
 }
 
 [data-theme='dark'] .share-spinner {
-  border-color: #3d3d3d;
-  border-top-color: #228be6;
+  border-color: var(--border-dark);
+  border-top-color: var(--color-primary);
 }
 
 /* Edit Button */
@@ -619,7 +619,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: linear-gradient(135deg, #40c057 0%, #37b24d 100%);
+  background: var(--gradient-success);
 }
 
 .share-edit-btn:hover:not(:disabled) {
@@ -645,8 +645,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .share-editor-title {
@@ -667,9 +667,9 @@
   padding: 8px 16px;
   font-size: 14px;
   font-weight: 500;
-  color: #495057;
-  background: #fff;
-  border: 1px solid #dee2e6;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -681,8 +681,8 @@
 }
 
 .share-editor-close-btn:hover {
-  background: #f1f3f4;
-  border-color: #adb5bd;
+  background: var(--bg-secondary);
+  border-color: var(--text-tertiary);
 }
 
 .share-editor-container {
@@ -692,25 +692,25 @@
 
 /* Dark mode for editor */
 [data-theme='dark'] .share-editor-overlay {
-  background: #1f1f1f;
+  background: var(--bg-dark-card);
 }
 
 [data-theme='dark'] .share-editor-header {
-  background: #2d2d2d;
-  border-bottom-color: #3d3d3d;
+  background: var(--bg-dark-input);
+  border-bottom-color: var(--border-dark);
 }
 
 [data-theme='dark'] .share-editor-title {
-  color: #f8f9fa;
+  color: var(--text-dark-primary);
 }
 
 [data-theme='dark'] .share-editor-close-btn {
-  background: #3d3d3d;
-  border-color: #4d4d4d;
-  color: #f8f9fa;
+  background: var(--bg-dark-hover);
+  border-color: var(--border-dark-hover);
+  color: var(--text-dark-primary);
 }
 
 [data-theme='dark'] .share-editor-close-btn:hover {
-  background: #4d4d4d;
-  border-color: #5d5d5d;
+  background: var(--border-dark-hover);
+  border-color: var(--border-dark-active);
 }

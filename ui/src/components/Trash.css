@@ -65,7 +65,7 @@
 }
 
 .empty-trash-btn:hover:not(:disabled) {
-  background: #c0392b;
+  background: var(--color-error-dark);
 }
 
 .empty-trash-btn:disabled {
@@ -137,7 +137,7 @@
 }
 
 .trash-item-icon .folder-icon {
-  color: #3182F6;
+  color: var(--color-primary);
 }
 
 .trash-item-icon .file-icon {
@@ -225,7 +225,7 @@
 }
 
 .restore-btn:hover:not(:disabled) {
-  background: #1d6ce0;
+  background: var(--color-primary-hover);
 }
 
 .delete-btn {
@@ -234,7 +234,7 @@
 }
 
 .delete-btn:hover:not(:disabled) {
-  background: #c0392b;
+  background: var(--color-error-dark);
 }
 
 .restore-btn:disabled,
@@ -250,7 +250,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -331,7 +331,7 @@
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #c0392b;
+  background: var(--color-error-dark);
 }
 
 .btn-danger:disabled {
@@ -465,7 +465,7 @@
 }
 
 .filter-reset-link:hover {
-  color: #1d6ce0;
+  color: var(--color-primary-hover);
 }
 
 /* Responsive adjustments */

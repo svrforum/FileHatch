@@ -7,7 +7,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--bg-overlay);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
@@ -163,8 +163,8 @@
 
 .create-user-modal .form-group input:focus {
   outline: none;
-  border-color: #228be6;
-  box-shadow: 0 0 0 3px rgba(34, 139, 230, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
 .create-user-modal .form-group input::placeholder {
@@ -207,8 +207,8 @@
 }
 
 .create-user-modal .checkbox-label input[type="checkbox"]:checked {
-  background: #228be6;
-  border-color: #228be6;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 .create-user-modal .checkbox-label input[type="checkbox"]:checked::after {
@@ -238,7 +238,7 @@
   width: 24px;
   height: 24px;
   border: 3px solid var(--border-light);
-  border-top-color: #228be6;
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -275,7 +275,7 @@
 
 .create-user-modal .folder-search-input:focus {
   outline: none;
-  border-color: #228be6;
+  border-color: var(--color-primary);
   background: var(--bg-primary);
 }
 
@@ -360,11 +360,11 @@
 }
 
 .create-user-modal .perm-btn.active.readonly {
-  background: #228be6;
+  background: var(--color-primary);
 }
 
 .create-user-modal .perm-btn.active.readwrite {
-  background: #40c057;
+  background: var(--color-success);
 }
 
 /* Error Message */
@@ -413,7 +413,7 @@
   font-size: 15px;
   font-weight: 600;
   color: white;
-  background: linear-gradient(135deg, #228be6 0%, #1c7ed6 100%);
+  background: var(--btn-primary-gradient);
   border: none;
   border-radius: 12px;
   cursor: pointer;
@@ -425,7 +425,7 @@
 
 .create-user-modal .btn-submit:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(34, 139, 230, 0.3);
+  box-shadow: var(--shadow-primary);
 }
 
 .create-user-modal .btn-submit:disabled {

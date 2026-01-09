@@ -140,7 +140,7 @@
 }
 
 .folder-icon {
-  color: #3182F6;
+  color: var(--color-primary);
   flex-shrink: 0;
 }
 

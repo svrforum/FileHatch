@@ -17,5 +17,13 @@
   overflow-x: hidden;
   min-height: calc(100vh - 60px);
   /* Make room for fixed sidebar */
-  margin-left: 260px;
+  margin-left: var(--sidebar-width);
+}
+
+/* Mobile Responsive - hide sidebar margin */
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+    padding: var(--spacing-md);
+  }
 }
