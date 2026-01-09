@@ -20,10 +20,17 @@
   margin-left: var(--sidebar-width);
 }
 
-/* Mobile Responsive - hide sidebar margin */
+/* Mobile Responsive */
 @media (max-width: 768px) {
+  .app-container {
+    padding-top: 56px; /* Mobile header height */
+  }
+
   .main-content {
     margin-left: 0;
-    padding: var(--spacing-md);
+    padding: var(--spacing-sm);
+    min-height: calc(100vh - 56px);
+    /* Safe area support for notched devices */
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }
