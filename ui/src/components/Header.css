@@ -127,6 +127,34 @@
   gap: var(--spacing-sm);
 }
 
+/* Theme Toggle Button */
+.header-right .theme-toggle-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.header-right .theme-toggle-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.header-right .theme-toggle-btn:active {
+  transform: scale(0.95);
+}
+
+[data-theme='dark'] .header-right .theme-toggle-btn:hover {
+  background: var(--bg-tertiary);
+}
+
 .icon-btn {
   width: 40px;
   height: 40px;
