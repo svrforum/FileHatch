@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { User, login, getProfile, LoginRequest, verify2FA, refreshToken } from '../api/auth'
+import { ApiError } from '../api/client'
 
 interface AuthState {
   token: string | null
@@ -115,9 +116,16 @@ export const useAuthStore = create<AuthState>()(
         try {
           const user = await getProfile(token)
           set({ user })
-        } catch {
-          // Token might be expired, logout
-          set({ token: null, user: null })
+        } catch (err) {
+          // Only logout if it's an authentication error (401/403)
+          // Don't logout for network errors or other issues
+          if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+            console.log('[Auth] Token expired or unauthorized, logging out')
+            set({ token: null, user: null })
+          } else {
+            // For other errors (network issues, etc.), keep the current state
+            console.warn('[Auth] Failed to refresh profile (keeping session):', err)
+          }
         }
       },
 
