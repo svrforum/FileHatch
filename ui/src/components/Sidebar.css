@@ -472,10 +472,6 @@
 }
 
 /* Admin Mode Styles */
-.sidebar.admin-mode {
-  background: linear-gradient(180deg, rgba(139, 92, 246, 0.03) 0%, var(--bg-primary) 100%);
-}
-
 .admin-header {
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);

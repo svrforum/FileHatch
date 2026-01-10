@@ -9,6 +9,11 @@
   padding-right: 320px;
 }
 
+/* Mobile overlay - hidden on desktop */
+.mobile-panel-overlay {
+  display: none;
+}
+
 /* panel-open class no longer needed for layout, kept for compatibility */
 .file-list-wrapper.panel-open {
   /* No change - space is always reserved */
@@ -1692,25 +1697,118 @@
    ================================= */
 
 @media (max-width: 768px) {
-  /* File List Container */
-  .file-list-container {
-    padding: var(--spacing-sm);
+  /* File List Wrapper - Remove reserved space for panel on mobile */
+  .file-list-wrapper {
+    padding-right: 0;
+    min-height: calc(100vh - 56px - 32px);
   }
 
-  /* File Details Panel - Full screen on mobile */
-  .file-details-panel {
+  /* File List Container */
+  .file-list-container {
+    padding: 0;
+    min-height: calc(100vh - 56px - 32px);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* File List Header - Mobile */
+  .file-list-header {
+    padding: var(--spacing-sm) var(--spacing-md);
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+  }
+
+  .breadcrumb {
+    gap: var(--spacing-xs);
+  }
+
+  .back-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .current-path {
+    font-size: 16px;
+  }
+
+  .file-count {
+    font-size: 12px;
+    margin-left: var(--spacing-sm);
+  }
+
+  .view-options {
+    gap: 2px;
+  }
+
+  .view-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Local search - Mobile */
+  .local-search-container.active {
+    max-width: none;
+    width: 100%;
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .local-search-input-wrapper {
+    height: 40px;
+  }
+
+  /* Hide empty details panel on mobile - only show when file is selected */
+  .file-details-panel.empty {
+    display: none;
+  }
+
+  /* File Details Panel - Compact bottom sheet on mobile */
+  .file-details-panel:not(.empty) {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    min-width: 100%;
+    max-height: 55vh;
+    height: auto;
+    z-index: 1200;
+    border-left: none;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+    animation: slideInUp 0.3s var(--ease-out-expo);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Drag handle indicator */
+  .file-details-panel:not(.empty)::before {
+    content: '';
+    position: sticky;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    display: block;
+    width: 36px;
+    height: 4px;
+    background: var(--border-default);
+    border-radius: 2px;
+    margin: 8px auto 0;
+  }
+
+  /* Mobile overlay - clickable to close panel */
+  .mobile-panel-overlay {
+    display: block;
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    width: 100%;
-    min-width: 100%;
-    height: 100vh;
-    z-index: 1200;
-    border-left: none;
-    border-radius: 0;
-    animation: slideInUp 0.3s var(--ease-out-expo);
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1100;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
 
   @keyframes slideInUp {
@@ -1724,61 +1822,130 @@
     }
   }
 
+  /* Compact header for bottom sheet */
   .details-header {
-    padding: var(--spacing-md);
-    padding-top: calc(var(--spacing-md) + env(safe-area-inset-top));
+    padding: var(--spacing-sm) var(--spacing-md);
+    position: sticky;
+    top: 0;
+    background: var(--bg-primary);
+    z-index: 10;
+    border-bottom: 1px solid var(--border-light);
   }
 
+  .details-header h3 {
+    font-size: 14px;
+  }
+
+  /* Compact close button */
+  .file-details-panel:not(.empty) .close-details-btn {
+    width: 32px;
+    height: 32px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-full);
+  }
+
+  /* Compact icon area */
   .details-icon {
-    padding: var(--spacing-lg);
+    padding: var(--spacing-sm);
+    display: none; /* Hide icon on mobile for compactness */
   }
 
-  .details-icon svg {
-    width: 56px;
-    height: 56px;
+  /* Compact thumbnail */
+  .details-thumbnail {
+    padding: var(--spacing-sm);
   }
 
+  .details-thumbnail img {
+    max-height: 100px;
+  }
+
+  /* Compact file name */
   .details-name {
-    font-size: 15px;
-    padding: 0 var(--spacing-md);
+    font-size: 14px;
+    font-weight: 600;
+    padding: var(--spacing-xs) var(--spacing-md);
   }
 
+  /* Compact details list - horizontal layout */
   .details-list {
-    padding: var(--spacing-md);
-    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-xs);
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .details-item {
+    gap: 2px;
   }
 
   .details-label {
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .details-value {
-    font-size: 13px;
+    font-size: 12px;
   }
 
+  .details-value.path {
+    font-size: 11px;
+    grid-column: 1 / -1;
+  }
+
+  /* Hide metadata section on mobile for compactness */
+  .details-metadata {
+    display: none;
+  }
+
+  /* Compact action buttons - horizontal row */
   .details-actions {
-    padding: var(--spacing-md);
-    padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom));
+    padding: var(--spacing-sm) var(--spacing-md);
+    padding-bottom: calc(var(--spacing-sm) + env(safe-area-inset-bottom));
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    border-top: 1px solid var(--border-light);
   }
 
   .btn-detail-action {
-    padding: 14px;
-    font-size: 15px;
-    min-height: 48px;
+    flex: 1;
+    min-width: calc(50% - var(--spacing-xs));
+    padding: 10px 12px;
+    font-size: 13px;
+    min-height: 40px;
+  }
+
+  .btn-detail-action svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* File Table Header - Mobile */
+  .file-table-header {
+    grid-template-columns: 1fr 40px;
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .file-table-header .col-size,
+  .file-table-header .col-date {
+    display: none;
   }
 
   /* File Row - Mobile optimized */
   .file-row {
-    padding: 10px var(--spacing-sm);
+    grid-template-columns: 1fr 40px;
+    padding: 12px var(--spacing-md);
     gap: var(--spacing-sm);
   }
 
-  .file-icon-wrapper {
-    width: 36px;
-    height: 36px;
+  .col-name {
+    gap: var(--spacing-sm);
   }
 
-  .file-icon-wrapper svg {
+  .file-icon {
+    flex-shrink: 0;
+  }
+
+  .file-icon svg {
     width: 20px;
     height: 20px;
   }
@@ -1787,21 +1954,18 @@
     font-size: 14px;
   }
 
-  .file-meta {
-    font-size: 11px;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-  }
-
-  .file-size, .file-date {
-    font-size: 11px;
-  }
-
   /* Hide columns on mobile */
-  .file-row .file-size,
-  .file-row .file-date {
+  .file-row .col-size,
+  .file-row .col-date {
     display: none;
+  }
+
+  .col-actions {
+    display: flex;
+  }
+
+  .action-btn {
+    opacity: 1;
   }
 
   /* Multi-select bar - Mobile */

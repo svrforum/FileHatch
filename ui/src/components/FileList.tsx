@@ -1079,6 +1079,14 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
 
   return (
     <div className={`file-list-wrapper ${selectedFile ? 'panel-open' : ''}`}>
+    {/* Mobile overlay - click to close details panel */}
+    {selectedFile && (
+      <div
+        className="mobile-panel-overlay"
+        onClick={() => setSelectedFile(null)}
+        aria-hidden="true"
+      />
+    )}
     <div
       className={`file-list-container ${isDraggingFiles ? 'dragging-files' : ''} ${isMarqueeSelecting ? 'marquee-selecting' : ''}`}
       ref={containerRef}
