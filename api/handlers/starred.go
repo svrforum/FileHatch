@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -14,6 +15,7 @@ type StarredFile struct {
 	ID        string    `json:"id"`
 	FilePath  string    `json:"filePath"`
 	StarredAt time.Time `json:"starredAt"`
+	IsDir     bool      `json:"isDir"`
 }
 
 // StarRequest represents a request to star/unstar a file
@@ -97,6 +99,16 @@ func (h *Handler) GetStarredFiles(c echo.Context) error {
 		if err := rows.Scan(&s.ID, &s.FilePath, &s.StarredAt); err != nil {
 			continue
 		}
+
+		// Check if the file is a directory
+		realPath, _, _, err := h.resolvePath(s.FilePath, claims)
+		if err == nil {
+			info, statErr := os.Stat(realPath)
+			if statErr == nil {
+				s.IsDir = info.IsDir()
+			}
+		}
+
 		starred = append(starred, s)
 	}
 
