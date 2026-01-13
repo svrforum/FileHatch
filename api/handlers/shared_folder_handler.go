@@ -159,7 +159,7 @@ func (h *SharedFolderHandler) ListMySharedFolders(c echo.Context) error {
 
 	query := `
 		SELECT sf.id, sf.name, sf.description, sf.storage_quota, sf.created_by,
-		       sf.created_at, sf.updated_at, sf.is_active, sfm.permission_level
+		       sf.created_at, sf.updated_at, sf.is_active, sf.storage_used, sfm.permission_level
 		FROM shared_folders sf
 		INNER JOIN shared_folder_members sfm ON sf.id = sfm.shared_folder_id
 		WHERE sfm.user_id = $1 AND sf.is_active = TRUE
@@ -178,15 +178,13 @@ func (h *SharedFolderHandler) ListMySharedFolders(c echo.Context) error {
 		var createdBy sql.NullString
 		if scanErr := rows.Scan(
 			&f.ID, &f.Name, &f.Description, &f.StorageQuota, &createdBy,
-			&f.CreatedAt, &f.UpdatedAt, &f.IsActive, &f.PermissionLevel,
+			&f.CreatedAt, &f.UpdatedAt, &f.IsActive, &f.UsedStorage, &f.PermissionLevel,
 		); scanErr != nil {
 			continue
 		}
 		if createdBy.Valid {
 			f.CreatedBy = createdBy.String
 		}
-		// Calculate storage usage by folder name
-		f.UsedStorage, _ = h.GetFolderStorageUsage(f.Name)
 		folders = append(folders, f)
 	}
 
@@ -235,7 +233,8 @@ func (h *SharedFolderHandler) GetMyPermission(c echo.Context) error {
 func (h *SharedFolderHandler) ListAllSharedFolders(c echo.Context) error {
 	query := `
 		SELECT sf.id, sf.name, sf.description, sf.storage_quota, sf.created_by,
-		       sf.created_at, sf.updated_at, sf.is_active, u.username as creator_username,
+		       sf.created_at, sf.updated_at, sf.is_active, sf.storage_used,
+		       u.username as creator_username,
 			   (SELECT COUNT(*) FROM shared_folder_members WHERE shared_folder_id = sf.id) as member_count
 		FROM shared_folders sf
 		LEFT JOIN users u ON sf.created_by = u.id
@@ -254,7 +253,8 @@ func (h *SharedFolderHandler) ListAllSharedFolders(c echo.Context) error {
 		var createdBy, creatorUsername sql.NullString
 		if scanErr := rows.Scan(
 			&f.ID, &f.Name, &f.Description, &f.StorageQuota, &createdBy,
-			&f.CreatedAt, &f.UpdatedAt, &f.IsActive, &creatorUsername, &f.MemberCount,
+			&f.CreatedAt, &f.UpdatedAt, &f.IsActive, &f.UsedStorage,
+			&creatorUsername, &f.MemberCount,
 		); scanErr != nil {
 			continue
 		}
@@ -264,8 +264,6 @@ func (h *SharedFolderHandler) ListAllSharedFolders(c echo.Context) error {
 		if creatorUsername.Valid {
 			f.CreatorUsername = creatorUsername.String
 		}
-		// Calculate storage usage by folder name
-		f.UsedStorage, _ = h.GetFolderStorageUsage(f.Name)
 		folders = append(folders, f)
 	}
 

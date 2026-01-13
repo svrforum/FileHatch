@@ -521,16 +521,36 @@ func (h *Handler) CheckSharedDrivePermission(userID, path string, requiredLevel 
 		return false
 	}
 
+	// Check cache first
+	if cache := GetPermissionCache(); cache != nil {
+		if cached, ok := cache.GetFolderAccess(userID, folderName); ok {
+			return cached.PermissionLevel >= requiredLevel
+		}
+	}
+
+	// Cache miss - query database
 	var permissionLevel int
+	var folderID string
 	err := h.db.QueryRow(`
-		SELECT sfm.permission_level
+		SELECT sfm.permission_level, sf.id
 		FROM shared_folder_members sfm
 		INNER JOIN shared_folders sf ON sf.id = sfm.shared_folder_id
 		WHERE sf.name = $1 AND sfm.user_id = $2 AND sf.is_active = TRUE
-	`, folderName, userID).Scan(&permissionLevel)
+	`, folderName, userID).Scan(&permissionLevel, &folderID)
 
 	if err != nil {
 		return false
+	}
+
+	// Store in cache
+	if cache := GetPermissionCache(); cache != nil {
+		cache.SetFolderAccess(userID, folderName, &ACLResult{
+			Allowed:         permissionLevel >= requiredLevel,
+			PermissionLevel: permissionLevel,
+			FolderID:        folderID,
+			FolderName:      folderName,
+			Reason:          "member",
+		})
 	}
 
 	return permissionLevel >= requiredLevel

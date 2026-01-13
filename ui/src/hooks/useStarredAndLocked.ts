@@ -26,9 +26,13 @@ export function useStarredAndLocked({
   const [localStarred, setLocalStarred] = useState<Record<string, boolean>>({})
   const [localLocks, setLocalLocks] = useState<Record<string, FileLockInfo>>({})
 
+  // Sort paths for stable query key (prevents cache misses when order changes)
+  const sortedPaths = [...filePaths].sort()
+  const pathsKey = sortedPaths.join(',')
+
   // Query starred status for current files
   const { data: starredData, refetch: refetchStarred } = useQuery({
-    queryKey: ['starred-status', filePaths.join(',')],
+    queryKey: ['starred-status', pathsKey],
     queryFn: async () => {
       if (filePaths.length === 0) return { starred: {} }
       return checkStarred(filePaths)
@@ -39,7 +43,7 @@ export function useStarredAndLocked({
 
   // Query lock status for current files
   const { data: locksData, refetch: refetchLocks } = useQuery({
-    queryKey: ['locks-status', filePaths.join(',')],
+    queryKey: ['locks-status', pathsKey],
     queryFn: async () => {
       if (filePaths.length === 0) return { locks: {} }
       return checkFileLocks(filePaths)

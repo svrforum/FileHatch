@@ -67,8 +67,15 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [viewingFile, setViewingFile] = useState<FileInfo | null>(null)
   const [zipViewingFile, setZipViewingFile] = useState<FileInfo | null>(null)
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
-  const [onlyOfficeAvailable, setOnlyOfficeAvailable] = useState(false)
-  const [onlyOfficePublicUrl, setOnlyOfficePublicUrl] = useState<string | null>(null)
+  // OnlyOffice status - use React Query with infinite staleTime for global caching
+  const { data: onlyOfficeStatus } = useQuery({
+    queryKey: ['onlyoffice-status'],
+    queryFn: checkOnlyOfficeStatus,
+    staleTime: Infinity, // Only fetch once per session
+    gcTime: Infinity,
+  })
+  const onlyOfficeAvailable = onlyOfficeStatus?.available ?? false
+  const onlyOfficePublicUrl = onlyOfficeStatus?.publicUrl ?? null
   const [onlyOfficeFile, setOnlyOfficeFile] = useState<FileInfo | null>(null)
   const [onlyOfficeConfig, setOnlyOfficeConfig] = useState<OnlyOfficeConfig | null>(null)
   const [showNewFileModal, setShowNewFileModal] = useState(false)
@@ -352,13 +359,6 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     }
   }, [contextMenu])
 
-  // Check OnlyOffice availability on mount
-  useEffect(() => {
-    checkOnlyOfficeStatus().then(({ available, publicUrl }) => {
-      setOnlyOfficeAvailable(available)
-      setOnlyOfficePublicUrl(publicUrl)
-    })
-  }, [])
 
   // Refresh file list when uploads complete
   useEffect(() => {
