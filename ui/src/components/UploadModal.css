@@ -104,7 +104,6 @@
 .drop-zone.dragging svg,
 .drop-zone:hover svg {
   color: var(--color-primary);
-  transform: translateY(-6px);
 }
 
 .drop-text {
