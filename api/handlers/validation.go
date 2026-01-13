@@ -277,15 +277,22 @@ func ValidatePath(path string) error {
 		return fmt.Errorf("path contains invalid characters")
 	}
 
-	// Check for path traversal
-	cleanPath := filepath.Clean(path)
-	if strings.Contains(cleanPath, "..") {
+	// Check for URL-encoded traversal attempts (before any processing)
+	lowerPath := strings.ToLower(path)
+	if strings.Contains(lowerPath, "%2e") || strings.Contains(lowerPath, "%00") {
+		return fmt.Errorf("encoded path traversal not allowed")
+	}
+
+	// Check for path traversal in original path (before Clean normalizes it away)
+	// This catches cases like "folder/../secret.txt" which Clean() would normalize to "secret.txt"
+	if strings.Contains(path, "..") {
 		return fmt.Errorf("path traversal not allowed")
 	}
 
-	// Check for URL-encoded traversal attempts
-	if strings.Contains(path, "%2e") || strings.Contains(path, "%2E") {
-		return fmt.Errorf("encoded path traversal not allowed")
+	// Additional check: verify cleaned path doesn't escape
+	cleanPath := filepath.Clean(path)
+	if strings.HasPrefix(cleanPath, "..") {
+		return fmt.Errorf("path traversal not allowed")
 	}
 
 	// Check path matches allowed pattern
