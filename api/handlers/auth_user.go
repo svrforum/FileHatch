@@ -37,9 +37,7 @@ func (h *AuthHandler) ListUsers(c echo.Context) error {
 		ORDER BY created_at DESC
 	`)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Database error",
-		})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 	defer rows.Close()
 
@@ -87,52 +85,38 @@ func (h *AuthHandler) ListUsers(c echo.Context) error {
 func (h *AuthHandler) CreateUser(c echo.Context) error {
 	var req CreateUserRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request",
-		})
+		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
 
 	// Validate input
 	if len(req.Username) < 3 || len(req.Username) > 50 {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Username must be between 3 and 50 characters",
-		})
+		return RespondError(c, ErrBadRequest("Username must be between 3 and 50 characters"))
 	}
 
 	// Validate password complexity
 	if err := ValidatePassword(req.Password); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		return RespondError(c, ErrBadRequest(err.Error()))
 	}
 
 	// Validate email format
 	if err := ValidateEmail(req.Email); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		return RespondError(c, ErrBadRequest(err.Error()))
 	}
 
 	// Check if username already exists
 	var exists bool
 	err := h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", req.Username).Scan(&exists)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Database error",
-		})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 	if exists {
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error": "Username already exists",
-		})
+		return RespondError(c, ErrAlreadyExists("Username"))
 	}
 
 	// Hash password
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to hash password",
-		})
+		return RespondError(c, ErrInternal("Failed to hash password"))
 	}
 
 	// Create user
@@ -144,9 +128,7 @@ func (h *AuthHandler) CreateUser(c echo.Context) error {
 	`, req.Username, req.Email, string(passwordHash), req.IsAdmin).Scan(&userID)
 
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create user",
-		})
+		return RespondError(c, ErrInternal("Failed to create user"))
 	}
 
 	// Create user's home directory
@@ -173,9 +155,7 @@ func (h *AuthHandler) UpdateUser(c echo.Context) error {
 
 	var req UpdateUserRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request",
-		})
+		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
 
 	// Build update query
@@ -186,9 +166,7 @@ func (h *AuthHandler) UpdateUser(c echo.Context) error {
 	if req.Email != "" {
 		// Validate email format
 		if err := ValidateEmail(req.Email); err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": err.Error(),
-			})
+			return RespondError(c, ErrBadRequest(err.Error()))
 		}
 		updates = append(updates, fmt.Sprintf("email = $%d", argCount))
 		args = append(args, req.Email)
@@ -198,15 +176,11 @@ func (h *AuthHandler) UpdateUser(c echo.Context) error {
 	if req.Password != "" {
 		// Validate password complexity
 		if err := ValidatePassword(req.Password); err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": err.Error(),
-			})
+			return RespondError(c, ErrBadRequest(err.Error()))
 		}
 		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to hash password",
-			})
+			return RespondError(c, ErrInternal("Failed to hash password"))
 		}
 		updates = append(updates, fmt.Sprintf("password_hash = $%d", argCount))
 		args = append(args, string(passwordHash))
@@ -224,16 +198,12 @@ func (h *AuthHandler) UpdateUser(c echo.Context) error {
 
 	result, err := h.db.Exec(query, args...)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to update user",
-		})
+		return RespondError(c, ErrInternal("Failed to update user"))
 	}
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "User not found",
-		})
+		return RespondError(c, ErrNotFound("User"))
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -249,23 +219,17 @@ func (h *AuthHandler) DeleteUser(c echo.Context) error {
 
 	// Prevent self-deletion
 	if userID == claims.UserID {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Cannot delete your own account",
-		})
+		return RespondError(c, ErrBadRequest("Cannot delete your own account"))
 	}
 
 	result, err := h.db.Exec("DELETE FROM users WHERE id = $1", userID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to delete user",
-		})
+		return RespondError(c, ErrInternal("Failed to delete user"))
 	}
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "User not found",
-		})
+		return RespondError(c, ErrNotFound("User"))
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{

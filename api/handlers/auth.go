@@ -132,52 +132,38 @@ type LoginResponse struct {
 func (h *AuthHandler) Register(c echo.Context) error {
 	var req RegisterRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request",
-		})
+		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
 
 	// Validate input
 	if len(req.Username) < 3 || len(req.Username) > 50 {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Username must be between 3 and 50 characters",
-		})
+		return RespondError(c, ErrBadRequest("Username must be between 3 and 50 characters"))
 	}
 
 	// Validate password complexity
 	if err := ValidatePassword(req.Password); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		return RespondError(c, ErrBadRequest(err.Error()))
 	}
 
 	// Validate email format
 	if err := ValidateEmail(req.Email); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		return RespondError(c, ErrBadRequest(err.Error()))
 	}
 
 	// Check if username already exists
 	var exists bool
 	err := h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", req.Username).Scan(&exists)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Database error",
-		})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 	if exists {
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error": "Username already exists",
-		})
+		return RespondError(c, ErrAlreadyExists("Username"))
 	}
 
 	// Hash password
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to hash password",
-		})
+		return RespondError(c, ErrInternal("Failed to hash password"))
 	}
 
 	// Create user
@@ -189,9 +175,7 @@ func (h *AuthHandler) Register(c echo.Context) error {
 	`, req.Username, req.Email, string(passwordHash)).Scan(&userID)
 
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create user",
-		})
+		return RespondError(c, ErrInternal("Failed to create user"))
 	}
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
@@ -218,15 +202,11 @@ func (h *AuthHandler) Register(c echo.Context) error {
 func (h *AuthHandler) Login(c echo.Context) error {
 	var req LoginRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request",
-		})
+		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
 
 	if req.Username == "" || req.Password == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Username and password are required",
-		})
+		return RespondError(c, ErrBadRequest("Username and password are required"))
 	}
 
 	ctx := c.Request().Context()
@@ -275,21 +255,15 @@ func (h *AuthHandler) Login(c echo.Context) error {
 			"username": req.Username,
 			"reason":   "user_not_found",
 		})
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Invalid username or password",
-		})
+		return RespondError(c, ErrUnauthorized("Invalid username or password"))
 	}
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Database error",
-		})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 
 	// Check if user is active
 	if !user.IsActive {
-		return c.JSON(http.StatusForbidden, map[string]string{
-			"error": "Account is disabled",
-		})
+		return RespondError(c, ErrForbidden("Account is disabled"))
 	}
 
 	// Verify password
@@ -302,9 +276,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 			"username": req.Username,
 			"reason":   "invalid_password",
 		})
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Invalid username or password",
-		})
+		return RespondError(c, ErrUnauthorized("Invalid username or password"))
 	}
 
 	// Set optional fields
@@ -338,9 +310,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	// Generate JWT token with appropriate expiration
 	token, err := h.generateTokenWithExpiration(user.ID, user.Username, user.IsAdmin, req.RememberMe, expiration)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to generate token",
-		})
+		return RespondError(c, ErrInternal("Failed to generate token"))
 	}
 
 	// Reset brute force counters on successful login
@@ -366,23 +336,17 @@ func (h *AuthHandler) Login(c echo.Context) error {
 func (h *AuthHandler) RefreshToken(c echo.Context) error {
 	claims, ok := c.Get("user").(*JWTClaims)
 	if !ok || claims == nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{
-			"error": "Invalid token",
-		})
+		return RespondError(c, ErrUnauthorized("Invalid token"))
 	}
 
 	// Check if the user is still active
 	var isActive bool
 	err := h.db.QueryRow("SELECT is_active FROM users WHERE id = $1", claims.UserID).Scan(&isActive)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Database error",
-		})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 	if !isActive {
-		return c.JSON(http.StatusForbidden, map[string]string{
-			"error": "Account is disabled",
-		})
+		return RespondError(c, ErrForbidden("Account is disabled"))
 	}
 
 	// Determine expiration based on rememberMe flag stored in claims
@@ -395,9 +359,7 @@ func (h *AuthHandler) RefreshToken(c echo.Context) error {
 	// Generate new token with same session type
 	token, err := h.generateTokenWithExpiration(claims.UserID, claims.Username, claims.IsAdmin, claims.RememberMe, expiration)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to generate token",
-		})
+		return RespondError(c, ErrInternal("Failed to generate token"))
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -434,14 +396,10 @@ func (h *AuthHandler) GetProfile(c echo.Context) error {
 		&user.IsAdmin, &user.IsActive, &totpEnabled, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "User not found",
-		})
+		return RespondError(c, ErrNotFound("User"))
 	}
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Database error",
-		})
+		return RespondError(c, ErrInternal("Database error"))
 	}
 
 	if email.Valid {
@@ -473,9 +431,7 @@ func (h *AuthHandler) UpdateProfile(c echo.Context) error {
 
 	var req UpdateProfileRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid request",
-		})
+		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
 
 	// Build update query dynamically
@@ -486,9 +442,7 @@ func (h *AuthHandler) UpdateProfile(c echo.Context) error {
 	if req.Email != "" {
 		// Validate email format
 		if err := ValidateEmail(req.Email); err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": err.Error(),
-			})
+			return RespondError(c, ErrBadRequest(err.Error()))
 		}
 		updates = append(updates, fmt.Sprintf("email = $%d", argCount))
 		args = append(args, req.Email)
@@ -498,32 +452,24 @@ func (h *AuthHandler) UpdateProfile(c echo.Context) error {
 	if req.NewPassword != "" {
 		// Validate password complexity
 		if err := ValidatePassword(req.NewPassword); err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": err.Error(),
-			})
+			return RespondError(c, ErrBadRequest(err.Error()))
 		}
 
 		// Verify old password
 		var currentHash string
 		err := h.db.QueryRow("SELECT password_hash FROM users WHERE id = $1", claims.UserID).Scan(&currentHash)
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Database error",
-			})
+			return RespondError(c, ErrInternal("Database error"))
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.OldPassword)); err != nil {
-			return c.JSON(http.StatusUnauthorized, map[string]string{
-				"error": "Current password is incorrect",
-			})
+			return RespondError(c, ErrUnauthorized("Current password is incorrect"))
 		}
 
 		// Hash new password
 		newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to hash password",
-			})
+			return RespondError(c, ErrInternal("Failed to hash password"))
 		}
 
 		updates = append(updates, fmt.Sprintf("password_hash = $%d", argCount))
@@ -532,9 +478,7 @@ func (h *AuthHandler) UpdateProfile(c echo.Context) error {
 	}
 
 	if len(updates) == 0 {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "No updates provided",
-		})
+		return RespondError(c, ErrBadRequest("No updates provided"))
 	}
 
 	updates = append(updates, "updated_at = NOW()")
@@ -544,9 +488,7 @@ func (h *AuthHandler) UpdateProfile(c echo.Context) error {
 
 	_, err := h.db.Exec(query, args...)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to update profile",
-		})
+		return RespondError(c, ErrInternal("Failed to update profile"))
 	}
 
 	// Fetch updated user
