@@ -164,6 +164,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--spacing-md);
   padding: 48px 24px;
   color: var(--text-tertiary);
 }
@@ -171,7 +172,6 @@
 .upload-panel-empty svg {
   width: 64px;
   height: 64px;
-  margin-bottom: 16px;
   opacity: 0.4;
 }
 
