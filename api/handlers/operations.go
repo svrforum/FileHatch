@@ -1,10 +1,8 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -506,262 +504,53 @@ func (h *Handler) CopyItemStream(c echo.Context) error {
 		return RespondError(c, ErrMissingParameter("destination"))
 	}
 
-	var claims *JWTClaims
-	if user, ok := c.Get("user").(*JWTClaims); ok {
-		claims = user
-	}
-
-	// Resolve source path
-	srcRealPath, srcStorageType, srcDisplayPath, err := h.resolvePath("/"+requestPath, claims)
+	// Resolve and validate paths
+	paths, err := h.ResolveOperationPaths(c, requestPath, destination, false)
 	if err != nil {
-		return RespondError(c, ErrBadRequest(err.Error()))
-	}
-
-	if srcStorageType == "root" {
-		return RespondError(c, ErrBadRequest("Cannot copy root"))
-	}
-
-	// Resolve destination path
-	destRealPath, destStorageType, destDisplayPath, err := h.resolvePath(destination, claims)
-	if err != nil {
-		return RespondError(c, ErrBadRequest(err.Error()))
-	}
-
-	if destStorageType == "root" {
-		return RespondError(c, ErrBadRequest("Cannot copy to root"))
-	}
-
-	// Check permissions
-	if (srcStorageType == StorageHome || destStorageType == StorageHome) && claims == nil {
-		return RespondError(c, ErrUnauthorized("Authentication required"))
-	}
-
-	// Check if source exists
-	srcInfo, err := os.Stat(srcRealPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return RespondError(c, ErrNotFound("Source not found"))
+		if apiErr, ok := err.(*APIError); ok {
+			return RespondError(c, apiErr)
 		}
-		return RespondError(c, ErrInternal("Failed to access source"))
+		return RespondError(c, ErrInternal(err.Error()))
 	}
 
-	// Check if destination is a directory
-	destInfo, err := os.Stat(destRealPath)
-	if err != nil {
-		return RespondError(c, ErrNotFound("Destination not found"))
-	}
-	if !destInfo.IsDir() {
-		return RespondError(c, ErrBadRequest("Destination must be a directory"))
-	}
-
-	// Build final destination path with duplicate handling
-	finalDestPath := filepath.Join(destRealPath, srcInfo.Name())
-	baseName := srcInfo.Name()
-	ext := filepath.Ext(baseName)
-	nameWithoutExt := strings.TrimSuffix(baseName, ext)
-	counter := 1
-	for {
-		if _, err := os.Stat(finalDestPath); os.IsNotExist(err) {
-			break
-		}
-		if srcInfo.IsDir() {
-			finalDestPath = filepath.Join(destRealPath, fmt.Sprintf("%s (%d)", baseName, counter))
-		} else {
-			finalDestPath = filepath.Join(destRealPath, fmt.Sprintf("%s (%d)%s", nameWithoutExt, counter, ext))
-		}
-		counter++
-	}
-
-	// Set up SSE
-	c.Response().Header().Set("Content-Type", "text/event-stream")
-	c.Response().Header().Set("Cache-Control", "no-cache")
-	c.Response().Header().Set("Connection", "keep-alive")
-	c.Response().Header().Set("X-Accel-Buffering", "no")
-	c.Response().WriteHeader(http.StatusOK)
-
-	// Helper to send progress
-	sendProgress := func(progress CopyProgress) {
-		data, _ := json.Marshal(progress)
-		fmt.Fprintf(c.Response(), "data: %s\n\n", data)
-		c.Response().Flush()
-	}
-
-	// Calculate total size
-	var totalBytes int64
-	var totalFiles int
-	if srcInfo.IsDir() {
-		filepath.Walk(srcRealPath, func(_ string, info os.FileInfo, _ error) error {
-			if info != nil && !info.IsDir() {
-				totalBytes += info.Size()
-				totalFiles++
-			}
-			return nil
-		})
-	} else {
-		totalBytes = srcInfo.Size()
-		totalFiles = 1
-	}
+	// Set up SSE and calculate stats
+	sendProgress := SetupSSE(c)
+	stats := CalculateTotalSize(paths.SrcRealPath, paths.SrcInfo)
 
 	// Send started event
 	sendProgress(CopyProgress{
 		Status:     "started",
-		TotalBytes: totalBytes,
-		TotalFiles: totalFiles,
+		TotalBytes: stats.TotalBytes,
+		TotalFiles: stats.TotalFiles,
 	})
 
-	// Copy with progress tracking
-	var copiedBytes int64
-	var copiedFiles int
-	var copyErr error
-	startTime := time.Now()
-	var lastProgressTime time.Time
+	// Create copy context and perform copy
+	ctx := NewCopyContext(stats, sendProgress)
+	copyErr := ctx.CopyWithProgress(paths.SrcRealPath, paths.FinalDestPath, paths.SrcInfo.IsDir())
 
-	copyFileWithProgress := func(src, dst string) error {
-		sourceFile, err := os.Open(src)
-		if err != nil {
-			return err
-		}
-		defer sourceFile.Close()
-
-		srcStat, _ := sourceFile.Stat()
-		sendProgress(CopyProgress{
-			Status:      "progress",
-			TotalBytes:  totalBytes,
-			CopiedBytes: copiedBytes,
-			CurrentFile: filepath.Base(src),
-			TotalFiles:  totalFiles,
-			CopiedFiles: copiedFiles,
-		})
-
-		destFile, err := os.Create(dst)
-		if err != nil {
-			return err
-		}
-		defer destFile.Close()
-
-		buf := make([]byte, 1024*1024) // 1MB buffer
-		for {
-			n, readErr := sourceFile.Read(buf)
-			if n > 0 {
-				_, writeErr := destFile.Write(buf[:n])
-				if writeErr != nil {
-					return writeErr
-				}
-				copiedBytes += int64(n)
-
-				// Send progress every 200ms or at least every 500KB
-				if time.Since(lastProgressTime) > 200*time.Millisecond {
-					elapsed := time.Since(startTime).Seconds()
-					var bytesPerSec int64
-					if elapsed > 0 {
-						bytesPerSec = int64(float64(copiedBytes) / elapsed)
-					}
-					sendProgress(CopyProgress{
-						Status:      "progress",
-						TotalBytes:  totalBytes,
-						CopiedBytes: copiedBytes,
-						CurrentFile: filepath.Base(src),
-						TotalFiles:  totalFiles,
-						CopiedFiles: copiedFiles,
-						BytesPerSec: bytesPerSec,
-					})
-					lastProgressTime = time.Now()
-				}
-			}
-			if readErr == io.EOF {
-				break
-			}
-			if readErr != nil {
-				return readErr
-			}
-		}
-
-		copiedFiles++
-		os.Chmod(dst, srcStat.Mode())
-		return nil
-	}
-
-	var copyDirWithProgress func(src, dst string) error
-	copyDirWithProgress = func(src, dst string) error {
-		srcInfo, err := os.Stat(src)
-		if err != nil {
-			return err
-		}
-
-		if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
-			return err
-		}
-
-		entries, err := os.ReadDir(src)
-		if err != nil {
-			return err
-		}
-
-		for _, entry := range entries {
-			srcPath := filepath.Join(src, entry.Name())
-			dstPath := filepath.Join(dst, entry.Name())
-
-			if entry.IsDir() {
-				if err := copyDirWithProgress(srcPath, dstPath); err != nil {
-					return err
-				}
-			} else {
-				if err := copyFileWithProgress(srcPath, dstPath); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}
-
-	// Perform copy
-	if srcInfo.IsDir() {
-		copyErr = copyDirWithProgress(srcRealPath, finalDestPath)
-	} else {
-		copyErr = copyFileWithProgress(srcRealPath, finalDestPath)
-	}
-
-	newDisplayPath := filepath.Join(destDisplayPath, filepath.Base(finalDestPath))
+	newDisplayPath := filepath.Join(paths.DestDisplayPath, filepath.Base(paths.FinalDestPath))
 
 	if copyErr != nil {
-		sendProgress(CopyProgress{
-			Status: "error",
-			Error:  copyErr.Error(),
-		})
+		ctx.SendError(copyErr)
 		return nil
 	}
 
 	// Log audit event
 	var userID *string
-	if claims != nil {
-		userID = &claims.UserID
+	if paths.Claims != nil {
+		userID = &paths.Claims.UserID
 	}
-	h.auditHandler.LogEvent(userID, c.RealIP(), EventFileCopy, srcDisplayPath, map[string]interface{}{
+	h.auditHandler.LogEvent(userID, c.RealIP(), EventFileCopy, paths.SrcDisplayPath, map[string]interface{}{
 		"destination": newDisplayPath,
-		"isDir":       srcInfo.IsDir(),
+		"isDir":       paths.SrcInfo.IsDir(),
 	})
 
-	// Update storage tracking: add copied bytes to user's storage
-	if claims != nil && destStorageType == StorageHome {
-		h.UpdateUserStorage(claims.UserID, copiedBytes)
+	// Update storage tracking
+	if paths.Claims != nil && paths.DestStorageType == StorageHome {
+		h.UpdateUserStorage(paths.Claims.UserID, ctx.CopiedBytes)
 	}
 
-	// Send completed event
-	elapsed := time.Since(startTime).Seconds()
-	var finalSpeed int64
-	if elapsed > 0 {
-		finalSpeed = int64(float64(copiedBytes) / elapsed)
-	}
-	sendProgress(CopyProgress{
-		Status:      "completed",
-		TotalBytes:  totalBytes,
-		CopiedBytes: copiedBytes,
-		TotalFiles:  totalFiles,
-		CopiedFiles: copiedFiles,
-		NewPath:     newDisplayPath,
-		BytesPerSec: finalSpeed,
-	})
-
+	ctx.SendCompleted(newDisplayPath)
 	return nil
 }
 
@@ -793,268 +582,82 @@ func (h *Handler) MoveItemStream(c echo.Context) error {
 		return RespondError(c, ErrMissingParameter("destination"))
 	}
 
-	var claims *JWTClaims
-	if user, ok := c.Get("user").(*JWTClaims); ok {
-		claims = user
-	}
-
-	// Resolve source path
-	srcRealPath, srcStorageType, srcDisplayPath, err := h.resolvePath("/"+requestPath, claims)
+	// Resolve and validate paths (allowSameFilename=false to generate unique names)
+	paths, err := h.ResolveOperationPaths(c, requestPath, destination, false)
 	if err != nil {
-		return RespondError(c, ErrBadRequest(err.Error()))
-	}
-
-	if srcStorageType == "root" {
-		return RespondError(c, ErrBadRequest("Cannot move root"))
-	}
-
-	// Resolve destination path
-	destRealPath, destStorageType, destDisplayPath, err := h.resolvePath(destination, claims)
-	if err != nil {
-		return RespondError(c, ErrBadRequest(err.Error()))
-	}
-
-	if destStorageType == "root" {
-		return RespondError(c, ErrBadRequest("Cannot move to root"))
-	}
-
-	// Check permissions
-	if (srcStorageType == StorageHome || destStorageType == StorageHome) && claims == nil {
-		return RespondError(c, ErrUnauthorized("Authentication required"))
-	}
-
-	// Check if source exists
-	srcInfo, err := os.Stat(srcRealPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return RespondError(c, ErrNotFound("Source not found"))
+		if apiErr, ok := err.(*APIError); ok {
+			return RespondError(c, apiErr)
 		}
-		return RespondError(c, ErrInternal("Failed to access source"))
-	}
-
-	// Check if destination is a directory
-	destInfo, err := os.Stat(destRealPath)
-	if err != nil {
-		return RespondError(c, ErrNotFound("Destination not found"))
-	}
-	if !destInfo.IsDir() {
-		return RespondError(c, ErrBadRequest("Destination must be a directory"))
-	}
-
-	// Build final destination path
-	finalDestPath := filepath.Join(destRealPath, srcInfo.Name())
-	baseName := srcInfo.Name()
-	ext := filepath.Ext(baseName)
-	nameWithoutExt := strings.TrimSuffix(baseName, ext)
-	counter := 1
-	for {
-		if _, err := os.Stat(finalDestPath); os.IsNotExist(err) {
-			break
-		}
-		if srcInfo.IsDir() {
-			finalDestPath = filepath.Join(destRealPath, fmt.Sprintf("%s (%d)", baseName, counter))
-		} else {
-			finalDestPath = filepath.Join(destRealPath, fmt.Sprintf("%s (%d)%s", nameWithoutExt, counter, ext))
-		}
-		counter++
+		return RespondError(c, ErrInternal(err.Error()))
 	}
 
 	// Prevent moving a directory into itself
-	if strings.HasPrefix(finalDestPath, srcRealPath+string(os.PathSeparator)) {
+	if strings.HasPrefix(paths.FinalDestPath, paths.SrcRealPath+string(os.PathSeparator)) {
 		return RespondError(c, ErrBadRequest("Cannot move directory into itself"))
 	}
 
-	// Set up SSE
-	c.Response().Header().Set("Content-Type", "text/event-stream")
-	c.Response().Header().Set("Cache-Control", "no-cache")
-	c.Response().Header().Set("Connection", "keep-alive")
-	c.Response().Header().Set("X-Accel-Buffering", "no")
-	c.Response().WriteHeader(http.StatusOK)
-
-	sendProgress := func(progress CopyProgress) {
-		data, _ := json.Marshal(progress)
-		fmt.Fprintf(c.Response(), "data: %s\n\n", data)
-		c.Response().Flush()
-	}
-
-	// Calculate total size
-	var totalBytes int64
-	var totalFiles int
-	if srcInfo.IsDir() {
-		filepath.Walk(srcRealPath, func(_ string, info os.FileInfo, _ error) error {
-			if info != nil && !info.IsDir() {
-				totalBytes += info.Size()
-				totalFiles++
-			}
-			return nil
-		})
-	} else {
-		totalBytes = srcInfo.Size()
-		totalFiles = 1
-	}
+	// Set up SSE and calculate stats
+	sendProgress := SetupSSE(c)
+	stats := CalculateTotalSize(paths.SrcRealPath, paths.SrcInfo)
 
 	sendProgress(CopyProgress{
 		Status:     "started",
-		TotalBytes: totalBytes,
-		TotalFiles: totalFiles,
+		TotalBytes: stats.TotalBytes,
+		TotalFiles: stats.TotalFiles,
 	})
 
 	startTime := time.Now()
+	newDisplayPath := filepath.Join(paths.DestDisplayPath, filepath.Base(paths.FinalDestPath))
 
 	// Try simple rename first (instant for same filesystem)
-	err = os.Rename(srcRealPath, finalDestPath)
-
-	newDisplayPath := filepath.Join(destDisplayPath, filepath.Base(finalDestPath))
+	err = os.Rename(paths.SrcRealPath, paths.FinalDestPath)
 
 	if err != nil {
 		// Cross-device move: copy then delete
 		sendProgress(CopyProgress{
 			Status:      "progress",
-			TotalBytes:  totalBytes,
+			TotalBytes:  stats.TotalBytes,
 			CopiedBytes: 0,
-			CurrentFile: "크로스 디바이스 이동 중...",
+			CurrentFile: "Cross-device move in progress...",
 		})
 
-		// Copy with progress
-		var copiedBytes int64
-		var copiedFiles int
-		var lastProgressTime time.Time
-
-		copyFileWithProgress := func(src, dst string) error {
-			sourceFile, err := os.Open(src)
-			if err != nil {
-				return err
-			}
-			defer sourceFile.Close()
-
-			srcStat, _ := sourceFile.Stat()
-
-			destFile, err := os.Create(dst)
-			if err != nil {
-				return err
-			}
-			defer destFile.Close()
-
-			buf := make([]byte, 1024*1024)
-			for {
-				n, readErr := sourceFile.Read(buf)
-				if n > 0 {
-					_, writeErr := destFile.Write(buf[:n])
-					if writeErr != nil {
-						return writeErr
-					}
-					copiedBytes += int64(n)
-
-					if time.Since(lastProgressTime) > 200*time.Millisecond {
-						elapsed := time.Since(startTime).Seconds()
-						var bytesPerSec int64
-						if elapsed > 0 {
-							bytesPerSec = int64(float64(copiedBytes) / elapsed)
-						}
-						sendProgress(CopyProgress{
-							Status:      "progress",
-							TotalBytes:  totalBytes,
-							CopiedBytes: copiedBytes,
-							CurrentFile: filepath.Base(src),
-							TotalFiles:  totalFiles,
-							CopiedFiles: copiedFiles,
-							BytesPerSec: bytesPerSec,
-						})
-						lastProgressTime = time.Now()
-					}
-				}
-				if readErr == io.EOF {
-					break
-				}
-				if readErr != nil {
-					return readErr
-				}
-			}
-
-			copiedFiles++
-			os.Chmod(dst, srcStat.Mode())
-			return nil
-		}
-
-		var copyDirWithProgress func(src, dst string) error
-		copyDirWithProgress = func(src, dst string) error {
-			srcInfo, err := os.Stat(src)
-			if err != nil {
-				return err
-			}
-
-			if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
-				return err
-			}
-
-			entries, err := os.ReadDir(src)
-			if err != nil {
-				return err
-			}
-
-			for _, entry := range entries {
-				srcPath := filepath.Join(src, entry.Name())
-				dstPath := filepath.Join(dst, entry.Name())
-
-				if entry.IsDir() {
-					if err := copyDirWithProgress(srcPath, dstPath); err != nil {
-						return err
-					}
-				} else {
-					if err := copyFileWithProgress(srcPath, dstPath); err != nil {
-						return err
-					}
-				}
-			}
-			return nil
-		}
-
-		var copyErr error
-		if srcInfo.IsDir() {
-			copyErr = copyDirWithProgress(srcRealPath, finalDestPath)
-		} else {
-			copyErr = copyFileWithProgress(srcRealPath, finalDestPath)
-		}
+		ctx := NewCopyContext(stats, sendProgress)
+		copyErr := ctx.CopyWithProgress(paths.SrcRealPath, paths.FinalDestPath, paths.SrcInfo.IsDir())
 
 		if copyErr != nil {
-			sendProgress(CopyProgress{
-				Status: "error",
-				Error:  copyErr.Error(),
-			})
+			ctx.SendError(copyErr)
 			return nil
 		}
 
 		// Delete source after successful copy
-		if srcInfo.IsDir() {
-			os.RemoveAll(srcRealPath)
+		if paths.SrcInfo.IsDir() {
+			os.RemoveAll(paths.SrcRealPath)
 		} else {
-			os.Remove(srcRealPath)
+			os.Remove(paths.SrcRealPath)
 		}
 	}
 
 	// Log audit event
 	var userID *string
-	if claims != nil {
-		userID = &claims.UserID
+	if paths.Claims != nil {
+		userID = &paths.Claims.UserID
 	}
-	h.auditHandler.LogEvent(userID, c.RealIP(), EventFileMove, srcDisplayPath, map[string]interface{}{
+	h.auditHandler.LogEvent(userID, c.RealIP(), EventFileMove, paths.SrcDisplayPath, map[string]interface{}{
 		"destination": newDisplayPath,
 	})
-
-	// Note: Move operation doesn't change total storage size, no update needed
 
 	// Send completed event
 	elapsed := time.Since(startTime).Seconds()
 	var finalSpeed int64
-	if elapsed > 0 && totalBytes > 0 {
-		finalSpeed = int64(float64(totalBytes) / elapsed)
+	if elapsed > 0 && stats.TotalBytes > 0 {
+		finalSpeed = int64(float64(stats.TotalBytes) / elapsed)
 	}
 	sendProgress(CopyProgress{
 		Status:      "completed",
-		TotalBytes:  totalBytes,
-		CopiedBytes: totalBytes,
-		TotalFiles:  totalFiles,
-		CopiedFiles: totalFiles,
+		TotalBytes:  stats.TotalBytes,
+		CopiedBytes: stats.TotalBytes,
+		TotalFiles:  stats.TotalFiles,
+		CopiedFiles: stats.TotalFiles,
 		NewPath:     newDisplayPath,
 		BytesPerSec: finalSpeed,
 	})
