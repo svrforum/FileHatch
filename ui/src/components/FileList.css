@@ -2060,6 +2060,82 @@
     font-size: 12px;
     padding: 4px 8px;
   }
+
+  /* Context Menu - Bottom sheet style on mobile */
+  .context-menu {
+    position: fixed;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    top: auto !important;
+    max-height: 70vh;
+    width: 100%;
+    min-width: 100%;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border: none;
+    border-top: 1px solid var(--border-light);
+    padding: var(--spacing-sm);
+    padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    animation: slideInUp 0.25s var(--ease-out-expo);
+  }
+
+  /* Drag handle for context menu */
+  .context-menu::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    background: var(--border-default);
+    border-radius: 2px;
+    margin: 0 auto var(--spacing-sm);
+  }
+
+  .context-menu-item {
+    padding: 14px 16px;
+    font-size: 15px;
+    min-height: 48px;
+    border-radius: var(--radius-md);
+  }
+
+  .context-menu-item svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Submenu displays inline on mobile */
+  .context-menu-item.has-submenu {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .context-menu-item.has-submenu > svg:first-child,
+  .context-menu-item.has-submenu > span:first-of-type {
+    display: none;
+  }
+
+  .submenu-arrow {
+    display: none;
+  }
+
+  .context-submenu {
+    position: static;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin-top: var(--spacing-xs);
+    min-width: 100%;
+  }
+
+  .context-submenu .context-menu-item {
+    padding-left: 24px;
+    background: var(--bg-secondary);
+  }
+
+  .context-menu-divider {
+    margin: var(--spacing-xs) 0;
+  }
 }
 
 /* Extra small screens */
