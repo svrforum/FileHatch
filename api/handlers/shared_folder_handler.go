@@ -430,6 +430,11 @@ func (h *SharedFolderHandler) DeleteSharedFolder(c echo.Context) error {
 	folderPath := h.GetFolderPath(folderName)
 	os.RemoveAll(folderPath)
 
+	// Invalidate permission cache for this folder (all users)
+	if cache := GetPermissionCache(); cache != nil {
+		cache.InvalidateFolder(folderName)
+	}
+
 	// Audit log
 	userID := claims.UserID
 	h.auditHandler.LogEvent(&userID, c.RealIP(), "shared_folder_delete",
@@ -552,6 +557,11 @@ func (h *SharedFolderHandler) AddMember(c echo.Context) error {
 			"permissionLevel": req.PermissionLevel,
 		})
 
+	// Invalidate permission cache for the user
+	if cache := GetPermissionCache(); cache != nil {
+		cache.InvalidateUser(req.UserID)
+	}
+
 	// Send notification to the invited user
 	if h.notificationService != nil {
 		permLabel := "읽기"
@@ -629,6 +639,11 @@ func (h *SharedFolderHandler) UpdateMemberPermission(c echo.Context) error {
 			"permissionLevel": req.PermissionLevel,
 		})
 
+	// Invalidate permission cache for the user
+	if cache := GetPermissionCache(); cache != nil {
+		cache.InvalidateUser(userID)
+	}
+
 	return RespondSuccess(c, map[string]string{"message": "Permission updated successfully"})
 }
 
@@ -668,6 +683,11 @@ func (h *SharedFolderHandler) RemoveMember(c echo.Context) error {
 		map[string]interface{}{
 			"memberUserId": userID,
 		})
+
+	// Invalidate permission cache for the user
+	if cache := GetPermissionCache(); cache != nil {
+		cache.InvalidateUser(userID)
+	}
 
 	// Send notification to the removed user
 	if h.notificationService != nil {

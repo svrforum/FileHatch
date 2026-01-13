@@ -37,6 +37,7 @@ func NewPermissionChecker(db *sql.DB) *PermissionChecker {
 // CheckSharedFolderAccess checks if a user has access to a shared folder
 // folderName is the name of the shared folder (first component after /shared/)
 // Returns ACL result with permission level
+// Results are cached for 5 minutes to reduce database load
 func (p *PermissionChecker) CheckSharedFolderAccess(userID string, folderName string) (*ACLResult, error) {
 	if userID == "" {
 		return &ACLResult{
@@ -54,6 +55,20 @@ func (p *PermissionChecker) CheckSharedFolderAccess(userID string, folderName st
 		}, nil
 	}
 
+	// Check cache first
+	cache := GetPermissionCache()
+	if cache != nil {
+		if cached, ok := cache.GetFolderAccess(userID, folderName); ok {
+			return &ACLResult{
+				Allowed:         cached.Allowed,
+				PermissionLevel: cached.PermissionLevel,
+				FolderID:        cached.FolderID,
+				FolderName:      cached.FolderName,
+				Reason:          cached.Reason,
+			}, nil
+		}
+	}
+
 	// Query for user's permission on the shared folder
 	var folderID string
 	var permissionLevel int
@@ -64,24 +79,31 @@ func (p *PermissionChecker) CheckSharedFolderAccess(userID string, folderName st
 		WHERE sf.name = $1 AND sfm.user_id = $2 AND sf.is_active = TRUE
 	`, folderName, userID).Scan(&folderID, &permissionLevel)
 
+	var result *ACLResult
 	if err == sql.ErrNoRows {
-		return &ACLResult{
+		result = &ACLResult{
 			Allowed:    false,
 			FolderName: folderName,
 			Reason:     fmt.Sprintf("no access to shared folder: %s", folderName),
-		}, nil
-	}
-	if err != nil {
+		}
+	} else if err != nil {
 		return nil, fmt.Errorf("failed to check folder access: %w", err)
+	} else {
+		result = &ACLResult{
+			Allowed:         true,
+			PermissionLevel: permissionLevel,
+			FolderID:        folderID,
+			FolderName:      folderName,
+			Reason:          "member of shared folder",
+		}
 	}
 
-	return &ACLResult{
-		Allowed:         true,
-		PermissionLevel: permissionLevel,
-		FolderID:        folderID,
-		FolderName:      folderName,
-		Reason:          "member of shared folder",
-	}, nil
+	// Cache the result
+	if cache != nil {
+		cache.SetFolderAccess(userID, folderName, result)
+	}
+
+	return result, nil
 }
 
 // CheckSharedFolderWriteAccess checks if user has write permission to shared folder
@@ -261,9 +283,18 @@ func (h *Handler) CanWritePath(virtualPath string, claims *JWTClaims) bool {
 }
 
 // ListAccessibleSharedFolders returns list of shared folders user can access
+// Results are cached for 5 minutes to reduce database load
 func (p *PermissionChecker) ListAccessibleSharedFolders(userID string) ([]string, error) {
 	if userID == "" {
 		return nil, nil
+	}
+
+	// Check cache first
+	cache := GetPermissionCache()
+	if cache != nil {
+		if folders, ok := cache.GetFolderList(userID); ok {
+			return folders, nil
+		}
 	}
 
 	rows, err := p.db.Query(`
@@ -287,7 +318,16 @@ func (p *PermissionChecker) ListAccessibleSharedFolders(userID string) ([]string
 		folders = append(folders, name)
 	}
 
-	return folders, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Cache the result
+	if cache != nil {
+		cache.SetFolderList(userID, folders)
+	}
+
+	return folders, nil
 }
 
 // FilterAccessiblePaths filters a list of paths to only those user can access
