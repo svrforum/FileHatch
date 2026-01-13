@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
+import { useToastStore } from '../stores/toastStore'
 import {
   SSOProvider,
   listSSOProviders,
@@ -21,7 +22,7 @@ const PROVIDER_TYPES = [
 
 function AdminSSOSettings() {
   const { user: currentUser, token } = useAuthStore()
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const { showSuccess, showError } = useToastStore()
   const [loading, setLoading] = useState(true)
 
   // SSO State
@@ -53,11 +54,6 @@ function AdminSSOSettings() {
     buttonColor: ''
   })
   const [savingSso, setSavingSso] = useState(false)
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
 
   // Load SSO settings and providers on mount
   useEffect(() => {
@@ -92,7 +88,7 @@ function AdminSSOSettings() {
       setSsoProviders(providers || [])
     } catch (error) {
       console.error('Failed to load SSO data:', error)
-      showToast('SSO 설정을 불러오는데 실패했습니다.', 'error')
+      showError('SSO 설정을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
     }
@@ -104,10 +100,10 @@ function AdminSSOSettings() {
     setSsoSettings(newSettings)
     try {
       await updateSSOSettings(token!, { [key]: value })
-      showToast('SSO 설정이 저장되었습니다.', 'success')
+      showSuccess('SSO 설정이 저장되었습니다.')
     } catch (error) {
       console.error('Failed to update SSO setting:', error)
-      showToast('SSO 설정 저장에 실패했습니다.', 'error')
+      showError('SSO 설정 저장에 실패했습니다.')
     }
   }
 
@@ -160,11 +156,11 @@ function AdminSSOSettings() {
 
   const handleSaveProvider = async () => {
     if (!providerForm.name || !providerForm.clientId) {
-      showToast('이름과 Client ID는 필수입니다.', 'error')
+      showError('이름과 Client ID는 필수입니다.')
       return
     }
     if (!editingProvider && !providerForm.clientSecret) {
-      showToast('Client Secret은 필수입니다.', 'error')
+      showError('Client Secret은 필수입니다.')
       return
     }
 
@@ -172,15 +168,15 @@ function AdminSSOSettings() {
     try {
       if (editingProvider) {
         await updateSSOProvider(token!, editingProvider.id, providerForm)
-        showToast('SSO 프로바이더가 수정되었습니다.', 'success')
+        showSuccess('SSO 프로바이더가 수정되었습니다.')
       } else {
         await createSSOProvider(token!, providerForm as never)
-        showToast('SSO 프로바이더가 추가되었습니다.', 'success')
+        showSuccess('SSO 프로바이더가 추가되었습니다.')
       }
       setShowProviderModal(false)
       loadSsoData()
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'SSO 프로바이더 저장에 실패했습니다.', 'error')
+      showError(error instanceof Error ? error.message : 'SSO 프로바이더 저장에 실패했습니다.')
     } finally {
       setSavingSso(false)
     }
@@ -191,10 +187,10 @@ function AdminSSOSettings() {
 
     try {
       await deleteSSOProvider(token!, provider.id)
-      showToast('SSO 프로바이더가 삭제되었습니다.', 'success')
+      showSuccess('SSO 프로바이더가 삭제되었습니다.')
       loadSsoData()
     } catch (error) {
-      showToast('SSO 프로바이더 삭제에 실패했습니다.', 'error')
+      showError('SSO 프로바이더 삭제에 실패했습니다.')
     }
   }
 
@@ -456,25 +452,6 @@ function AdminSSOSettings() {
           </div>
         </div>
       </div>
-
-      {/* Toast */}
-      {toast && (
-        <div className={`as-toast ${toast.type}`}>
-          {toast.type === 'success' ? (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-              <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          ) : (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-              <path d="M12 8V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              <circle cx="12" cy="16" r="1" fill="currentColor"/>
-            </svg>
-          )}
-          <span>{toast.message}</span>
-        </div>
-      )}
 
       {/* SSO Provider Modal */}
       {showProviderModal && (

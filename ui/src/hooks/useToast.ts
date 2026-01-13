@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react'
+import { useToastStore, ToastType } from '../stores/toastStore'
 
 export interface Toast {
   id: string
   message: string
-  type: 'success' | 'error' | 'info'
+  type: ToastType
 }
 
 export interface UseToastReturn {
@@ -13,42 +13,41 @@ export interface UseToastReturn {
   showSuccess: (message: string) => void
   showError: (message: string) => void
   showInfo: (message: string) => void
+  showWarning: (message: string) => void
 }
 
 /**
  * Hook for managing toast notifications
+ * This is a wrapper around useToastStore for backward compatibility
  */
 export function useToast(): UseToastReturn {
-  const [toasts, setToasts] = useState<Toast[]>([])
+  const storeToasts = useToastStore((state) => state.toasts)
+  const showToast = useToastStore((state) => state.showToast)
+  const storeRemoveToast = useToastStore((state) => state.removeToast)
+  const storeShowSuccess = useToastStore((state) => state.showSuccess)
+  const storeShowError = useToastStore((state) => state.showError)
+  const storeShowInfo = useToastStore((state) => state.showInfo)
+  const storeShowWarning = useToastStore((state) => state.showWarning)
 
-  const addToast = useCallback((message: string, type: Toast['type']) => {
-    const id = Date.now().toString()
-    setToasts(prev => [...prev, { id, message, type }])
-  }, [])
+  // Map store toasts to the expected format
+  const toasts: Toast[] = storeToasts.map((t) => ({
+    id: t.id,
+    message: t.message,
+    type: t.type,
+  }))
 
-  const removeToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id))
-  }, [])
-
-  const showSuccess = useCallback((message: string) => {
-    addToast(message, 'success')
-  }, [addToast])
-
-  const showError = useCallback((message: string) => {
-    addToast(message, 'error')
-  }, [addToast])
-
-  const showInfo = useCallback((message: string) => {
-    addToast(message, 'info')
-  }, [addToast])
+  const addToast = (message: string, type: Toast['type']) => {
+    showToast(message, type)
+  }
 
   return {
     toasts,
     addToast,
-    removeToast,
-    showSuccess,
-    showError,
-    showInfo,
+    removeToast: storeRemoveToast,
+    showSuccess: storeShowSuccess,
+    showError: storeShowError,
+    showInfo: storeShowInfo,
+    showWarning: storeShowWarning,
   }
 }
 

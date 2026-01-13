@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
+import { useToastStore } from '../stores/toastStore'
 import './AdminSettings.css'
 
 const API_BASE = '/api'
@@ -22,7 +23,7 @@ interface SystemSettings {
 
 function AdminSettings() {
   const { user: currentUser, token } = useAuthStore()
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const { showSuccess, showError } = useToastStore()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -50,11 +51,6 @@ function AdminSettings() {
   // Convert GB to bytes for saving
   const gbToBytes = (gb: number) => {
     return (gb * 1024 * 1024 * 1024).toString()
-  }
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
   }
 
   // Load settings on mount
@@ -90,7 +86,7 @@ function AdminSettings() {
         setSettings(loadedSettings)
       } catch (error) {
         console.error('Failed to load settings:', error)
-        showToast('설정을 불러오는데 실패했습니다.', 'error')
+        showError('설정을 불러오는데 실패했습니다.')
       } finally {
         setLoading(false)
       }
@@ -117,10 +113,10 @@ function AdminSettings() {
       if (!response.ok) {
         throw new Error('Failed to save settings')
       }
-      showToast('설정이 저장되었습니다.', 'success')
+      showSuccess('설정이 저장되었습니다.')
     } catch (error) {
       console.error('Failed to save settings:', error)
-      showToast('설정 저장에 실패했습니다.', 'error')
+      showError('설정 저장에 실패했습니다.')
     } finally {
       setSaving(false)
     }
@@ -515,25 +511,6 @@ function AdminSettings() {
           </button>
         </div>
       </div>
-
-      {/* Toast */}
-      {toast && (
-        <div className={`as-toast ${toast.type}`}>
-          {toast.type === 'success' ? (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-              <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          ) : (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-              <path d="M12 8V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              <circle cx="12" cy="16" r="1" fill="currentColor"/>
-            </svg>
-          )}
-          <span>{toast.message}</span>
-        </div>
-      )}
 
     </div>
   )

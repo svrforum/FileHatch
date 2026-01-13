@@ -1,101 +1,12 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
-import { useToastStore, ToastMessage as StoreToastMessage } from '../stores/toastStore'
+import { useEffect, useState } from 'react'
+import { useToastStore, ToastMessage } from '../stores/toastStore'
 import './Toast.css'
 
-export type ToastType = 'success' | 'error' | 'info' | 'warning'
+// Re-export types for convenience
+export type { ToastType, ToastMessage } from '../stores/toastStore'
 
-export interface ToastMessage {
-  id: string
-  type: ToastType
-  message: string
-  duration?: number
-}
-
-interface ToastContextType {
-  showToast: (message: string, type?: ToastType, duration?: number) => void
-  showSuccess: (message: string) => void
-  showError: (message: string) => void
-  showWarning: (message: string) => void
-  showInfo: (message: string) => void
-  toasts: ToastMessage[]
-  removeToast: (id: string) => void
-}
-
-const ToastContext = createContext<ToastContextType | null>(null)
-
-export const useToast = () => {
-  const context = useContext(ToastContext)
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider')
-  }
-  return context
-}
-
-interface ToastProviderProps {
-  children: ReactNode
-}
-
-export function ToastProvider({ children }: ToastProviderProps) {
-  const [toasts, setToasts] = useState<ToastMessage[]>([])
-
-  const removeToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(toast => toast.id !== id))
-  }, [])
-
-  const showToast = useCallback((message: string, type: ToastType = 'info', duration = 5000) => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    const toast: ToastMessage = { id, type, message, duration }
-    setToasts(prev => [...prev, toast])
-  }, [])
-
-  const showSuccess = useCallback((message: string) => showToast(message, 'success'), [showToast])
-  const showError = useCallback((message: string) => showToast(message, 'error', 7000), [showToast])
-  const showWarning = useCallback((message: string) => showToast(message, 'warning'), [showToast])
-  const showInfo = useCallback((message: string) => showToast(message, 'info'), [showToast])
-
-  return (
-    <ToastContext.Provider value={{ showToast, showSuccess, showError, showWarning, showInfo, toasts, removeToast }}>
-      {children}
-      <Toast toasts={toasts} onRemove={removeToast} />
-    </ToastContext.Provider>
-  )
-}
-
-interface ToastProps {
-  toasts: ToastMessage[]
-  onRemove: (id: string) => void
-}
-
-function Toast({ toasts, onRemove }: ToastProps) {
-  // Also get toasts from zustand store for global toast notifications
-  const storeToasts = useToastStore((state) => state.toasts)
-  const removeStoreToast = useToastStore((state) => state.removeToast)
-
-  // Combine context toasts and store toasts
-  const allToasts: ToastMessage[] = [
-    ...toasts,
-    ...storeToasts.map((t: StoreToastMessage) => ({
-      id: t.id,
-      type: t.type,
-      message: t.message,
-      duration: t.duration,
-    })),
-  ]
-
-  const handleRemove = (id: string) => {
-    // Try to remove from both sources
-    onRemove(id)
-    removeStoreToast(id)
-  }
-
-  return (
-    <div className="toast-container">
-      {allToasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onRemove={handleRemove} />
-      ))}
-    </div>
-  )
-}
+// Re-export the store hook as useToast for backward compatibility
+export { useToastStore as useToast } from '../stores/toastStore'
 
 function ToastItem({ toast, onRemove }: { toast: ToastMessage; onRemove: (id: string) => void }) {
   const [isLeaving, setIsLeaving] = useState(false)
@@ -149,4 +60,17 @@ function ToastItem({ toast, onRemove }: { toast: ToastMessage; onRemove: (id: st
   )
 }
 
-export default Toast
+export function ToastContainer() {
+  const toasts = useToastStore((state) => state.toasts)
+  const removeToast = useToastStore((state) => state.removeToast)
+
+  return (
+    <div className="toast-container">
+      {toasts.map((toast) => (
+        <ToastItem key={toast.id} toast={toast} onRemove={removeToast} />
+      ))}
+    </div>
+  )
+}
+
+export default ToastContainer

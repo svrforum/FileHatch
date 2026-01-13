@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useToast } from '../useToast'
+import { useToastStore } from '../../stores/toastStore'
 
 describe('useToast', () => {
   beforeEach(() => {
-    // Reset any state between tests
+    // Reset the zustand store before each test
+    const state = useToastStore.getState()
+    state.toasts.forEach(toast => state.removeToast(toast.id))
   })
 
   it('should initialize with empty toasts array', () => {
@@ -103,6 +106,18 @@ describe('useToast', () => {
     expect(result.current.toasts).toHaveLength(1)
     expect(result.current.toasts[0].type).toBe('info')
     expect(result.current.toasts[0].message).toBe('Info message')
+  })
+
+  it('should add warning toast with showWarning', () => {
+    const { result } = renderHook(() => useToast())
+
+    act(() => {
+      result.current.showWarning('Warning message')
+    })
+
+    expect(result.current.toasts).toHaveLength(1)
+    expect(result.current.toasts[0].type).toBe('warning')
+    expect(result.current.toasts[0].message).toBe('Warning message')
   })
 
   it('should generate unique ids for toasts', async () => {

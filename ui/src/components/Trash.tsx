@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listTrash, restoreFromTrash, deleteFromTrash, emptyTrash, formatFileSize, TrashItem } from '../api/files'
-import Toast from './Toast'
+import { useToastStore } from '../stores/toastStore'
 import './Trash.css'
 
 interface TrashProps {
@@ -17,7 +17,6 @@ export default function Trash({ onNavigate }: TrashProps) {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [showEmptyConfirm, setShowEmptyConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
-  const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' | 'info' }[]>([])
 
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('')
@@ -25,10 +24,8 @@ export default function Trash({ onNavigate }: TrashProps) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [sortOption, setSortOption] = useState<SortOption>('newest')
 
-  const addToast = (type: 'success' | 'error' | 'info', message: string) => {
-    const id = Date.now().toString()
-    setToasts(prev => [...prev, { id, message, type }])
-  }
+  // Global toast - rendered by ToastContainer in main.tsx
+  const { showSuccess, showError } = useToastStore()
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['trash'],
@@ -41,13 +38,13 @@ export default function Trash({ onNavigate }: TrashProps) {
       queryClient.invalidateQueries({ queryKey: ['trash'] })
       queryClient.invalidateQueries({ queryKey: ['files'] })
       queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
-      addToast('success', '복원되었습니다')
+      showSuccess('복원되었습니다')
       // Navigate to the restored item's directory
       const parentPath = result.restoredPath.split('/').slice(0, -1).join('/') || '/'
       onNavigate(parentPath)
     },
     onError: (err: Error) => {
-      addToast('error', err.message)
+      showError(err.message)
     },
   })
 
@@ -56,11 +53,11 @@ export default function Trash({ onNavigate }: TrashProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trash'] })
       queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
-      addToast('success', '영구 삭제되었습니다')
+      showSuccess('영구 삭제되었습니다')
       setShowDeleteConfirm(null)
     },
     onError: (err: Error) => {
-      addToast('error', err.message)
+      showError(err.message)
     },
   })
 
@@ -69,11 +66,11 @@ export default function Trash({ onNavigate }: TrashProps) {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['trash'] })
       queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
-      addToast('success', `${result.deletedCount}개 항목이 영구 삭제되었습니다`)
+      showSuccess(`${result.deletedCount}개 항목이 영구 삭제되었습니다`)
       setShowEmptyConfirm(false)
     },
     onError: (err: Error) => {
-      addToast('error', err.message)
+      showError(err.message)
     },
   })
 
@@ -507,11 +504,6 @@ export default function Trash({ onNavigate }: TrashProps) {
           </div>
         </div>
       )}
-
-      <Toast
-        toasts={toasts}
-        onRemove={(id) => setToasts(prev => prev.filter(t => t.id !== id))}
-      />
     </div>
   )
 }

@@ -19,7 +19,6 @@ import { useLocalSearch } from '../hooks/useLocalSearch'
 import { useFileMetadata } from '../hooks/useFileMetadata'
 import { useStarredAndLocked } from '../hooks/useStarredAndLocked'
 import ConfirmModal from './ConfirmModal'
-import Toast from './Toast'
 import TextEditor from './TextEditor'
 import FileViewer from './FileViewer'
 import ZipViewer from './ZipViewer'
@@ -93,8 +92,8 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [pathsToTransfer, setPathsToTransfer] = useState<string[]>([])
   const fileRowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
-  // Toast hook
-  const { toasts, addToast, removeToast, showSuccess, showError, showInfo } = useToast()
+  // Toast hook - toasts are rendered globally by ToastContainer in main.tsx
+  const { addToast, showSuccess, showError, showInfo } = useToast()
 
   // Check if current path is a special share view (needed for local search and other conditionals)
   const isSharedWithMeView = currentPath === '/shared-with-me'
@@ -1433,11 +1432,6 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         cancelText="취소"
         onConfirm={handleCopyConfirm}
         onCancel={() => setCopyTarget(null)}
-      />
-
-      <Toast
-        toasts={toasts}
-        onRemove={removeToast}
       />
 
       {/* Text Editor Modal */}
