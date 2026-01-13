@@ -670,6 +670,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--spacing-md);
   padding: var(--spacing-xl);
   flex: 1;
   min-height: 300px;
@@ -693,20 +694,17 @@
 
 .loading-state p,
 .error-state p {
-  margin-top: var(--spacing-md);
   font-size: 14px;
 }
 
 .empty-state svg {
   color: var(--text-tertiary);
-  margin-bottom: var(--spacing-md);
 }
 
 .empty-state h3 {
   font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: var(--spacing-sm);
 }
 
 .empty-state p {

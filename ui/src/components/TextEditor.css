@@ -129,6 +129,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--spacing-md);
   height: 100%;
   color: var(--text-secondary);
 }
@@ -140,16 +141,13 @@
   border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
-  margin-bottom: var(--spacing-md);
 }
 
 .editor-error svg {
   color: var(--color-error);
-  margin-bottom: var(--spacing-md);
 }
 
 .editor-error p {
-  margin-bottom: var(--spacing-md);
   font-size: 14px;
 }
 

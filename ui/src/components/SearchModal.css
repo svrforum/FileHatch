@@ -161,12 +161,12 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--spacing-md);
   padding: 60px 20px;
   color: var(--text-tertiary);
 }
 
 .search-modal-empty svg {
-  margin-bottom: 16px;
   opacity: 0.5;
 }
 

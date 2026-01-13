@@ -677,20 +677,20 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--spacing-md);
   padding: 80px 40px;
   text-align: center;
 }
 
 .empty-state svg {
   color: var(--text-tertiary);
-  margin-bottom: 20px;
 }
 
 .empty-state h3 {
   font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 8px;
+  margin: 0;
 }
 
 .empty-state p {

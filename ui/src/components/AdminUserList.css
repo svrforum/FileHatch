@@ -1007,6 +1007,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--spacing-md);
   padding: 80px 40px;
   text-align: center;
   background: var(--bg-primary);
@@ -1015,7 +1016,6 @@
 
 .empty-state svg {
   color: var(--text-tertiary);
-  margin-bottom: 24px;
   opacity: 0.5;
 }
 
@@ -1023,7 +1023,7 @@
   font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 8px;
+  margin: 0;
 }
 
 .empty-state p {
