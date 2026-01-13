@@ -197,10 +197,11 @@ function Header({ onProfileClick, onNavigate, onFileSelect, currentPath = '/', i
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               onFocus={() => searchResults.length > 0 && setShowResults(true)}
+              aria-label="파일 검색"
             />
             {isSearching && <div className="search-spinner" />}
             {searchQuery.trim() && !isSearching && (
-              <button className="search-expand-btn" onClick={openSearchModal} title="전체 검색">
+              <button className="search-expand-btn" onClick={openSearchModal} title="전체 검색" aria-label="전체 검색 열기">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                   <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
@@ -256,6 +257,7 @@ function Header({ onProfileClick, onNavigate, onFileSelect, currentPath = '/', i
           className="theme-toggle-btn"
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           title={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+          aria-label={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
         >
           {theme === 'dark' ? (
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -270,7 +272,7 @@ function Header({ onProfileClick, onNavigate, onFileSelect, currentPath = '/', i
         </button>
         <NotificationBell />
         {user && (
-          <button className="avatar-btn" onClick={onProfileClick} title={user.username}>
+          <button className="avatar-btn" onClick={onProfileClick} title={user.username} aria-label={`${user.username} 프로필`}>
             <div className="avatar">
               <span>{user.username.charAt(0).toUpperCase()}</span>
             </div>

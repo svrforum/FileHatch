@@ -48,11 +48,19 @@ function ToastItem({ toast, onRemove }: { toast: ToastMessage; onRemove: (id: st
   }
 
   return (
-    <div className={`toast toast-${toast.type} ${isLeaving ? 'leaving' : ''}`}>
-      <span className="toast-icon">{icons[toast.type]}</span>
+    <div
+      className={`toast toast-${toast.type} ${isLeaving ? 'leaving' : ''}`}
+      role="alert"
+      aria-live="polite"
+    >
+      <span className="toast-icon" aria-hidden="true">{icons[toast.type]}</span>
       <span className="toast-message">{toast.message}</span>
-      <button className="toast-close" onClick={() => onRemove(toast.id)}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <button
+        className="toast-close"
+        onClick={() => onRemove(toast.id)}
+        aria-label="알림 닫기"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
         </svg>
       </button>

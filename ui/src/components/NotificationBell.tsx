@@ -134,6 +134,7 @@ export const NotificationBell: React.FC = () => {
                 <button
                   onClick={handleMarkAllAsRead}
                   title="모두 읽음 처리"
+                  aria-label="모두 읽음 처리"
                   disabled={unreadCount === 0}
                 >
                   <CheckIcon size={16} />
@@ -141,6 +142,7 @@ export const NotificationBell: React.FC = () => {
                 <button
                   onClick={handleDeleteAllRead}
                   title="읽은 알림 삭제"
+                  aria-label="읽은 알림 삭제"
                 >
                   <Trash2Icon size={16} />
                 </button>

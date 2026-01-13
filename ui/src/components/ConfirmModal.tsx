@@ -31,9 +31,16 @@ function ConfirmModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
-        <div className={`confirm-icon ${danger ? 'danger' : 'warning'}`}>
+    <div className="modal-overlay" onClick={onCancel} role="presentation">
+      <div
+        className="confirm-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-modal-title"
+        aria-describedby="confirm-modal-message"
+      >
+        <div className={`confirm-icon ${danger ? 'danger' : 'warning'}`} aria-hidden="true">
           {danger ? (
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -45,8 +52,8 @@ function ConfirmModal({
             </svg>
           )}
         </div>
-        <h3 className="confirm-title">{title}</h3>
-        <p className="confirm-message">{message}</p>
+        <h3 id="confirm-modal-title" className="confirm-title">{title}</h3>
+        <p id="confirm-modal-message" className="confirm-message">{message}</p>
         <div className="confirm-actions">
           <button className="btn-secondary" onClick={onCancel}>
             {cancelText}

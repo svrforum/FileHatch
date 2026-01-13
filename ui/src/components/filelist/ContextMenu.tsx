@@ -179,6 +179,8 @@ function ContextMenu({
     <div
       ref={contextMenuRef}
       className="context-menu"
+      role="menu"
+      aria-label="컨텍스트 메뉴"
       style={{
         top: contextMenuPosition?.y ?? contextMenu.y,
         left: contextMenuPosition?.x ?? contextMenu.x,
