@@ -104,6 +104,14 @@ const (
 	EventAdminSMBEnable      = "admin.smb.enable"
 	EventAdminSMBDisable     = "admin.smb.disable"
 	EventAdminSettingsUpdate = "admin.settings.update"
+
+	// Security events
+	EventLoginFailed      = "security.login_failed"
+	EventLoginBlocked     = "security.login_blocked"
+	EventAccountLocked    = "security.account_locked"
+	EventAccountUnlocked  = "security.account_unlocked"
+	EventIPLocked         = "security.ip_locked"
+	EventIPUnlocked       = "security.ip_unlocked"
 )
 
 // LogEvent records an audit event

@@ -183,6 +183,10 @@ func main() {
 	// Create Audit handler
 	auditHandler := handlers.NewAuditHandler(db, dataRoot)
 
+	// Initialize Brute Force Guard for login protection
+	bruteForceGuard := handlers.InitBruteForceGuard(db, auditHandler)
+	log.Println("Brute force protection initialized")
+
 	// Create TOTP handler for 2FA
 	totpHandler := handlers.NewTOTPHandler(db, auditHandler)
 
@@ -399,6 +403,11 @@ func main() {
 	adminApi.DELETE("/admin/sso/providers/:id", ssoHandler.DeleteProvider)
 	adminApi.GET("/admin/sso/settings", ssoHandler.GetSSOSettings)
 	adminApi.PUT("/admin/sso/settings", ssoHandler.UpdateSSOSettings)
+
+	// Security Management API (admin only) - Brute Force Protection
+	adminApi.GET("/admin/security/locked-users", bruteForceGuard.GetLockedUsers)
+	adminApi.DELETE("/admin/security/locked-users/:username", bruteForceGuard.UnlockUser)
+	adminApi.GET("/admin/security/stats", bruteForceGuard.GetStats)
 
 	// File Share API (user-to-user sharing - protected)
 	authApi.POST("/file-shares", fileShareHandler.CreateFileShare)

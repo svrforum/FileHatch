@@ -221,6 +221,28 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		})
 	}
 
+	ctx := c.Request().Context()
+	ip := c.RealIP()
+
+	// Check brute force protection
+	guard := GetBruteForceGuard()
+	if guard != nil {
+		allowed, reason, remaining := guard.CheckAndRecordAttempt(ctx, ip, req.Username)
+		if !allowed {
+			// Log blocked attempt
+			h.auditHandler.LogEvent(nil, ip, EventLoginBlocked, req.Username, map[string]interface{}{
+				"username": req.Username,
+				"reason":   reason,
+			})
+			return c.JSON(http.StatusTooManyRequests, map[string]interface{}{
+				"error":      reason,
+				"retryAfter": guard.config.LockDuration.Seconds(),
+			})
+		}
+		// Set remaining attempts header
+		c.Response().Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+	}
+
 	// Get user from database
 	var user User
 	var passwordHash string
@@ -237,6 +259,14 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		&user.IsAdmin, &user.IsActive, &totpEnabled, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
+		// Record failed attempt for non-existent user (still track by IP)
+		if guard != nil {
+			guard.RecordFailedAttempt(ctx, ip, "")
+		}
+		h.auditHandler.LogEvent(nil, ip, EventLoginFailed, req.Username, map[string]interface{}{
+			"username": req.Username,
+			"reason":   "user_not_found",
+		})
 		return c.JSON(http.StatusUnauthorized, map[string]string{
 			"error": "Invalid username or password",
 		})
@@ -256,6 +286,14 @@ func (h *AuthHandler) Login(c echo.Context) error {
 
 	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
+		// Record failed attempt for existing user
+		if guard != nil {
+			guard.RecordFailedAttempt(ctx, ip, req.Username)
+		}
+		h.auditHandler.LogEvent(&user.ID, ip, EventLoginFailed, req.Username, map[string]interface{}{
+			"username": req.Username,
+			"reason":   "invalid_password",
+		})
 		return c.JSON(http.StatusUnauthorized, map[string]string{
 			"error": "Invalid username or password",
 		})
@@ -297,8 +335,13 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		})
 	}
 
+	// Reset brute force counters on successful login
+	if guard != nil {
+		guard.RecordSuccessfulLogin(ctx, ip, user.Username)
+	}
+
 	// Log login event
-	h.auditHandler.LogEvent(&user.ID, c.RealIP(), EventUserLogin, user.Username, map[string]interface{}{
+	h.auditHandler.LogEvent(&user.ID, ip, EventUserLogin, user.Username, map[string]interface{}{
 		"username":   user.Username,
 		"isAdmin":    user.IsAdmin,
 		"rememberMe": req.RememberMe,
