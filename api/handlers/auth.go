@@ -144,9 +144,17 @@ func (h *AuthHandler) Register(c echo.Context) error {
 		})
 	}
 
-	if len(req.Password) < 8 {
+	// Validate password complexity
+	if err := ValidatePassword(req.Password); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Password must be at least 8 characters",
+			"error": err.Error(),
+		})
+	}
+
+	// Validate email format
+	if err := ValidateEmail(req.Email); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": err.Error(),
 		})
 	}
 
@@ -476,15 +484,22 @@ func (h *AuthHandler) UpdateProfile(c echo.Context) error {
 	argCount := 1
 
 	if req.Email != "" {
+		// Validate email format
+		if err := ValidateEmail(req.Email); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": err.Error(),
+			})
+		}
 		updates = append(updates, fmt.Sprintf("email = $%d", argCount))
 		args = append(args, req.Email)
 		argCount++
 	}
 
 	if req.NewPassword != "" {
-		if len(req.NewPassword) < 8 {
+		// Validate password complexity
+		if err := ValidatePassword(req.NewPassword); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Password must be at least 8 characters",
+				"error": err.Error(),
 			})
 		}
 

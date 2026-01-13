@@ -194,7 +194,7 @@ func TestRegister_Success(t *testing.T) {
 	req, _ := NewJSONRequest(http.MethodPost, "/api/auth/register", map[string]string{
 		"username": "newuser",
 		"email":    "new@example.com",
-		"password": "password123",
+		"password": "Password123!",
 	})
 
 	c := tc.Echo.NewContext(req, tc.Recorder)
@@ -220,7 +220,7 @@ func TestRegister_ShortUsername(t *testing.T) {
 	req, _ := NewJSONRequest(http.MethodPost, "/api/auth/register", map[string]string{
 		"username": "ab",
 		"email":    "test@example.com",
-		"password": "password123",
+		"password": "Password123!",
 	})
 
 	c := tc.Echo.NewContext(req, tc.Recorder)
@@ -248,7 +248,7 @@ func TestRegister_ShortPassword(t *testing.T) {
 	handler.Register(c)
 
 	AssertStatus(t, tc.Recorder, http.StatusBadRequest)
-	AssertJSONError(t, tc.Recorder, "Password must be at least 8 characters")
+	AssertJSONError(t, tc.Recorder, "password must be at least 8 characters")
 }
 
 func TestRegister_DuplicateUsername(t *testing.T) {
@@ -265,7 +265,7 @@ func TestRegister_DuplicateUsername(t *testing.T) {
 	req, _ := NewJSONRequest(http.MethodPost, "/api/auth/register", map[string]string{
 		"username": "existinguser",
 		"email":    "test@example.com",
-		"password": "password123",
+		"password": "Password123!",
 	})
 
 	c := tc.Echo.NewContext(req, tc.Recorder)
