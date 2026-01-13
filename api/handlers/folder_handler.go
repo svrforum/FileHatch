@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -248,6 +249,12 @@ func (h *Handler) DeleteFolder(c echo.Context) error {
 	// Check if force delete is requested
 	force := c.QueryParam("force") == "true"
 
+	// Calculate folder size before deleting (for storage tracking)
+	var folderSize int64
+	if force {
+		folderSize, _ = GetFileSize(realPath)
+	}
+
 	if force {
 		if err := os.RemoveAll(realPath); err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -273,6 +280,20 @@ func (h *Handler) DeleteFolder(c echo.Context) error {
 			return c.JSON(http.StatusInternalServerError, map[string]string{
 				"error": "Failed to delete folder",
 			})
+		}
+	}
+
+	// Update storage tracking (only if force delete with non-zero size)
+	if force && folderSize > 0 {
+		if storageType == StorageShared {
+			folderName := ExtractSharedDriveFolderName(virtualPath)
+			if err := h.UpdateSharedFolderStorage(folderName, -folderSize); err != nil {
+				fmt.Printf("[Storage] Failed to update shared folder storage: %v\n", err)
+			}
+		} else if storageType == StorageHome && claims != nil {
+			if err := h.UpdateUserStorage(claims.UserID, -folderSize); err != nil {
+				fmt.Printf("[Storage] Failed to update user storage: %v\n", err)
+			}
 		}
 	}
 

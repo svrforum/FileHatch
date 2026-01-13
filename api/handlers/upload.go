@@ -157,73 +157,58 @@ func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPR
 
 // checkUserQuota checks if user has enough storage quota for the upload
 // Quota is checked against home folder + trash usage (shared folders have separate quota)
+// Uses database-stored values for instant checks (no filesystem scan)
 func (h *UploadHandler) checkUserQuota(username string, uploadSize int64) (bool, int64, error) {
-	// Get user quota from database (or use default)
-	var quota int64 = DefaultUserQuota
+	// Get user quota and current usage from database
+	var quota, storageUsed, trashUsed sql.NullInt64
 	err := h.db.QueryRow(`
-		SELECT COALESCE(storage_quota, $1) FROM users WHERE username = $2
-	`, DefaultUserQuota, username).Scan(&quota)
+		SELECT COALESCE(storage_quota, $1), storage_used, trash_used
+		FROM users WHERE username = $2
+	`, DefaultUserQuota, username).Scan(&quota, &storageUsed, &trashUsed)
+
 	if err != nil && err != sql.ErrNoRows {
 		return true, 0, err // Fail-open on error
 	}
 
-	// quota of 0 means unlimited
-	if quota == 0 {
-		return true, -1, nil
+	// Get quota value (0 means unlimited)
+	var quotaVal int64 = DefaultUserQuota
+	if quota.Valid && quota.Int64 > 0 {
+		quotaVal = quota.Int64
+	} else if quota.Valid && quota.Int64 == 0 {
+		return true, -1, nil // Unlimited
 	}
 
-	// Calculate current usage (home folder + trash)
-	userPath := filepath.Join(h.dataRoot, "users", username)
-	trashPath := filepath.Join(h.dataRoot, "trash", username)
+	// Get current usage from DB (instant - no filesystem scan)
 	var currentUsage int64
+	if storageUsed.Valid {
+		currentUsage += storageUsed.Int64
+	}
+	if trashUsed.Valid {
+		currentUsage += trashUsed.Int64
+	}
 
-	// Count home folder usage
-	filepath.Walk(userPath, func(_ string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() {
-			currentUsage += info.Size()
-		}
-		return nil
-	})
-
-	// Count trash folder usage
-	filepath.Walk(trashPath, func(_ string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() {
-			currentUsage += info.Size()
-		}
-		return nil
-	})
-
-	// Log for debugging
-	fmt.Printf("[QuotaCheck] User: %s, CurrentUsage: %d (home+trash), Quota: %d, UploadSize: %d\n",
-		username, currentUsage, quota, uploadSize)
-
-	remaining := quota - currentUsage
+	remaining := quotaVal - currentUsage
 	if uploadSize > remaining {
-		fmt.Printf("[QuotaCheck] REJECTED: remaining=%d < uploadSize=%d\n", remaining, uploadSize)
+		LogInfo("[QuotaCheck] REJECTED", "user", username, "used", currentUsage, "quota", quotaVal, "upload", uploadSize)
 		return false, remaining, nil
 	}
 
-	fmt.Printf("[QuotaCheck] ALLOWED: remaining=%d >= uploadSize=%d\n", remaining, uploadSize)
 	return true, remaining, nil
 }
 
 // checkSharedDriveQuota checks quota for shared drive
+// Uses database-stored storage_used value for instant checks (no filesystem scan)
 func (h *UploadHandler) checkSharedDriveQuota(path string, uploadSize int64) (allowed bool, quota int64, used int64) {
 	folderName := ExtractSharedDriveFolderName(path)
 	if folderName == "" {
 		return true, 0, 0 // No folder name means root shared, allow
 	}
 
-	// Get quota from database
+	// Get quota and current usage from database
+	var storageUsed sql.NullInt64
 	err := h.db.QueryRow(`
-		SELECT storage_quota FROM shared_folders WHERE name = $1 AND is_active = TRUE
-	`, folderName).Scan(&quota)
+		SELECT storage_quota, storage_used FROM shared_folders WHERE name = $1 AND is_active = TRUE
+	`, folderName).Scan(&quota, &storageUsed)
 	if err != nil {
 		return true, 0, 0 // Allow on error
 	}
@@ -233,17 +218,10 @@ func (h *UploadHandler) checkSharedDriveQuota(path string, uploadSize int64) (al
 		return true, 0, 0
 	}
 
-	// Calculate current usage
-	folderPath := filepath.Join(h.dataRoot, "shared", folderName)
-	filepath.Walk(folderPath, func(_ string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() {
-			used += info.Size()
-		}
-		return nil
-	})
+	// Get current usage from DB (instant - no filesystem scan)
+	if storageUsed.Valid {
+		used = storageUsed.Int64
+	}
 
 	return (used + uploadSize) <= quota, quota, used
 }
@@ -397,8 +375,8 @@ func (h *UploadHandler) handleCompletedUploads() {
 
 		fmt.Printf("Upload completed: %s -> %s (overwrite: %v)\n", filename, finalPath, overwrite)
 
-		// Update storage tracking for the user
-		if username != "" && h.auditHandler != nil && h.auditHandler.db != nil {
+		// Update storage tracking for the user (home folder uploads)
+		if username != "" && h.auditHandler != nil && h.auditHandler.db != nil && !strings.HasPrefix(destPath, "/shared/") {
 			// Get file size after upload
 			fileSize := event.Upload.Size
 			_, err := h.auditHandler.db.Exec(`
@@ -409,6 +387,23 @@ func (h *UploadHandler) handleCompletedUploads() {
 			`, fileSize, username)
 			if err != nil {
 				fmt.Printf("[Storage] Failed to update storage for %s: %v\n", username, err)
+			}
+		}
+
+		// Update storage tracking for shared folders
+		if strings.HasPrefix(destPath, "/shared/") && h.auditHandler != nil && h.auditHandler.db != nil {
+			folderName := ExtractSharedDriveFolderName(destPath)
+			if folderName != "" {
+				fileSize := event.Upload.Size
+				_, err := h.auditHandler.db.Exec(`
+					UPDATE shared_folders
+					SET storage_used = GREATEST(0, COALESCE(storage_used, 0) + $1),
+					    updated_at = NOW()
+					WHERE name = $2 AND is_active = TRUE
+				`, fileSize, folderName)
+				if err != nil {
+					fmt.Printf("[Storage] Failed to update shared folder storage for %s: %v\n", folderName, err)
+				}
 			}
 		}
 

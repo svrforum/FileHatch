@@ -183,8 +183,23 @@ func (h *Handler) DeleteFile(c echo.Context) error {
 		return RespondError(c, ErrBadRequest("Path is a directory, use DELETE /api/folders instead"))
 	}
 
+	// Get file size before deleting (for storage tracking)
+	fileSize := info.Size()
+
 	if err := os.Remove(realPath); err != nil {
 		return RespondError(c, ErrOperationFailed("delete file", err))
+	}
+
+	// Update storage tracking
+	if storageType == StorageShared {
+		folderName := ExtractSharedDriveFolderName(virtualPath)
+		if err := h.UpdateSharedFolderStorage(folderName, -fileSize); err != nil {
+			fmt.Printf("[Storage] Failed to update shared folder storage: %v\n", err)
+		}
+	} else if storageType == StorageHome && claims != nil {
+		if err := h.UpdateUserStorage(claims.UserID, -fileSize); err != nil {
+			fmt.Printf("[Storage] Failed to update user storage: %v\n", err)
+		}
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{

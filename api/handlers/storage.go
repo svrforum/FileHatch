@@ -256,3 +256,68 @@ func GetFileSize(path string) (int64, error) {
 	})
 	return size, err
 }
+
+// UpdateSharedFolderStorage updates the storage_used value for a shared folder
+// folderName is the shared folder name (extracted from path like /shared/{folderName}/...)
+// delta can be positive (file added) or negative (file removed)
+func (h *Handler) UpdateSharedFolderStorage(folderName string, delta int64) error {
+	if folderName == "" {
+		return nil
+	}
+	_, err := h.db.Exec(`
+		UPDATE shared_folders
+		SET storage_used = GREATEST(0, COALESCE(storage_used, 0) + $1),
+		    updated_at = NOW()
+		WHERE name = $2 AND is_active = TRUE
+	`, delta, folderName)
+
+	// Invalidate cache since shared storage changed
+	if err == nil {
+		cache := GetStorageCache()
+		cache.InvalidateSharedUsage()
+	}
+
+	return err
+}
+
+// RecalculateSharedFolderStorage recalculates storage by scanning filesystem
+func (h *Handler) RecalculateSharedFolderStorage(folderName string) error {
+	folderPath := filepath.Join(h.dataRoot, "shared", folderName)
+	size, _ := h.calculateDirSize(folderPath)
+
+	_, err := h.db.Exec(`
+		UPDATE shared_folders
+		SET storage_used = $1, updated_at = NOW()
+		WHERE name = $2 AND is_active = TRUE
+	`, size, folderName)
+
+	if err == nil {
+		fmt.Printf("[Storage] Recalculated shared folder %s: %d bytes\n", folderName, size)
+	}
+	return err
+}
+
+// RecalculateAllSharedFoldersStorage recalculates storage for all shared folders
+func (h *Handler) RecalculateAllSharedFoldersStorage() error {
+	rows, err := h.db.Query(`SELECT name FROM shared_folders WHERE is_active = true`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var count int
+	for rows.Next() {
+		var folderName string
+		if err := rows.Scan(&folderName); err != nil {
+			continue
+		}
+		if err := h.RecalculateSharedFolderStorage(folderName); err != nil {
+			fmt.Printf("[Storage] Failed to recalculate shared folder %s: %v\n", folderName, err)
+			continue
+		}
+		count++
+	}
+
+	fmt.Printf("[Storage] Recalculated storage for %d shared folders\n", count)
+	return nil
+}
