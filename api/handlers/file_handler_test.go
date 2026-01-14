@@ -1,15 +1,14 @@
 package handlers
 
 import (
-	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/labstack/echo/v4"
 )
 
 // FileTestContext extends TestContext with file-specific helpers
@@ -41,10 +40,10 @@ func SetupFileTest(t *testing.T) *FileTestContext {
 	}
 }
 
-// CreateTestUser creates a test user directory structure
+// CreateTestUser creates a test user directory structure (proper path: {dataRoot}/users/{username})
 func (ftc *FileTestContext) CreateTestUser(t *testing.T, username string) string {
 	t.Helper()
-	userDir := filepath.Join(ftc.DataRoot, username)
+	userDir := filepath.Join(ftc.DataRoot, "users", username)
 	if err := os.MkdirAll(userDir, 0755); err != nil {
 		t.Fatalf("Failed to create user directory: %v", err)
 	}
@@ -86,9 +85,9 @@ func TestCreateFolder_Success(t *testing.T) {
 	ftc.Mock.ExpectExec("INSERT INTO audit_logs").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	// Create request
+	// Create request - use /home path which maps to user's home directory
 	body := CreateFolderRequest{
-		Path: "/",
+		Path: "/home",
 		Name: "newfolder",
 	}
 	req, err := NewJSONRequest(http.MethodPost, "/api/folders", body)
@@ -123,9 +122,9 @@ func TestCreateFolder_AlreadyExists(t *testing.T) {
 	userDir := ftc.CreateTestUser(t, "testuser")
 	ftc.CreateTestFolder(t, filepath.Join(userDir, "existingfolder"))
 
-	// Create request for same folder
+	// Create request for same folder - use /home path
 	body := CreateFolderRequest{
-		Path: "/",
+		Path: "/home",
 		Name: "existingfolder",
 	}
 	req, err := NewJSONRequest(http.MethodPost, "/api/folders", body)
@@ -198,7 +197,7 @@ func TestCreateFolder_InvalidName(t *testing.T) {
 			ftc.CreateTestUser(t, "testuser")
 
 			body := CreateFolderRequest{
-				Path: "/",
+				Path: "/home",
 				Name: tc.folder,
 			}
 			req, err := NewJSONRequest(http.MethodPost, "/api/folders", body)
@@ -234,11 +233,9 @@ func TestCheckFileExists_Exists(t *testing.T) {
 	testFilePath := filepath.Join(userDir, "testfile.txt")
 	ftc.CreateTestFile(t, testFilePath, []byte("test content"))
 
-	// Create request
-	req := httptest.NewRequest(http.MethodGet, "/api/files/check?path=/testfile.txt", nil)
+	// Create request with correct query params: path=/home and filename=testfile.txt
+	req := httptest.NewRequest(http.MethodGet, "/api/files/check?path=/home&filename=testfile.txt", nil)
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames()
-	c.QueryParams().Set("path", "/testfile.txt")
 
 	// Execute
 	err := ftc.Handler.CheckFileExists(c)
@@ -249,7 +246,7 @@ func TestCheckFileExists_Exists(t *testing.T) {
 	// Verify
 	AssertStatus(t, ftc.Recorder, http.StatusOK)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	if err := ParseJSONResponse(ftc.Recorder, &resp); err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
@@ -266,9 +263,8 @@ func TestCheckFileExists_NotExists(t *testing.T) {
 
 	ftc.CreateTestUser(t, "testuser")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/files/check?path=/nonexistent.txt", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/files/check?path=/home&filename=nonexistent.txt", nil)
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.QueryParams().Set("path", "/nonexistent.txt")
 
 	err := ftc.Handler.CheckFileExists(c)
 	if err != nil {
@@ -277,7 +273,7 @@ func TestCheckFileExists_NotExists(t *testing.T) {
 
 	AssertStatus(t, ftc.Recorder, http.StatusOK)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	if err := ParseJSONResponse(ftc.Recorder, &resp); err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
@@ -312,11 +308,11 @@ func TestDeleteFile_Success(t *testing.T) {
 	ftc.Mock.ExpectExec("INSERT INTO audit_logs").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	// Create request
-	req := httptest.NewRequest(http.MethodDelete, "/api/files/todelete.txt", nil)
+	// Create request - use "*" param with "home/filename" format
+	req := httptest.NewRequest(http.MethodDelete, "/api/files/home/todelete.txt", nil)
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
-	c.SetParamValues("todelete.txt")
+	c.SetParamNames("*")
+	c.SetParamValues("home/todelete.txt")
 
 	// Execute
 	err := ftc.Handler.DeleteFile(c)
@@ -339,10 +335,10 @@ func TestDeleteFile_NotFound(t *testing.T) {
 
 	ftc.CreateTestUser(t, "testuser")
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/files/nonexistent.txt", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/files/home/nonexistent.txt", nil)
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
-	c.SetParamValues("nonexistent.txt")
+	c.SetParamNames("*")
+	c.SetParamValues("home/nonexistent.txt")
 
 	err := ftc.Handler.DeleteFile(c)
 	if err != nil {
@@ -362,7 +358,7 @@ func TestDeleteFile_PathTraversal_Blocked(t *testing.T) {
 	// Try to delete file outside user directory
 	req := httptest.NewRequest(http.MethodDelete, "/api/files/../../../etc/passwd", nil)
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
+	c.SetParamNames("*")
 	c.SetParamValues("../../../etc/passwd")
 
 	err := ftc.Handler.DeleteFile(c)
@@ -402,10 +398,10 @@ func TestDeleteFolder_Success(t *testing.T) {
 	ftc.Mock.ExpectExec("INSERT INTO audit_logs").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/folders/todelete", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/folders/home/todelete?force=true", nil)
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
-	c.SetParamValues("todelete")
+	c.SetParamNames("*")
+	c.SetParamValues("home/todelete")
 
 	err := ftc.Handler.DeleteFolder(c)
 	if err != nil {
@@ -426,10 +422,10 @@ func TestDeleteFolder_NotFound(t *testing.T) {
 
 	ftc.CreateTestUser(t, "testuser")
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/folders/nonexistent", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/folders/home/nonexistent", nil)
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
-	c.SetParamValues("nonexistent")
+	c.SetParamNames("*")
+	c.SetParamValues("home/nonexistent")
 
 	err := ftc.Handler.DeleteFolder(c)
 	if err != nil {
@@ -457,10 +453,10 @@ func TestGetFolderStats_Success(t *testing.T) {
 	ftc.CreateTestFolder(t, subFolder)
 	ftc.CreateTestFile(t, filepath.Join(subFolder, "file3.txt"), []byte("sub"))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/folders/stats/testfolder", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/folders/stats/home/testfolder", nil)
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
-	c.SetParamValues("testfolder")
+	c.SetParamNames("*")
+	c.SetParamValues("home/testfolder")
 
 	err := ftc.Handler.GetFolderStats(c)
 	if err != nil {
@@ -507,14 +503,14 @@ func TestRenameItem_Success(t *testing.T) {
 	body := RenameRequest{
 		NewName: "newname.txt",
 	}
-	req, err := NewJSONRequest(http.MethodPut, "/api/files/rename/oldname.txt", body)
+	req, err := NewJSONRequest(http.MethodPut, "/api/files/rename/home/oldname.txt", body)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
-	c.SetParamValues("oldname.txt")
+	c.SetParamNames("*")
+	c.SetParamValues("home/oldname.txt")
 
 	err = ftc.Handler.RenameItem(c)
 	if err != nil {
@@ -544,14 +540,14 @@ func TestRenameItem_DestinationExists(t *testing.T) {
 	body := RenameRequest{
 		NewName: "existing.txt",
 	}
-	req, err := NewJSONRequest(http.MethodPut, "/api/files/rename/source.txt", body)
+	req, err := NewJSONRequest(http.MethodPut, "/api/files/rename/home/source.txt", body)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
-	c.SetParamValues("source.txt")
+	c.SetParamNames("*")
+	c.SetParamValues("home/source.txt")
 
 	err = ftc.Handler.RenameItem(c)
 	if err != nil {
@@ -583,16 +579,16 @@ func TestMoveItem_Success(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	body := MoveRequest{
-		Destination: "/destination",
+		Destination: "/home/destination",
 	}
-	req, err := NewJSONRequest(http.MethodPut, "/api/files/move/source.txt", body)
+	req, err := NewJSONRequest(http.MethodPut, "/api/files/move/home/source.txt", body)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
-	c.SetParamValues("source.txt")
+	c.SetParamNames("*")
+	c.SetParamValues("home/source.txt")
 
 	err = ftc.Handler.MoveItem(c)
 	if err != nil {
@@ -619,16 +615,16 @@ func TestMoveItem_SourceNotFound(t *testing.T) {
 	ftc.CreateTestFolder(t, filepath.Join(userDir, "destination"))
 
 	body := MoveRequest{
-		Destination: "/destination",
+		Destination: "/home/destination",
 	}
-	req, err := NewJSONRequest(http.MethodPut, "/api/files/move/nonexistent.txt", body)
+	req, err := NewJSONRequest(http.MethodPut, "/api/files/move/home/nonexistent.txt", body)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
-	c.SetParamValues("nonexistent.txt")
+	c.SetParamNames("*")
+	c.SetParamValues("home/nonexistent.txt")
 
 	err = ftc.Handler.MoveItem(c)
 	if err != nil {
@@ -665,16 +661,16 @@ func TestCopyItem_Success(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	body := CopyRequest{
-		Destination: "/destination",
+		Destination: "/home/destination",
 	}
-	req, err := NewJSONRequest(http.MethodPost, "/api/files/copy/source.txt", body)
+	req, err := NewJSONRequest(http.MethodPost, "/api/files/copy/home/source.txt", body)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
-	c.SetParamValues("source.txt")
+	c.SetParamNames("*")
+	c.SetParamValues("home/source.txt")
 
 	err = ftc.Handler.CopyItem(c)
 	if err != nil {
@@ -711,16 +707,16 @@ func TestCopyItem_SourceNotFound(t *testing.T) {
 	ftc.CreateTestFolder(t, filepath.Join(userDir, "destination"))
 
 	body := CopyRequest{
-		Destination: "/destination",
+		Destination: "/home/destination",
 	}
-	req, err := NewJSONRequest(http.MethodPost, "/api/files/copy/nonexistent.txt", body)
+	req, err := NewJSONRequest(http.MethodPost, "/api/files/copy/home/nonexistent.txt", body)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
-	c.SetParamValues("nonexistent.txt")
+	c.SetParamNames("*")
+	c.SetParamValues("home/nonexistent.txt")
 
 	err = ftc.Handler.CopyItem(c)
 	if err != nil {
@@ -742,31 +738,20 @@ func TestSaveFileContent_Success(t *testing.T) {
 	filePath := filepath.Join(userDir, "editable.txt")
 	ftc.CreateTestFile(t, filePath, []byte("original content"))
 
-	// Mock storage queries
-	ftc.Mock.ExpectQuery("SELECT storage_quota, storage_used FROM users").
-		WithArgs("1").
-		WillReturnRows(sqlmock.NewRows([]string{"storage_quota", "storage_used"}).AddRow(1073741824, 100))
-	ftc.Mock.ExpectExec("UPDATE users SET storage_used").
-		WillReturnResult(sqlmock.NewResult(1, 1))
-
 	// Mock audit log
 	ftc.Mock.ExpectExec("INSERT INTO audit_logs").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	newContent := "updated content here"
-	body := map[string]string{
-		"content": newContent,
-	}
-	req, err := NewJSONRequest(http.MethodPut, "/api/files/content/editable.txt", body)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	// SaveFileContent reads raw body, not JSON
+	req := httptest.NewRequest(http.MethodPut, "/api/files/content/home/editable.txt", strings.NewReader(newContent))
+	req.Header.Set("Content-Type", "text/plain")
 
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
-	c.SetParamValues("editable.txt")
+	c.SetParamNames("*")
+	c.SetParamValues("home/editable.txt")
 
-	err = ftc.Handler.SaveFileContent(c)
+	err := ftc.Handler.SaveFileContent(c)
 	if err != nil {
 		t.Fatalf("SaveFileContent returned error: %v", err)
 	}
@@ -792,14 +777,14 @@ func TestSaveFileContent_FileNotFound(t *testing.T) {
 	body := map[string]string{
 		"content": "new content",
 	}
-	req, err := NewJSONRequest(http.MethodPut, "/api/files/content/nonexistent.txt", body)
+	req, err := NewJSONRequest(http.MethodPut, "/api/files/content/home/nonexistent.txt", body)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
 	c := CreateAuthenticatedContext(ftc.Echo, ftc.Recorder, req, "1", "testuser", false)
-	c.SetParamNames("path")
-	c.SetParamValues("nonexistent.txt")
+	c.SetParamNames("*")
+	c.SetParamValues("home/nonexistent.txt")
 
 	err = ftc.Handler.SaveFileContent(c)
 	if err != nil {
