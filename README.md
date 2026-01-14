@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./File_Hatch_banner.png" alt="FileHatch Banner" width="600">
+</p>
+
 # FileHatch
 
 **엔터프라이즈급 클라우드 파일 공유 시스템**
@@ -15,9 +19,10 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
 ### 주요 특징
 
 - **다중 프로토콜 접근**: 웹 UI, SMB/CIFS, WebDAV 지원
-- **강력한 보안**: JWT 인증, 2FA(TOTP), SSO/OIDC 통합
+- **강력한 보안**: JWT 인증, 2FA(TOTP), SSO/OIDC 통합, 브루트포스 방지
 - **문서 편집**: OnlyOffice 통합으로 브라우저 내 Office 문서 편집
 - **팀 협업**: 공유 드라이브, 파일 공유, 실시간 알림
+- **PWA 지원**: 모바일/데스크톱 앱처럼 설치 가능
 - **완전 컨테이너화**: Docker Compose로 간편한 배포
 
 ---
@@ -28,10 +33,10 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
 | 기술 | 버전 | 용도 |
 |------|------|------|
 | Go | 1.23 | 메인 언어 |
-| Echo | v4.13 | 웹 프레임워크 |
+| Echo | v4.12 | 웹 프레임워크 |
 | PostgreSQL | 17 | 주 데이터베이스 |
 | Valkey | 8.1 | 캐시/세션 (Redis 호환) |
-| TUS | v2.7 | 재개 가능한 파일 업로드 |
+| TUS | v2.4 | 재개 가능한 파일 업로드 |
 | JWT | v5 | 인증 토큰 |
 | Gorilla WebSocket | v1.5 | 실시간 알림 |
 | pquerna/otp | v1.4 | TOTP 2단계 인증 |
@@ -44,8 +49,8 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
 | TypeScript | 5.6 | 타입 안전성 |
 | Vite | 5.4 | 빌드 도구 |
 | Zustand | 5.0 | 상태 관리 |
-| TanStack Query | 5.60 | 서버 상태 관리 |
-| TanStack Virtual | 3.10 | 가상 스크롤링 |
+| TanStack Query | 5.62 | 서버 상태 관리 |
+| TanStack Virtual | 3.11 | 가상 스크롤링 |
 | tus-js-client | 4.2 | 재개 가능한 업로드 |
 | Monaco Editor | 0.52 | 코드/텍스트 편집기 |
 | react-pdf | 10.2 | PDF 뷰어 |
@@ -57,7 +62,7 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
 | Express.js 4.21 | UI 리버스 프록시 |
 | Samba 4.20 | SMB/CIFS 파일 공유 |
 | OnlyOffice (선택) | Office 문서 편집 |
-| Keycloak 26.3 (선택) | SSO/OIDC 인증 |
+| Keycloak 26.4 (선택) | SSO/OIDC 인증 |
 
 ---
 
@@ -74,6 +79,7 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
   - 도메인 제한 설정
 - **역할 기반 접근 제어**: 관리자/일반 사용자 분리
 - **ACL 기반 권한 관리**: 파일/폴더별 세분화된 권한
+- **브루트포스 방지**: 로그인 시도 횟수 제한 및 자동 차단
 - **감사 로그**: 모든 작업에 대한 불변 감사 추적
 
 ### 파일 관리
@@ -86,12 +92,15 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
 - **다운로드**
   - 개별 파일 다운로드
   - ZIP 폴더 다운로드 (캐싱 지원)
+  - 다중 파일 ZIP 압축 다운로드
   - 다운로드 진행률 표시
 - **파일 작업**
   - 이름 변경, 복사, 이동
   - 휴지통 (복원, 영구 삭제)
   - 다중 선택 (Ctrl+클릭, Shift+클릭)
   - 일괄 작업 (삭제, 다운로드)
+  - 파일 잠금 (동시 편집 방지)
+  - 즐겨찾기/별표 기능
 - **파일 생성**
   - 텍스트 파일 (txt, md, html, json)
   - Office 문서 (docx, xlsx, pptx)
@@ -107,7 +116,7 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
   - 오디오 (MP3, WAV, OGG)
   - PDF 문서
   - 텍스트/코드 파일
-  - ZIP 파일 (내용 탐색)
+  - ZIP 파일 (내용 탐색 및 압축 해제)
 - **썸네일 시스템**
   - 자동 썸네일 생성
   - 반응형 크기 (64px ~ 512px)
@@ -327,6 +336,8 @@ FileHatch는 Docker Compose 프로필을 사용하여 선택적 기능을 활성
 
 브라우저에서 Office 문서 (Word, Excel, PowerPoint)를 직접 편집할 수 있습니다.
 
+> 📖 **상세 가이드**: [OnlyOffice 설정 가이드](./docs/ONLYOFFICE_SETUP.md)
+
 ```bash
 # OnlyOffice 포함하여 시작
 docker compose --profile office up -d
@@ -343,6 +354,8 @@ OnlyOffice 설정:
 ### SSO (Keycloak) 통합 (선택)
 
 OIDC 기반 Single Sign-On을 설정합니다.
+
+> 📖 **상세 가이드**: [SSO 설정 가이드](./docs/SSO_SETUP.md)
 
 ```bash
 # 1. SSO 프로필로 시작
@@ -638,9 +651,10 @@ FileHatch/
 - 민감 데이터 암호화 (AES-256-GCM)
 - SQL 인젝션 방지 (파라미터화된 쿼리)
 - CORS 보호
-- 보안 헤더 (HSTS, CSP, X-Frame-Options 등)
+- 보안 헤더 미들웨어 (HSTS, CSP, X-Frame-Options, X-Content-Type-Options 등)
 - XSS 방지
 - IP 기반 속도 제한
+- 브루트포스 방지 (로그인 시도 제한)
 - 감사 로깅 (불변)
 - ACL 기반 접근 제어
 
