@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"net/http"
+	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -87,14 +90,49 @@ func generateState() (string, error) {
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
-// getExternalHost returns the external host from X-Forwarded-Host or falls back to request Host
+// getExternalURL returns the EXTERNAL_URL environment variable if set
+func getExternalURL() string {
+	if extURL := os.Getenv("EXTERNAL_URL"); extURL != "" {
+		return strings.TrimSuffix(extURL, "/")
+	}
+	return ""
+}
+
+// getExternalHost returns the external host for constructing callback URLs
+// Priority: 1) EXTERNAL_URL env var, 2) X-Forwarded-Host header, 3) Host header
 func getExternalHost(c echo.Context) string {
-	// Check X-Forwarded-Host first (set by reverse proxy)
+	// 1. Check EXTERNAL_URL environment variable first
+	if extURL := getExternalURL(); extURL != "" {
+		if parsed, err := url.Parse(extURL); err == nil && parsed.Host != "" {
+			return parsed.Host
+		}
+	}
+	// 2. Check X-Forwarded-Host header (set by reverse proxy)
 	if forwardedHost := c.Request().Header.Get("X-Forwarded-Host"); forwardedHost != "" {
 		return forwardedHost
 	}
-	// Fall back to Host header
+	// 3. Fall back to Host header
 	return c.Request().Host
+}
+
+// getExternalScheme returns the external scheme (http or https) for constructing callback URLs
+// Priority: 1) EXTERNAL_URL env var, 2) X-Forwarded-Proto header, 3) request scheme
+func getExternalScheme(c echo.Context) string {
+	// 1. Check EXTERNAL_URL environment variable first
+	if extURL := getExternalURL(); extURL != "" {
+		if parsed, err := url.Parse(extURL); err == nil && parsed.Scheme != "" {
+			return parsed.Scheme
+		}
+	}
+	// 2. Check X-Forwarded-Proto header (set by reverse proxy)
+	if proto := c.Request().Header.Get("X-Forwarded-Proto"); proto != "" {
+		return proto
+	}
+	// 3. Fall back to request scheme
+	if c.Request().TLS != nil {
+		return "https"
+	}
+	return "http"
 }
 
 // GetProviders returns all enabled SSO providers (public info only)

@@ -102,11 +102,8 @@ func (h *SSOHandler) GetAuthURL(c echo.Context) error {
 		})
 	}
 
-	// Build redirect URI
-	scheme := "http"
-	if c.Request().TLS != nil || c.Request().Header.Get("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
+	// Build redirect URI using external URL configuration
+	scheme := getExternalScheme(c)
 	host := getExternalHost(c)
 	redirectURI := fmt.Sprintf("%s://%s/api/auth/sso/callback/%s", scheme, host, providerID)
 
@@ -189,11 +186,8 @@ func (h *SSOHandler) HandleCallback(c echo.Context) error {
 		}
 	}
 
-	// Build redirect URI
-	scheme := "http"
-	if c.Request().TLS != nil || c.Request().Header.Get("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
+	// Build redirect URI using external URL configuration
+	scheme := getExternalScheme(c)
 	host := getExternalHost(c)
 	redirectURI := fmt.Sprintf("%s://%s/api/auth/sso/callback/%s", scheme, host, providerID)
 

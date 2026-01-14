@@ -23,6 +23,7 @@ services:
       - ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_URL:-http://onlyoffice}
       - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      - EXTERNAL_URL=${EXTERNAL_URL:-}
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${CONFIG_PATH:-./config}:/etc/scv
@@ -114,7 +115,7 @@ services:
   # 6. OnlyOffice Document Server (Optional - use: docker compose --profile office up -d)
   onlyoffice:
     container_name: scv-onlyoffice
-    image: onlyoffice/documentserver:latest
+    image: onlyoffice/documentserver:8.2
     restart: unless-stopped
     profiles:
       - office
