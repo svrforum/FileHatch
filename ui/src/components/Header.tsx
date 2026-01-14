@@ -157,10 +157,7 @@ function Header({ onProfileClick, onNavigate, onFileSelect, currentPath = '/', i
           </button>
         )}
         <div className="logo">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-            <rect width="32" height="32" rx="8" fill="#3182F6"/>
-            <path d="M10 16L14 20L22 12" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+          <img src="/icons/icon-72x72.png" alt="FileHatch" width="40" height="40" />
           <span className="logo-text">FileHatch</span>
         </div>
         {breadcrumbs.length > 0 && (

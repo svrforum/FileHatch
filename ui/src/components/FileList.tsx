@@ -34,6 +34,7 @@ import {
 } from './filelist'
 import { getFileIcon } from '../utils/fileIcons'
 import { formatRelativeDate, formatFullDateTime } from '../utils/dateUtils'
+import MobileFAB from './MobileFAB'
 import './FileList.css'
 
 interface FileListProps {
@@ -1558,6 +1559,12 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         onSelect={handleCopyToConfirm}
         title="복사할 위치 선택"
         actionLabel="복사"
+      />
+
+      {/* Mobile FAB */}
+      <MobileFAB
+        onUploadClick={onUploadClick}
+        onNewFolderClick={onNewFolderClick}
       />
     </div>
   )

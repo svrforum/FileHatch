@@ -1,0 +1,146 @@
+/* MobileFAB - Mobile Only Floating Action Button */
+
+/* Hide on desktop */
+.mobile-fab-container {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-fab-container {
+    display: block;
+    position: fixed;
+    right: 16px;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    z-index: 1000;
+  }
+
+  /* Overlay when FAB is open */
+  .mobile-fab-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: -1;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* Actions container */
+  .mobile-fab-actions {
+    position: absolute;
+    right: 0;
+    bottom: 64px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: all 0.2s ease;
+  }
+
+  .mobile-fab-container.open .mobile-fab-actions {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  /* Individual action button */
+  .mobile-fab-action {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-fab-action-label {
+    padding: 8px 14px;
+    background: var(--bg-primary);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .mobile-fab-action-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    background: var(--bg-primary);
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-md);
+    color: var(--color-primary);
+    transition: all var(--transition-fast);
+  }
+
+  .mobile-fab-action-icon.upload {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .mobile-fab-action:active .mobile-fab-action-icon {
+    transform: scale(0.95);
+  }
+
+  .mobile-fab-action:active .mobile-fab-action-label {
+    background: var(--bg-secondary);
+  }
+
+  /* Main FAB button */
+  .mobile-fab-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    background: var(--color-primary);
+    border: none;
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-lg);
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-fab-main:active {
+    transform: scale(0.95);
+  }
+
+  .mobile-fab-main svg {
+    transition: transform 0.2s ease;
+  }
+
+  .mobile-fab-container.open .mobile-fab-main {
+    background: var(--text-secondary);
+  }
+
+  .mobile-fab-container.open .mobile-fab-main svg {
+    transform: rotate(45deg);
+  }
+
+  /* Hide FAB when multi-select bar is visible */
+  .file-list-container:has(.multi-select-bar) ~ .mobile-fab-container,
+  .file-list-container:has(.file-details-panel:not(.empty)) ~ .mobile-fab-container {
+    display: none;
+  }
+}

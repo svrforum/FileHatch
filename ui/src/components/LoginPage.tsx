@@ -159,10 +159,7 @@ function LoginPage() {
         <div className="login-container">
           <div className="login-header">
             <div className="login-logo twofa-logo">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+              <img src="/icons/icon-128x128.png" alt="FileHatch" />
             </div>
             <h1>2단계 인증</h1>
             <p>인증 앱에서 생성된 코드를 입력하세요</p>
@@ -216,13 +213,9 @@ function LoginPage() {
     <div className="login-page">
       <div className="login-container">
         <div className="login-header">
-          <div className="login-logo">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-              <path d="M19 11H5C3.89543 11 3 11.8954 3 13V20C3 21.1046 3.89543 22 5 22H19C20.1046 22 21 21.1046 21 20V13C21 11.8954 20.1046 11 19 11Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M7 11V7C7 5.67392 7.52678 4.40215 8.46447 3.46447C9.40215 2.52678 10.6739 2 12 2C13.3261 2 14.5979 2.52678 15.5355 3.46447C16.4732 4.40215 17 5.67392 17 7V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+          <div className="login-banner">
+            <img src="/banner.png" alt="FileHatch" />
           </div>
-          <h1>FileHatch</h1>
           <p>안전한 파일 저장소에 로그인하세요</p>
         </div>
 
