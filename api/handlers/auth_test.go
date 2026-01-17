@@ -94,7 +94,7 @@ func TestLogin_InvalidPassword(t *testing.T) {
 
 	c := tc.Echo.NewContext(req, tc.Recorder)
 
-	handler.Login(c)
+	_ = handler.Login(c)
 
 	AssertStatus(t, tc.Recorder, http.StatusUnauthorized)
 	AssertJSONError(t, tc.Recorder, "Invalid username or password")
@@ -117,7 +117,7 @@ func TestLogin_UserNotFound(t *testing.T) {
 
 	c := tc.Echo.NewContext(req, tc.Recorder)
 
-	handler.Login(c)
+	_ = handler.Login(c)
 
 	AssertStatus(t, tc.Recorder, http.StatusUnauthorized)
 	AssertJSONError(t, tc.Recorder, "Invalid username or password")
@@ -136,7 +136,7 @@ func TestLogin_EmptyCredentials(t *testing.T) {
 
 	c := tc.Echo.NewContext(req, tc.Recorder)
 
-	handler.Login(c)
+	_ = handler.Login(c)
 
 	AssertStatus(t, tc.Recorder, http.StatusBadRequest)
 	AssertJSONError(t, tc.Recorder, "Username and password are required")
@@ -169,7 +169,7 @@ func TestLogin_DisabledAccount(t *testing.T) {
 
 	c := tc.Echo.NewContext(req, tc.Recorder)
 
-	handler.Login(c)
+	_ = handler.Login(c)
 
 	AssertStatus(t, tc.Recorder, http.StatusForbidden)
 	AssertJSONError(t, tc.Recorder, "Account is disabled")
@@ -199,12 +199,12 @@ func TestRegister_Success(t *testing.T) {
 
 	c := tc.Echo.NewContext(req, tc.Recorder)
 
-	handler.Register(c)
+	_ = handler.Register(c)
 
 	AssertStatus(t, tc.Recorder, http.StatusCreated)
 
 	var resp map[string]interface{}
-	ParseJSONResponse(tc.Recorder, &resp)
+	_ = ParseJSONResponse(tc.Recorder, &resp)
 
 	if resp["success"] != true {
 		t.Error("Expected success: true")
@@ -225,7 +225,7 @@ func TestRegister_ShortUsername(t *testing.T) {
 
 	c := tc.Echo.NewContext(req, tc.Recorder)
 
-	handler.Register(c)
+	_ = handler.Register(c)
 
 	AssertStatus(t, tc.Recorder, http.StatusBadRequest)
 	AssertJSONError(t, tc.Recorder, "Username must be between 3 and 50 characters")
@@ -245,7 +245,7 @@ func TestRegister_ShortPassword(t *testing.T) {
 
 	c := tc.Echo.NewContext(req, tc.Recorder)
 
-	handler.Register(c)
+	_ = handler.Register(c)
 
 	AssertStatus(t, tc.Recorder, http.StatusBadRequest)
 	AssertJSONError(t, tc.Recorder, "password must be at least 8 characters")
@@ -270,7 +270,7 @@ func TestRegister_DuplicateUsername(t *testing.T) {
 
 	c := tc.Echo.NewContext(req, tc.Recorder)
 
-	handler.Register(c)
+	_ = handler.Register(c)
 
 	AssertStatus(t, tc.Recorder, http.StatusConflict)
 	AssertJSONError(t, tc.Recorder, "Username already exists")
@@ -300,7 +300,7 @@ func TestGetProfile_Success(t *testing.T) {
 
 	c := CreateAuthenticatedContext(tc.Echo, rec, req, "user-123", "testuser", false)
 
-	handler.GetProfile(c)
+	_ = handler.GetProfile(c)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
@@ -370,7 +370,7 @@ func TestJWTMiddleware_ValidToken(t *testing.T) {
 
 	// Apply middleware and call handler
 	middlewareFunc := handler.JWTMiddleware(testHandler)
-	middlewareFunc(c)
+	_ = middlewareFunc(c)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
@@ -393,7 +393,7 @@ func TestJWTMiddleware_NoToken(t *testing.T) {
 	c := tc.Echo.NewContext(req, rec)
 
 	middlewareFunc := handler.JWTMiddleware(testHandler)
-	middlewareFunc(c)
+	_ = middlewareFunc(c)
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("Expected status 401, got %d", rec.Code)
@@ -417,7 +417,7 @@ func TestJWTMiddleware_InvalidToken(t *testing.T) {
 	c := tc.Echo.NewContext(req, rec)
 
 	middlewareFunc := handler.JWTMiddleware(testHandler)
-	middlewareFunc(c)
+	_ = middlewareFunc(c)
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("Expected status 401, got %d", rec.Code)

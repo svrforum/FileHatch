@@ -445,7 +445,7 @@ func (g *BruteForceGuard) logLockEvent(username *string, ip, lockType, reason st
 		}
 	}
 
-	g.audit.LogEvent(userID, ip, eventType, target, map[string]interface{}{
+	_ = g.audit.LogEvent(userID, ip, eventType, target, map[string]interface{}{
 		"lockType": lockType,
 		"reason":   reason,
 		"duration": g.config.LockDuration.String(),
@@ -560,7 +560,7 @@ func (g *BruteForceGuard) UnlockUser(c echo.Context) error {
 
 	// 감사 로그
 	if claims, ok := c.Get("user").(*JWTClaims); ok {
-		g.audit.LogEvent(&claims.UserID, c.RealIP(), EventAccountUnlocked, username, map[string]interface{}{
+		_ = g.audit.LogEvent(&claims.UserID, c.RealIP(), EventAccountUnlocked, username, map[string]interface{}{
 			"unlockedBy": claims.Username,
 		})
 	}

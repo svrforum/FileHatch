@@ -417,7 +417,7 @@ func (h *UploadHandler) handleCompletedUploads() {
 		if username != "" {
 			userID = h.getUserIDByUsername(username)
 		}
-		h.auditHandler.LogEvent(userID, ipAddr, EventFileUpload, destPath+"/"+filename, map[string]interface{}{
+		_ = h.auditHandler.LogEvent(userID, ipAddr, EventFileUpload, destPath+"/"+filename, map[string]interface{}{
 			"fileName": filename,
 			"size":     event.Upload.Size,
 			"source":   "web",

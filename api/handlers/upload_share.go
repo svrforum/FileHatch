@@ -371,7 +371,7 @@ func (h *UploadShareHandler) handleCompletedUploads() {
 
 		// Get share owner info for audit logging
 		var ownerID, ownerUsername string
-		h.db.QueryRow(`
+		_ = h.db.QueryRow(`
 			SELECT s.created_by, u.username
 			FROM shares s
 			JOIN users u ON s.created_by = u.id
@@ -403,7 +403,7 @@ func (h *UploadShareHandler) handleCompletedUploads() {
 		os.Remove(infoPath)
 
 		// Update share statistics
-		h.db.Exec(`
+		_, _ = h.db.Exec(`
 			UPDATE shares
 			SET upload_count = upload_count + 1,
 			    total_uploaded_size = total_uploaded_size + $1
@@ -418,7 +418,7 @@ func (h *UploadShareHandler) handleCompletedUploads() {
 		if ownerID != "" {
 			actorID = &ownerID
 		}
-		h.auditHandler.LogEvent(actorID, clientIP, EventFileUpload, "/"+destPath+"/"+filepath.Base(finalPath), map[string]interface{}{
+		_ = h.auditHandler.LogEvent(actorID, clientIP, EventFileUpload, "/"+destPath+"/"+filepath.Base(finalPath), map[string]interface{}{
 			"fileName":      filepath.Base(finalPath),
 			"size":          event.Upload.Size,
 			"source":        "share_upload",
@@ -432,7 +432,7 @@ func (h *UploadShareHandler) handleCompletedUploads() {
 			title := "업로드 링크로 파일이 업로드되었습니다"
 			message := fmt.Sprintf("누군가가 '%s' 파일을 업로드했습니다 (%s)", filepath.Base(finalPath), formatFileSize(event.Upload.Size))
 			link := "/" + destPath
-			h.notificationService.Create(
+			_, _ = h.notificationService.Create(
 				ownerID,
 				NotifUploadLinkReceived,
 				title,

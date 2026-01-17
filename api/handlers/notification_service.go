@@ -120,7 +120,7 @@ func (s *NotificationService) GetUnreadCount(userID string) (int, error) {
 // List returns notifications for a user with pagination
 func (s *NotificationService) List(userID string, limit, offset int) ([]Notification, int, error) {
 	// Clean up old notifications (30 days)
-	s.db.Exec(`DELETE FROM notifications WHERE created_at < NOW() - INTERVAL '30 days'`)
+	_, _ = s.db.Exec(`DELETE FROM notifications WHERE created_at < NOW() - INTERVAL '30 days'`)
 
 	rows, err := s.db.Query(`
 		SELECT n.id, n.user_id, n.type, n.title, n.message, n.link,
@@ -162,7 +162,7 @@ func (s *NotificationService) List(userID string, limit, offset int) ([]Notifica
 			n.ActorName = &actorName.String
 		}
 		if metadata != nil {
-			json.Unmarshal(metadata, &n.Metadata)
+			_ = json.Unmarshal(metadata, &n.Metadata)
 		}
 
 		notifications = append(notifications, n)
@@ -170,7 +170,7 @@ func (s *NotificationService) List(userID string, limit, offset int) ([]Notifica
 
 	// Get total count
 	var total int
-	s.db.QueryRow(`SELECT COUNT(*) FROM notifications WHERE user_id = $1`, userID).Scan(&total)
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM notifications WHERE user_id = $1`, userID).Scan(&total)
 
 	return notifications, total, nil
 }

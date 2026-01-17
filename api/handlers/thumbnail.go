@@ -109,7 +109,7 @@ func (p *ThumbnailWorkerPool) worker() {
 		// Cache the result
 		if err == nil && len(data) > 0 && p.cache != nil {
 			suffix := fmt.Sprintf("thumb:%s", job.Size.Name)
-			p.cache.Set(job.FilePath, job.ModTime, suffix, data)
+			_ = p.cache.Set(job.FilePath, job.ModTime, suffix, data)
 		}
 
 		// Send result if channel provided
@@ -264,7 +264,7 @@ func (h *Handler) GetThumbnail(c echo.Context) error {
 
 	// Cache the result
 	if cache != nil && len(thumbData) > 0 {
-		cache.Set(realPath, info.ModTime(), suffix, thumbData)
+		_ = cache.Set(realPath, info.ModTime(), suffix, thumbData)
 	}
 
 	SetCacheHeaders(c.Response().Writer, etag, 604800) // 7 days

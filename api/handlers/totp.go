@@ -363,10 +363,10 @@ func (h *TOTPHandler) Verify2FA(c echo.Context) error {
 
 		// Update remaining backup codes
 		remainingJSON, _ := json.Marshal(remainingCodes)
-		h.db.Exec(`UPDATE users SET totp_backup_codes = $1, updated_at = NOW() WHERE id = $2`, string(remainingJSON), user.ID)
+		_, _ = h.db.Exec(`UPDATE users SET totp_backup_codes = $1, updated_at = NOW() WHERE id = $2`, string(remainingJSON), user.ID)
 
 		// Audit log
-		h.auditHandler.LogEvent(&user.ID, c.RealIP(), "user.2fa.backup_used", user.Username, map[string]interface{}{
+		_ = h.auditHandler.LogEvent(&user.ID, c.RealIP(), "user.2fa.backup_used", user.Username, map[string]interface{}{
 			"remaining_codes": len(remainingCodes),
 		})
 	} else {
@@ -419,7 +419,7 @@ func (h *TOTPHandler) Verify2FA(c echo.Context) error {
 	}
 
 	// Audit log
-	h.auditHandler.LogEvent(&user.ID, c.RealIP(), EventUserLogin, user.Username, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(&user.ID, c.RealIP(), EventUserLogin, user.Username, map[string]interface{}{
 		"username":   user.Username,
 		"isAdmin":    user.IsAdmin,
 		"via_2fa":    true,

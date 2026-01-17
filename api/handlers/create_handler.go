@@ -104,7 +104,7 @@ func (h *Handler) CreateFile(c echo.Context) error {
 	if claims != nil {
 		userID = &claims.UserID
 	}
-	h.auditHandler.LogEvent(userID, c.RealIP(), EventFileUpload, targetPath+"/"+req.Filename, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileUpload, targetPath+"/"+req.Filename, map[string]interface{}{
 		"fileName": req.Filename,
 		"fileType": req.FileType,
 		"source":   "create",

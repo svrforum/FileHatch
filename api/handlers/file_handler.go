@@ -112,7 +112,7 @@ func (h *Handler) GetFile(c echo.Context) error {
 		if claims != nil {
 			userID = &claims.UserID
 		}
-		h.auditHandler.LogEvent(userID, c.RealIP(), EventFileDownload, virtualPath, map[string]any{
+		_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileDownload, virtualPath, map[string]any{
 			"filename":    info.Name(),
 			"size":        info.Size(),
 			"storageType": storageType,
@@ -314,7 +314,7 @@ func (h *Handler) SaveFileContent(c echo.Context) error {
 		userID = &claims.UserID
 	}
 	clientIP := c.RealIP()
-	h.auditHandler.LogEvent(userID, clientIP, EventFileEdit, "/"+requestPath, map[string]any{
+	_ = h.auditHandler.LogEvent(userID, clientIP, EventFileEdit, "/"+requestPath, map[string]any{
 		"size":        len(body),
 		"storageType": storageType,
 		"isShared":    isSharedFile,

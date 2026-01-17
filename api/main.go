@@ -567,7 +567,7 @@ func main() {
 		if err := fileWatcher.Start(); err != nil {
 			log.Printf("Warning: Failed to start file watcher: %v", err)
 		}
-		defer fileWatcher.Stop()
+		defer func() { _ = fileWatcher.Stop() }()
 	}
 
 	// WebDAV handler

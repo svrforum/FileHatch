@@ -194,7 +194,7 @@ func (h *Handler) OnlyOfficeCallback(c echo.Context) error {
 			userID = &claims.UserID
 		}
 		clientIP := c.RealIP()
-		h.auditHandler.LogEvent(userID, clientIP, EventFileEdit, decodedPath, map[string]interface{}{
+		_ = h.auditHandler.LogEvent(userID, clientIP, EventFileEdit, decodedPath, map[string]interface{}{
 			"size":        len(content),
 			"storageType": storageType,
 			"source":      "onlyoffice",

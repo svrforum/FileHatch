@@ -296,7 +296,7 @@ func (h *SharedFolderHandler) CreateSharedFolder(c echo.Context) error {
 
 	// Check if folder with same name already exists
 	var existingCount int
-	h.db.QueryRow("SELECT COUNT(*) FROM shared_folders WHERE name = $1", req.Name).Scan(&existingCount)
+	_ = h.db.QueryRow("SELECT COUNT(*) FROM shared_folders WHERE name = $1", req.Name).Scan(&existingCount)
 	if existingCount > 0 {
 		return RespondError(c, ErrAlreadyExists("Folder with this name"))
 	}
@@ -316,13 +316,13 @@ func (h *SharedFolderHandler) CreateSharedFolder(c echo.Context) error {
 	// Create directory on filesystem using folder name
 	if dirErr := h.EnsureSharedFolderDir(req.Name); dirErr != nil {
 		// Rollback database entry
-		h.db.Exec("DELETE FROM shared_folders WHERE id = $1", folderID)
+		_, _ = h.db.Exec("DELETE FROM shared_folders WHERE id = $1", folderID)
 		return RespondError(c, ErrOperationFailed("create folder directory", dirErr))
 	}
 
 	// Audit log
 	userID := claims.UserID
-	h.auditHandler.LogEvent(&userID, c.RealIP(), "shared_folder_create",
+	_ = h.auditHandler.LogEvent(&userID, c.RealIP(), "shared_folder_create",
 		fmt.Sprintf("/shared/%s", sanitizeFolderName(req.Name)),
 		map[string]interface{}{
 			"name":         req.Name,
@@ -389,7 +389,7 @@ func (h *SharedFolderHandler) UpdateSharedFolder(c echo.Context) error {
 
 	// Audit log
 	userID := claims.UserID
-	h.auditHandler.LogEvent(&userID, c.RealIP(), "shared_folder_update",
+	_ = h.auditHandler.LogEvent(&userID, c.RealIP(), "shared_folder_update",
 		fmt.Sprintf("/shared/%s", sanitizeFolderName(req.Name)),
 		map[string]interface{}{
 			"name":         req.Name,
@@ -435,7 +435,7 @@ func (h *SharedFolderHandler) DeleteSharedFolder(c echo.Context) error {
 
 	// Audit log
 	userID := claims.UserID
-	h.auditHandler.LogEvent(&userID, c.RealIP(), "shared_folder_delete",
+	_ = h.auditHandler.LogEvent(&userID, c.RealIP(), "shared_folder_delete",
 		fmt.Sprintf("/shared/%s", sanitizeFolderName(folderName)), nil)
 
 	return RespondSuccess(c, map[string]string{"message": "Shared folder deleted successfully"})
@@ -520,14 +520,14 @@ func (h *SharedFolderHandler) AddMember(c echo.Context) error {
 
 	// Check if folder exists
 	var folderExists bool
-	h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM shared_folders WHERE id = $1)", folderID).Scan(&folderExists)
+	_ = h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM shared_folders WHERE id = $1)", folderID).Scan(&folderExists)
 	if !folderExists {
 		return RespondError(c, ErrNotFound("Shared folder"))
 	}
 
 	// Check if user exists
 	var userExists bool
-	h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.UserID).Scan(&userExists)
+	_ = h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.UserID).Scan(&userExists)
 	if !userExists {
 		return RespondError(c, ErrNotFound("User"))
 	}
@@ -546,9 +546,9 @@ func (h *SharedFolderHandler) AddMember(c echo.Context) error {
 
 	// Audit log - get folder name for path
 	var folderName string
-	h.db.QueryRow("SELECT name FROM shared_folders WHERE id = $1", folderID).Scan(&folderName)
+	_ = h.db.QueryRow("SELECT name FROM shared_folders WHERE id = $1", folderID).Scan(&folderName)
 	actorID := claims.UserID
-	h.auditHandler.LogEvent(&actorID, c.RealIP(), "shared_folder_member_add",
+	_ = h.auditHandler.LogEvent(&actorID, c.RealIP(), "shared_folder_member_add",
 		fmt.Sprintf("/shared/%s", sanitizeFolderName(folderName)),
 		map[string]interface{}{
 			"memberUserId":    req.UserID,
@@ -569,7 +569,7 @@ func (h *SharedFolderHandler) AddMember(c echo.Context) error {
 		title := "공유 폴더에 초대되었습니다"
 		message := claims.Username + "님이 '" + folderName + "' 폴더에 초대했습니다 (" + permLabel + " 권한)"
 		link := "/shared/" + folderID
-		h.notificationService.Create(
+		_, _ = h.notificationService.Create(
 			req.UserID,
 			NotifSharedFolderInvited,
 			title,
@@ -628,9 +628,9 @@ func (h *SharedFolderHandler) UpdateMemberPermission(c echo.Context) error {
 
 	// Audit log - get folder name for path
 	var folderName string
-	h.db.QueryRow("SELECT name FROM shared_folders WHERE id = $1", folderID).Scan(&folderName)
+	_ = h.db.QueryRow("SELECT name FROM shared_folders WHERE id = $1", folderID).Scan(&folderName)
 	actorID := claims.UserID
-	h.auditHandler.LogEvent(&actorID, c.RealIP(), "shared_folder_member_update",
+	_ = h.auditHandler.LogEvent(&actorID, c.RealIP(), "shared_folder_member_update",
 		fmt.Sprintf("/shared/%s", sanitizeFolderName(folderName)),
 		map[string]interface{}{
 			"memberUserId":    userID,
@@ -674,9 +674,9 @@ func (h *SharedFolderHandler) RemoveMember(c echo.Context) error {
 
 	// Audit log - get folder name for path
 	var folderName string
-	h.db.QueryRow("SELECT name FROM shared_folders WHERE id = $1", folderID).Scan(&folderName)
+	_ = h.db.QueryRow("SELECT name FROM shared_folders WHERE id = $1", folderID).Scan(&folderName)
 	actorID := claims.UserID
-	h.auditHandler.LogEvent(&actorID, c.RealIP(), "shared_folder_member_remove",
+	_ = h.auditHandler.LogEvent(&actorID, c.RealIP(), "shared_folder_member_remove",
 		fmt.Sprintf("/shared/%s", sanitizeFolderName(folderName)),
 		map[string]interface{}{
 			"memberUserId": userID,
@@ -691,7 +691,7 @@ func (h *SharedFolderHandler) RemoveMember(c echo.Context) error {
 	if h.notificationService != nil {
 		title := "공유 폴더에서 제외되었습니다"
 		message := "'" + folderName + "' 폴더에서 제외되었습니다"
-		h.notificationService.Create(
+		_, _ = h.notificationService.Create(
 			userID,
 			NotifSharedFolderRemoved,
 			title,

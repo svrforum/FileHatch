@@ -242,7 +242,7 @@ func (c *StatsCache) GetOrCompute(path string, computeFn func() (*CachedFolderSt
 	stats.DirModTime = info.ModTime()
 
 	// Cache the result
-	c.Set(path, stats)
+	_ = c.Set(path, stats)
 
 	return stats, nil
 }
@@ -352,7 +352,7 @@ func (c *StatsCache) Warmup(basePath string, depth int) {
 			go func(p string) {
 				stats, err := computeFolderStats(p)
 				if err == nil {
-					c.Set(p, stats)
+					_ = c.Set(p, stats)
 				}
 			}(path)
 

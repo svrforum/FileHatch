@@ -309,7 +309,7 @@ func convertSMItoVTT(smi string) string {
 				remaining := line[startIdx+6:]
 				// Handle both START=1234 and START="1234"
 				remaining = strings.TrimPrefix(remaining, "\"")
-				fmt.Sscanf(remaining, "%d", &ms)
+				_, _ = fmt.Sscanf(remaining, "%d", &ms)
 				currentStart = ms
 				currentText.Reset()
 

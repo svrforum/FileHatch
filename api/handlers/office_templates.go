@@ -225,5 +225,5 @@ func createPptxTemplate() []byte {
 // addFileToZip adds a file with content to a zip writer
 func addFileToZip(w *zip.Writer, name, content string) {
 	f, _ := w.Create(name)
-	f.Write([]byte(content))
+	_, _ = f.Write([]byte(content))
 }

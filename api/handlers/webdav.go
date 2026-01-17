@@ -161,7 +161,7 @@ func (h *WebDAVHandler) logAccess(userID string, r *http.Request) {
 		return // Don't log other methods
 	}
 
-	h.db.Exec(`
+	_, _ = h.db.Exec(`
 		INSERT INTO audit_logs (actor_id, ip_addr, event_type, target_resource, details)
 		VALUES ($1, $2, $3, $4, $5)
 	`, userID, getClientIP(r), eventType, displayPath, fmt.Sprintf(`{"source": "webdav", "method": "%s"}`, method))

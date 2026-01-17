@@ -210,7 +210,7 @@ func (fw *FileWatcher) eventLoop() {
 				auditEventType = EventSMBCreate
 				// If a new directory is created, add it to watch list
 				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-					fw.watcher.Add(event.Name)
+					_ = fw.watcher.Add(event.Name)
 				}
 			case event.Op&fsnotify.Write == fsnotify.Write:
 				eventType = "write"

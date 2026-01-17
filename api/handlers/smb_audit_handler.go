@@ -147,7 +147,7 @@ func (h *SMBAuditHandler) ProcessAuditLog() (int, error) {
 		if err != nil {
 			// File might have been rotated, start from beginning
 			h.lastPosition = 0
-			file.Seek(0, 0)
+			_, _ = file.Seek(0, 0)
 		}
 	}
 
@@ -190,7 +190,7 @@ func (h *SMBAuditHandler) ProcessAuditLog() (int, error) {
 
 		// Log to audit table
 		action := mapOperationToAction(entry.Operation)
-		h.auditHandler.LogEvent(userID, entry.ClientIP, action, auditPath, map[string]interface{}{
+		_ = h.auditHandler.LogEvent(userID, entry.ClientIP, action, auditPath, map[string]interface{}{
 			"smbShare":  entry.ShareName,
 			"smbClient": entry.Hostname,
 			"operation": entry.Operation,

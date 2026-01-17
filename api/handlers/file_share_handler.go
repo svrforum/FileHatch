@@ -133,7 +133,7 @@ func (h *FileShareHandler) CreateFileShare(c echo.Context) error {
 	}
 
 	// Audit log
-	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file_share_create", req.ItemPath, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file_share_create", req.ItemPath, map[string]interface{}{
 		"sharedWithId":    req.SharedWithID,
 		"permissionLevel": req.PermissionLevel,
 		"isFolder":        req.IsFolder,
@@ -152,7 +152,7 @@ func (h *FileShareHandler) CreateFileShare(c echo.Context) error {
 		title := claims.Username + "님이 " + itemType + "을 공유했습니다"
 		message := "'" + req.ItemName + "' (" + permLabel + " 권한)"
 		link := "/shared-with-me"
-		h.notificationService.Create(
+		_, _ = h.notificationService.Create(
 			req.SharedWithID,
 			NotifShareReceived,
 			title,
@@ -311,7 +311,7 @@ func (h *FileShareHandler) UpdateFileShare(c echo.Context) error {
 	}
 
 	// Audit log
-	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file_share_update", shareID, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file_share_update", shareID, map[string]interface{}{
 		"permissionLevel": req.PermissionLevel,
 	})
 
@@ -324,7 +324,7 @@ func (h *FileShareHandler) UpdateFileShare(c echo.Context) error {
 		title := "공유 권한이 변경되었습니다"
 		message := claims.Username + "님이 '" + itemName + "' 권한을 " + permLabel + "(으)로 변경했습니다"
 		link := "/shared-with-me"
-		h.notificationService.Create(
+		_, _ = h.notificationService.Create(
 			sharedWithID,
 			NotifSharePermissionChanged,
 			title,
@@ -375,7 +375,7 @@ func (h *FileShareHandler) DeleteFileShare(c echo.Context) error {
 	}
 
 	// Audit log
-	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file_share_delete", itemPath, nil)
+	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file_share_delete", itemPath, nil)
 
 	// Send notification to the shared-with user
 	if h.notificationService != nil {
@@ -385,7 +385,7 @@ func (h *FileShareHandler) DeleteFileShare(c echo.Context) error {
 		}
 		title := "공유가 취소되었습니다"
 		message := claims.Username + "님이 '" + itemName + "' " + itemType + " 공유를 취소했습니다"
-		h.notificationService.Create(
+		_, _ = h.notificationService.Create(
 			sharedWithID,
 			NotifShareRemoved,
 			title,

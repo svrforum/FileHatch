@@ -153,7 +153,7 @@ func CalculateTotalSize(path string, info os.FileInfo) FileStats {
 	stats := FileStats{}
 
 	if info.IsDir() {
-		filepath.Walk(path, func(_ string, fi os.FileInfo, _ error) error {
+		_ = filepath.Walk(path, func(_ string, fi os.FileInfo, _ error) error {
 			if fi != nil && !fi.IsDir() {
 				stats.TotalBytes += fi.Size()
 				stats.TotalFiles++

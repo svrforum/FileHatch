@@ -223,7 +223,7 @@ func (h *SSOHandler) HandleCallback(c echo.Context) error {
 
 	// Also check global allowed domains
 	var globalAllowedDomains string
-	h.db.QueryRow("SELECT value FROM system_settings WHERE key = 'sso_allowed_domains'").Scan(&globalAllowedDomains)
+	_ = h.db.QueryRow("SELECT value FROM system_settings WHERE key = 'sso_allowed_domains'").Scan(&globalAllowedDomains)
 	if globalAllowedDomains != "" {
 		emailDomain := ""
 		if parts := strings.Split(userInfo.Email, "@"); len(parts) == 2 {
@@ -263,7 +263,7 @@ func (h *SSOHandler) HandleCallback(c echo.Context) error {
 	}
 
 	// Log the SSO login
-	h.db.Exec(`
+	_, _ = h.db.Exec(`
 		INSERT INTO audit_logs (actor_id, ip_addr, event_type, target_resource, details)
 		VALUES ($1, $2, 'sso_login', $3, $4)
 	`, user.ID, c.RealIP(), provider.Name, fmt.Sprintf(`{"provider": "%s", "email": "%s"}`, provider.Name, userInfo.Email))
@@ -376,7 +376,7 @@ func (h *SSOHandler) getUserInfo(provider SSOProvider, accessToken string) (*OID
 			Email string `json:"email"`
 			Name  string `json:"name"`
 		}
-		json.Unmarshal(body, &githubUser)
+		_ = json.Unmarshal(body, &githubUser)
 		userInfo.Sub = fmt.Sprintf("%d", githubUser.ID)
 		userInfo.Name = githubUser.Name
 		if userInfo.Name == "" {
@@ -407,7 +407,7 @@ func (h *SSOHandler) findOrCreateUser(userInfo *OIDCUserInfo, provider SSOProvid
 			return nil, fmt.Errorf("user account is disabled")
 		}
 		// Update user info
-		h.db.Exec(`
+		_, _ = h.db.Exec(`
 			UPDATE users SET email = $1, updated_at = NOW() WHERE id = $2
 		`, userInfo.Email, user.ID)
 		return &user, nil
@@ -420,7 +420,7 @@ func (h *SSOHandler) findOrCreateUser(userInfo *OIDCUserInfo, provider SSOProvid
 	// Check if auto-create is allowed
 	if !provider.AutoCreateUser {
 		var autoRegister string
-		h.db.QueryRow("SELECT value FROM system_settings WHERE key = 'sso_auto_register'").Scan(&autoRegister)
+		_ = h.db.QueryRow("SELECT value FROM system_settings WHERE key = 'sso_auto_register'").Scan(&autoRegister)
 		if autoRegister != "true" {
 			return nil, fmt.Errorf("user not found and auto-registration is disabled")
 		}
@@ -434,7 +434,7 @@ func (h *SSOHandler) findOrCreateUser(userInfo *OIDCUserInfo, provider SSOProvid
 
 	if err == nil {
 		// User exists with this email, link the SSO account
-		h.db.Exec(`
+		_, _ = h.db.Exec(`
 			UPDATE users SET provider = $1, provider_id = $2, updated_at = NOW() WHERE id = $3
 		`, provider.ProviderType, userInfo.Sub, user.ID)
 		return &user, nil
@@ -446,7 +446,7 @@ func (h *SSOHandler) findOrCreateUser(userInfo *OIDCUserInfo, provider SSOProvid
 
 	// Generate a random password for the SSO user (they won't use it)
 	randomPass := make([]byte, 32)
-	rand.Read(randomPass)
+	_, _ = rand.Read(randomPass)
 	passwordHash, _ := bcrypt.GenerateFromPassword(randomPass, bcrypt.DefaultCost)
 
 	err = h.db.QueryRow(`
@@ -466,7 +466,7 @@ func (h *SSOHandler) findOrCreateUser(userInfo *OIDCUserInfo, provider SSOProvid
 
 	// Create user's home directory
 	userDir := filepath.Join(h.dataRoot, "users", username)
-	os.MkdirAll(userDir, 0755)
+	_ = os.MkdirAll(userDir, 0755)
 
 	return &user, nil
 }
@@ -492,7 +492,7 @@ func (h *SSOHandler) generateUsername(email, name string) string {
 
 	// Check if username exists
 	var exists bool
-	h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", base).Scan(&exists)
+	_ = h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", base).Scan(&exists)
 	if !exists {
 		return base
 	}
@@ -500,7 +500,7 @@ func (h *SSOHandler) generateUsername(email, name string) string {
 	// Add suffix
 	for i := 1; i < 1000; i++ {
 		candidate := fmt.Sprintf("%s%d", base, i)
-		h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", candidate).Scan(&exists)
+		_ = h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", candidate).Scan(&exists)
 		if !exists {
 			return candidate
 		}

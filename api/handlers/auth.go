@@ -218,7 +218,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		allowed, reason, remaining := guard.CheckAndRecordAttempt(ctx, ip, req.Username)
 		if !allowed {
 			// Log blocked attempt
-			h.auditHandler.LogEvent(nil, ip, EventLoginBlocked, req.Username, map[string]interface{}{
+			_ = h.auditHandler.LogEvent(nil, ip, EventLoginBlocked, req.Username, map[string]interface{}{
 				"username": req.Username,
 				"reason":   reason,
 			})
@@ -251,7 +251,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		if guard != nil {
 			guard.RecordFailedAttempt(ctx, ip, "")
 		}
-		h.auditHandler.LogEvent(nil, ip, EventLoginFailed, req.Username, map[string]interface{}{
+		_ = h.auditHandler.LogEvent(nil, ip, EventLoginFailed, req.Username, map[string]interface{}{
 			"username": req.Username,
 			"reason":   "user_not_found",
 		})
@@ -272,7 +272,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		if guard != nil {
 			guard.RecordFailedAttempt(ctx, ip, req.Username)
 		}
-		h.auditHandler.LogEvent(&user.ID, ip, EventLoginFailed, req.Username, map[string]interface{}{
+		_ = h.auditHandler.LogEvent(&user.ID, ip, EventLoginFailed, req.Username, map[string]interface{}{
 			"username": req.Username,
 			"reason":   "invalid_password",
 		})
@@ -319,7 +319,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	// Log login event
-	h.auditHandler.LogEvent(&user.ID, ip, EventUserLogin, user.Username, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(&user.ID, ip, EventUserLogin, user.Username, map[string]interface{}{
 		"username":   user.Username,
 		"isAdmin":    user.IsAdmin,
 		"rememberMe": req.RememberMe,
@@ -497,7 +497,7 @@ func (h *AuthHandler) UpdateProfile(c echo.Context) error {
 	var smbHash sql.NullString
 	var providerVal sql.NullString
 
-	h.db.QueryRow(`
+	_ = h.db.QueryRow(`
 		SELECT id, username, email, smb_hash, provider, is_admin, is_active, created_at, updated_at
 		FROM users WHERE id = $1
 	`, claims.UserID).Scan(&user.ID, &user.Username, &emailVal, &smbHash, &providerVal, &user.IsAdmin, &user.IsActive, &user.CreatedAt, &user.UpdatedAt)

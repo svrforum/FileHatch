@@ -136,7 +136,7 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 	if claims != nil {
 		userID = &claims.UserID
 	}
-	h.auditHandler.LogEvent(userID, c.RealIP(), EventFolderCreate, newFolderPath, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFolderCreate, newFolderPath, map[string]interface{}{
 		"name":       req.Name,
 		"parentPath": displayPath,
 	})
@@ -412,7 +412,7 @@ func (h *Handler) GetFolderStats(c echo.Context) error {
 	// Cache the result
 	if cache != nil {
 		stats.DirModTime = info.ModTime()
-		cache.Set(realPath, stats)
+		_ = cache.Set(realPath, stats)
 	}
 
 	return c.JSON(http.StatusOK, FolderStats{

@@ -20,7 +20,7 @@ func WithTransaction(db *sql.DB, fn TxFunc) error {
 
 	defer func() {
 		if p := recover(); p != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			panic(p) // Re-throw panic after rollback
 		}
 	}()
@@ -48,7 +48,7 @@ func WithTransactionContext(ctx context.Context, db *sql.DB, fn TxFunc) error {
 
 	defer func() {
 		if p := recover(); p != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			panic(p)
 		}
 	}()

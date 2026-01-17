@@ -146,10 +146,10 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 		IsDir:        info.IsDir(),
 		DeletedAt:    time.Now(),
 	}
-	h.saveTrashMeta(claims.Username, meta)
+	_ = h.saveTrashMeta(claims.Username, meta)
 
 	// Log audit event
-	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventFileDelete, displayPath, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventFileDelete, displayPath, map[string]interface{}{
 		"isDir":   info.IsDir(),
 		"size":    size,
 		"trashId": trashID,
@@ -271,10 +271,10 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 
 	// Update metadata
 	delete(meta, trashID)
-	h.saveTrashMeta(claims.Username, meta)
+	_ = h.saveTrashMeta(claims.Username, meta)
 
 	// Log restore event for recent files tracking
-	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", item.OriginalPath, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", item.OriginalPath, map[string]interface{}{
 		"trashId": trashID,
 	})
 
@@ -332,7 +332,7 @@ func (h *Handler) DeleteFromTrash(c echo.Context) error {
 
 	// Update metadata
 	delete(meta, trashID)
-	h.saveTrashMeta(claims.Username, meta)
+	_ = h.saveTrashMeta(claims.Username, meta)
 
 	// Update storage tracking: decrease trash used
 	if err := h.UpdateUserTrashStorage(claims.UserID, -item.Size); err != nil {
@@ -369,7 +369,7 @@ func (h *Handler) EmptyTrash(c echo.Context) error {
 	}
 
 	// Recreate empty trash directory
-	os.MkdirAll(trashPath, 0755)
+	_ = os.MkdirAll(trashPath, 0755)
 
 	// Update storage tracking: set trash to 0
 	if _, err := h.db.Exec(`UPDATE users SET trash_used = 0, updated_at = NOW() WHERE id = $1`, claims.UserID); err != nil {
@@ -477,7 +477,7 @@ func (h *Handler) runTrashCleanup(retentionDays int) {
 
 		// Save updated metadata
 		if len(toDelete) > 0 {
-			h.saveTrashMeta(username, meta)
+			_ = h.saveTrashMeta(username, meta)
 		}
 	}
 

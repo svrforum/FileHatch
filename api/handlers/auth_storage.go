@@ -28,7 +28,7 @@ func (h *AuthHandler) calculateStorageUsed(username string) int64 {
 	userDir := h.dataRoot + "/users/" + username
 	var totalSize int64
 
-	filepath.Walk(userDir, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(userDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}

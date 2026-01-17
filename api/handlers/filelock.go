@@ -124,7 +124,7 @@ func (h *Handler) LockFile(c echo.Context) error {
 	}
 
 	// Log audit event
-	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file.lock", req.Path, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file.lock", req.Path, map[string]interface{}{
 		"duration": req.Duration,
 		"reason":   req.Reason,
 	})
@@ -188,7 +188,7 @@ func (h *Handler) UnlockFile(c echo.Context) error {
 	}
 
 	// Log audit event
-	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file.unlock", req.Path, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file.unlock", req.Path, map[string]interface{}{
 		"force": req.Force && lockedBy != claims.UserID,
 	})
 
@@ -324,7 +324,7 @@ func (h *Handler) GetMyLocks(c echo.Context) error {
 
 // cleanupExpiredLocks removes expired file locks
 func (h *Handler) cleanupExpiredLocks() {
-	h.db.Exec(`
+	_, _ = h.db.Exec(`
 		DELETE FROM file_locks WHERE expires_at IS NOT NULL AND expires_at < NOW()
 	`)
 }

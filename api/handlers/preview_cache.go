@@ -179,7 +179,7 @@ func (c *PreviewCache) cleanup() {
 	now := time.Now()
 	removed := 0
 
-	filepath.Walk(c.cacheDir, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(c.cacheDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -232,7 +232,7 @@ func (c *PreviewCache) GetStats() (totalFiles int, totalSize int64, oldestEntry 
 
 	oldestEntry = time.Now()
 
-	filepath.Walk(c.cacheDir, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(c.cacheDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
@@ -316,7 +316,7 @@ func (c *PreviewCache) CachedTextPreview(filePath string, info os.FileInfo, opts
 	} else {
 		cacheData[n] = 0
 	}
-	c.Set(filePath, info.ModTime(), suffix, cacheData)
+	_ = c.Set(filePath, info.ModTime(), suffix, cacheData)
 
 	return string(content[:n]), truncated, nil
 }

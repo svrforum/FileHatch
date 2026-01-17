@@ -130,7 +130,7 @@ func (h *Handler) CompressFiles(c echo.Context) error {
 	}
 
 	// Log audit event
-	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file.compress", parentDisplayPath+"/"+outputName, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file.compress", parentDisplayPath+"/"+outputName, map[string]interface{}{
 		"sourceCount": len(req.Paths),
 		"sources":     req.Paths,
 		"outputSize":  finalSize,
@@ -138,7 +138,7 @@ func (h *Handler) CompressFiles(c echo.Context) error {
 
 	// Update storage tracking: add compressed file size
 	if finalSize > 0 {
-		h.UpdateUserStorage(claims.UserID, finalSize)
+		_ = h.UpdateUserStorage(claims.UserID, finalSize)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -307,7 +307,7 @@ func (h *Handler) ExtractZip(c echo.Context) error {
 		}
 
 		if file.FileInfo().IsDir() {
-			os.MkdirAll(destPath, file.Mode())
+			_ = os.MkdirAll(destPath, file.Mode())
 			continue
 		}
 
@@ -327,7 +327,7 @@ func (h *Handler) ExtractZip(c echo.Context) error {
 	extractedSize, _ := GetFileSize(extractDir)
 
 	// Log audit event
-	h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file.extract", displayPath, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file.extract", displayPath, map[string]interface{}{
 		"extractedTo":    extractDisplayPath,
 		"extractedCount": extractedCount,
 		"extractedSize":  extractedSize,
@@ -335,7 +335,7 @@ func (h *Handler) ExtractZip(c echo.Context) error {
 
 	// Update storage tracking: add extracted files size
 	if extractedSize > 0 {
-		h.UpdateUserStorage(claims.UserID, extractedSize)
+		_ = h.UpdateUserStorage(claims.UserID, extractedSize)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{

@@ -139,7 +139,7 @@ func (h *AuditHandler) LogEventFromContext(c echo.Context, eventType, targetReso
 		ipAddr = "0.0.0.0"
 	}
 
-	h.LogEvent(actorID, ipAddr, eventType, targetResource, details)
+	_ = h.LogEvent(actorID, ipAddr, eventType, targetResource, details)
 }
 
 // ListAuditLogs returns audit logs with pagination and filtering
@@ -254,7 +254,7 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 		args = append(args, *endDate)
 		countArgs = append(countArgs, *endDate)
 		argCount++
-		countArgCount++
+		_ = countArgCount // Suppress unused warning
 	}
 
 	query += " ORDER BY al.ts DESC LIMIT $" + strconv.Itoa(argCount) + " OFFSET $" + strconv.Itoa(argCount+1)
@@ -307,9 +307,9 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 	// Get total count with same filters
 	var total int
 	if len(countArgs) > 0 {
-		h.db.QueryRow(countQuery, countArgs...).Scan(&total)
+		_ = h.db.QueryRow(countQuery, countArgs...).Scan(&total)
 	} else {
-		h.db.QueryRow(countQuery).Scan(&total)
+		_ = h.db.QueryRow(countQuery).Scan(&total)
 	}
 
 	return RespondSuccess(c, map[string]interface{}{

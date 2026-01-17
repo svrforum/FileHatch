@@ -139,7 +139,7 @@ func getExternalScheme(c echo.Context) string {
 func (h *SSOHandler) GetProviders(c echo.Context) error {
 	// Check if SSO is enabled
 	var ssoEnabled string
-	h.db.QueryRow("SELECT value FROM system_settings WHERE key = 'sso_enabled'").Scan(&ssoEnabled)
+	_ = h.db.QueryRow("SELECT value FROM system_settings WHERE key = 'sso_enabled'").Scan(&ssoEnabled)
 	if ssoEnabled != "true" {
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"enabled":   false,
@@ -178,7 +178,7 @@ func (h *SSOHandler) GetProviders(c echo.Context) error {
 
 	// Check SSO-only mode
 	var ssoOnlyMode string
-	h.db.QueryRow("SELECT value FROM system_settings WHERE key = 'sso_only_mode'").Scan(&ssoOnlyMode)
+	_ = h.db.QueryRow("SELECT value FROM system_settings WHERE key = 'sso_only_mode'").Scan(&ssoOnlyMode)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"enabled":     true,

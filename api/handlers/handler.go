@@ -330,7 +330,7 @@ func (h *Handler) ListFiles(c echo.Context) error {
 		// Add home folder and shared-with-me if user is authenticated
 		if claims != nil {
 			// Ensure home dir exists
-			h.EnsureUserHomeDir(claims.Username)
+			_ = h.EnsureUserHomeDir(claims.Username)
 			roots = append([]FileInfo{
 				{
 					Name:    "home",
@@ -363,9 +363,9 @@ func (h *Handler) ListFiles(c echo.Context) error {
 
 	// Ensure directory exists
 	if storageType == StorageHome && claims != nil {
-		h.EnsureUserHomeDir(claims.Username)
+		_ = h.EnsureUserHomeDir(claims.Username)
 	} else if storageType == StorageShared {
-		h.EnsureSharedDir()
+		_ = h.EnsureSharedDir()
 	}
 
 	// Check shared drive read permission (skip for root /shared listing)
@@ -588,7 +588,7 @@ func (h *Handler) CheckSharedDriveQuota(path string, uploadSize int64) (allowed 
 
 	// Calculate current usage
 	folderPath := filepath.Join(h.dataRoot, "shared", folderName)
-	filepath.Walk(folderPath, func(_ string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(folderPath, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}

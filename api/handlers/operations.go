@@ -111,7 +111,7 @@ func (h *Handler) RenameItem(c echo.Context) error {
 	// Get file info for isDir check
 	fileInfo, _ := os.Stat(newRealPath)
 	isDir := fileInfo != nil && fileInfo.IsDir()
-	h.auditHandler.LogEvent(userID, c.RealIP(), EventFileRename, displayPath, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileRename, displayPath, map[string]interface{}{
 		"newName": req.NewName,
 		"newPath": newDisplayPath,
 		"isDir":   isDir,
@@ -239,7 +239,7 @@ func (h *Handler) MoveItem(c echo.Context) error {
 	if claims != nil {
 		userID = &claims.UserID
 	}
-	h.auditHandler.LogEvent(userID, c.RealIP(), EventFileMove, srcDisplayPath, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileMove, srcDisplayPath, map[string]interface{}{
 		"destination": newDisplayPath,
 		"isDir":       srcInfo.IsDir(),
 	})
@@ -383,7 +383,7 @@ func (h *Handler) CopyItem(c echo.Context) error {
 	if claims != nil {
 		userID = &claims.UserID
 	}
-	h.auditHandler.LogEvent(userID, c.RealIP(), EventFileCopy, srcDisplayPath, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileCopy, srcDisplayPath, map[string]interface{}{
 		"destination": newDisplayPath,
 		"isDir":       srcInfo.IsDir(),
 	})
@@ -392,7 +392,7 @@ func (h *Handler) CopyItem(c echo.Context) error {
 	if claims != nil && destStorageType == StorageHome {
 		copiedSize, _ := GetFileSize(finalDestPath)
 		if copiedSize > 0 {
-			h.UpdateUserStorage(claims.UserID, copiedSize)
+			_ = h.UpdateUserStorage(claims.UserID, copiedSize)
 		}
 	}
 
@@ -540,14 +540,14 @@ func (h *Handler) CopyItemStream(c echo.Context) error {
 	if paths.Claims != nil {
 		userID = &paths.Claims.UserID
 	}
-	h.auditHandler.LogEvent(userID, c.RealIP(), EventFileCopy, paths.SrcDisplayPath, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileCopy, paths.SrcDisplayPath, map[string]interface{}{
 		"destination": newDisplayPath,
 		"isDir":       paths.SrcInfo.IsDir(),
 	})
 
 	// Update storage tracking
 	if paths.Claims != nil && paths.DestStorageType == StorageHome {
-		h.UpdateUserStorage(paths.Claims.UserID, ctx.CopiedBytes)
+		_ = h.UpdateUserStorage(paths.Claims.UserID, ctx.CopiedBytes)
 	}
 
 	ctx.SendCompleted(newDisplayPath)
@@ -642,7 +642,7 @@ func (h *Handler) MoveItemStream(c echo.Context) error {
 	if paths.Claims != nil {
 		userID = &paths.Claims.UserID
 	}
-	h.auditHandler.LogEvent(userID, c.RealIP(), EventFileMove, paths.SrcDisplayPath, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileMove, paths.SrcDisplayPath, map[string]interface{}{
 		"destination": newDisplayPath,
 	})
 

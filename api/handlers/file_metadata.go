@@ -83,7 +83,7 @@ func (h *FileMetadataHandler) GetFileMetadata(c echo.Context) error {
 
 	// Parse tags JSON
 	if tagsJSON != nil {
-		json.Unmarshal(tagsJSON, &metadata.Tags)
+		_ = json.Unmarshal(tagsJSON, &metadata.Tags)
 	}
 	if metadata.Tags == nil {
 		metadata.Tags = []string{}
@@ -261,7 +261,7 @@ func (h *FileMetadataHandler) SearchByTag(c echo.Context) error {
 		var tagsJSON []byte
 		if err := rows.Scan(&metadata.ID, &metadata.FilePath, &metadata.Description,
 			&tagsJSON, &metadata.CreatedAt, &metadata.UpdatedAt); err == nil {
-			json.Unmarshal(tagsJSON, &metadata.Tags)
+			_ = json.Unmarshal(tagsJSON, &metadata.Tags)
 			if metadata.Tags == nil {
 				metadata.Tags = []string{}
 			}
@@ -317,7 +317,7 @@ func (h *FileMetadataHandler) GetBatchMetadata(c echo.Context) error {
 		)
 
 		if err == nil {
-			json.Unmarshal(tagsJSON, &metadata.Tags)
+			_ = json.Unmarshal(tagsJSON, &metadata.Tags)
 			if metadata.Tags == nil {
 				metadata.Tags = []string{}
 			}

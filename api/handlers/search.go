@@ -308,7 +308,7 @@ func (h *Handler) searchInDirParallel(realPath, displayPath, query string, isGlo
 			}
 
 			// Search inside directory
-			filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+			_ = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return nil
 				}
@@ -408,7 +408,7 @@ func (h *Handler) searchInMetadata(query, userID string, maxResults int) []Searc
 
 		// Parse tags
 		var tags []string
-		json.Unmarshal(tagsJSON, &tags)
+		_ = json.Unmarshal(tagsJSON, &tags)
 
 		// Determine match type
 		matchType := ""
@@ -523,7 +523,7 @@ func (h *Handler) searchInMetadataFiltered(query, userID string, maxResults int,
 
 		// Parse tags
 		var tags []string
-		json.Unmarshal(tagsJSON, &tags)
+		_ = json.Unmarshal(tagsJSON, &tags)
 
 		// Determine match type
 		matchType := ""

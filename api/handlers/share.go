@@ -428,7 +428,7 @@ func (h *ShareHandler) AccessShare(c echo.Context) error {
 	}
 
 	// Increment access count
-	h.db.Exec("UPDATE shares SET access_count = access_count + 1 WHERE id = $1", share.ID)
+	_, _ = h.db.Exec("UPDATE shares SET access_count = access_count + 1 WHERE id = $1", share.ID)
 
 	// Get file info
 	fullPath := filepath.Join(h.dataRoot, share.Path)
@@ -521,7 +521,7 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 		userID = &claims.UserID
 		accessorUsername = claims.Username
 	}
-	h.auditHandler.LogEvent(userID, c.RealIP(), EventShareAccess, path, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventShareAccess, path, map[string]interface{}{
 		"action":   "download",
 		"token":    token,
 		"filename": info.Name(),
@@ -538,7 +538,7 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 			message = "누군가가 '" + info.Name() + "' 파일을 다운로드했습니다 (IP: " + c.RealIP() + ")"
 		}
 		link := "/shared-by-me"
-		h.notificationService.Create(
+		_, _ = h.notificationService.Create(
 			createdBy,
 			NotifShareLinkAccessed,
 			title,
@@ -645,7 +645,7 @@ func (h *ShareHandler) GetShareOnlyOfficeConfig(c echo.Context) error {
 
 	// Get owner info for display
 	var ownerUsername string
-	h.db.QueryRow("SELECT username FROM users WHERE id = $1", share.CreatedBy).Scan(&ownerUsername)
+	_ = h.db.QueryRow("SELECT username FROM users WHERE id = $1", share.CreatedBy).Scan(&ownerUsername)
 
 	// Determine user info for OnlyOffice
 	userId := "share_" + shareToken[:8]
@@ -821,7 +821,7 @@ func (h *ShareHandler) ShareOnlyOfficeCallback(c echo.Context) error {
 		}
 
 		// Log audit event
-		h.auditHandler.LogEvent(&share.CreatedBy, c.RealIP(), EventFileEdit, share.Path, map[string]interface{}{
+		_ = h.auditHandler.LogEvent(&share.CreatedBy, c.RealIP(), EventFileEdit, share.Path, map[string]interface{}{
 			"size":       len(content),
 			"source":     "onlyoffice_share",
 			"shareToken": shareToken,
@@ -831,7 +831,7 @@ func (h *ShareHandler) ShareOnlyOfficeCallback(c echo.Context) error {
 		if h.notificationService != nil {
 			title := "공유 문서가 수정되었습니다"
 			message := fmt.Sprintf("공유 링크를 통해 '%s' 파일이 수정되었습니다", filepath.Base(share.Path))
-			h.notificationService.Create(
+			_, _ = h.notificationService.Create(
 				share.CreatedBy,
 				NotifSharedFileModified,
 				title,

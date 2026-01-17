@@ -303,7 +303,7 @@ func (c *Client) writePump() {
 	for {
 		message, ok := <-c.send
 		if !ok {
-			c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+			_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 			return
 		}
 

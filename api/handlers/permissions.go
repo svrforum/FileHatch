@@ -385,7 +385,7 @@ func (p *PermissionChecker) AuditAccessAttempt(userID, username, path string, al
 			INSERT INTO audit_logs (actor_id, event_type, target_resource, ip_addr, details)
 			VALUES ($1, $2, $3, $4::inet, $5)
 		`
-		p.db.Exec(query, userID, eventType, path, ipAddr, details)
+		_, _ = p.db.Exec(query, userID, eventType, path, ipAddr, details)
 	}
 }
 

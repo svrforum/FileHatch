@@ -235,16 +235,16 @@ func (h *Handler) getProjectInfo() ProjectInfo {
 
 	// Count users
 	var userCount int
-	h.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount)
+	_ = h.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount)
 	info.UsersCount = userCount
 
 	// Count shared folders
 	var sharedCount int
-	h.db.QueryRow("SELECT COUNT(*) FROM shared_folders WHERE is_active = true").Scan(&sharedCount)
+	_ = h.db.QueryRow("SELECT COUNT(*) FROM shared_folders WHERE is_active = true").Scan(&sharedCount)
 	info.SharedFolders = sharedCount
 
 	// Calculate total size and file count
-	filepath.Walk(h.dataRoot, func(path string, fi os.FileInfo, err error) error {
+	_ = filepath.Walk(h.dataRoot, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -312,7 +312,7 @@ func calculateDirSize(path string) (int64, int) {
 	var size int64
 	var count int
 
-	filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
