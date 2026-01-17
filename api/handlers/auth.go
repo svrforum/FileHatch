@@ -628,12 +628,6 @@ func (h *AuthHandler) updateSMBUserPassword(username, password string) error {
 	return os.WriteFile(usersFile, []byte(strings.Join(lines, "\n")+"\n"), 0600)
 }
 
-// generateToken generates a JWT token for a user
-// This is a wrapper around GenerateJWT for backward compatibility
-func (h *AuthHandler) generateToken(userID, username string, isAdmin bool) (string, error) {
-	return GenerateJWTWithExpiration(userID, username, isAdmin, false, 24*time.Hour)
-}
-
 // generateTokenWithExpiration generates a JWT token with custom expiration
 func (h *AuthHandler) generateTokenWithExpiration(userID, username string, isAdmin, rememberMe bool, expiration time.Duration) (string, error) {
 	return GenerateJWTWithExpiration(userID, username, isAdmin, rememberMe, expiration)
