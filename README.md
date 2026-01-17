@@ -4,13 +4,17 @@
 
 # FileHatch
 
-**엔터프라이즈급 클라우드 파일 공유 시스템**
+[English](README.en.md) | **한국어**
+
+**자체 호스팅 클라우드 파일 공유 시스템**
+
+> **Beta**: 이 프로젝트는 현재 베타 단계입니다. 프로덕션 사용 전 충분한 테스트를 권장합니다.
 
 [![Go Version](https://img.shields.io/badge/Go-1.23-00ADD8?logo=go)](https://golang.org/)
 [![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)](https://www.docker.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Beta-yellow.svg)]()
 
 ## 개요
 
@@ -831,7 +835,7 @@ docker compose build ui
 
 ## 라이선스
 
-MIT License - 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
+이 프로젝트는 아직 라이선스가 지정되지 않았습니다. 추후 업데이트 예정입니다.
 
 ---
 
