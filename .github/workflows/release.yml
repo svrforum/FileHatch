@@ -1,0 +1,258 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  REGISTRY: docker.io
+  IMAGE_PREFIX: svrforum/filehatch
+
+jobs:
+  detect:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      api_changed: ${{ steps.changes.outputs.api }}
+      ui_changed: ${{ steps.changes.outputs.ui }}
+      samba_changed: ${{ steps.changes.outputs.samba }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Check component changes
+        id: changes
+        run: |
+          check_changes() {
+            local component=$1
+            local dir=$2
+
+            SOURCE_HASH=$(find ./$dir -type f \( -name "*.go" -o -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.json" -o -name "*.sh" -o -name "Dockerfile" -o -name "*.conf*" \) -exec sha256sum {} \; 2>/dev/null | sort | sha256sum | cut -d' ' -f1)
+            REMOTE_HASH=$(docker manifest inspect ${{ env.IMAGE_PREFIX }}-$component:latest 2>/dev/null | \
+              jq -r '.annotations["org.opencontainers.image.revision"]' 2>/dev/null || echo "none")
+
+            if [ "$SOURCE_HASH" = "$REMOTE_HASH" ]; then
+              echo "$component=false" >> $GITHUB_OUTPUT
+              echo "$component: No changes (skipped)"
+            else
+              echo "$component=true" >> $GITHUB_OUTPUT
+              echo "${component}_hash=$SOURCE_HASH" >> $GITHUB_OUTPUT
+              echo "$component: Changes detected"
+            fi
+          }
+
+          check_changes "api" "api"
+          check_changes "ui" "ui"
+          check_changes "samba" "samba"
+
+  build-api:
+    name: Build API
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.api_changed == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}
+            ${{ env.IMAGE_PREFIX }}-api:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+  build-ui:
+    name: Build UI
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.ui_changed == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ui
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}
+            ${{ env.IMAGE_PREFIX }}-ui:latest
+          cache-from: type=gha,scope=ui
+          cache-to: type=gha,mode=max,scope=ui
+
+  build-samba:
+    name: Build Samba
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.samba_changed == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./samba
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-samba:${{ needs.detect.outputs.version }}
+            ${{ env.IMAGE_PREFIX }}-samba:latest
+          cache-from: type=gha,scope=samba
+          cache-to: type=gha,mode=max,scope=samba
+
+  release:
+    name: Create Release
+    needs: [detect, build-api, build-ui, build-samba]
+    if: always() && needs.detect.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get tag message
+        id: tag_message
+        run: |
+          TAG_MSG=$(git tag -l --format='%(contents)' ${GITHUB_REF#refs/tags/} | tail -n +2)
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAG_MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="$PREV_TAG..HEAD"
+          else
+            RANGE="-20"
+          fi
+
+          CHANGELOG=""
+          for hash in $(git log --pretty=format:"%H" $RANGE); do
+            subject=$(git log -1 --pretty=format:"%s" $hash)
+            if echo "$subject" | grep -q "^chore: Bump version"; then
+              continue
+            fi
+            body=$(git log -1 --pretty=format:"%b" $hash | sed '/^$/d' | sed 's/^/  /')
+            if [ -n "$body" ]; then
+              CHANGELOG="${CHANGELOG}### ${subject}"$'\n\n'"${body}"$'\n\n'
+            else
+              CHANGELOG="${CHANGELOG}- ${subject}"$'\n'
+            fi
+          done
+
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          CONTRIBUTORS=""
+          if [ -n "$PREV_TAG" ]; then
+            PR_NUMBERS=$(git log --pretty=format:"%s %b" $PREV_TAG..HEAD | grep -oE '#[0-9]+' | sort -u | tr -d '#')
+            for PR in $PR_NUMBERS; do
+              PR_AUTHOR=$(gh pr view $PR --json author --jq '.author.login' 2>/dev/null || echo "")
+              if [ -n "$PR_AUTHOR" ] && [ "$PR_AUTHOR" != "svrforum" ]; then
+                if [ -z "$CONTRIBUTORS" ]; then
+                  CONTRIBUTORS="@$PR_AUTHOR"
+                else
+                  CONTRIBUTORS="$CONTRIBUTORS, @$PR_AUTHOR"
+                fi
+              fi
+            done
+          fi
+          echo "contributors=$CONTRIBUTORS" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ needs.detect.outputs.version }}
+          body: |
+            ${{ steps.tag_message.outputs.message }}
+
+            ---
+
+            ## Docker Images
+
+            ```bash
+            docker pull svrforum/filehatch-api:${{ needs.detect.outputs.version }}
+            docker pull svrforum/filehatch-ui:${{ needs.detect.outputs.version }}
+            docker pull svrforum/filehatch-samba:${{ needs.detect.outputs.version }}
+            ```
+
+            Or use `latest` tag:
+            ```bash
+            docker pull svrforum/filehatch-api:latest
+            docker pull svrforum/filehatch-ui:latest
+            docker pull svrforum/filehatch-samba:latest
+            ```
+
+            ## Build Summary
+            | Component | Status |
+            |-----------|--------|
+            | API | ${{ needs.build-api.result == 'success' && 'Built' || (needs.detect.outputs.api_changed == 'true' && 'Failed' || 'Skipped (no changes)') }} |
+            | UI | ${{ needs.build-ui.result == 'success' && 'Built' || (needs.detect.outputs.ui_changed == 'true' && 'Failed' || 'Skipped (no changes)') }} |
+            | Samba | ${{ needs.build-samba.result == 'success' && 'Built' || (needs.detect.outputs.samba_changed == 'true' && 'Failed' || 'Skipped (no changes)') }} |
+
+            ${{ steps.changelog.outputs.contributors != '' && format('## Contributors\nThank you for your contributions! {0}\n', steps.changelog.outputs.contributors) || '' }}
+
+            ## Commits
+            ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
