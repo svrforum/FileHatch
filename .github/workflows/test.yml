@@ -136,9 +136,30 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Create config directory
+        run: |
+          mkdir -p config
+          cat > config/smb.conf << 'EOF'
+          [global]
+            workgroup = WORKGROUP
+            server string = FileHatch SMB Server
+            security = user
+            map to guest = Bad User
+            log level = 1
+
+          [data]
+            path = /data
+            browseable = yes
+            read only = no
+            guest ok = no
+            valid users = @users
+            create mask = 0644
+            directory mask = 0755
+          EOF
+
       - name: Pull and Start Services (Production Images)
         run: |
-          # Use production docker-compose.yml with GHCR images
+          # Use production docker-compose.yml with Docker Hub images
           docker compose pull api ui
           docker compose up -d
           sleep 30
@@ -261,9 +282,30 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Create config directory
+        run: |
+          mkdir -p config
+          cat > config/smb.conf << 'EOF'
+          [global]
+            workgroup = WORKGROUP
+            server string = FileHatch SMB Server
+            security = user
+            map to guest = Bad User
+            log level = 1
+
+          [data]
+            path = /data
+            browseable = yes
+            read only = no
+            guest ok = no
+            valid users = @users
+            create mask = 0644
+            directory mask = 0755
+          EOF
+
       - name: Pull and Start all services (Production Images)
         run: |
-          # Use production docker-compose.yml with GHCR images
+          # Use production docker-compose.yml with Docker Hub images
           docker compose pull
           docker compose up -d
 
