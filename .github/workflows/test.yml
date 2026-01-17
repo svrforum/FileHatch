@@ -1,5 +1,10 @@
 name: Test Suite
 
+# Test workflow runs on push/PR to main and develop branches
+# Uses:
+#   - docker-compose-dev.yaml: For build validation (local builds)
+#   - docker-compose.yml: For E2E and health tests (GHCR production images)
+
 on:
   push:
     branches: [main, develop]
@@ -9,6 +14,7 @@ on:
 env:
   GO_VERSION: '1.23'
   NODE_VERSION: '20'
+  REGISTRY: ghcr.io
 
 jobs:
   # Backend Unit Tests
@@ -104,41 +110,16 @@ jobs:
           npm ci
           npm run build
 
-      - name: Build Docker Images
+      - name: Build Docker Images (Development)
         run: |
-          docker compose build api ui
+          docker compose -f docker-compose-dev.yaml build api ui
 
-  # E2E Tests
+  # E2E Tests (using GHCR production images)
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
     needs: [build]
     timeout-minutes: 30
-
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: fh_user
-          POSTGRES_PASSWORD: fh_password
-          POSTGRES_DB: fh_main
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      valkey:
-        image: valkey/valkey:8-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "valkey-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
       - name: Checkout code
@@ -149,9 +130,18 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Start Services
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull and Start Services (Production Images)
         run: |
-          docker compose up -d api ui
+          # Use production docker-compose.yml with GHCR images
+          docker compose pull api ui
+          docker compose up -d
           sleep 30
 
       - name: Wait for Services
@@ -189,6 +179,14 @@ jobs:
           name: playwright-screenshots
           path: tests/e2e/test-results/
           retention-days: 7
+
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
 
   # Security Scan
   security-scan:
@@ -248,7 +246,7 @@ jobs:
           npm ci
           npm run build -- --noEmit 2>&1 || true
 
-  # Docker Compose Health Check
+  # Docker Compose Health Check (using GHCR production images)
   docker-health:
     name: Docker Compose Health
     runs-on: ubuntu-latest
@@ -258,8 +256,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Start all services
-        run: docker compose up -d
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull and Start all services (Production Images)
+        run: |
+          # Use production docker-compose.yml with GHCR images
+          docker compose pull
+          docker compose up -d
 
       - name: Wait for services to be healthy
         run: |

@@ -1,19 +1,21 @@
-# FileHatch Production Docker Compose
-# Uses pre-built images from GitHub Container Registry (GHCR)
+# FileHatch Development Docker Compose
+# Builds images locally from source code
 #
 # Usage:
-#   docker compose up -d                    # Start core services
-#   docker compose --profile office up -d   # With OnlyOffice
-#   docker compose --profile sso up -d      # With Keycloak SSO
+#   docker compose -f docker-compose-dev.yaml up -d                    # Start core services
+#   docker compose -f docker-compose-dev.yaml --profile office up -d   # With OnlyOffice
+#   docker compose -f docker-compose-dev.yaml --profile sso up -d      # With Keycloak SSO
 #
-# For development (with local builds):
-#   docker compose -f docker-compose-dev.yaml up -d
+# For production (with pre-built GHCR images):
+#   docker compose up -d
 
 services:
   # 1. Main Backend (Go)
   api:
     container_name: fh-api
-    image: ghcr.io/svrforum/filehatch-api:${IMAGE_TAG:-latest}
+    build:
+      context: ./api
+      dockerfile: Dockerfile
     restart: unless-stopped
     extra_hosts:
       - "localhost:host-gateway"
@@ -52,7 +54,9 @@ services:
   # 2. Frontend (React + Express)
   ui:
     container_name: fh-ui
-    image: ghcr.io/svrforum/filehatch-ui:${IMAGE_TAG:-latest}
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - "${UI_PORT:-3080}:3000"
@@ -74,7 +78,9 @@ services:
   # 3. SMB Service (Sidecar)
   samba:
     container_name: fh-samba
-    image: ghcr.io/svrforum/filehatch-samba:${IMAGE_TAG:-latest}
+    build:
+      context: ./samba
+      dockerfile: Dockerfile
     restart: unless-stopped
     network_mode: host
     environment:
