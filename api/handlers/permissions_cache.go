@@ -119,11 +119,6 @@ func (c *PermissionCache) folderListKey(userID string) string {
 	return c.prefix + "list:" + userID
 }
 
-// fileShareKey generates cache key for file share access
-func (c *PermissionCache) fileShareKey(userID, filePath string) string {
-	return c.prefix + "share:" + userID + ":" + filePath
-}
-
 // GetFolderAccess retrieves cached folder access result
 func (c *PermissionCache) GetFolderAccess(userID, folderName string) (*CachedPermission, bool) {
 	key := c.folderAccessKey(userID, folderName)

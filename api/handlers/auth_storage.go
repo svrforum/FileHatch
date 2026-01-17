@@ -51,12 +51,6 @@ func (h *AuthHandler) calculateStorageUsed(username string) int64 {
 	return totalSize
 }
 
-// invalidateStorageCache invalidates the storage cache for a user
-func (h *AuthHandler) invalidateStorageCache(username string) {
-	cache := GetStorageCache()
-	cache.InvalidateUserUsage(username)
-}
-
 // GetUserQuotaInfo returns quota info for a user by username
 func (h *AuthHandler) GetUserQuotaInfo(username string) (quota int64, used int64, err error) {
 	err = h.db.QueryRow("SELECT COALESCE(storage_quota, 0) FROM users WHERE username = $1", username).Scan(&quota)

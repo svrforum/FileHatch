@@ -61,13 +61,8 @@ func (h *Handler) GetFile(c echo.Context) error {
 		}
 	}
 
-	// For home folder files, check if it's the owner or a shared file
-	if storageType == StorageHome && claims != nil {
-		// Check if this is someone else's home folder being accessed via share
-		// The path format for shared files would be /home/filename (owner's perspective)
-		// But when accessed by another user, we need to resolve through file_shares
-		// This check happens after resolvePath, so realPath already points to current user's home
-	}
+	// For home folder files accessed by the owner, no additional check needed
+	// Shared file access is handled in the block below
 
 	// If realPath doesn't exist but user is authenticated, check if it's a shared file
 	if realPath == "" || (storageType == StorageSharedWithMe && claims != nil) {

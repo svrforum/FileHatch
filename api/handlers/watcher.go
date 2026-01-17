@@ -3,7 +3,6 @@ package handlers
 import (
 	"bufio"
 	"database/sql"
-	"encoding/json"
 	"log"
 	"os"
 	"os/exec"
@@ -335,47 +334,4 @@ func (fw *FileWatcher) extractUsername(fsPath string) string {
 
 	// For shared folder, we can't determine the user
 	return ""
-}
-
-// logAuditEvent logs an SMB file operation to the audit log
-func (fw *FileWatcher) logAuditEvent(username, eventType, targetResource string, details map[string]interface{}) {
-	if fw.db == nil {
-		return
-	}
-
-	// Find user ID by username
-	var actorID *string
-	if username != "" {
-		var userID string
-		err := fw.db.QueryRow("SELECT id FROM users WHERE username = $1", username).Scan(&userID)
-		if err == nil {
-			actorID = &userID
-		}
-	}
-
-	// Get SMB client IP from smbstatus
-	clientIP := ""
-	if username != "" {
-		clientIP = GetSMBClientIP(username)
-	}
-
-	detailsJSON, _ := json.Marshal(details)
-
-	// Use client IP if available, otherwise NULL
-	var err error
-	if clientIP != "" {
-		_, err = fw.db.Exec(`
-			INSERT INTO audit_logs (actor_id, ip_addr, event_type, target_resource, details)
-			VALUES ($1, $2::inet, $3, $4, $5)
-		`, actorID, clientIP, eventType, targetResource, detailsJSON)
-	} else {
-		_, err = fw.db.Exec(`
-			INSERT INTO audit_logs (actor_id, ip_addr, event_type, target_resource, details)
-			VALUES ($1, NULL, $2, $3, $4)
-		`, actorID, eventType, targetResource, detailsJSON)
-	}
-
-	if err != nil {
-		log.Printf("[Watcher] Failed to log audit event: %v", err)
-	}
 }

@@ -357,14 +357,6 @@ func (h *SMBHandler) UpdateSMBConfig(c echo.Context) error {
 	})
 }
 
-// writeSMBUsersFile writes a file with SMB user information for samba container
-func (h *SMBHandler) writeSMBUsersFile() error {
-	// This function is called when we need to refresh the sync file
-	// We don't have passwords stored, so this just maintains the user list
-	// Actual passwords are added via updateSMBUserPassword
-	return nil
-}
-
 // updateSMBUserPassword adds or updates a user's password using encrypted storage
 func (h *SMBHandler) updateSMBUserPassword(username, password string) error {
 	if h.crypto != nil {

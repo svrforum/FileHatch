@@ -43,45 +43,6 @@ type OnlyOfficeCallbackRequest struct {
 	} `json:"actions,omitempty"`
 }
 
-// checkSharedFileWritePermission checks if user can write to a shared file
-func (h *Handler) checkSharedFileWritePermission(userID, virtualPath string) bool {
-	// Check file_shares table for write permission
-	var permissionLevel int
-	err := h.db.QueryRow(`
-		SELECT permission_level FROM file_shares
-		WHERE item_path = $1 AND shared_with_id = $2
-	`, virtualPath, userID).Scan(&permissionLevel)
-
-	if err == nil {
-		return permissionLevel >= FileShareReadWrite
-	}
-
-	// Also check if the path is under a shared folder
-	rows, err := h.db.Query(`
-		SELECT item_path, permission_level FROM file_shares
-		WHERE shared_with_id = $1 AND is_folder = TRUE
-	`, userID)
-	if err != nil {
-		return false
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var sharedPath string
-		var perm int
-		if err := rows.Scan(&sharedPath, &perm); err != nil {
-			continue
-		}
-		// Check if virtualPath is under sharedPath
-		if strings.HasPrefix(virtualPath, sharedPath+"/") || virtualPath == sharedPath {
-			if perm >= FileShareReadWrite {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // OnlyOfficeCallback handles document save callbacks from OnlyOffice
 // Status codes: 0 - no document with given key, 1 - editing, 2 - ready for saving,
 // 3 - save error, 4 - no changes, 6 - force save, 7 - force save error
@@ -251,7 +212,6 @@ func (h *Handler) GetOnlyOfficeConfig(c echo.Context) error {
 			sharedRealPath, _, shareErr := h.GetSharedFileOwnerPath(claims.UserID, virtualPath)
 			if shareErr == nil {
 				realPath = sharedRealPath
-				isSharedFile = true
 				canEdit = h.CanWriteSharedFile(claims.UserID, virtualPath)
 				info, err = statFile(realPath)
 			}

@@ -300,10 +300,7 @@ func (h *SettingsHandler) GetTrashRetentionDays() int {
 }
 
 // Global settings handler instance
-var (
-	globalSettingsHandler     *SettingsHandler
-	globalSettingsHandlerOnce sync.Once
-)
+var globalSettingsHandler *SettingsHandler
 
 // GetGlobalSettingsHandler returns the global settings handler
 func GetGlobalSettingsHandler() *SettingsHandler {
