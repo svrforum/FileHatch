@@ -17,7 +17,7 @@ services:
   # Keycloak Identity Provider
   keycloak:
     container_name: fh-keycloak
-    image: quay.io/keycloak/keycloak:26.4.0
+    image: quay.io/keycloak/keycloak:26.5.1
     restart: unless-stopped
     environment:
       - KEYCLOAK_ADMIN=admin

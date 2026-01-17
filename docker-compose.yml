@@ -107,7 +107,7 @@ services:
   # 5. Cache & Queue (Valkey)
   valkey:
     container_name: fh-valkey
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:8.1.5-alpine
     restart: unless-stopped
     environment:
       - TZ=${TZ:-Asia/Seoul}
@@ -120,7 +120,7 @@ services:
   # 6. OnlyOffice Document Server (Optional - use: docker compose --profile office up -d)
   onlyoffice:
     container_name: fh-onlyoffice
-    image: onlyoffice/documentserver:8.2
+    image: onlyoffice/documentserver:9.2.1
     restart: unless-stopped
     profiles:
       - office
@@ -145,7 +145,7 @@ services:
   # 7. Keycloak SSO Server (Optional - use: docker compose --profile sso up -d)
   keycloak:
     container_name: fh-keycloak
-    image: quay.io/keycloak/keycloak:26.4.0
+    image: quay.io/keycloak/keycloak:26.5.1
     restart: unless-stopped
     profiles:
       - sso
