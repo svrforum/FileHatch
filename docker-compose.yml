@@ -1,5 +1,5 @@
 # FileHatch Production Docker Compose
-# Uses pre-built images from GitHub Container Registry (GHCR)
+# Uses pre-built images from Docker Hub
 #
 # Usage:
 #   docker compose up -d                    # Start core services
@@ -13,7 +13,7 @@ services:
   # 1. Main Backend (Go)
   api:
     container_name: fh-api
-    image: ghcr.io/svrforum/filehatch-api:${IMAGE_TAG:-latest}
+    image: svrforum/filehatch-api:${IMAGE_TAG:-latest}
     restart: unless-stopped
     extra_hosts:
       - "localhost:host-gateway"
@@ -52,7 +52,7 @@ services:
   # 2. Frontend (React + Express)
   ui:
     container_name: fh-ui
-    image: ghcr.io/svrforum/filehatch-ui:${IMAGE_TAG:-latest}
+    image: svrforum/filehatch-ui:${IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
       - "${UI_PORT:-3080}:3000"
@@ -74,7 +74,7 @@ services:
   # 3. SMB Service (Sidecar)
   samba:
     container_name: fh-samba
-    image: ghcr.io/svrforum/filehatch-samba:${IMAGE_TAG:-latest}
+    image: svrforum/filehatch-samba:${IMAGE_TAG:-latest}
     restart: unless-stopped
     network_mode: host
     environment:

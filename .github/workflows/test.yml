@@ -3,7 +3,7 @@ name: Test Suite
 # Test workflow runs on push/PR to main and develop branches
 # Uses:
 #   - docker-compose-dev.yaml: For build validation (local builds)
-#   - docker-compose.yml: For E2E and health tests (GHCR production images)
+#   - docker-compose.yml: For E2E and health tests (Docker Hub production images)
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
 env:
   GO_VERSION: '1.23'
   NODE_VERSION: '20'
-  REGISTRY: ghcr.io
+  REGISTRY: docker.io
 
 jobs:
   # Backend Unit Tests
@@ -130,12 +130,11 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Login to GHCR
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Pull and Start Services (Production Images)
         run: |
@@ -256,12 +255,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Login to GHCR
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Pull and Start all services (Production Images)
         run: |
