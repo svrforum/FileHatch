@@ -102,7 +102,7 @@ jobs:
 
       - name: Build Backend
         working-directory: ./api
-        run: go build -o ../bin/api ./...
+        run: go build -o ../bin/api .
 
       - name: Build Frontend
         working-directory: ./ui
