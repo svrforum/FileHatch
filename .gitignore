@@ -1,3 +1,11 @@
+# AI Agent/Assistant Tools
+.claude/
+.cursor/
+.aider*
+.codeium/
+.copilot/
+.windsurf/
+
 # Development Guidelines (Private)
 CLAUDE.MD
 
