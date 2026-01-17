@@ -26,7 +26,7 @@ export class ApiError extends Error {
  * Get the authentication token from localStorage
  */
 export function getAuthToken(): string | null {
-  const stored = localStorage.getItem('scv-auth')
+  const stored = localStorage.getItem('filehatch-auth')
   if (stored) {
     try {
       const { state } = JSON.parse(stored)

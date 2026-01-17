@@ -43,7 +43,7 @@ function AdminSharedFolders() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
-    return (localStorage.getItem('scv-shared-folders-view') as 'grid' | 'list') || 'grid'
+    return (localStorage.getItem('filehatch-shared-folders-view') as 'grid' | 'list') || 'grid'
   })
 
   // Create/Edit Modal
@@ -135,7 +135,7 @@ function AdminSharedFolders() {
   // Handle view mode change
   const handleViewModeChange = (mode: 'grid' | 'list') => {
     setViewMode(mode)
-    localStorage.setItem('scv-shared-folders-view', mode)
+    localStorage.setItem('filehatch-shared-folders-view', mode)
   }
 
   // Load users for create modal

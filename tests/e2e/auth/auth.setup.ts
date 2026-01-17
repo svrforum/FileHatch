@@ -5,14 +5,15 @@ const userAuthFile = path.join(__dirname, '../playwright/.auth/user.json');
 const adminAuthFile = path.join(__dirname, '../playwright/.auth/admin.json');
 
 // Test credentials - should be set via environment or use defaults for local testing
+// Default admin account: admin/admin1234 (from 002_default_data.sql migration)
 const TEST_USER = {
-  username: process.env.TEST_USER || 'testuser',
-  password: process.env.TEST_PASSWORD || 'testpass123',
+  username: process.env.TEST_USER || 'admin',
+  password: process.env.TEST_PASSWORD || 'admin1234',
 };
 
 const TEST_ADMIN = {
   username: process.env.TEST_ADMIN || 'admin',
-  password: process.env.TEST_ADMIN_PASSWORD || 'admin123',
+  password: process.env.TEST_ADMIN_PASSWORD || 'admin1234',
 };
 
 setup('authenticate as user', async ({ page }) => {
@@ -32,8 +33,8 @@ setup('authenticate as user', async ({ page }) => {
   // Wait for successful login - should redirect to main page
   await expect(page).toHaveURL(/.*(?!login)/);
 
-  // Verify user is logged in by checking for user-specific elements
-  await expect(page.locator('[data-testid="user-menu"], .user-menu, .header-profile')).toBeVisible({
+  // Verify user is logged in by checking for user-specific elements (avatar button)
+  await expect(page.locator('.avatar-btn')).toBeVisible({
     timeout: 10000,
   });
 
@@ -58,8 +59,8 @@ setup('authenticate as admin', async ({ page }) => {
   // Wait for successful login
   await expect(page).toHaveURL(/.*(?!login)/);
 
-  // Verify admin is logged in
-  await expect(page.locator('[data-testid="user-menu"], .user-menu, .header-profile')).toBeVisible({
+  // Verify admin is logged in (avatar button)
+  await expect(page.locator('.avatar-btn')).toBeVisible({
     timeout: 10000,
   });
 

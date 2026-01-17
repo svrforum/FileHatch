@@ -5,7 +5,7 @@ import { useToastStore, parseUploadError } from './toastStore'
 
 // Helper to get auth info
 function getAuthInfo(): { token: string | null; username: string | null } {
-  const stored = localStorage.getItem('scv-auth')
+  const stored = localStorage.getItem('filehatch-auth')
   if (stored) {
     try {
       const { state } = JSON.parse(stored)

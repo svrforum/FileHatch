@@ -102,7 +102,7 @@ func InitBruteForceGuard(db *sql.DB, auditHandler *AuditHandler) *BruteForceGuar
 			redis:        client,
 			db:           db,
 			audit:        auditHandler,
-			keyPrefix:    "scv:bruteforce:",
+			keyPrefix:    "fh:bruteforce:",
 			config:       config,
 			redisEnabled: redisEnabled,
 		}

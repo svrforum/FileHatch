@@ -32,12 +32,12 @@ type SMBCrypto struct {
 func NewSMBCrypto(configPath string) (*SMBCrypto, error) {
 	keyStr := os.Getenv("SMB_ENCRYPTION_KEY")
 	if keyStr == "" {
-		env := os.Getenv("SCV_ENV")
+		env := os.Getenv("FH_ENV")
 		if env == "production" {
 			return nil, fmt.Errorf("SMB_ENCRYPTION_KEY environment variable is required in production mode")
 		}
 		// Development default key - NOT FOR PRODUCTION
-		keyStr = "scv-dev-smb-key-not-for-prod-32"
+		keyStr = "fh-dev-smb-key-not-for-prod-32"
 	}
 
 	// Ensure key is exactly 32 bytes for AES-256

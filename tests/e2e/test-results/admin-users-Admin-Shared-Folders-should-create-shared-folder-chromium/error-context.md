@@ -1,0 +1,108 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - img "FileHatch" [ref=e7]
+        - generic [ref=e8]: FileHatch
+      - navigation [ref=e9]:
+        - generic [ref=e10]: /
+        - button "내 파일" [ref=e12] [cursor=pointer]
+    - generic [ref=e13]:
+      - button "다크 모드로 전환" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+      - button "알림" [ref=e18] [cursor=pointer]:
+        - img [ref=e19]
+      - button "admin 프로필" [ref=e22] [cursor=pointer]:
+        - generic [ref=e24]: A
+  - generic [ref=e25]:
+    - complementary [ref=e26]:
+      - generic [ref=e28]:
+        - img [ref=e29]
+        - generic [ref=e32]: 관리자 설정
+      - navigation [ref=e33]:
+        - link "사용자 관리" [ref=e34] [cursor=pointer]:
+          - /url: /fhadmin/users
+          - img [ref=e35]
+          - generic [ref=e40]: 사용자 관리
+        - link "공유 드라이브" [active] [ref=e41] [cursor=pointer]:
+          - /url: /fhadmin/shared-folders
+          - img [ref=e42]
+          - generic [ref=e45]: 공유 드라이브
+        - link "시스템 설정" [ref=e46] [cursor=pointer]:
+          - /url: /fhadmin/settings
+          - img [ref=e47]
+          - generic [ref=e50]: 시스템 설정
+        - link "SSO 설정" [ref=e51] [cursor=pointer]:
+          - /url: /fhadmin/sso
+          - img [ref=e52]
+          - generic [ref=e55]: SSO 설정
+        - link "감사 로그" [ref=e56] [cursor=pointer]:
+          - /url: /fhadmin/logs
+          - img [ref=e57]
+          - generic [ref=e60]: 감사 로그
+        - link "서버 정보" [ref=e61] [cursor=pointer]:
+          - /url: /fhadmin/system-info
+          - img [ref=e62]
+          - generic [ref=e67]: 서버 정보
+      - generic [ref=e68]:
+        - button "일반 모드로" [ref=e69] [cursor=pointer]:
+          - img [ref=e70]
+          - generic [ref=e72]: 일반 모드로
+        - generic [ref=e73]:
+          - generic [ref=e74] [cursor=pointer]:
+            - img [ref=e75]
+            - generic [ref=e77]: 전송 현황
+          - generic [ref=e78] [cursor=pointer]: 진행 중인 전송 없음
+        - generic [ref=e79]:
+          - generic [ref=e80]:
+            - generic [ref=e81]: 저장 공간
+            - generic [ref=e82]: 85.2 MB / 10.0 GB
+          - generic [ref=e86]: "휴지통: 948 B"
+    - main [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - generic [ref=e90]:
+            - img [ref=e92]
+            - generic [ref=e94]:
+              - heading "공유 드라이브" [level=1] [ref=e95]
+              - paragraph [ref=e96]: 팀원들과 파일을 공유할 수 있는 드라이브를 관리합니다.
+          - button "새 공유 드라이브" [ref=e97] [cursor=pointer]:
+            - img [ref=e98]
+            - text: 새 공유 드라이브
+        - generic [ref=e100]:
+          - generic [ref=e101] [cursor=pointer]:
+            - img [ref=e103]
+            - generic [ref=e105]:
+              - generic [ref=e106]: "0"
+              - generic [ref=e107]: 전체 드라이브
+          - generic [ref=e108] [cursor=pointer]:
+            - img [ref=e110]
+            - generic [ref=e113]:
+              - generic [ref=e114]: "0"
+              - generic [ref=e115]: 활성 드라이브
+          - generic [ref=e116] [cursor=pointer]:
+            - img [ref=e118]
+            - generic [ref=e123]:
+              - generic [ref=e124]: "0"
+              - generic [ref=e125]: 전체 멤버
+        - generic [ref=e126]: 공유 드라이브를 불러오는데 실패했습니다
+        - generic [ref=e127]:
+          - generic [ref=e128]:
+            - img [ref=e129]
+            - textbox "드라이브 검색..." [ref=e132]
+          - generic [ref=e133]:
+            - button "그리드 뷰" [ref=e134] [cursor=pointer]:
+              - img [ref=e135]
+            - button "리스트 뷰" [ref=e140] [cursor=pointer]:
+              - img [ref=e141]
+        - generic [ref=e143]:
+          - img [ref=e145]
+          - heading "공유 드라이브가 없습니다" [level=3] [ref=e147]
+          - paragraph [ref=e148]: 새 공유 드라이브를 생성하여 팀원들과 파일을 공유하세요.
+          - button "새 공유 드라이브" [ref=e149] [cursor=pointer]:
+            - img [ref=e150]
+            - text: 새 공유 드라이브
+```

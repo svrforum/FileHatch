@@ -1,0 +1,119 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - img "FileHatch" [ref=e7]
+        - generic [ref=e8]: FileHatch
+      - navigation [ref=e9]:
+        - generic [ref=e10]: /
+        - button "내 파일" [ref=e12] [cursor=pointer]
+    - generic [ref=e13]:
+      - button "다크 모드로 전환" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+      - button "알림" [ref=e18] [cursor=pointer]:
+        - img [ref=e19]
+      - button "admin 프로필" [ref=e22] [cursor=pointer]:
+        - generic [ref=e24]: A
+  - generic [ref=e25]:
+    - complementary [ref=e26]:
+      - generic [ref=e28]:
+        - img [ref=e29]
+        - generic [ref=e32]: 관리자 설정
+      - navigation [ref=e33]:
+        - link "사용자 관리" [ref=e34] [cursor=pointer]:
+          - /url: /fhadmin/users
+          - img [ref=e35]
+          - generic [ref=e40]: 사용자 관리
+        - link "공유 드라이브" [ref=e41] [cursor=pointer]:
+          - /url: /fhadmin/shared-folders
+          - img [ref=e42]
+          - generic [ref=e45]: 공유 드라이브
+        - link "시스템 설정" [ref=e46] [cursor=pointer]:
+          - /url: /fhadmin/settings
+          - img [ref=e47]
+          - generic [ref=e50]: 시스템 설정
+        - link "SSO 설정" [ref=e51] [cursor=pointer]:
+          - /url: /fhadmin/sso
+          - img [ref=e52]
+          - generic [ref=e55]: SSO 설정
+        - link "감사 로그" [ref=e56] [cursor=pointer]:
+          - /url: /fhadmin/logs
+          - img [ref=e57]
+          - generic [ref=e60]: 감사 로그
+        - link "서버 정보" [ref=e61] [cursor=pointer]:
+          - /url: /fhadmin/system-info
+          - img [ref=e62]
+          - generic [ref=e67]: 서버 정보
+      - generic [ref=e68]:
+        - button "일반 모드로" [ref=e69] [cursor=pointer]:
+          - img [ref=e70]
+          - generic [ref=e72]: 일반 모드로
+        - generic [ref=e73]:
+          - generic [ref=e74] [cursor=pointer]:
+            - img [ref=e75]
+            - generic [ref=e77]: 전송 현황
+          - generic [ref=e78] [cursor=pointer]: 진행 중인 전송 없음
+        - generic [ref=e79]:
+          - generic [ref=e80]:
+            - generic [ref=e81]: 저장 공간
+            - generic [ref=e82]: 85.2 MB / 10.0 GB
+          - generic [ref=e86]: "휴지통: 948 B"
+    - main [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - generic [ref=e90]:
+            - heading "사용자 관리" [level=2] [ref=e91]
+            - paragraph [ref=e92]: 시스템의 모든 사용자를 관리합니다.
+          - generic [ref=e93]:
+            - button "새로고침" [ref=e94] [cursor=pointer]:
+              - img [ref=e95]
+            - button "사용자 추가" [ref=e99] [cursor=pointer]:
+              - img [ref=e100]
+              - text: 사용자 추가
+        - generic [ref=e102]:
+          - generic [ref=e103]:
+            - generic [ref=e104] [cursor=pointer]:
+              - generic [ref=e105]: "4"
+              - text: 전체
+            - generic [ref=e106] [cursor=pointer]:
+              - generic [ref=e107]: "4"
+              - text: 활성
+            - generic [ref=e108] [cursor=pointer]:
+              - generic [ref=e109]: "0"
+              - text: 비활성
+            - generic [ref=e110] [cursor=pointer]:
+              - generic [ref=e111]: "1"
+              - text: 관리자
+          - generic [ref=e112]:
+            - generic [ref=e113]:
+              - img [ref=e114]
+              - textbox "이름 또는 이메일로 검색..." [active] [ref=e117]: admin
+              - button [ref=e118] [cursor=pointer]:
+                - img [ref=e119]
+            - generic [ref=e121]:
+              - button "카드 뷰" [ref=e122] [cursor=pointer]:
+                - img [ref=e123]
+              - button "리스트 뷰" [ref=e128] [cursor=pointer]:
+                - img [ref=e129]
+          - generic [ref=e132]:
+            - generic [ref=e133]:
+              - generic [ref=e134]: AD
+              - generic [ref=e136]:
+                - heading "admin 나" [level=4] [ref=e137]:
+                  - text: admin
+                  - generic [ref=e138]: 나
+                - paragraph [ref=e139]: admin@localhost
+            - generic [ref=e141]: 관리자
+            - generic [ref=e143]:
+              - generic [ref=e144]: 저장공간
+              - generic [ref=e145]: 85.16 MB / 무제한
+            - generic [ref=e147]:
+              - img [ref=e148]
+              - text: 2026. 1. 16.
+            - button "수정" [ref=e152] [cursor=pointer]:
+              - img [ref=e153]
+              - text: 수정
+```

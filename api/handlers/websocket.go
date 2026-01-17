@@ -65,7 +65,7 @@ func isOriginAllowed(origin string) bool {
 	}
 
 	// In development mode, be more permissive
-	if os.Getenv("SCV_ENV") != "production" {
+	if os.Getenv("FH_ENV") != "production" {
 		log.Printf("WARNING: WebSocket connection from non-allowed origin: %s (allowed in development)", origin)
 		return true
 	}

@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Share Links', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('[data-testid="file-list"], .file-list')).toBeVisible({
+    await expect(page.locator('.file-list-wrapper')).toBeVisible({
       timeout: 10000,
     });
   });
@@ -12,14 +12,18 @@ test.describe('Share Links', () => {
     const fileName = `share-test-${Date.now()}.txt`;
 
     // Upload a file first
+    await page.locator('.upload-btn').click();
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('[data-testid="upload-btn"], button:has-text("업로드"), button:has-text("Upload")').click();
+    await page.locator('text=파일 선택').click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: fileName,
       mimeType: 'text/plain',
       buffer: Buffer.from('Share test content'),
     });
+
+    // Click start upload button
+    await page.locator('button:has-text("업로드 시작")').click();
 
     // Wait for file to appear
     await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
@@ -28,7 +32,7 @@ test.describe('Share Links', () => {
     await page.locator(`text=${fileName}`).click({ button: 'right' });
 
     // Click share option
-    await page.locator('text=공유, text=Share').first().click();
+    await page.locator('text=링크로 공유').first().click();
 
     // Wait for share modal
     await expect(page.locator('[data-testid="share-modal"], .share-modal, .modal')).toBeVisible({
@@ -48,8 +52,9 @@ test.describe('Share Links', () => {
     const fileName = `protected-share-${Date.now()}.txt`;
 
     // Upload file
+    await page.locator('.upload-btn').click();
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('[data-testid="upload-btn"], button:has-text("업로드"), button:has-text("Upload")').click();
+    await page.locator('text=파일 선택').click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: fileName,
@@ -57,11 +62,12 @@ test.describe('Share Links', () => {
       buffer: Buffer.from('Protected share content'),
     });
 
+    await page.locator('button:has-text("업로드 시작")').click();
     await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
 
     // Open share modal
     await page.locator(`text=${fileName}`).click({ button: 'right' });
-    await page.locator('text=공유, text=Share').first().click();
+    await page.locator('text=링크로 공유').first().click();
 
     // Enable password protection
     await page.locator('input[type="checkbox"]:near(:text("비밀번호")), label:has-text("비밀번호") input').click();
@@ -80,8 +86,9 @@ test.describe('Share Links', () => {
     const fileName = `expiring-share-${Date.now()}.txt`;
 
     // Upload file
+    await page.locator('.upload-btn').click();
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('[data-testid="upload-btn"], button:has-text("업로드"), button:has-text("Upload")').click();
+    await page.locator('text=파일 선택').click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: fileName,
@@ -89,11 +96,12 @@ test.describe('Share Links', () => {
       buffer: Buffer.from('Expiring share content'),
     });
 
+    await page.locator('button:has-text("업로드 시작")').click();
     await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
 
     // Open share modal
     await page.locator(`text=${fileName}`).click({ button: 'right' });
-    await page.locator('text=공유, text=Share').first().click();
+    await page.locator('text=링크로 공유').first().click();
 
     // Set expiration (select 1 day or similar option)
     await page.locator('select:near(:text("만료")), select[name*="expir"]').selectOption({ index: 1 });
@@ -112,8 +120,9 @@ test.describe('Share Links', () => {
     await context.grantPermissions(['clipboard-write', 'clipboard-read']);
 
     // Upload file
+    await page.locator('.upload-btn').click();
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('[data-testid="upload-btn"], button:has-text("업로드"), button:has-text("Upload")').click();
+    await page.locator('text=파일 선택').click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: fileName,
@@ -121,11 +130,12 @@ test.describe('Share Links', () => {
       buffer: Buffer.from('Copy link test'),
     });
 
+    await page.locator('button:has-text("업로드 시작")').click();
     await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
 
     // Open share modal
     await page.locator(`text=${fileName}`).click({ button: 'right' });
-    await page.locator('text=공유, text=Share').first().click();
+    await page.locator('text=링크로 공유').first().click();
 
     // Create share
     await page.locator('button:has-text("링크 생성"), button:has-text("Create")').click();
@@ -142,8 +152,9 @@ test.describe('Share Links', () => {
     const fileName = `delete-share-${Date.now()}.txt`;
 
     // Upload file and create share
+    await page.locator('.upload-btn').click();
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('[data-testid="upload-btn"], button:has-text("업로드"), button:has-text("Upload")').click();
+    await page.locator('text=파일 선택').click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: fileName,
@@ -151,11 +162,12 @@ test.describe('Share Links', () => {
       buffer: Buffer.from('Delete share test'),
     });
 
+    await page.locator('button:has-text("업로드 시작")').click();
     await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
 
     // Open share modal
     await page.locator(`text=${fileName}`).click({ button: 'right' });
-    await page.locator('text=공유, text=Share').first().click();
+    await page.locator('text=링크로 공유').first().click();
 
     // Create share
     await page.locator('button:has-text("링크 생성"), button:has-text("Create")').click();
@@ -178,7 +190,7 @@ test.describe('Share Links', () => {
 test.describe('Share Access (Unauthenticated)', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('should access public share link', async ({ page, request }) => {
+  test('should access public share link', async ({ page }) => {
     // This test requires a pre-created share link
     // In a real scenario, we'd use API to create a share first
     const shareToken = process.env.TEST_SHARE_TOKEN;

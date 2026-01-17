@@ -1,0 +1,1136 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - img "FileHatch" [ref=e7]
+        - generic [ref=e8]: FileHatch
+      - navigation [ref=e9]:
+        - generic [ref=e10]: /
+        - button "내 파일" [ref=e12] [cursor=pointer]
+    - generic [ref=e14]:
+      - img [ref=e15]
+      - textbox "파일 검색" [ref=e18]:
+        - /placeholder: 파일 검색... (Enter로 전체 검색)
+    - generic [ref=e19]:
+      - button "다크 모드로 전환" [ref=e20] [cursor=pointer]:
+        - img [ref=e21]
+      - button "알림" [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+      - button "admin 프로필" [ref=e28] [cursor=pointer]:
+        - generic [ref=e30]: A
+  - generic [ref=e31]:
+    - complementary [ref=e32]:
+      - generic [ref=e33]:
+        - button "파일 업로드" [ref=e34] [cursor=pointer]:
+          - img [ref=e35]
+          - generic [ref=e38]: 업로드
+        - button "새 폴더 만들기" [ref=e39] [cursor=pointer]:
+          - img [ref=e40]
+      - navigation [ref=e42]:
+        - link "내 파일" [ref=e43] [cursor=pointer]:
+          - /url: /files
+          - img [ref=e44]
+          - generic [ref=e46]: 내 파일
+        - link "내 작업" [ref=e47] [cursor=pointer]:
+          - /url: /my-activity
+          - img [ref=e48]
+          - generic [ref=e51]: 내 작업
+        - generic [ref=e52]:
+          - button "공유 섹션" [expanded] [ref=e53] [cursor=pointer]:
+            - img [ref=e54]
+            - generic [ref=e59]: 공유
+            - img [ref=e60]
+          - generic [ref=e62]:
+            - link "나에게 공유된 파일" [ref=e63] [cursor=pointer]:
+              - /url: /shared-with-me
+              - img [ref=e64]
+              - generic [ref=e67]: 나에게 공유된 파일
+            - link "다른사용자에 공유된 파일" [ref=e68] [cursor=pointer]:
+              - /url: /shared-by-me
+              - img [ref=e69]
+              - generic [ref=e72]: 다른사용자에 공유된 파일
+            - link "링크로 공유된 파일" [ref=e73] [cursor=pointer]:
+              - /url: /link-shares
+              - img [ref=e74]
+              - generic [ref=e77]: 링크로 공유된 파일
+        - link "휴지통" [ref=e78] [cursor=pointer]:
+          - /url: /trash
+          - img [ref=e79]
+          - generic [ref=e81]: 휴지통
+      - generic [ref=e82]:
+        - button "관리자 모드" [ref=e83] [cursor=pointer]:
+          - img [ref=e84]
+          - generic [ref=e87]: 관리자 모드
+        - generic [ref=e88]:
+          - generic [ref=e89] [cursor=pointer]:
+            - img [ref=e90]
+            - generic [ref=e92]: 전송 현황
+          - generic [ref=e93] [cursor=pointer]: 진행 중인 전송 없음
+        - generic [ref=e94]:
+          - generic [ref=e95]:
+            - generic [ref=e96]: 저장 공간
+            - generic [ref=e97]: 85.2 MB / 10.0 GB
+          - generic [ref=e101]: "휴지통: 948 B"
+    - main [ref=e102]:
+      - generic [ref=e103]:
+        - generic [ref=e104]:
+          - generic [ref=e105]:
+            - generic [ref=e106]:
+              - heading "내 파일" [level=2] [ref=e107]
+              - generic [ref=e108]: 106개 항목 · 85.2 MB
+            - generic [ref=e109]:
+              - button "폴더 내 검색 (Ctrl+F)" [ref=e111] [cursor=pointer]:
+                - img [ref=e112]
+              - button "새로고침" [ref=e115] [cursor=pointer]:
+                - img [ref=e116]
+              - button "리스트 보기" [ref=e120] [cursor=pointer]:
+                - img [ref=e121]
+              - button "그리드 보기" [ref=e123] [cursor=pointer]:
+                - img [ref=e124]
+          - generic [ref=e129]:
+            - generic [ref=e130]:
+              - generic [ref=e131] [cursor=pointer]: 이름 ↑
+              - generic [ref=e132] [cursor=pointer]: 크기
+              - generic [ref=e133] [cursor=pointer]: 수정일
+            - generic [ref=e136]:
+              - generic [ref=e138] [cursor=pointer]:
+                - generic [ref=e139]:
+                  - img [ref=e140]
+                  - generic [ref=e142]: "11"
+                - generic [ref=e143]: "-"
+                - generic "2026년 1월 9일 금 오후 08:41:34" [ref=e144]: 2026년 1월 9일
+                - button [ref=e146]:
+                  - img [ref=e147]
+              - generic [ref=e152] [cursor=pointer]:
+                - generic [ref=e153]:
+                  - img [ref=e154]
+                  - generic [ref=e156]: nav-folder-1768565817382
+                - generic [ref=e157]: "-"
+                - generic "2026년 1월 16일 금 오후 09:17:20" [ref=e158]: 1시간 전
+                - button [ref=e160]:
+                  - img [ref=e161]
+              - generic [ref=e166] [cursor=pointer]:
+                - generic [ref=e167]:
+                  - img [ref=e168]
+                  - generic [ref=e170]: nav-folder-1768569751177
+                - generic [ref=e171]: "-"
+                - generic "2026년 1월 16일 금 오후 10:22:31" [ref=e172]: 12분 전
+                - button [ref=e174]:
+                  - img [ref=e175]
+              - generic [ref=e180] [cursor=pointer]:
+                - generic [ref=e181]:
+                  - img [ref=e182]
+                  - generic [ref=e184]: nav-folder-1768570478196
+                - generic [ref=e185]: "-"
+                - generic "2026년 1월 16일 금 오후 10:34:39" [ref=e186]: 방금 전
+                - button [ref=e188]:
+                  - img [ref=e189]
+              - generic [ref=e194] [cursor=pointer]:
+                - generic [ref=e195]:
+                  - img [ref=e196]
+                  - generic [ref=e198]: test-folder-1768356207798
+                - generic [ref=e199]: "-"
+                - generic "2026년 1월 14일 수 오전 11:03:31" [ref=e200]: 2026년 1월 14일
+                - button [ref=e202]:
+                  - img [ref=e203]
+              - generic [ref=e208] [cursor=pointer]:
+                - generic [ref=e209]:
+                  - img [ref=e210]
+                  - generic [ref=e212]: test-folder-1768356466022
+                - generic [ref=e213]: "-"
+                - generic "2026년 1월 14일 수 오전 11:07:54" [ref=e214]: 2026년 1월 14일
+                - button [ref=e216]:
+                  - img [ref=e217]
+              - generic [ref=e222] [cursor=pointer]:
+                - generic [ref=e223]:
+                  - img [ref=e224]
+                  - generic [ref=e226]: test-folder-1768356504834
+                - generic [ref=e227]: "-"
+                - generic "2026년 1월 14일 수 오전 11:08:28" [ref=e228]: 2026년 1월 14일
+                - button [ref=e230]:
+                  - img [ref=e231]
+              - generic [ref=e236] [cursor=pointer]:
+                - generic [ref=e237]:
+                  - img [ref=e238]
+                  - generic [ref=e240]: test-folder-1768356674018
+                - generic [ref=e241]: "-"
+                - generic "2026년 1월 14일 수 오전 11:11:17" [ref=e242]: 2026년 1월 14일
+                - button [ref=e244]:
+                  - img [ref=e245]
+              - generic [ref=e250] [cursor=pointer]:
+                - generic [ref=e251]:
+                  - img [ref=e252]
+                  - generic [ref=e254]: test-folder-1768356690199
+                - generic [ref=e255]: "-"
+                - generic "2026년 1월 14일 수 오전 11:11:38" [ref=e256]: 2026년 1월 14일
+                - button [ref=e258]:
+                  - img [ref=e259]
+              - generic [ref=e264] [cursor=pointer]:
+                - generic [ref=e265]:
+                  - img [ref=e266]
+                  - generic [ref=e268]: test-folder-1768565815296
+                - generic [ref=e269]: "-"
+                - generic "2026년 1월 16일 금 오후 09:17:16" [ref=e270]: 1시간 전
+                - button [ref=e272]:
+                  - img [ref=e273]
+              - generic [ref=e278] [cursor=pointer]:
+                - generic [ref=e279]:
+                  - img [ref=e280]
+                  - generic [ref=e282]: test-folder-1768566631691
+                - generic [ref=e283]: "-"
+                - generic "2026년 1월 16일 금 오후 09:30:54" [ref=e284]: 1시간 전
+                - button [ref=e286]:
+                  - img [ref=e287]
+              - generic [ref=e292] [cursor=pointer]:
+                - generic [ref=e293]:
+                  - img [ref=e294]
+                  - generic [ref=e296]: test-folder-1768569745760
+                - generic [ref=e297]: "-"
+                - generic "2026년 1월 16일 금 오후 10:22:29" [ref=e298]: 12분 전
+                - button [ref=e300]:
+                  - img [ref=e301]
+              - generic [ref=e306] [cursor=pointer]:
+                - generic [ref=e307]:
+                  - img [ref=e308]
+                  - generic [ref=e310]: test-folder-1768570471998
+                - generic [ref=e311]: "-"
+                - generic "2026년 1월 16일 금 오후 10:34:36" [ref=e312]: 방금 전
+                - button [ref=e314]:
+                  - img [ref=e315]
+              - generic [ref=e320] [cursor=pointer]:
+                - generic [ref=e321]:
+                  - img [ref=e322]
+                  - generic [ref=e326]: copy-link-1768565856507.txt
+                  - button "즐겨찾기 추가" [ref=e327]:
+                    - img [ref=e328]
+                - generic [ref=e330]: 14 B
+                - generic "2026년 1월 16일 금 오후 09:17:43" [ref=e331]: 1시간 전
+                - button [ref=e333]:
+                  - img [ref=e334]
+              - generic [ref=e339] [cursor=pointer]:
+                - generic [ref=e340]:
+                  - img [ref=e341]
+                  - generic [ref=e345]: copy-link-1768565856507[1].txt
+                  - button "즐겨찾기 추가" [ref=e346]:
+                    - img [ref=e347]
+                - generic [ref=e349]: 14 B
+                - generic "2026년 1월 16일 금 오후 09:17:43" [ref=e350]: 1시간 전
+                - button [ref=e352]:
+                  - img [ref=e353]
+              - generic [ref=e358] [cursor=pointer]:
+                - generic [ref=e359]:
+                  - img [ref=e360]
+                  - generic [ref=e364]: copy-link-1768566673555.txt
+                  - button "즐겨찾기 추가" [ref=e365]:
+                    - img [ref=e366]
+                - generic [ref=e368]: 14 B
+                - generic "2026년 1월 16일 금 오후 09:31:23" [ref=e369]: 1시간 전
+                - button [ref=e371]:
+                  - img [ref=e372]
+              - generic [ref=e377] [cursor=pointer]:
+                - generic [ref=e378]:
+                  - img [ref=e379]
+                  - generic [ref=e383]: copy-link-1768566673555[1].txt
+                  - button "즐겨찾기 추가" [ref=e384]:
+                    - img [ref=e385]
+                - generic [ref=e387]: 14 B
+                - generic "2026년 1월 16일 금 오후 09:31:23" [ref=e388]: 1시간 전
+                - button [ref=e390]:
+                  - img [ref=e391]
+              - generic [ref=e396] [cursor=pointer]:
+                - generic [ref=e397]:
+                  - img [ref=e398]
+                  - generic [ref=e402]: copy-link-1768568321919.txt
+                  - button "즐겨찾기 추가" [ref=e403]:
+                    - img [ref=e404]
+                - generic [ref=e406]: 14 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e407]: 35분 전
+                - button [ref=e409]:
+                  - img [ref=e410]
+              - generic [ref=e415] [cursor=pointer]:
+                - generic [ref=e416]:
+                  - img [ref=e417]
+                  - generic [ref=e421]: copy-link-1768568321919[1].txt
+                  - button "즐겨찾기 추가" [ref=e422]:
+                    - img [ref=e423]
+                - generic [ref=e425]: 14 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e426]: 35분 전
+                - button [ref=e428]:
+                  - img [ref=e429]
+              - generic [ref=e434] [cursor=pointer]:
+                - generic [ref=e435]:
+                  - img [ref=e436]
+                  - generic [ref=e440]: copy-link-1768570160889.txt
+                  - button "즐겨찾기 추가" [ref=e441]:
+                    - img [ref=e442]
+                - generic [ref=e444]: 14 B
+                - generic "2026년 1월 16일 금 오후 10:29:22" [ref=e445]: 5분 전
+                - button [ref=e447]:
+                  - img [ref=e448]
+              - generic [ref=e453] [cursor=pointer]:
+                - generic [ref=e454]:
+                  - img [ref=e455]
+                  - generic [ref=e459]: delete-share-1768565856428.txt
+                  - button "즐겨찾기 추가" [ref=e460]:
+                    - img [ref=e461]
+                - generic [ref=e463]: 17 B
+                - generic "2026년 1월 16일 금 오후 09:17:43" [ref=e464]: 1시간 전
+                - button [ref=e466]:
+                  - img [ref=e467]
+              - generic [ref=e472] [cursor=pointer]:
+                - generic [ref=e473]:
+                  - img [ref=e474]
+                  - generic [ref=e478]: delete-share-1768565856428[1].txt
+                  - button "즐겨찾기 추가" [ref=e479]:
+                    - img [ref=e480]
+                - generic [ref=e482]: 17 B
+                - generic "2026년 1월 16일 금 오후 09:17:43" [ref=e483]: 1시간 전
+                - button [ref=e485]:
+                  - img [ref=e486]
+              - generic [ref=e491] [cursor=pointer]:
+                - generic [ref=e492]:
+                  - img [ref=e493]
+                  - generic [ref=e497]: delete-share-1768566673637.txt
+                  - button "즐겨찾기 추가" [ref=e498]:
+                    - img [ref=e499]
+                - generic [ref=e501]: 17 B
+                - generic "2026년 1월 16일 금 오후 09:31:23" [ref=e502]: 1시간 전
+                - button [ref=e504]:
+                  - img [ref=e505]
+              - generic [ref=e510] [cursor=pointer]:
+                - generic [ref=e511]:
+                  - img [ref=e512]
+                  - generic [ref=e516]: delete-share-1768566673637[1].txt
+                  - button "즐겨찾기 추가" [ref=e517]:
+                    - img [ref=e518]
+                - generic [ref=e520]: 17 B
+                - generic "2026년 1월 16일 금 오후 09:31:23" [ref=e521]: 1시간 전
+                - button [ref=e523]:
+                  - img [ref=e524]
+              - generic [ref=e529] [cursor=pointer]:
+                - generic [ref=e530]:
+                  - img [ref=e531]
+                  - generic [ref=e535]: delete-share-1768568324095.txt
+                  - button "즐겨찾기 추가" [ref=e536]:
+                    - img [ref=e537]
+                - generic [ref=e539]: 17 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e540]: 35분 전
+                - button [ref=e542]:
+                  - img [ref=e543]
+              - generic [ref=e548] [cursor=pointer]:
+                - generic [ref=e549]:
+                  - img [ref=e550]
+                  - generic [ref=e554]: delete-share-1768568324095[1].txt
+                  - button "즐겨찾기 추가" [ref=e555]:
+                    - img [ref=e556]
+                - generic [ref=e558]: 17 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e559]: 35분 전
+                - button [ref=e561]:
+                  - img [ref=e562]
+              - generic [ref=e567] [cursor=pointer]:
+                - generic [ref=e568]:
+                  - img [ref=e569]
+                  - generic [ref=e573]: delete-share-1768570217476.txt
+                  - button "즐겨찾기 추가" [ref=e574]:
+                    - img [ref=e575]
+                - generic [ref=e577]: 17 B
+                - generic "2026년 1월 16일 금 오후 10:30:18" [ref=e578]: 4분 전
+                - button [ref=e580]:
+                  - img [ref=e581]
+              - generic [ref=e586] [cursor=pointer]:
+                - generic [ref=e587]:
+                  - img [ref=e588]
+                  - generic [ref=e592]: delete-test-1768356520480.txt
+                  - button "즐겨찾기 추가" [ref=e593]:
+                    - img [ref=e594]
+                - generic [ref=e596]: 19 B
+                - generic "2026년 1월 14일 수 오전 11:09:08" [ref=e597]: 2026년 1월 14일
+                - button [ref=e599]:
+                  - img [ref=e600]
+              - generic [ref=e605] [cursor=pointer]:
+                - generic [ref=e606]:
+                  - img [ref=e607]
+                  - generic [ref=e611]: delete-test-1768356690199.txt
+                  - button "즐겨찾기 추가" [ref=e612]:
+                    - img [ref=e613]
+                - generic [ref=e615]: 19 B
+                - generic "2026년 1월 14일 수 오전 11:11:38" [ref=e616]: 2026년 1월 14일
+                - button [ref=e618]:
+                  - img [ref=e619]
+              - generic [ref=e624] [cursor=pointer]:
+                - generic [ref=e625]:
+                  - img [ref=e626]
+                  - generic [ref=e630]: delete-test-1768569761609.txt
+                  - button "즐겨찾기 추가" [ref=e631]:
+                    - img [ref=e632]
+                - generic [ref=e634]: 19 B
+                - generic "2026년 1월 16일 금 오후 10:22:42" [ref=e635]: 12분 전
+                - button [ref=e637]:
+                  - img [ref=e638]
+              - generic [ref=e643] [cursor=pointer]:
+                - generic [ref=e644]:
+                  - img [ref=e645]
+                  - generic [ref=e649]: delete-test-1768570488183.txt
+                  - button "즐겨찾기 추가" [ref=e650]:
+                    - img [ref=e651]
+                - generic [ref=e653]: 19 B
+                - generic "2026년 1월 16일 금 오후 10:34:49" [ref=e654]: 방금 전
+                - button [ref=e656]:
+                  - img [ref=e657]
+              - generic [ref=e662] [cursor=pointer]:
+                - generic [ref=e663]:
+                  - img [ref=e664]
+                  - generic [ref=e668]: download-test-1768356520737.txt
+                  - button "즐겨찾기 추가" [ref=e669]:
+                    - img [ref=e670]
+                - generic [ref=e672]: 21 B
+                - generic "2026년 1월 14일 수 오전 11:09:08" [ref=e673]: 2026년 1월 14일
+                - button [ref=e675]:
+                  - img [ref=e676]
+              - generic [ref=e681] [cursor=pointer]:
+                - generic [ref=e682]:
+                  - img [ref=e683]
+                  - generic [ref=e687]: download-test-1768569875233.txt
+                  - button "즐겨찾기 추가" [ref=e688]:
+                    - img [ref=e689]
+                - generic [ref=e691]: 21 B
+                - generic "2026년 1월 16일 금 오후 10:24:36" [ref=e692]: 10분 전
+                - button [ref=e694]:
+                  - img [ref=e695]
+              - generic [ref=e700] [cursor=pointer]:
+                - generic [ref=e701]:
+                  - img [ref=e702]
+                  - generic [ref=e708]: download_20251229_040454.zip
+                  - button "즐겨찾기 추가" [ref=e709]:
+                    - img [ref=e710]
+                - generic [ref=e712]: 537.3 KB
+                - generic "2026년 1월 9일 금 오후 08:22:06" [ref=e713]: 2026년 1월 9일
+                - button [ref=e715]:
+                  - img [ref=e716]
+              - generic [ref=e721] [cursor=pointer]:
+                - generic [ref=e722]:
+                  - img [ref=e723]
+                  - generic [ref=e727]: drag-drop-1768565844615.txt
+                  - button "즐겨찾기 추가" [ref=e728]:
+                    - img [ref=e729]
+                - generic [ref=e731]: 21 B
+                - generic "2026년 1월 16일 금 오후 09:17:25" [ref=e732]: 1시간 전
+                - button [ref=e734]:
+                  - img [ref=e735]
+              - generic [ref=e740] [cursor=pointer]:
+                - generic [ref=e741]:
+                  - img [ref=e742]
+                  - generic [ref=e746]: drag-drop-1768569931495.txt
+                  - button "즐겨찾기 추가" [ref=e747]:
+                    - img [ref=e748]
+                - generic [ref=e750]: 21 B
+                - generic "2026년 1월 16일 금 오후 10:25:32" [ref=e751]: 9분 전
+                - button [ref=e753]:
+                  - img [ref=e754]
+              - generic [ref=e759] [cursor=pointer]:
+                - generic [ref=e760]:
+                  - img [ref=e761]
+                  - generic [ref=e765]: Everything-1.4.1.1030.x64.Lite-Setup.exe
+                  - button "즐겨찾기 추가" [ref=e766]:
+                    - img [ref=e767]
+                - generic [ref=e769]: 1.9 MB
+                - generic "2026년 1월 9일 금 오후 08:22:06" [ref=e770]: 2026년 1월 9일
+                - button [ref=e772]:
+                  - img [ref=e773]
+              - generic [ref=e778] [cursor=pointer]:
+                - generic [ref=e779]:
+                  - img [ref=e780]
+                  - generic [ref=e784]: expiring-share-1768565856548.txt
+                  - button "즐겨찾기 추가" [ref=e785]:
+                    - img [ref=e786]
+                - generic [ref=e788]: 22 B
+                - generic "2026년 1월 16일 금 오후 09:17:43" [ref=e789]: 1시간 전
+                - button [ref=e791]:
+                  - img [ref=e792]
+              - generic [ref=e797] [cursor=pointer]:
+                - generic [ref=e798]:
+                  - img [ref=e799]
+                  - generic [ref=e803]: expiring-share-1768565856548[1].txt
+                  - button "즐겨찾기 추가" [ref=e804]:
+                    - img [ref=e805]
+                - generic [ref=e807]: 22 B
+                - generic "2026년 1월 16일 금 오후 09:17:43" [ref=e808]: 1시간 전
+                - button [ref=e810]:
+                  - img [ref=e811]
+              - generic [ref=e816] [cursor=pointer]:
+                - generic [ref=e817]:
+                  - img [ref=e818]
+                  - generic [ref=e822]: expiring-share-1768566673451.txt
+                  - button "즐겨찾기 추가" [ref=e823]:
+                    - img [ref=e824]
+                - generic [ref=e826]: 22 B
+                - generic "2026년 1월 16일 금 오후 09:31:23" [ref=e827]: 1시간 전
+                - button [ref=e829]:
+                  - img [ref=e830]
+              - generic [ref=e835] [cursor=pointer]:
+                - generic [ref=e836]:
+                  - img [ref=e837]
+                  - generic [ref=e841]: expiring-share-1768566673451[1].txt
+                  - button "즐겨찾기 추가" [ref=e842]:
+                    - img [ref=e843]
+                - generic [ref=e845]: 22 B
+                - generic "2026년 1월 16일 금 오후 09:31:23" [ref=e846]: 1시간 전
+                - button [ref=e848]:
+                  - img [ref=e849]
+              - generic [ref=e854] [cursor=pointer]:
+                - generic [ref=e855]:
+                  - img [ref=e856]
+                  - generic [ref=e860]: expiring-share-1768568321750.txt
+                  - button "즐겨찾기 추가" [ref=e861]:
+                    - img [ref=e862]
+                - generic [ref=e864]: 22 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e865]: 35분 전
+                - button [ref=e867]:
+                  - img [ref=e868]
+              - generic [ref=e873] [cursor=pointer]:
+                - generic [ref=e874]:
+                  - img [ref=e875]
+                  - generic [ref=e879]: expiring-share-1768568321750[1].txt
+                  - button "즐겨찾기 추가" [ref=e880]:
+                    - img [ref=e881]
+                - generic [ref=e883]: 22 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e884]: 35분 전
+                - button [ref=e886]:
+                  - img [ref=e887]
+              - generic [ref=e892] [cursor=pointer]:
+                - generic [ref=e893]:
+                  - img [ref=e894]
+                  - generic [ref=e898]: expiring-share-1768570103963.txt
+                  - button "즐겨찾기 추가" [ref=e899]:
+                    - img [ref=e900]
+                - generic [ref=e902]: 22 B
+                - generic "2026년 1월 16일 금 오후 10:28:25" [ref=e903]: 6분 전
+                - button [ref=e905]:
+                  - img [ref=e906]
+              - generic [ref=e911] [cursor=pointer]:
+                - generic [ref=e912]:
+                  - img [ref=e913]
+                  - generic [ref=e917]: multi-select-1-1768356520625.txt
+                  - button "즐겨찾기 추가" [ref=e918]:
+                    - img [ref=e919]
+                - generic [ref=e921]: 19 B
+                - generic "2026년 1월 14일 수 오전 11:09:08" [ref=e922]: 2026년 1월 14일
+                - button [ref=e924]:
+                  - img [ref=e925]
+              - generic [ref=e930] [cursor=pointer]:
+                - generic [ref=e931]:
+                  - img [ref=e932]
+                  - generic [ref=e936]: multi-select-1-1768565835055.txt
+                  - button "즐겨찾기 추가" [ref=e937]:
+                    - img [ref=e938]
+                - generic [ref=e940]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:17:26" [ref=e941]: 1시간 전
+                - button [ref=e943]:
+                  - img [ref=e944]
+              - generic [ref=e949] [cursor=pointer]:
+                - generic [ref=e950]:
+                  - img [ref=e951]
+                  - generic [ref=e955]: multi-select-1-1768565835055[1].txt
+                  - button "즐겨찾기 추가" [ref=e956]:
+                    - img [ref=e957]
+                - generic [ref=e959]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:17:26" [ref=e960]: 1시간 전
+                - button [ref=e962]:
+                  - img [ref=e963]
+              - generic [ref=e968] [cursor=pointer]:
+                - generic [ref=e969]:
+                  - img [ref=e970]
+                  - generic [ref=e974]: multi-select-1-1768566647853.txt
+                  - button "즐겨찾기 추가" [ref=e975]:
+                    - img [ref=e976]
+                - generic [ref=e978]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:31:07" [ref=e979]: 1시간 전
+                - button [ref=e981]:
+                  - img [ref=e982]
+              - generic [ref=e987] [cursor=pointer]:
+                - generic [ref=e988]:
+                  - img [ref=e989]
+                  - generic [ref=e993]: multi-select-1-1768566647853[1].txt
+                  - button "즐겨찾기 추가" [ref=e994]:
+                    - img [ref=e995]
+                - generic [ref=e997]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:31:07" [ref=e998]: 1시간 전
+                - button [ref=e1000]:
+                  - img [ref=e1001]
+              - generic [ref=e1006] [cursor=pointer]:
+                - generic [ref=e1007]:
+                  - img [ref=e1008]
+                  - generic [ref=e1012]: multi-select-1-1768568305454.txt
+                  - button "즐겨찾기 추가" [ref=e1013]:
+                    - img [ref=e1014]
+                - generic [ref=e1016]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e1017]: 35분 전
+                - button [ref=e1019]:
+                  - img [ref=e1020]
+              - generic [ref=e1025] [cursor=pointer]:
+                - generic [ref=e1026]:
+                  - img [ref=e1027]
+                  - generic [ref=e1031]: multi-select-1-1768568305454[1].txt
+                  - button "즐겨찾기 추가" [ref=e1032]:
+                    - img [ref=e1033]
+                - generic [ref=e1035]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e1036]: 35분 전
+                - button [ref=e1038]:
+                  - img [ref=e1039]
+              - generic [ref=e1044] [cursor=pointer]:
+                - generic [ref=e1045]:
+                  - img [ref=e1046]
+                  - generic [ref=e1050]: multi-select-1-1768569818749.txt
+                  - button "즐겨찾기 추가" [ref=e1051]:
+                    - img [ref=e1052]
+                - generic [ref=e1054]: 19 B
+                - generic "2026년 1월 16일 금 오후 10:23:39" [ref=e1055]: 11분 전
+                - button [ref=e1057]:
+                  - img [ref=e1058]
+              - generic [ref=e1063] [cursor=pointer]:
+                - generic [ref=e1064]:
+                  - img [ref=e1065]
+                  - generic [ref=e1069]: multi-select-2-1768356520625.txt
+                  - button "즐겨찾기 추가" [ref=e1070]:
+                    - img [ref=e1071]
+                - generic [ref=e1073]: 19 B
+                - generic "2026년 1월 14일 수 오전 11:09:10" [ref=e1074]: 2026년 1월 14일
+                - button [ref=e1076]:
+                  - img [ref=e1077]
+              - generic [ref=e1082] [cursor=pointer]:
+                - generic [ref=e1083]:
+                  - img [ref=e1084]
+                  - generic [ref=e1088]: multi-select-2-1768565835055.txt
+                  - button "즐겨찾기 추가" [ref=e1089]:
+                    - img [ref=e1090]
+                - generic [ref=e1092]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:17:29" [ref=e1093]: 1시간 전
+                - button [ref=e1095]:
+                  - img [ref=e1096]
+              - generic [ref=e1101] [cursor=pointer]:
+                - generic [ref=e1102]:
+                  - img [ref=e1103]
+                  - generic [ref=e1107]: multi-select-2-1768565835055[1].txt
+                  - button "즐겨찾기 추가" [ref=e1108]:
+                    - img [ref=e1109]
+                - generic [ref=e1111]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:17:29" [ref=e1112]: 1시간 전
+                - button [ref=e1114]:
+                  - img [ref=e1115]
+              - generic [ref=e1120] [cursor=pointer]:
+                - generic [ref=e1121]:
+                  - img [ref=e1122]
+                  - generic [ref=e1126]: multi-select-2-1768566647853.txt
+                  - button "즐겨찾기 추가" [ref=e1127]:
+                    - img [ref=e1128]
+                - generic [ref=e1130]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:31:09" [ref=e1131]: 1시간 전
+                - button [ref=e1133]:
+                  - img [ref=e1134]
+              - generic [ref=e1139] [cursor=pointer]:
+                - generic [ref=e1140]:
+                  - img [ref=e1141]
+                  - generic [ref=e1145]: multi-select-2-1768568305454.txt
+                  - button "즐겨찾기 추가" [ref=e1146]:
+                    - img [ref=e1147]
+                - generic [ref=e1149]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:59:14" [ref=e1150]: 35분 전
+                - button [ref=e1152]:
+                  - img [ref=e1153]
+              - generic [ref=e1158] [cursor=pointer]:
+                - generic [ref=e1159]:
+                  - generic [ref=e1161]: NPG_logo-removebg-preview (1).png
+                  - button "즐겨찾기 추가" [ref=e1162]:
+                    - img [ref=e1163]
+                - generic [ref=e1165]: 179.1 KB
+                - generic "2026년 1월 9일 금 오후 08:22:06" [ref=e1166]: 2026년 1월 9일
+                - button [ref=e1168]:
+                  - img [ref=e1169]
+              - generic [ref=e1174] [cursor=pointer]:
+                - generic [ref=e1175]:
+                  - generic [ref=e1177]: NPG_logo-removebg-preview (1)[1].png
+                  - button "즐겨찾기 추가" [ref=e1178]:
+                    - img [ref=e1179]
+                - generic [ref=e1181]: 179.1 KB
+                - generic "2026년 1월 9일 금 오후 08:22:06" [ref=e1182]: 2026년 1월 9일
+                - button [ref=e1184]:
+                  - img [ref=e1185]
+              - generic [ref=e1190] [cursor=pointer]:
+                - generic [ref=e1191]:
+                  - img [ref=e1192]
+                  - generic [ref=e1196]: protected-share-1768565853042.txt
+                  - button "즐겨찾기 추가" [ref=e1197]:
+                    - img [ref=e1198]
+                - generic [ref=e1200]: 23 B
+                - generic "2026년 1월 16일 금 오후 09:17:43" [ref=e1201]: 1시간 전
+                - button [ref=e1203]:
+                  - img [ref=e1204]
+              - generic [ref=e1209] [cursor=pointer]:
+                - generic [ref=e1210]:
+                  - img [ref=e1211]
+                  - generic [ref=e1215]: protected-share-1768565853042[1].txt
+                  - button "즐겨찾기 추가" [ref=e1216]:
+                    - img [ref=e1217]
+                - generic [ref=e1219]: 23 B
+                - generic "2026년 1월 16일 금 오후 09:17:43" [ref=e1220]: 1시간 전
+                - button [ref=e1222]:
+                  - img [ref=e1223]
+              - generic [ref=e1228] [cursor=pointer]:
+                - generic [ref=e1229]:
+                  - img [ref=e1230]
+                  - generic [ref=e1234]: protected-share-1768566673365.txt
+                  - button "즐겨찾기 추가" [ref=e1235]:
+                    - img [ref=e1236]
+                - generic [ref=e1238]: 23 B
+                - generic "2026년 1월 16일 금 오후 09:31:23" [ref=e1239]: 1시간 전
+                - button [ref=e1241]:
+                  - img [ref=e1242]
+              - generic [ref=e1247] [cursor=pointer]:
+                - generic [ref=e1248]:
+                  - img [ref=e1249]
+                  - generic [ref=e1253]: protected-share-1768566673365[1].txt
+                  - button "즐겨찾기 추가" [ref=e1254]:
+                    - img [ref=e1255]
+                - generic [ref=e1257]: 23 B
+                - generic "2026년 1월 16일 금 오후 09:31:23" [ref=e1258]: 1시간 전
+                - button [ref=e1260]:
+                  - img [ref=e1261]
+              - generic [ref=e1266] [cursor=pointer]:
+                - generic [ref=e1267]:
+                  - img [ref=e1268]
+                  - generic [ref=e1272]: protected-share-1768568314108.txt
+                  - button "즐겨찾기 추가" [ref=e1273]:
+                    - img [ref=e1274]
+                - generic [ref=e1276]: 23 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e1277]: 35분 전
+                - button [ref=e1279]:
+                  - img [ref=e1280]
+              - generic [ref=e1285] [cursor=pointer]:
+                - generic [ref=e1286]:
+                  - img [ref=e1287]
+                  - generic [ref=e1291]: protected-share-1768568314108[1].txt
+                  - button "즐겨찾기 추가" [ref=e1292]:
+                    - img [ref=e1293]
+                - generic [ref=e1295]: 23 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e1296]: 35분 전
+                - button [ref=e1298]:
+                  - img [ref=e1299]
+              - generic [ref=e1304] [cursor=pointer]:
+                - generic [ref=e1305]:
+                  - img [ref=e1306]
+                  - generic [ref=e1310]: protected-share-1768570045344.txt
+                  - button "즐겨찾기 추가" [ref=e1311]:
+                    - img [ref=e1312]
+                - generic [ref=e1314]: 23 B
+                - generic "2026년 1월 16일 금 오후 10:27:26" [ref=e1315]: 7분 전
+                - button [ref=e1317]:
+                  - img [ref=e1318]
+              - generic [ref=e1323] [cursor=pointer]:
+                - generic [ref=e1324]:
+                  - img [ref=e1325]
+                  - generic [ref=e1329]: rename-test-1768356520436.txt
+                  - button "즐겨찾기 추가" [ref=e1330]:
+                    - img [ref=e1331]
+                - generic [ref=e1333]: 19 B
+                - generic "2026년 1월 14일 수 오전 11:09:08" [ref=e1334]: 2026년 1월 14일
+                - button [ref=e1336]:
+                  - img [ref=e1337]
+              - generic [ref=e1342] [cursor=pointer]:
+                - generic [ref=e1343]:
+                  - img [ref=e1344]
+                  - generic [ref=e1348]: rename-test-1768356690214.txt
+                  - button "즐겨찾기 추가" [ref=e1349]:
+                    - img [ref=e1350]
+                - generic [ref=e1352]: 19 B
+                - generic "2026년 1월 14일 수 오전 11:11:38" [ref=e1353]: 2026년 1월 14일
+                - button [ref=e1355]:
+                  - img [ref=e1356]
+              - generic [ref=e1361] [cursor=pointer]:
+                - generic [ref=e1362]:
+                  - img [ref=e1363]
+                  - generic [ref=e1367]: rename-test-1768356979220.txt
+                  - button "즐겨찾기 추가" [ref=e1368]:
+                    - img [ref=e1369]
+                - generic [ref=e1371]: 19 B
+                - generic "2026년 1월 14일 수 오전 11:16:22" [ref=e1372]: 2026년 1월 14일
+                - button [ref=e1374]:
+                  - img [ref=e1375]
+              - generic [ref=e1380] [cursor=pointer]:
+                - generic [ref=e1381]:
+                  - img [ref=e1382]
+                  - generic [ref=e1386]: rename-test-1768356979220[1].txt
+                  - button "즐겨찾기 추가" [ref=e1387]:
+                    - img [ref=e1388]
+                - generic [ref=e1390]: 19 B
+                - generic "2026년 1월 14일 수 오전 11:16:23" [ref=e1391]: 2026년 1월 14일
+                - button [ref=e1393]:
+                  - img [ref=e1394]
+              - generic [ref=e1399] [cursor=pointer]:
+                - generic [ref=e1400]:
+                  - img [ref=e1401]
+                  - generic [ref=e1405]: rename-test-1768357031764.txt
+                  - button "즐겨찾기 추가" [ref=e1406]:
+                    - img [ref=e1407]
+                - generic [ref=e1409]: 19 B
+                - generic "2026년 1월 14일 수 오전 11:17:15" [ref=e1410]: 2026년 1월 14일
+                - button [ref=e1412]:
+                  - img [ref=e1413]
+              - generic [ref=e1418] [cursor=pointer]:
+                - generic [ref=e1419]:
+                  - img [ref=e1420]
+                  - generic [ref=e1424]: rename-test-1768357031764[1].txt
+                  - button "즐겨찾기 추가" [ref=e1425]:
+                    - img [ref=e1426]
+                - generic [ref=e1428]: 19 B
+                - generic "2026년 1월 14일 수 오전 11:17:15" [ref=e1429]: 2026년 1월 14일
+                - button [ref=e1431]:
+                  - img [ref=e1432]
+              - generic [ref=e1437] [cursor=pointer]:
+                - generic [ref=e1438]:
+                  - img [ref=e1439]
+                  - generic [ref=e1443]: rename-test-1768548999105[1].txt
+                  - button "즐겨찾기 추가" [ref=e1444]:
+                    - img [ref=e1445]
+                - generic [ref=e1447]: 19 B
+                - generic "2026년 1월 16일 금 오후 04:36:42" [ref=e1448]: 5시간 전
+                - button [ref=e1450]:
+                  - img [ref=e1451]
+              - generic [ref=e1456] [cursor=pointer]:
+                - generic [ref=e1457]:
+                  - img [ref=e1458]
+                  - generic [ref=e1462]: rename-test-1768549040871[1].txt
+                  - button "즐겨찾기 추가" [ref=e1463]:
+                    - img [ref=e1464]
+                - generic [ref=e1466]: 19 B
+                - generic "2026년 1월 16일 금 오후 04:37:23" [ref=e1467]: 5시간 전
+                - button [ref=e1469]:
+                  - img [ref=e1470]
+              - generic [ref=e1475] [cursor=pointer]:
+                - generic [ref=e1476]:
+                  - img [ref=e1477]
+                  - generic [ref=e1481]: rename-test-1768565821547[1].txt
+                  - button "즐겨찾기 추가" [ref=e1482]:
+                    - img [ref=e1483]
+                - generic [ref=e1485]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:17:26" [ref=e1486]: 1시간 전
+                - button [ref=e1488]:
+                  - img [ref=e1489]
+              - generic [ref=e1494] [cursor=pointer]:
+                - generic [ref=e1495]:
+                  - img [ref=e1496]
+                  - generic [ref=e1500]: rename-test-1768566641195[1].txt
+                  - button "즐겨찾기 추가" [ref=e1501]:
+                    - img [ref=e1502]
+                - generic [ref=e1504]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:31:07" [ref=e1505]: 1시간 전
+                - button [ref=e1507]:
+                  - img [ref=e1508]
+              - generic [ref=e1513] [cursor=pointer]:
+                - generic [ref=e1514]:
+                  - img [ref=e1515]
+                  - generic [ref=e1519]: rename-test-1768569754910[1].txt
+                  - button "즐겨찾기 추가" [ref=e1520]:
+                    - img [ref=e1521]
+                - generic [ref=e1523]: 19 B
+                - generic "2026년 1월 16일 금 오후 10:22:38" [ref=e1524]: 12분 전
+                - button [ref=e1526]:
+                  - img [ref=e1527]
+              - generic [ref=e1532] [cursor=pointer]:
+                - generic [ref=e1533]:
+                  - img [ref=e1534]
+                  - generic [ref=e1538]: rename-test-1768570481675[1].txt
+                  - button "즐겨찾기 추가" [ref=e1539]:
+                    - img [ref=e1540]
+                - generic [ref=e1542]: 19 B
+                - generic "2026년 1월 16일 금 오후 10:34:45" [ref=e1543]: 방금 전
+                - button [ref=e1545]:
+                  - img [ref=e1546]
+              - generic [ref=e1551] [cursor=pointer]:
+                - generic [ref=e1552]:
+                  - img [ref=e1553]
+                  - generic [ref=e1557]: renamed-1768548999105.txt
+                  - button "즐겨찾기 추가" [ref=e1558]:
+                    - img [ref=e1559]
+                - generic [ref=e1561]: 19 B
+                - generic "2026년 1월 16일 금 오후 04:36:42" [ref=e1562]: 5시간 전
+                - button [ref=e1564]:
+                  - img [ref=e1565]
+              - generic [ref=e1570] [cursor=pointer]:
+                - generic [ref=e1571]:
+                  - img [ref=e1572]
+                  - generic [ref=e1576]: renamed-1768549040871.txt
+                  - button "즐겨찾기 추가" [ref=e1577]:
+                    - img [ref=e1578]
+                - generic [ref=e1580]: 19 B
+                - generic "2026년 1월 16일 금 오후 04:37:23" [ref=e1581]: 5시간 전
+                - button [ref=e1583]:
+                  - img [ref=e1584]
+              - generic [ref=e1589] [cursor=pointer]:
+                - generic [ref=e1590]:
+                  - img [ref=e1591]
+                  - generic [ref=e1595]: renamed-1768565821547.txt
+                  - button "즐겨찾기 추가" [ref=e1596]:
+                    - img [ref=e1597]
+                - generic [ref=e1599]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:17:26" [ref=e1600]: 1시간 전
+                - button [ref=e1602]:
+                  - img [ref=e1603]
+              - generic [ref=e1608] [cursor=pointer]:
+                - generic [ref=e1609]:
+                  - img [ref=e1610]
+                  - generic [ref=e1614]: renamed-1768566641195.txt
+                  - button "즐겨찾기 추가" [ref=e1615]:
+                    - img [ref=e1616]
+                - generic [ref=e1618]: 19 B
+                - generic "2026년 1월 16일 금 오후 09:31:07" [ref=e1619]: 1시간 전
+                - button [ref=e1621]:
+                  - img [ref=e1622]
+              - generic [ref=e1627] [cursor=pointer]:
+                - generic [ref=e1628]:
+                  - img [ref=e1629]
+                  - generic [ref=e1633]: renamed-1768569754910.txt
+                  - button "즐겨찾기 추가" [ref=e1634]:
+                    - img [ref=e1635]
+                - generic [ref=e1637]: 19 B
+                - generic "2026년 1월 16일 금 오후 10:22:38" [ref=e1638]: 12분 전
+                - button [ref=e1640]:
+                  - img [ref=e1641]
+              - generic [ref=e1646] [cursor=pointer]:
+                - generic [ref=e1647]:
+                  - img [ref=e1648]
+                  - generic [ref=e1652]: renamed-1768570481675.txt
+                  - button "즐겨찾기 추가" [ref=e1653]:
+                    - img [ref=e1654]
+                - generic [ref=e1656]: 19 B
+                - generic "2026년 1월 16일 금 오후 10:34:45" [ref=e1657]: 방금 전
+                - button [ref=e1659]:
+                  - img [ref=e1660]
+              - generic [ref=e1665] [cursor=pointer]:
+                - generic [ref=e1666]:
+                  - img [ref=e1667]
+                  - generic [ref=e1671]: rufus-3.22p (1).exe
+                  - button "즐겨찾기 추가" [ref=e1672]:
+                    - img [ref=e1673]
+                - generic [ref=e1675]: 1.4 MB
+                - generic "2026년 1월 9일 금 오후 08:22:06" [ref=e1676]: 2026년 1월 9일
+                - button [ref=e1678]:
+                  - img [ref=e1679]
+              - generic [ref=e1684] [cursor=pointer]:
+                - generic [ref=e1685]:
+                  - img [ref=e1686]
+                  - generic [ref=e1690]: rufus-3.22p (2).exe
+                  - button "즐겨찾기 추가" [ref=e1691]:
+                    - img [ref=e1692]
+                - generic [ref=e1694]: 1.4 MB
+                - generic "2026년 1월 9일 금 오후 08:22:06" [ref=e1695]: 2026년 1월 9일
+                - button [ref=e1697]:
+                  - img [ref=e1698]
+              - generic [ref=e1703] [cursor=pointer]:
+                - generic [ref=e1704]:
+                  - img [ref=e1705]
+                  - generic [ref=e1709]: rufus-3.22p.exe
+                  - button "즐겨찾기 추가" [ref=e1710]:
+                    - img [ref=e1711]
+                - generic [ref=e1713]: 1.4 MB
+                - generic "2026년 1월 9일 금 오후 08:22:06" [ref=e1714]: 2026년 1월 9일
+                - button [ref=e1716]:
+                  - img [ref=e1717]
+              - generic [ref=e1722] [cursor=pointer]:
+                - generic [ref=e1723]:
+                  - img [ref=e1724]
+                  - generic [ref=e1728]: searchable-1768356523492.txt
+                  - button "즐겨찾기 추가" [ref=e1729]:
+                    - img [ref=e1730]
+                - generic [ref=e1732]: 18 B
+                - generic "2026년 1월 14일 수 오전 11:09:08" [ref=e1733]: 2026년 1월 14일
+                - button [ref=e1735]:
+                  - img [ref=e1736]
+              - generic [ref=e1741] [cursor=pointer]:
+                - generic [ref=e1742]:
+                  - img [ref=e1743]
+                  - generic [ref=e1747]: searchable-1768565845702.txt
+                  - button "즐겨찾기 추가" [ref=e1748]:
+                    - img [ref=e1749]
+                - generic [ref=e1751]: 18 B
+                - generic "2026년 1월 16일 금 오후 09:17:30" [ref=e1752]: 1시간 전
+                - button [ref=e1754]:
+                  - img [ref=e1755]
+              - generic [ref=e1760] [cursor=pointer]:
+                - generic [ref=e1761]:
+                  - img [ref=e1762]
+                  - generic [ref=e1766]: searchable-1768565845702[1].txt
+                  - button "즐겨찾기 추가" [ref=e1767]:
+                    - img [ref=e1768]
+                - generic [ref=e1770]: 18 B
+                - generic "2026년 1월 16일 금 오후 09:17:30" [ref=e1771]: 1시간 전
+                - button [ref=e1773]:
+                  - img [ref=e1774]
+              - generic [ref=e1779] [cursor=pointer]:
+                - generic [ref=e1780]:
+                  - img [ref=e1781]
+                  - generic [ref=e1785]: searchable-1768566663410.txt
+                  - button "즐겨찾기 추가" [ref=e1786]:
+                    - img [ref=e1787]
+                - generic [ref=e1789]: 18 B
+                - generic "2026년 1월 16일 금 오후 09:31:07" [ref=e1790]: 1시간 전
+                - button [ref=e1792]:
+                  - img [ref=e1793]
+              - generic [ref=e1798] [cursor=pointer]:
+                - generic [ref=e1799]:
+                  - img [ref=e1800]
+                  - generic [ref=e1804]: searchable-1768566663410[1].txt
+                  - button "즐겨찾기 추가" [ref=e1805]:
+                    - img [ref=e1806]
+                - generic [ref=e1808]: 18 B
+                - generic "2026년 1월 16일 금 오후 09:31:07" [ref=e1809]: 1시간 전
+                - button [ref=e1811]:
+                  - img [ref=e1812]
+              - generic [ref=e1817] [cursor=pointer]:
+                - generic [ref=e1818]:
+                  - img [ref=e1819]
+                  - generic [ref=e1823]: searchable-1768568315321.txt
+                  - button "즐겨찾기 추가" [ref=e1824]:
+                    - img [ref=e1825]
+                - generic [ref=e1827]: 18 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e1828]: 35분 전
+                - button [ref=e1830]:
+                  - img [ref=e1831]
+              - generic [ref=e1836] [cursor=pointer]:
+                - generic [ref=e1837]:
+                  - img [ref=e1838]
+                  - generic [ref=e1842]: searchable-1768568315321[1].txt
+                  - button "즐겨찾기 추가" [ref=e1843]:
+                    - img [ref=e1844]
+                - generic [ref=e1846]: 18 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e1847]: 35분 전
+                - button [ref=e1849]:
+                  - img [ref=e1850]
+              - generic [ref=e1855] [cursor=pointer]:
+                - generic [ref=e1856]:
+                  - img [ref=e1857]
+                  - generic [ref=e1861]: searchable-1768569932693.txt
+                  - button "즐겨찾기 추가" [ref=e1862]:
+                    - img [ref=e1863]
+                - generic [ref=e1865]: 18 B
+                - generic "2026년 1월 16일 금 오후 10:25:36" [ref=e1866]: 9분 전
+                - button [ref=e1868]:
+                  - img [ref=e1869]
+              - generic [ref=e1874] [cursor=pointer]:
+                - generic [ref=e1875]:
+                  - img [ref=e1876]
+                  - generic [ref=e1880]: searchable-1768569932693[1].txt
+                  - button "즐겨찾기 추가" [ref=e1881]:
+                    - img [ref=e1882]
+                - generic [ref=e1884]: 18 B
+                - generic "2026년 1월 16일 금 오후 10:25:36" [ref=e1885]: 9분 전
+                - button [ref=e1887]:
+                  - img [ref=e1888]
+              - generic [ref=e1893] [cursor=pointer]:
+                - generic [ref=e1894]:
+                  - img [ref=e1895]
+                  - generic [ref=e1899]: share-test-1768565851999.txt
+                  - button "즐겨찾기 추가" [ref=e1900]:
+                    - img [ref=e1901]
+                - generic [ref=e1903]: 18 B
+                - generic "2026년 1월 16일 금 오후 09:17:43" [ref=e1904]: 1시간 전
+                - button [ref=e1906]:
+                  - img [ref=e1907]
+              - generic [ref=e1912] [cursor=pointer]:
+                - generic [ref=e1913]:
+                  - img [ref=e1914]
+                  - generic [ref=e1918]: share-test-1768565851999[1].txt
+                  - button "즐겨찾기 추가" [ref=e1919]:
+                    - img [ref=e1920]
+                - generic [ref=e1922]: 18 B
+                - generic "2026년 1월 16일 금 오후 09:17:43" [ref=e1923]: 1시간 전
+                - button [ref=e1925]:
+                  - img [ref=e1926]
+              - generic [ref=e1931] [cursor=pointer]:
+                - generic [ref=e1932]:
+                  - img [ref=e1933]
+                  - generic [ref=e1937]: share-test-1768566669841.txt
+                  - button "즐겨찾기 추가" [ref=e1938]:
+                    - img [ref=e1939]
+                - generic [ref=e1941]: 18 B
+                - generic "2026년 1월 16일 금 오후 09:31:11" [ref=e1942]: 1시간 전
+                - button [ref=e1944]:
+                  - img [ref=e1945]
+              - generic [ref=e1950] [cursor=pointer]:
+                - generic [ref=e1951]:
+                  - img [ref=e1952]
+                  - generic [ref=e1956]: share-test-1768568315552.txt
+                  - button "즐겨찾기 추가" [ref=e1957]:
+                    - img [ref=e1958]
+                - generic [ref=e1960]: 18 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e1961]: 35분 전
+                - button [ref=e1963]:
+                  - img [ref=e1964]
+              - generic [ref=e1969] [cursor=pointer]:
+                - generic [ref=e1970]:
+                  - img [ref=e1971]
+                  - generic [ref=e1975]: share-test-1768568315552[1].txt
+                  - button "즐겨찾기 추가" [ref=e1976]:
+                    - img [ref=e1977]
+                - generic [ref=e1979]: 18 B
+                - generic "2026년 1월 16일 금 오후 09:59:12" [ref=e1980]: 35분 전
+                - button [ref=e1982]:
+                  - img [ref=e1983]
+              - generic [ref=e1988] [cursor=pointer]:
+                - generic [ref=e1989]:
+                  - img [ref=e1990]
+                  - generic [ref=e1994]: share-test-1768569989046.txt
+                  - button "즐겨찾기 추가" [ref=e1995]:
+                    - img [ref=e1996]
+                - generic [ref=e1998]: 18 B
+                - generic "2026년 1월 16일 금 오후 10:26:30" [ref=e1999]: 8분 전
+                - button [ref=e2001]:
+                  - img [ref=e2002]
+              - generic [ref=e2007] [cursor=pointer]:
+                - generic [ref=e2008]:
+                  - img [ref=e2009]
+                  - generic [ref=e2013]: SnipIt.exe
+                  - button "즐겨찾기 추가" [ref=e2014]:
+                    - img [ref=e2015]
+                - generic [ref=e2017]: 77.8 MB
+                - generic "2026년 1월 9일 금 오후 08:22:07" [ref=e2018]: 2026년 1월 9일
+                - button [ref=e2020]:
+                  - img [ref=e2021]
+              - generic [ref=e2026] [cursor=pointer]:
+                - generic [ref=e2027]:
+                  - generic [ref=e2029]: unraid_licence.png
+                  - button "즐겨찾기 추가" [ref=e2030]:
+                    - img [ref=e2031]
+                - generic [ref=e2033]: 612.3 KB
+                - generic "2026년 1월 9일 금 오후 08:22:06" [ref=e2034]: 2026년 1월 9일
+                - button [ref=e2036]:
+                  - img [ref=e2037]
+              - generic [ref=e2042] [cursor=pointer]:
+                - generic [ref=e2043]:
+                  - img [ref=e2044]
+                  - generic [ref=e2048]: upload_test_1767887280.txt
+                  - button "즐겨찾기 추가" [ref=e2049]:
+                    - img [ref=e2050]
+                - generic [ref=e2052]: 44 B
+                - generic "2026년 1월 14일 수 오전 01:15:16" [ref=e2053]: 2026년 1월 14일
+                - button [ref=e2055]:
+                  - img [ref=e2056]
+              - generic [ref=e2061] [cursor=pointer]:
+                - generic [ref=e2062]:
+                  - img [ref=e2063]:
+                    - generic [ref=e2066]: W
+                  - generic [ref=e2067]: 새 파일.docx
+                  - button "즐겨찾기 추가" [ref=e2068]:
+                    - img [ref=e2069]
+                - generic [ref=e2071]: 1.2 KB
+                - generic "2026년 1월 9일 금 오전 12:59:18" [ref=e2072]: 2026년 1월 9일
+                - button [ref=e2074]:
+                  - img [ref=e2075]
+        - generic [ref=e2080]:
+          - img [ref=e2081]
+          - paragraph [ref=e2084]:
+            - text: 파일을 선택하면
+            - text: 상세 정보가 표시됩니다
+```

@@ -31,14 +31,14 @@ func NewTOTPHandler(db *sql.DB, auditHandler *AuditHandler) *TOTPHandler {
 		keyStr = os.Getenv("SMB_ENCRYPTION_KEY")
 	}
 	if keyStr == "" {
-		env := os.Getenv("SCV_ENV")
+		env := os.Getenv("FH_ENV")
 		if env == "production" {
 			// In production, fall back to JWT secret if no specific key
 			keyStr = os.Getenv("JWT_SECRET")
 		}
 		if keyStr == "" {
 			// Development fallback
-			keyStr = "scv-dev-totp-key-not-for-prod-32"
+			keyStr = "fh-dev-totp-key-not-for-prod-32"
 		}
 	}
 

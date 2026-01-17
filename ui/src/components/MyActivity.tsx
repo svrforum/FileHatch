@@ -224,7 +224,7 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
 
     if (!imageExts.includes(ext) && !videoExts.includes(ext)) return
 
-    const authData = localStorage.getItem('scv-auth')
+    const authData = localStorage.getItem('filehatch-auth')
     const token = authData ? JSON.parse(authData).state?.token : null
     const pathWithoutSlash = selectedFile.path.startsWith('/') ? selectedFile.path.slice(1) : selectedFile.path
     const encodedPath = pathWithoutSlash.split('/').map(part =>

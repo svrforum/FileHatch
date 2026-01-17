@@ -149,7 +149,7 @@ if [ ! -f "config/smb.conf" ]; then
     disable spoolss = yes
     log file = /var/log/samba/log.%m
     max log size = 50
-    passdb backend = smbpasswd:/etc/scv/smb_users.txt
+    passdb backend = smbpasswd:/etc/filehatch/smb_users.txt
 
 [home]
     path = /data/users

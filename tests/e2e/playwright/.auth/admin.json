@@ -1,0 +1,14 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:3080",
+      "localStorage": [
+        {
+          "name": "filehatch-auth",
+          "value": "{\"state\":{\"token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2ZmJhNjU0YS0xMTdkLTQ0MWYtOGFmMy01MDQwY2I1MDZhNjQiLCJ1c2VybmFtZSI6ImFkbWluIiwiaXNBZG1pbiI6dHJ1ZSwiaXNzIjoiZmlsZWhhdGNoIiwiZXhwIjoxNzY4NjU2NzMwLCJpYXQiOjE3Njg1NzAzMzB9.iYVYtQOY_xKEJByppsY5YboWTNU5W594Mppa9Y3C2ew\",\"user\":{\"id\":\"6fba654a-117d-441f-8af3-5040cb506a64\",\"username\":\"admin\",\"email\":\"admin@localhost\",\"provider\":\"local\",\"isAdmin\":true,\"isActive\":true,\"hasSmb\":false,\"has2fa\":false,\"storageQuota\":0,\"storageUsed\":0,\"createdAt\":\"2026-01-16T21:15:19.885076+09:00\",\"updatedAt\":\"2026-01-16T22:30:18.779025+09:00\"}},\"version\":0}"
+        }
+      ]
+    }
+  ]
+}

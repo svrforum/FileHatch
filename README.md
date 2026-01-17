@@ -426,9 +426,9 @@ docker compose build --no-cache
 |------|--------|------|
 | `DB_HOST` | db | PostgreSQL 호스트 |
 | `DB_PORT` | 5432 | PostgreSQL 포트 |
-| `DB_USER` | scv_user | 데이터베이스 사용자 |
-| `DB_PASS` | scv_password | 데이터베이스 비밀번호 |
-| `DB_NAME` | scv_main | 데이터베이스 이름 |
+| `DB_USER` | fh_user | 데이터베이스 사용자 |
+| `DB_PASS` | fh_password | 데이터베이스 비밀번호 |
+| `DB_NAME` | fh_main | 데이터베이스 이름 |
 | `VALKEY_HOST` | valkey | Valkey 호스트 |
 | `VALKEY_PORT` | 6379 | Valkey 포트 |
 | `JWT_SECRET` | (자동생성) | JWT 서명 키 (**프로덕션에서 변경 필수**) |
@@ -668,7 +668,7 @@ FileHatch/
 |------|--------|------|----------|
 | `JWT_SECRET` | 개발용 기본값 | JWT 서명 키 (64자 이상 권장) | `openssl rand -hex 32` |
 | `ENCRYPTION_KEY` | 개발용 기본값 | AES-256 암호화 키 | `openssl rand -hex 32` |
-| `DB_PASS` | `scv_password` | PostgreSQL 비밀번호 | `openssl rand -base64 24` |
+| `DB_PASS` | `fh_password` | PostgreSQL 비밀번호 | `openssl rand -base64 24` |
 | `KEYCLOAK_ADMIN_PASSWORD` | `admin123` | Keycloak 관리자 비밀번호 | 강력한 비밀번호 설정 |
 
 > 💡 **팁**: `./scripts/setup.sh` 실행 시 JWT_SECRET, ENCRYPTION_KEY, DB_PASS가 자동으로 안전한 값으로 생성됩니다.
@@ -734,7 +734,7 @@ docker compose down && docker compose up -d
 **Q: 데이터베이스 연결 오류**
 ```bash
 # DB 컨테이너 상태 확인
-docker compose exec db pg_isready -U scv_user -d scv_main
+docker compose exec db pg_isready -U fh_user -d fh_main
 ```
 
 **Q: SMB 접근이 안됩니다.**

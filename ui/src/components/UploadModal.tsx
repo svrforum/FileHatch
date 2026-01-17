@@ -8,7 +8,7 @@ import './UploadModal.css'
 
 // Helper to get auth token
 function getAuthToken(): string | null {
-  const stored = localStorage.getItem('scv-auth')
+  const stored = localStorage.getItem('filehatch-auth')
   if (stored) {
     try {
       const { state } = JSON.parse(stored)

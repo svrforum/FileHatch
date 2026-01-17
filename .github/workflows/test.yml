@@ -119,9 +119,9 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_USER: scv_user
-          POSTGRES_PASSWORD: scv_password
-          POSTGRES_DB: scv_main
+          POSTGRES_USER: fh_user
+          POSTGRES_PASSWORD: fh_password
+          POSTGRES_DB: fh_main
         ports:
           - 5432:5432
         options: >-

@@ -10,7 +10,7 @@
 #
 # 옵션:
 #   -o, --output DIR    백업 저장 경로 (기본: ./backups)
-#   -n, --name NAME     백업 파일 이름 접두사 (기본: scv_backup)
+#   -n, --name NAME     백업 파일 이름 접두사 (기본: fh_backup)
 #   -k, --keep N        보관할 백업 개수 (기본: 10)
 # =============================================================================
 
@@ -31,7 +31,7 @@ cd "$PROJECT_DIR"
 
 # 기본값
 BACKUP_DIR="$PROJECT_DIR/backups"
-BACKUP_PREFIX="scv_backup"
+BACKUP_PREFIX="fh_backup"
 KEEP_COUNT=10
 BACKUP_TYPE="all"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -42,8 +42,8 @@ if [ -f "$PROJECT_DIR/.env" ]; then
 fi
 
 # 기본값 설정
-DB_USER="${DB_USER:-scv_user}"
-DB_NAME="${DB_NAME:-scv_main}"
+DB_USER="${DB_USER:-fh_user}"
+DB_NAME="${DB_NAME:-fh_main}"
 
 # 옵션 파싱
 while [[ $# -gt 0 ]]; do
@@ -102,15 +102,15 @@ backup_database() {
 
     local db_backup="$BACKUP_DIR/${BACKUP_PREFIX}_db_${TIMESTAMP}.sql.gz"
 
-    if docker ps --format '{{.Names}}' | grep -q "scv-db"; then
-        docker exec scv-db pg_dump -U "$DB_USER" -d "$DB_NAME" --no-owner --no-acl | gzip > "$db_backup"
+    if docker ps --format '{{.Names}}' | grep -q "fh-db"; then
+        docker exec fh-db pg_dump -U "$DB_USER" -d "$DB_NAME" --no-owner --no-acl | gzip > "$db_backup"
 
         if [ -f "$db_backup" ]; then
             local size=$(du -h "$db_backup" | cut -f1)
             echo -e "  ${GREEN}✓ 데이터베이스 백업 완료: $(basename $db_backup) ($size)${NC}"
         fi
     else
-        echo -e "  ${RED}✗ scv-db 컨테이너가 실행 중이 아닙니다.${NC}"
+        echo -e "  ${RED}✗ fh-db 컨테이너가 실행 중이 아닙니다.${NC}"
         return 1
     fi
 }

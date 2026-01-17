@@ -428,13 +428,13 @@ func (h *AuditHandler) GetSystemLogs(c echo.Context) error {
 	}
 
 	// Determine which containers to fetch logs from
-	containers := []string{"scv-api", "scv-ui", "scv-db"}
+	containers := []string{"fh-api", "fh-ui", "fh-db"}
 	if container != "" {
 		containerMap := map[string]string{
-			"api":    "scv-api",
-			"ui":     "scv-ui",
-			"db":     "scv-db",
-			"valkey": "scv-valkey",
+			"api":    "fh-api",
+			"ui":     "fh-ui",
+			"db":     "fh-db",
+			"valkey": "fh-valkey",
 		}
 		if mapped, ok := containerMap[container]; ok {
 			containers = []string{mapped}
@@ -483,7 +483,7 @@ func (h *AuditHandler) fetchContainerLogs(container string, tail int, level stri
 	logPattern := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s+(.*)$`)
 	levelPattern := regexp.MustCompile(`(?i)^.*?\b(fatal|error|warn(?:ing)?|info|debug)\b`)
 
-	containerShort := strings.TrimPrefix(container, "scv-")
+	containerShort := strings.TrimPrefix(container, "fh-")
 
 	for scanner.Scan() {
 		line := scanner.Text()

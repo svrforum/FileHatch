@@ -54,7 +54,7 @@ function LoginPage() {
       // Clear URL params
       window.history.replaceState({}, '', '/login')
       // Set token directly to localStorage to ensure it's persisted before navigation
-      localStorage.setItem('scv-auth', JSON.stringify({ state: { token: ssoToken, user: null }, version: 0 }))
+      localStorage.setItem('filehatch-auth', JSON.stringify({ state: { token: ssoToken, user: null }, version: 0 }))
       setToken(ssoToken)
       // Small delay to ensure state is persisted
       setTimeout(() => {

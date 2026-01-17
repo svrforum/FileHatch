@@ -252,7 +252,7 @@ func (h *SSOHandler) HandleCallback(c echo.Context) error {
 		"userId":   user.ID,
 		"username": user.Username,
 		"isAdmin":  user.IsAdmin,
-		"iss":      "simplecloudvault",
+		"iss":      "filehatch",
 		"exp":      time.Now().Add(24 * time.Hour).Unix(),
 		"iat":      time.Now().Unix(),
 	})

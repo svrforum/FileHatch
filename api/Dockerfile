@@ -31,7 +31,7 @@ RUN apk --no-cache add ca-certificates tzdata docker-cli ffmpeg libwebp-tools
 COPY --from=builder /build/main .
 
 # Create data directory
-RUN mkdir -p /data /etc/scv
+RUN mkdir -p /data /etc/filehatch
 
 EXPOSE 8080
 

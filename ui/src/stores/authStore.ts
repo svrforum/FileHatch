@@ -154,7 +154,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'scv-auth',
+      name: 'filehatch-auth',
       partialize: (state) => ({ token: state.token, user: state.user }),
     }
   )

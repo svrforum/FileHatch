@@ -382,7 +382,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
 
           <nav className="nav-menu">
             <Link
-              to="/scvadmin/users"
+              to="/fhadmin/users"
               className={`nav-item ${adminView === 'users' ? 'active' : ''}`}
               onClick={() => onMobileClose?.()}
             >
@@ -390,7 +390,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
               <span>사용자 관리</span>
             </Link>
             <Link
-              to="/scvadmin/shared-folders"
+              to="/fhadmin/shared-folders"
               className={`nav-item ${adminView === 'shared-folders' ? 'active' : ''}`}
               onClick={() => onMobileClose?.()}
             >
@@ -398,7 +398,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
               <span>공유 드라이브</span>
             </Link>
             <Link
-              to="/scvadmin/settings"
+              to="/fhadmin/settings"
               className={`nav-item ${adminView === 'settings' ? 'active' : ''}`}
               onClick={() => onMobileClose?.()}
             >
@@ -406,7 +406,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
               <span>시스템 설정</span>
             </Link>
             <Link
-              to="/scvadmin/sso"
+              to="/fhadmin/sso"
               className={`nav-item ${adminView === 'sso' ? 'active' : ''}`}
               onClick={() => onMobileClose?.()}
             >
@@ -414,7 +414,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
               <span>SSO 설정</span>
             </Link>
             <Link
-              to="/scvadmin/logs"
+              to="/fhadmin/logs"
               className={`nav-item ${adminView === 'logs' ? 'active' : ''}`}
               onClick={() => onMobileClose?.()}
             >
@@ -422,7 +422,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
               <span>감사 로그</span>
             </Link>
             <Link
-              to="/scvadmin/system-info"
+              to="/fhadmin/system-info"
               className={`nav-item ${adminView === 'system-info' ? 'active' : ''}`}
               onClick={() => onMobileClose?.()}
             >

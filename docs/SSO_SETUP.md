@@ -184,7 +184,7 @@ Keycloak 관리 콘솔에서 FileHatch 연동을 위한 설정을 진행합니�
 
 1. 좌측 상단 드롭다운 메뉴에서 **"Create realm"** 클릭
 2. Realm 정보 입력:
-   - **Realm name**: `scv` (또는 원하는 이름)
+   - **Realm name**: `filehatch` (또는 원하는 이름)
 3. **Create** 버튼 클릭
 
 > 💡 **Realm**이란? Keycloak에서 사용자, 클라이언트, 역할 등을 격리하는 단위입니다. 각 Realm은 독립적인 인증 영역입니다.
@@ -195,7 +195,7 @@ Keycloak 관리 콘솔에서 FileHatch 연동을 위한 설정을 진행합니�
 2. **Create client** 버튼 클릭
 3. **General Settings**:
    - **Client type**: OpenID Connect
-   - **Client ID**: `simplecloudvault` (원하는 ID)
+   - **Client ID**: `filehatch` (원하는 ID)
    - **Next** 클릭
 4. **Capability config**:
    - **Client authentication**: ON (활성화)
@@ -256,7 +256,7 @@ docker compose ps keycloak
 ```bash
 # 예: 커스텀 설정으로 실행
 HOST_IP=192.168.1.100 \
-SCV_URL=http://192.168.1.100:3080 \
+FH_URL=http://192.168.1.100:3080 \
 REALM_NAME=mycompany \
 CLIENT_ID=filehatch \
 ./scripts/setup-keycloak.sh
@@ -265,17 +265,17 @@ CLIENT_ID=filehatch \
 | 환경변수 | 기본값 | 설명 |
 |---------|--------|------|
 | `HOST_IP` | 자동 감지 | Keycloak 호스트 IP |
-| `SCV_URL` | http://localhost:3080 | FileHatch URL |
-| `REALM_NAME` | scv | Keycloak Realm 이름 |
-| `CLIENT_ID` | simplecloudvault | OAuth Client ID |
+| `FH_URL` | http://localhost:3080 | FileHatch URL |
+| `REALM_NAME` | filehatch | Keycloak Realm 이름 |
+| `CLIENT_ID` | filehatch | OAuth Client ID |
 | `CLIENT_SECRET` | 자동 생성 | OAuth Client Secret |
 
 ### 5.3 생성되는 리소스
 
 스크립트 실행 후 생성되는 리소스:
 
-1. **Realm**: `scv` (또는 지정한 이름)
-2. **Client**: `simplecloudvault` (Confidential)
+1. **Realm**: `filehatch` (또는 지정한 이름)
+2. **Client**: `filehatch` (Confidential)
 3. **테스트 사용자**: `testuser` / `test1234`
 4. **FileHatch SSO 프로바이더** 자동 등록
 
@@ -298,9 +298,9 @@ CLIENT_ID=filehatch \
 |------|------|------|
 | **프로바이더 이름** | 로그인 버튼에 표시될 이름 | `회사 SSO` |
 | **프로바이더 타입** | 프로바이더 종류 | `oidc` (Keycloak) |
-| **Client ID** | OAuth 클라이언트 ID | `simplecloudvault` |
+| **Client ID** | OAuth 클라이언트 ID | `filehatch` |
 | **Client Secret** | OAuth 클라이언트 시크릿 | Keycloak에서 복사한 값 |
-| **Issuer URL** | OIDC 발급자 URL | `http://192.168.1.100:8180/auth/realms/scv` |
+| **Issuer URL** | OIDC 발급자 URL | `http://192.168.1.100:8180/auth/realms/filehatch` |
 | **Authorization URL** | 인증 엔드포인트 (자동 파생 가능) | (비워두면 Issuer에서 파생) |
 | **Token URL** | 토큰 엔드포인트 (자동 파생 가능) | (비워두면 Issuer에서 파생) |
 | **Userinfo URL** | 사용자 정보 엔드포인트 (자동 파생 가능) | (비워두면 Issuer에서 파생) |
@@ -315,7 +315,7 @@ CLIENT_ID=filehatch \
 http://{KEYCLOAK_HOSTNAME}:{KEYCLOAK_PORT}/auth/realms/{REALM_NAME}
 
 예시:
-- http://192.168.1.100:8180/auth/realms/scv
+- http://192.168.1.100:8180/auth/realms/filehatch
 - https://sso.company.com/auth/realms/company
 ```
 
@@ -336,9 +336,9 @@ curl -X POST http://localhost:3080/api/admin/sso/providers \
   -d '{
     "name": "Keycloak SSO",
     "providerType": "oidc",
-    "clientId": "simplecloudvault",
+    "clientId": "filehatch",
     "clientSecret": "YOUR_CLIENT_SECRET",
-    "issuerUrl": "http://192.168.1.100:8180/auth/realms/scv",
+    "issuerUrl": "http://192.168.1.100:8180/auth/realms/filehatch",
     "scopes": "openid email profile",
     "autoCreateUser": true,
     "isEnabled": true
@@ -527,7 +527,7 @@ curl -X PUT http://localhost:3080/api/admin/sso/settings \
 2. FileHatch SSO 프로바이더의 Issuer URL 확인:
    ```
    # 브라우저에서 접근하는 URL과 동일해야 함
-   http://192.168.1.100:8180/auth/realms/scv
+   http://192.168.1.100:8180/auth/realms/filehatch
    ```
 
 3. Keycloak 재시작 후 확인:

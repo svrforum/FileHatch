@@ -160,7 +160,7 @@ type AuditLog struct {
 
 // SystemInfo represents system information
 type SystemInfo struct {
-	Hostname    string      `json:"hostname" example:"scv-server"`
+	Hostname    string      `json:"hostname" example:"fh-server"`
 	OS          string      `json:"os" example:"linux"`
 	Arch        string      `json:"arch" example:"amd64"`
 	CPUs        int         `json:"cpus" example:"4"`

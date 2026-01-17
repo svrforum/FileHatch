@@ -16,7 +16,7 @@
 services:
   # Keycloak Identity Provider
   keycloak:
-    container_name: scv-keycloak
+    container_name: fh-keycloak
     image: quay.io/keycloak/keycloak:26.4.0
     restart: unless-stopped
     environment:

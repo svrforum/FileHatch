@@ -112,16 +112,16 @@ function App() {
   const location = useLocation()
 
   // Determine current view from URL
-  const isAdminMode = location.pathname.startsWith('/scvadmin')
+  const isAdminMode = location.pathname.startsWith('/fhadmin')
   const isTrashView = location.pathname === '/trash'
 
   // Get admin view from URL
   const getAdminView = (): AdminView => {
-    if (location.pathname === '/scvadmin/shared-folders') return 'shared-folders'
-    if (location.pathname === '/scvadmin/settings') return 'settings'
-    if (location.pathname === '/scvadmin/sso') return 'sso'
-    if (location.pathname === '/scvadmin/logs') return 'logs'
-    if (location.pathname === '/scvadmin/system-info') return 'system-info'
+    if (location.pathname === '/fhadmin/shared-folders') return 'shared-folders'
+    if (location.pathname === '/fhadmin/settings') return 'settings'
+    if (location.pathname === '/fhadmin/sso') return 'sso'
+    if (location.pathname === '/fhadmin/logs') return 'logs'
+    if (location.pathname === '/fhadmin/system-info') return 'system-info'
     return 'users'
   }
   const adminView = getAdminView()
@@ -289,7 +289,7 @@ function App() {
   }, [navigate])
 
   const handleAdminClick = useCallback(() => {
-    navigate('/scvadmin/users')
+    navigate('/fhadmin/users')
   }, [navigate])
 
   const handleExitAdminMode = useCallback(() => {
@@ -412,37 +412,37 @@ function App() {
                   <NotificationCenter />
                 </Suspense>
               } />
-              <Route path="/scvadmin/users" element={
+              <Route path="/fhadmin/users" element={
                 <Suspense fallback={<AdminSkeleton />}>
                   <AdminUserList />
                 </Suspense>
               } />
-              <Route path="/scvadmin/shared-folders" element={
+              <Route path="/fhadmin/shared-folders" element={
                 <Suspense fallback={<AdminSkeleton />}>
                   <AdminSharedFolders />
                 </Suspense>
               } />
-              <Route path="/scvadmin/settings" element={
+              <Route path="/fhadmin/settings" element={
                 <Suspense fallback={<AdminSkeleton />}>
                   <AdminSettings />
                 </Suspense>
               } />
-              <Route path="/scvadmin/sso" element={
+              <Route path="/fhadmin/sso" element={
                 <Suspense fallback={<AdminSkeleton />}>
                   <AdminSSOSettings />
                 </Suspense>
               } />
-              <Route path="/scvadmin/logs" element={
+              <Route path="/fhadmin/logs" element={
                 <Suspense fallback={<AdminSkeleton />}>
                   <AdminLogs />
                 </Suspense>
               } />
-              <Route path="/scvadmin/system-info" element={
+              <Route path="/fhadmin/system-info" element={
                 <Suspense fallback={<AdminSkeleton />}>
                   <AdminSystemInfo />
                 </Suspense>
               } />
-              <Route path="/scvadmin" element={
+              <Route path="/fhadmin" element={
                 <Suspense fallback={<AdminSkeleton />}>
                   <AdminUserList />
                 </Suspense>

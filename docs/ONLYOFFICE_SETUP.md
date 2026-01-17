@@ -600,7 +600,7 @@ OnlyOffice 리소스 사용량을 모니터링하세요:
 
 ```bash
 # 실시간 리소스 사용량
-docker stats scv-onlyoffice
+docker stats fh-onlyoffice
 
 # 디스크 사용량
 docker compose exec onlyoffice df -h

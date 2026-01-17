@@ -1,0 +1,245 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - img "FileHatch" [ref=e7]
+        - generic [ref=e8]: FileHatch
+      - navigation [ref=e9]:
+        - generic [ref=e10]: /
+        - button "내 파일" [ref=e12] [cursor=pointer]
+    - generic [ref=e13]:
+      - button "다크 모드로 전환" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+      - button "알림" [ref=e18] [cursor=pointer]:
+        - img [ref=e19]
+      - button "admin 프로필" [ref=e22] [cursor=pointer]:
+        - generic [ref=e24]: A
+  - generic [ref=e25]:
+    - complementary [ref=e26]:
+      - generic [ref=e28]:
+        - img [ref=e29]
+        - generic [ref=e32]: 관리자 설정
+      - navigation [ref=e33]:
+        - link "사용자 관리" [ref=e34] [cursor=pointer]:
+          - /url: /fhadmin/users
+          - img [ref=e35]
+          - generic [ref=e40]: 사용자 관리
+        - link "공유 드라이브" [ref=e41] [cursor=pointer]:
+          - /url: /fhadmin/shared-folders
+          - img [ref=e42]
+          - generic [ref=e45]: 공유 드라이브
+        - link "시스템 설정" [ref=e46] [cursor=pointer]:
+          - /url: /fhadmin/settings
+          - img [ref=e47]
+          - generic [ref=e50]: 시스템 설정
+        - link "SSO 설정" [ref=e51] [cursor=pointer]:
+          - /url: /fhadmin/sso
+          - img [ref=e52]
+          - generic [ref=e55]: SSO 설정
+        - link "감사 로그" [ref=e56] [cursor=pointer]:
+          - /url: /fhadmin/logs
+          - img [ref=e57]
+          - generic [ref=e60]: 감사 로그
+        - link "서버 정보" [ref=e61] [cursor=pointer]:
+          - /url: /fhadmin/system-info
+          - img [ref=e62]
+          - generic [ref=e67]: 서버 정보
+      - generic [ref=e68]:
+        - button "일반 모드로" [ref=e69] [cursor=pointer]:
+          - img [ref=e70]
+          - generic [ref=e72]: 일반 모드로
+        - generic [ref=e73]:
+          - generic [ref=e74] [cursor=pointer]:
+            - img [ref=e75]
+            - generic [ref=e77]: 전송 현황
+          - generic [ref=e78] [cursor=pointer]: 진행 중인 전송 없음
+        - generic [ref=e79]:
+          - generic [ref=e80]:
+            - generic [ref=e81]: 저장 공간
+            - generic [ref=e82]: 85.2 MB / 10.0 GB
+          - generic [ref=e86]: "휴지통: 948 B"
+    - main [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - generic [ref=e90]:
+            - heading "사용자 관리" [level=2] [ref=e91]
+            - paragraph [ref=e92]: 시스템의 모든 사용자를 관리합니다.
+          - generic [ref=e93]:
+            - button "새로고침" [ref=e94] [cursor=pointer]:
+              - img [ref=e95]
+            - button "사용자 추가" [ref=e99] [cursor=pointer]:
+              - img [ref=e100]
+              - text: 사용자 추가
+        - generic [ref=e102]:
+          - generic [ref=e103]:
+            - generic [ref=e104] [cursor=pointer]:
+              - generic [ref=e105]: "4"
+              - text: 전체
+            - generic [ref=e106] [cursor=pointer]:
+              - generic [ref=e107]: "4"
+              - text: 활성
+            - generic [ref=e108] [cursor=pointer]:
+              - generic [ref=e109]: "0"
+              - text: 비활성
+            - generic [ref=e110] [cursor=pointer]:
+              - generic [ref=e111]: "1"
+              - text: 관리자
+          - generic [ref=e112]:
+            - generic [ref=e113]:
+              - img [ref=e114]
+              - textbox "이름 또는 이메일로 검색..." [ref=e117]
+            - generic [ref=e118]:
+              - button "카드 뷰" [ref=e119] [cursor=pointer]:
+                - img [ref=e120]
+              - button "리스트 뷰" [ref=e125] [cursor=pointer]:
+                - img [ref=e126]
+          - generic [ref=e128]:
+            - generic [ref=e129]:
+              - generic [ref=e130]:
+                - generic [ref=e131]: TE
+                - generic [ref=e133]:
+                  - heading "testuser176857033911" [level=4] [ref=e134]
+                  - paragraph [ref=e135]: testuser176857033911@test.com
+              - generic [ref=e137]: 사용자
+              - generic [ref=e139]:
+                - generic [ref=e140]: 저장공간
+                - generic [ref=e141]: 0 B / 무제한
+              - generic [ref=e143]:
+                - img [ref=e144]
+                - text: 2026. 1. 16.
+              - generic [ref=e147]:
+                - button "수정" [active] [ref=e148] [cursor=pointer]:
+                  - img [ref=e149]
+                  - text: 수정
+                - button "비활성화" [ref=e152] [cursor=pointer]:
+                  - img [ref=e153]
+                  - text: 비활성화
+                - button [ref=e156] [cursor=pointer]:
+                  - img [ref=e157]
+            - generic [ref=e159]:
+              - generic [ref=e160]:
+                - generic [ref=e161]: TE
+                - generic [ref=e163]:
+                  - heading "testuser176856961165" [level=4] [ref=e164]
+                  - paragraph [ref=e165]: testuser176856961165@test.com
+              - generic [ref=e167]: 사용자
+              - generic [ref=e169]:
+                - generic [ref=e170]: 저장공간
+                - generic [ref=e171]: 0 B / 무제한
+              - generic [ref=e173]:
+                - img [ref=e174]
+                - text: 2026. 1. 16.
+              - generic [ref=e177]:
+                - button "수정" [ref=e178] [cursor=pointer]:
+                  - img [ref=e179]
+                  - text: 수정
+                - button "비활성화" [ref=e182] [cursor=pointer]:
+                  - img [ref=e183]
+                  - text: 비활성화
+                - button [ref=e186] [cursor=pointer]:
+                  - img [ref=e187]
+            - generic [ref=e189]:
+              - generic [ref=e190]:
+                - generic [ref=e191]: TE
+                - generic [ref=e193]:
+                  - heading "testuser176856959021" [level=4] [ref=e194]
+                  - paragraph [ref=e195]: testuser176856959021@test.com
+              - generic [ref=e197]: 사용자
+              - generic [ref=e199]:
+                - generic [ref=e200]: 저장공간
+                - generic [ref=e201]: 0 B / 무제한
+              - generic [ref=e203]:
+                - img [ref=e204]
+                - text: 2026. 1. 16.
+              - generic [ref=e207]:
+                - button "수정" [ref=e208] [cursor=pointer]:
+                  - img [ref=e209]
+                  - text: 수정
+                - button "비활성화" [ref=e212] [cursor=pointer]:
+                  - img [ref=e213]
+                  - text: 비활성화
+                - button [ref=e216] [cursor=pointer]:
+                  - img [ref=e217]
+            - generic [ref=e219]:
+              - generic [ref=e220]:
+                - generic [ref=e221]: AD
+                - generic [ref=e223]:
+                  - heading "admin 나" [level=4] [ref=e224]:
+                    - text: admin
+                    - generic [ref=e225]: 나
+                  - paragraph [ref=e226]: admin@localhost
+              - generic [ref=e228]: 관리자
+              - generic [ref=e230]:
+                - generic [ref=e231]: 저장공간
+                - generic [ref=e232]: 85.16 MB / 무제한
+              - generic [ref=e234]:
+                - img [ref=e235]
+                - text: 2026. 1. 16.
+              - button "수정" [ref=e239] [cursor=pointer]:
+                - img [ref=e240]
+                - text: 수정
+        - generic [ref=e244]:
+          - generic [ref=e245]:
+            - generic [ref=e246]:
+              - generic [ref=e247]: TE
+              - generic [ref=e248]:
+                - heading "testuser176857033911" [level=2] [ref=e249]
+                - paragraph [ref=e250]: testuser176857033911@test.com
+            - button [ref=e251] [cursor=pointer]:
+              - img [ref=e252]
+          - generic [ref=e254]:
+            - generic [ref=e255]:
+              - generic [ref=e256]:
+                - heading "비밀번호 변경" [level=3] [ref=e257]
+                - generic [ref=e258]:
+                  - generic [ref=e259]:
+                    - generic [ref=e260]: 새 비밀번호
+                    - textbox "변경 시에만 입력" [ref=e261]
+                  - generic [ref=e262]:
+                    - generic [ref=e263]: 비밀번호 확인
+                    - textbox "비밀번호 재입력" [ref=e264]
+              - generic [ref=e265]:
+                - heading "저장공간" [level=3] [ref=e266]
+                - generic [ref=e267]:
+                  - generic [ref=e268]: 저장공간 제한
+                  - generic [ref=e269]:
+                    - spinbutton [ref=e270]: "0"
+                    - generic [ref=e271]: GB
+                  - paragraph [ref=e272]: "현재 사용량: 0 B (0 = 무제한)"
+              - generic [ref=e273]:
+                - heading "공유 드라이브 권한" [level=3] [ref=e274]
+                - paragraph [ref=e275]: 사용자의 공유 드라이브 접근 권한을 설정합니다.
+                - paragraph [ref=e277]: 생성된 공유 드라이브가 없습니다.
+              - generic [ref=e278]:
+                - heading "권한 설정" [level=3] [ref=e279]
+                - generic [ref=e280]:
+                  - generic [ref=e281] [cursor=pointer]:
+                    - generic [ref=e282]:
+                      - img [ref=e283]
+                      - generic [ref=e286]:
+                        - generic [ref=e287]: 관리자 권한
+                        - generic [ref=e288]: 시스템 설정 및 사용자 관리 가능
+                    - generic [ref=e289]:
+                      - checkbox "관리자 권한 시스템 설정 및 사용자 관리 가능"
+                  - generic [ref=e291] [cursor=pointer]:
+                    - generic [ref=e292]:
+                      - img [ref=e293]
+                      - generic [ref=e296]:
+                        - generic [ref=e297]: 계정 활성화
+                        - generic [ref=e298]: 비활성화 시 로그인 불가
+                    - generic [ref=e299]:
+                      - checkbox "계정 활성화 비활성화 시 로그인 불가" [checked]
+              - generic [ref=e301]:
+                - heading "2단계 인증" [level=3] [ref=e302]
+                - generic [ref=e304]:
+                  - img [ref=e306]
+                  - generic [ref=e308]:
+                    - generic [ref=e309]: 2FA 비활성화
+                    - generic [ref=e310]: 이 사용자는 2단계 인증을 사용하지 않습니다
+            - generic [ref=e311]:
+              - button "취소" [ref=e312] [cursor=pointer]
+              - button "변경사항 저장" [ref=e313] [cursor=pointer]
+```

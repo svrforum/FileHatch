@@ -30,14 +30,14 @@ fi
 # 기본값 설정
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
-DB_USER="${DB_USER:-scv_user}"
-DB_PASS="${DB_PASS:-scv_password}"
-DB_NAME="${DB_NAME:-scv_main}"
+DB_USER="${DB_USER:-fh_user}"
+DB_PASS="${DB_PASS:-fh_password}"
+DB_NAME="${DB_NAME:-fh_main}"
 
 # Docker 환경 감지
-if docker ps --format '{{.Names}}' | grep -q "scv-db"; then
+if docker ps --format '{{.Names}}' | grep -q "fh-db"; then
     USE_DOCKER=true
-    echo -e "${BLUE}Docker 환경 감지됨. scv-db 컨테이너 사용${NC}"
+    echo -e "${BLUE}Docker 환경 감지됨. fh-db 컨테이너 사용${NC}"
 else
     USE_DOCKER=false
 fi
@@ -46,7 +46,7 @@ fi
 run_psql() {
     local query="$1"
     if [ "$USE_DOCKER" = true ]; then
-        docker exec scv-db psql -U "$DB_USER" -d "$DB_NAME" -t -c "$query"
+        docker exec fh-db psql -U "$DB_USER" -d "$DB_NAME" -t -c "$query"
     else
         PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "$query"
     fi
@@ -56,7 +56,7 @@ run_psql() {
 run_sql_file() {
     local file="$1"
     if [ "$USE_DOCKER" = true ]; then
-        docker exec -i scv-db psql -U "$DB_USER" -d "$DB_NAME" < "$file"
+        docker exec -i fh-db psql -U "$DB_USER" -d "$DB_NAME" < "$file"
     else
         PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" < "$file"
     fi

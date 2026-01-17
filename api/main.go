@@ -24,7 +24,7 @@ const dataRoot = "/data"
 func getCORSOrigins() []string {
 	origins := os.Getenv("CORS_ALLOWED_ORIGINS")
 	if origins == "" {
-		env := os.Getenv("SCV_ENV")
+		env := os.Getenv("FH_ENV")
 		if env == "production" {
 			log.Println("WARNING: CORS_ALLOWED_ORIGINS not set in production. Using restrictive defaults.")
 			// In production without explicit config, only allow same-origin
@@ -170,10 +170,10 @@ func main() {
 	}
 
 	// Create SMB handler
-	smbHandler := handlers.NewSMBHandler(db, "/etc/scv")
+	smbHandler := handlers.NewSMBHandler(db, "/etc/filehatch")
 
 	// Create SMB Audit handler
-	smbAuditHandler := handlers.NewSMBAuditHandler(db, "/etc/scv")
+	smbAuditHandler := handlers.NewSMBAuditHandler(db, "/etc/filehatch")
 	// Start background sync every 30 seconds
 	smbAuditHandler.StartBackgroundSync(30 * time.Second)
 
@@ -219,7 +219,7 @@ func main() {
 	// Create SSO handler
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		jwtSecret = "scv-dev-secret-not-for-production-use"
+		jwtSecret = "fh-dev-secret-not-for-production-use"
 		log.Println("WARNING: JWT_SECRET not set, using insecure default. Set JWT_SECRET environment variable for production!")
 	} else if len(jwtSecret) < 32 {
 		log.Println("WARNING: JWT_SECRET is too short. Use at least 32 characters for security.")
@@ -231,6 +231,11 @@ func main() {
 	// Routes
 	e.GET("/health", h.HealthCheck)
 	e.GET("/api/health", h.HealthCheck)
+
+	// Version endpoint
+	e.GET("/api/version", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, GetVersionInfo())
+	})
 
 	// Swagger documentation
 	e.GET("/swagger/*", echoSwagger.WrapHandler)

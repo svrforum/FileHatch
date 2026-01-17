@@ -33,8 +33,8 @@ if [ -f "$PROJECT_DIR/.env" ]; then
 fi
 
 # 기본값 설정
-DB_USER="${DB_USER:-scv_user}"
-DB_NAME="${DB_NAME:-scv_main}"
+DB_USER="${DB_USER:-fh_user}"
+DB_NAME="${DB_NAME:-fh_main}"
 BACKUP_DIR="$PROJECT_DIR/backups"
 
 echo ""
@@ -99,27 +99,27 @@ restore_database() {
     echo ""
     echo -e "${BLUE}[DB] 데이터베이스 복원 중...${NC}"
 
-    if ! docker ps --format '{{.Names}}' | grep -q "scv-db"; then
-        echo -e "${RED}오류: scv-db 컨테이너가 실행 중이 아닙니다.${NC}"
+    if ! docker ps --format '{{.Names}}' | grep -q "fh-db"; then
+        echo -e "${RED}오류: fh-db 컨테이너가 실행 중이 아닙니다.${NC}"
         echo "먼저 서비스를 시작하세요: docker compose up -d db"
         exit 1
     fi
 
     # 기존 연결 종료
-    docker exec scv-db psql -U "$DB_USER" -d postgres -c \
+    docker exec fh-db psql -U "$DB_USER" -d postgres -c \
         "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();" 2>/dev/null || true
 
     # 데이터베이스 재생성
     echo -e "  기존 데이터베이스 삭제 중..."
-    docker exec scv-db psql -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS $DB_NAME;" 2>/dev/null || true
-    docker exec scv-db psql -U "$DB_USER" -d postgres -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
+    docker exec fh-db psql -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS $DB_NAME;" 2>/dev/null || true
+    docker exec fh-db psql -U "$DB_USER" -d postgres -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
 
     # 백업 복원
     echo -e "  백업 복원 중..."
     if [[ "$backup_file" == *.gz ]]; then
-        gunzip -c "$backup_file" | docker exec -i scv-db psql -U "$DB_USER" -d "$DB_NAME"
+        gunzip -c "$backup_file" | docker exec -i fh-db psql -U "$DB_USER" -d "$DB_NAME"
     else
-        cat "$backup_file" | docker exec -i scv-db psql -U "$DB_USER" -d "$DB_NAME"
+        cat "$backup_file" | docker exec -i fh-db psql -U "$DB_USER" -d "$DB_NAME"
     fi
 
     echo -e "  ${GREEN}✓ 데이터베이스 복원 완료${NC}"
@@ -313,8 +313,8 @@ else
             echo ""
             echo "예제:"
             echo "  $0                                  # 대화형 모드"
-            echo "  $0 db backups/scv_backup_db_20240101.sql.gz"
-            echo "  $0 files backups/scv_backup_files_20240101.tar.gz"
+            echo "  $0 db backups/fh_backup_db_20240101.sql.gz"
+            echo "  $0 files backups/fh_backup_files_20240101.tar.gz"
             exit 0
             ;;
         *)

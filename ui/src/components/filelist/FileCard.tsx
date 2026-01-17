@@ -22,8 +22,8 @@ function useThumbnail(path: string | null, enabled: boolean) {
     }
 
     let cancelled = false
-    // 토큰은 scv-auth에 JSON 형식으로 저장됨
-    const authData = localStorage.getItem('scv-auth')
+    // 토큰은 filehatch-auth에 JSON 형식으로 저장됨
+    const authData = localStorage.getItem('filehatch-auth')
     const token = authData ? JSON.parse(authData).state?.token : null
 
     const fetchThumbnail = async () => {

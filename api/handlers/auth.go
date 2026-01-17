@@ -27,7 +27,7 @@ var sharedJWTSecret []byte
 
 func NewAuthHandler(db *sql.DB) *AuthHandler {
 	secret := os.Getenv("JWT_SECRET")
-	env := os.Getenv("SCV_ENV")
+	env := os.Getenv("FH_ENV")
 
 	if secret == "" {
 		if env == "production" {
@@ -35,7 +35,7 @@ func NewAuthHandler(db *sql.DB) *AuthHandler {
 		}
 		// Development fallback with warning
 		log.Println("WARNING: JWT_SECRET not set. Using default secret. Set JWT_SECRET in production!")
-		secret = "scv-dev-secret-not-for-production-use"
+		secret = "fh-dev-secret-not-for-production-use"
 	} else if len(secret) < 32 {
 		log.Println("WARNING: JWT_SECRET should be at least 32 characters for security")
 	}
@@ -45,7 +45,7 @@ func NewAuthHandler(db *sql.DB) *AuthHandler {
 		db:           db,
 		jwtSecret:    []byte(secret),
 		dataRoot:     "/data",
-		configPath:   "/etc/scv",
+		configPath:   "/etc/filehatch",
 		auditHandler: NewAuditHandler(db, "/data"),
 	}
 }
@@ -66,7 +66,7 @@ func GenerateJWTWithExpiration(userID, username string, isAdmin, rememberMe bool
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "simplecloudvault",
+			Issuer:    "filehatch",
 		},
 	}
 

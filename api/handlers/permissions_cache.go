@@ -59,7 +59,7 @@ func DefaultPermissionCacheConfig() PermissionCacheConfig {
 		RedisAddr:  fmt.Sprintf("%s:%s", redisAddr, redisPort),
 		RedisPass:  os.Getenv("VALKEY_PASSWORD"),
 		RedisDB:    0,
-		KeyPrefix:  "scv:perm:",
+		KeyPrefix:  "fh:perm:",
 		DefaultTTL: 5 * time.Minute,
 	}
 }

@@ -11,7 +11,7 @@ const docTemplate = `{
         "title": "{{.Title}}",
         "contact": {
             "name": "API Support",
-            "email": "support@simplecloudvault.io"
+            "email": "support@filehatch.io"
         },
         "license": {
             "name": "MIT",

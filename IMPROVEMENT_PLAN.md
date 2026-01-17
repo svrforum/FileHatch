@@ -570,13 +570,13 @@ jobs:
 # backup.sh
 
 # PostgreSQL 백업
-docker compose exec db pg_dump -U scv_user scv_main > backup_$(date +%Y%m%d).sql
+docker compose exec db pg_dump -U fh_user fh_main > backup_$(date +%Y%m%d).sql
 
 # 파일 백업 (증분)
 rsync -avz --delete /data/ /backup/data/
 
 # S3 업로드 (선택)
-aws s3 sync /backup s3://scv-backup/
+aws s3 sync /backup s3://fh-backup/
 ```
 
 ---

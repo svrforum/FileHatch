@@ -50,7 +50,7 @@ func GetSMBClientIP(username string) string {
 	}
 
 	// Run smbstatus to get current connections
-	cmd := exec.Command("docker", "exec", "scv-samba", "smbstatus", "-b")
+	cmd := exec.Command("docker", "exec", "fh-samba", "smbstatus", "-b")
 	output, err := cmd.Output()
 	if err != nil {
 		log.Printf("[SMB] Failed to get smbstatus: %v", err)

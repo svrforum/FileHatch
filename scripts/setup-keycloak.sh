@@ -32,22 +32,22 @@ if [ -z "$HOST_IP" ]; then
 fi
 
 # Configuration
-SCV_URL="${SCV_URL:-http://localhost:3080}"
+FH_URL="${FH_URL:-http://localhost:3080}"
 KEYCLOAK_URL="http://${HOST_IP}:8080"
 KEYCLOAK_ADMIN="${KEYCLOAK_ADMIN:-admin}"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin123}"
-REALM_NAME="${REALM_NAME:-scv}"
-CLIENT_ID="${CLIENT_ID:-simplecloudvault}"
+REALM_NAME="${REALM_NAME:-filehatch}"
+CLIENT_ID="${CLIENT_ID:-filehatch}"
 CLIENT_SECRET="${CLIENT_SECRET:-}"
 TEST_USER="${TEST_USER:-testuser}"
 TEST_PASSWORD="${TEST_PASSWORD:-test1234}"
 TEST_EMAIL="${TEST_EMAIL:-testuser@example.com}"
-SCV_ADMIN="${SCV_ADMIN:-admin}"
-SCV_PASSWORD="${SCV_PASSWORD:-admin1234}"
+FH_ADMIN="${FH_ADMIN:-admin}"
+FH_PASSWORD="${FH_PASSWORD:-admin1234}"
 
 # Generate client secret if not provided
 if [ -z "$CLIENT_SECRET" ]; then
-    CLIENT_SECRET="scv-$(openssl rand -hex 16)"
+    CLIENT_SECRET="fh-$(openssl rand -hex 16)"
 fi
 
 echo -e "${BLUE}======================================${NC}"
@@ -56,7 +56,7 @@ echo -e "${BLUE}======================================${NC}"
 echo ""
 echo -e "${YELLOW}Configuration:${NC}"
 echo "  HOST_IP:          $HOST_IP"
-echo "  SCV URL:          $SCV_URL"
+echo "  FileHatch URL:    $FH_URL"
 echo "  Keycloak URL:     $KEYCLOAK_URL"
 echo "  Realm:            $REALM_NAME"
 echo "  Client ID:        $CLIENT_ID"
@@ -105,12 +105,12 @@ get_keycloak_token() {
     echo "$response" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4
 }
 
-# Function to get SCV admin token
-get_scv_token() {
+# Function to get FileHatch admin token
+get_fh_token() {
     local response
-    response=$(curl -sf -X POST "${SCV_URL}/api/auth/login" \
+    response=$(curl -sf -X POST "${FH_URL}/api/auth/login" \
         -H "Content-Type: application/json" \
-        -d "{\"username\":\"${SCV_ADMIN}\",\"password\":\"${SCV_PASSWORD}\"}" 2>/dev/null)
+        -d "{\"username\":\"${FH_ADMIN}\",\"password\":\"${FH_PASSWORD}\"}" 2>/dev/null)
 
     if [ $? -ne 0 ]; then
         echo ""
@@ -124,7 +124,7 @@ get_scv_token() {
 echo ""
 echo -e "${BLUE}[Step 1/6] Checking services...${NC}"
 wait_for_service "${KEYCLOAK_URL}/auth/" "Keycloak" || exit 1
-wait_for_service "${SCV_URL}/api/storage/usage" "FileHatch" || exit 1
+wait_for_service "${FH_URL}/api/storage/usage" "FileHatch" || exit 1
 
 # Step 2: Get Keycloak admin token
 echo ""
@@ -180,12 +180,12 @@ CLIENT_RESULT=$(curl -sf -X POST "${KEYCLOAK_URL}/auth/admin/realms/${REALM_NAME
         \"standardFlowEnabled\": true,
         \"directAccessGrantsEnabled\": false,
         \"serviceAccountsEnabled\": false,
-        \"rootUrl\": \"${SCV_URL}\",
-        \"baseUrl\": \"${SCV_URL}\",
-        \"redirectUris\": [\"${SCV_URL}/api/auth/sso/callback/*\"],
-        \"webOrigins\": [\"${SCV_URL}\"],
+        \"rootUrl\": \"${FH_URL}\",
+        \"baseUrl\": \"${FH_URL}\",
+        \"redirectUris\": [\"${FH_URL}/api/auth/sso/callback/*\"],
+        \"webOrigins\": [\"${FH_URL}\"],
         \"attributes\": {
-            \"post.logout.redirect.uris\": \"${SCV_URL}/*\"
+            \"post.logout.redirect.uris\": \"${FH_URL}/*\"
         }
     }" 2>&1)
 
@@ -234,24 +234,24 @@ fi
 echo ""
 echo -e "${BLUE}[Step 6/6] Configuring FileHatch SSO...${NC}"
 
-SCV_TOKEN=$(get_scv_token)
-if [ -z "$SCV_TOKEN" ]; then
+FH_TOKEN=$(get_fh_token)
+if [ -z "$FH_TOKEN" ]; then
     echo -e "${RED}ERROR: Failed to get FileHatch admin token${NC}"
-    echo "Please check SCV admin credentials"
+    echo "Please check FileHatch admin credentials"
     exit 1
 fi
 
 # Enable SSO
-curl -sf -X PUT "${SCV_URL}/api/admin/sso/settings" \
-    -H "Authorization: Bearer ${SCV_TOKEN}" \
+curl -sf -X PUT "${FH_URL}/api/admin/sso/settings" \
+    -H "Authorization: Bearer ${FH_TOKEN}" \
     -H "Content-Type: application/json" \
     -d '{"sso_enabled":"true","sso_auto_register":"true"}' > /dev/null
 
 echo -e "${GREEN}SSO enabled in FileHatch${NC}"
 
 # Check if provider already exists
-EXISTING_PROVIDERS=$(curl -sf "${SCV_URL}/api/admin/sso/providers" \
-    -H "Authorization: Bearer ${SCV_TOKEN}" 2>/dev/null)
+EXISTING_PROVIDERS=$(curl -sf "${FH_URL}/api/admin/sso/providers" \
+    -H "Authorization: Bearer ${FH_TOKEN}" 2>/dev/null)
 PROVIDER_ID=$(echo "$EXISTING_PROVIDERS" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
 # IMPORTANT: Both issuerUrl and authorizationUrl must use the same HOST_IP
@@ -264,8 +264,8 @@ AUTH_URL="http://${HOST_IP}:8080/auth/realms/${REALM_NAME}/protocol/openid-conne
 
 if [ -n "$PROVIDER_ID" ] && echo "$EXISTING_PROVIDERS" | grep -q "Keycloak"; then
     echo -e "${YELLOW}Keycloak provider found (ID: $PROVIDER_ID), updating...${NC}"
-    curl -sf -X PUT "${SCV_URL}/api/admin/sso/providers/${PROVIDER_ID}" \
-        -H "Authorization: Bearer ${SCV_TOKEN}" \
+    curl -sf -X PUT "${FH_URL}/api/admin/sso/providers/${PROVIDER_ID}" \
+        -H "Authorization: Bearer ${FH_TOKEN}" \
         -H "Content-Type: application/json" \
         -d "{
             \"name\": \"Keycloak\",
@@ -282,8 +282,8 @@ if [ -n "$PROVIDER_ID" ] && echo "$EXISTING_PROVIDERS" | grep -q "Keycloak"; the
         }" > /dev/null
     echo -e "${GREEN}Keycloak SSO provider updated successfully${NC}"
 else
-    PROVIDER_RESULT=$(curl -sf -X POST "${SCV_URL}/api/admin/sso/providers" \
-        -H "Authorization: Bearer ${SCV_TOKEN}" \
+    PROVIDER_RESULT=$(curl -sf -X POST "${FH_URL}/api/admin/sso/providers" \
+        -H "Authorization: Bearer ${FH_TOKEN}" \
         -H "Content-Type: application/json" \
         -d "{
             \"name\": \"Keycloak\",
@@ -330,7 +330,7 @@ echo "  Password: ${TEST_PASSWORD}"
 echo "  Email:    ${TEST_EMAIL}"
 echo ""
 echo -e "${YELLOW}FileHatch:${NC}"
-echo "  URL:      ${SCV_URL}"
+echo "  URL:      ${FH_URL}"
 echo ""
 echo -e "${GREEN}You can now login to FileHatch using the 'Keycloak' button on the login page.${NC}"
 echo ""

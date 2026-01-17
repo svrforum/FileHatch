@@ -54,7 +54,7 @@ func DefaultStatsCacheConfig() StatsCacheConfig {
 		RedisAddr:     fmt.Sprintf("%s:%s", redisAddr, redisPort),
 		RedisPass:     os.Getenv("VALKEY_PASSWORD"),
 		RedisDB:       0,
-		KeyPrefix:     "scv:stats:",
+		KeyPrefix:     "fh:stats:",
 		DefaultTTL:    30 * time.Minute,
 		LocalCacheTTL: 5 * time.Minute,
 	}

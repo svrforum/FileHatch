@@ -6,7 +6,7 @@
 //	@description				FileHatch provides comprehensive file management, sharing, and collaboration features.
 //
 //	@contact.name				API Support
-//	@contact.email				support@simplecloudvault.io
+//	@contact.email				support@filehatch.io
 //
 //	@license.name				MIT
 //	@license.url				https://opensource.org/licenses/MIT

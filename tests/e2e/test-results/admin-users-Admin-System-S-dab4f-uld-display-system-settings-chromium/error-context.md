@@ -1,0 +1,203 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - img "FileHatch" [ref=e7]
+        - generic [ref=e8]: FileHatch
+      - navigation [ref=e9]:
+        - generic [ref=e10]: /
+        - button "내 파일" [ref=e12] [cursor=pointer]
+    - generic [ref=e13]:
+      - button "다크 모드로 전환" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+      - button "알림" [ref=e18] [cursor=pointer]:
+        - img [ref=e19]
+      - button "admin 프로필" [ref=e22] [cursor=pointer]:
+        - generic [ref=e24]: A
+  - generic [ref=e25]:
+    - complementary [ref=e26]:
+      - generic [ref=e28]:
+        - img [ref=e29]
+        - generic [ref=e32]: 관리자 설정
+      - navigation [ref=e33]:
+        - link "사용자 관리" [ref=e34] [cursor=pointer]:
+          - /url: /fhadmin/users
+          - img [ref=e35]
+          - generic [ref=e40]: 사용자 관리
+        - link "공유 드라이브" [ref=e41] [cursor=pointer]:
+          - /url: /fhadmin/shared-folders
+          - img [ref=e42]
+          - generic [ref=e45]: 공유 드라이브
+        - link "시스템 설정" [active] [ref=e46] [cursor=pointer]:
+          - /url: /fhadmin/settings
+          - img [ref=e47]
+          - generic [ref=e50]: 시스템 설정
+        - link "SSO 설정" [ref=e51] [cursor=pointer]:
+          - /url: /fhadmin/sso
+          - img [ref=e52]
+          - generic [ref=e55]: SSO 설정
+        - link "감사 로그" [ref=e56] [cursor=pointer]:
+          - /url: /fhadmin/logs
+          - img [ref=e57]
+          - generic [ref=e60]: 감사 로그
+        - link "서버 정보" [ref=e61] [cursor=pointer]:
+          - /url: /fhadmin/system-info
+          - img [ref=e62]
+          - generic [ref=e67]: 서버 정보
+      - generic [ref=e68]:
+        - button "일반 모드로" [ref=e69] [cursor=pointer]:
+          - img [ref=e70]
+          - generic [ref=e72]: 일반 모드로
+        - generic [ref=e73]:
+          - generic [ref=e74] [cursor=pointer]:
+            - img [ref=e75]
+            - generic [ref=e77]: 전송 현황
+          - generic [ref=e78] [cursor=pointer]: 진행 중인 전송 없음
+        - generic [ref=e79]:
+          - generic [ref=e80]:
+            - generic [ref=e81]: 저장 공간
+            - generic [ref=e82]: 85.2 MB / 10.0 GB
+          - generic [ref=e86]: "휴지통: 948 B"
+    - main [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - img [ref=e91]
+          - generic [ref=e94]:
+            - heading "시스템 설정" [level=1] [ref=e95]
+            - paragraph [ref=e96]: FileHatch 시스템 설정을 관리합니다.
+        - generic [ref=e97]:
+          - generic [ref=e98]:
+            - generic [ref=e99]:
+              - img [ref=e101]
+              - generic [ref=e103]:
+                - heading "휴지통 설정" [level=3] [ref=e104]
+                - paragraph [ref=e105]: 휴지통 자동 비우기 설정을 관리합니다.
+            - generic [ref=e107]:
+              - generic [ref=e108]:
+                - generic [ref=e109]: 자동 삭제 기간
+                - generic [ref=e110]: 휴지통에 있는 항목이 지정된 일수가 지나면 자동으로 삭제됩니다.
+              - generic [ref=e111]:
+                - spinbutton [ref=e112]: "30"
+                - generic [ref=e113]: 일
+          - generic [ref=e114]:
+            - generic [ref=e115]:
+              - img [ref=e117]
+              - generic [ref=e119]:
+                - heading "저장소 설정" [level=3] [ref=e120]
+                - paragraph [ref=e121]: 사용자별 저장 공간 할당량을 설정합니다.
+            - generic [ref=e122]:
+              - generic [ref=e123]:
+                - generic [ref=e124]:
+                  - generic [ref=e125]: 기본 할당량
+                  - generic [ref=e126]: 새로운 사용자에게 할당되는 기본 저장 공간입니다.
+                - generic [ref=e127]:
+                  - spinbutton [ref=e128]: "10"
+                  - generic [ref=e129]: GB
+              - generic [ref=e131]:
+                - generic [ref=e132]:
+                  - generic [ref=e133]: 최대 파일 크기
+                  - generic [ref=e134]: 업로드 가능한 최대 파일 크기입니다.
+                - generic [ref=e135]:
+                  - spinbutton [ref=e136]: "10"
+                  - generic [ref=e137]: GB
+          - generic [ref=e138]:
+            - generic [ref=e139]:
+              - img [ref=e141]
+              - generic [ref=e144]:
+                - heading "보안 설정" [level=3] [ref=e145]
+                - paragraph [ref=e146]: 인증 및 보안 관련 설정을 관리합니다.
+            - generic [ref=e148]:
+              - generic [ref=e149]:
+                - generic [ref=e150]: 세션 만료 시간
+                - generic [ref=e151]: 로그인 세션이 유지되는 시간입니다. (최대 30일)
+              - generic [ref=e152]:
+                - spinbutton [ref=e153]: "24"
+                - generic [ref=e154]: 시간
+          - generic [ref=e155]:
+            - generic [ref=e156]:
+              - img [ref=e158]
+              - generic [ref=e161]:
+                - heading "Rate Limiting" [level=3] [ref=e162]
+                - paragraph [ref=e163]: API 요청 제한 설정입니다. 서버 재시작 시 적용됩니다.
+            - generic [ref=e164]:
+              - generic [ref=e165]:
+                - generic [ref=e166]:
+                  - generic [ref=e167]: Rate Limiting 활성화
+                  - generic [ref=e168]: IP별 초당 요청 수를 제한하여 과도한 요청을 방지합니다.
+                - generic [ref=e169]:
+                  - checkbox [checked]
+              - generic [ref=e172]:
+                - generic [ref=e173]:
+                  - generic [ref=e174]: 초당 요청 제한
+                  - generic [ref=e175]: IP당 초당 허용되는 최대 요청 수입니다.
+                - generic [ref=e176]:
+                  - spinbutton [ref=e177]: "100"
+                  - generic [ref=e178]: req/s
+          - generic [ref=e179]:
+            - generic [ref=e180]:
+              - img [ref=e182]
+              - generic [ref=e184]:
+                - heading "보안 헤더" [level=3] [ref=e185]
+                - paragraph [ref=e186]: HTTP 보안 헤더 설정입니다. 서버 재시작 시 적용됩니다.
+            - generic [ref=e187]:
+              - generic [ref=e188]:
+                - generic [ref=e189]:
+                  - generic [ref=e190]: 보안 헤더 활성화
+                  - generic [ref=e191]: XSS, HSTS, CSP 등 보안 헤더를 전체적으로 활성화합니다.
+                - generic [ref=e192]:
+                  - checkbox [checked]
+              - generic [ref=e195]:
+                - generic [ref=e196]:
+                  - generic [ref=e197]: XSS Protection
+                  - generic [ref=e198]: 브라우저의 XSS 필터를 활성화합니다.
+                - generic [ref=e199]:
+                  - checkbox [checked]
+              - generic [ref=e202]:
+                - generic [ref=e203]:
+                  - generic [ref=e204]: HSTS (HTTP Strict Transport Security)
+                  - generic [ref=e205]: HTTPS 강제 사용을 브라우저에 알립니다.
+                - generic [ref=e206]:
+                  - checkbox [checked]
+              - generic [ref=e209]:
+                - generic [ref=e210]:
+                  - generic [ref=e211]: Content Security Policy (CSP)
+                  - generic [ref=e212]: 콘텐츠 로드 정책을 설정하여 XSS 공격을 방지합니다.
+                - generic [ref=e213]:
+                  - checkbox [checked]
+              - generic [ref=e216]:
+                - generic [ref=e217]:
+                  - generic [ref=e218]: X-Frame-Options
+                  - generic [ref=e219]: iframe 임베딩 허용 정책입니다.
+                - combobox [ref=e220] [cursor=pointer]:
+                  - option "DENY (완전 차단)"
+                  - option "SAMEORIGIN (동일 도메인만 허용)" [selected]
+          - generic [ref=e221]:
+            - generic [ref=e222]:
+              - img [ref=e224]
+              - generic [ref=e229]:
+                - heading "SMB/CIFS 설정" [level=3] [ref=e230]
+                - paragraph [ref=e231]: 네트워크 드라이브 접근 설정입니다.
+              - generic [ref=e232]: 읽기 전용
+            - generic [ref=e233]:
+              - generic [ref=e234]:
+                - generic [ref=e235]:
+                  - generic [ref=e236]: SMB 서버 상태
+                  - generic [ref=e237]: Samba 서버의 현재 실행 상태입니다.
+                - generic [ref=e238]: 실행 중
+              - generic [ref=e241]:
+                - generic [ref=e242]:
+                  - generic [ref=e243]: 작업 그룹
+                  - generic [ref=e244]: Windows 네트워크 작업 그룹 이름입니다.
+                - generic [ref=e245]: WORKGROUP
+              - generic [ref=e247]:
+                - generic [ref=e248]:
+                  - generic [ref=e249]: 프로토콜 버전
+                  - generic [ref=e250]: 지원되는 SMB 프로토콜 버전입니다.
+                - generic [ref=e251]: SMB2 / SMB3
+          - button "설정 저장" [ref=e253] [cursor=pointer]:
+            - img [ref=e254]
+            - text: 설정 저장
+```

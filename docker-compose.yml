@@ -1,7 +1,7 @@
 services:
   # 1. Main Backend (Go)
   api:
-    container_name: scv-api
+    container_name: fh-api
     build:
       context: ./api
       dockerfile: Dockerfile
@@ -12,9 +12,9 @@ services:
       - TZ=${TZ:-Asia/Seoul}
       - DB_HOST=${DB_HOST:-db}
       - DB_PORT=${DB_PORT:-5432}
-      - DB_USER=${DB_USER:-scv_user}
-      - DB_PASS=${DB_PASS:-scv_password}
-      - DB_NAME=${DB_NAME:-scv_main}
+      - DB_USER=${DB_USER:-fh_user}
+      - DB_PASS=${DB_PASS:-fh_password}
+      - DB_NAME=${DB_NAME:-fh_main}
       - VALKEY_HOST=${VALKEY_HOST:-valkey}
       - VALKEY_PORT=${VALKEY_PORT:-6379}
       - JWT_SECRET=${JWT_SECRET:-}
@@ -26,7 +26,7 @@ services:
       - EXTERNAL_URL=${EXTERNAL_URL:-}
     volumes:
       - ${DATA_PATH:-./data}:/data
-      - ${CONFIG_PATH:-./config}:/etc/scv
+      - ${CONFIG_PATH:-./config}:/etc/filehatch
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       db:
@@ -42,7 +42,7 @@ services:
 
   # 2. Frontend (React + Express)
   ui:
-    container_name: scv-ui
+    container_name: fh-ui
     build:
       context: ./ui
       dockerfile: Dockerfile
@@ -66,7 +66,7 @@ services:
 
   # 3. SMB Service (Sidecar)
   samba:
-    container_name: scv-samba
+    container_name: fh-samba
     build:
       context: ./samba
       dockerfile: Dockerfile
@@ -77,31 +77,31 @@ services:
       - WORKGROUP=${SMB_WORKGROUP:-WORKGROUP}
     volumes:
       - ${DATA_PATH:-./data}:/data
-      - ${CONFIG_PATH:-./config}:/etc/scv
+      - ${CONFIG_PATH:-./config}:/etc/filehatch
       - ${CONFIG_PATH:-./config}/smb.conf:/etc/samba/smb.conf:ro
 
   # 4. Database (PostgreSQL)
   db:
-    container_name: scv-db
+    container_name: fh-db
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
       - TZ=${TZ:-Asia/Seoul}
-      - POSTGRES_USER=${DB_USER:-scv_user}
-      - POSTGRES_PASSWORD=${DB_PASS:-scv_password}
-      - POSTGRES_DB=${DB_NAME:-scv_main}
+      - POSTGRES_USER=${DB_USER:-fh_user}
+      - POSTGRES_PASSWORD=${DB_PASS:-fh_password}
+      - POSTGRES_DB=${DB_NAME:-fh_main}
     volumes:
       - ${DATABASE_PATH:-./database}:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-scv_user} -d ${DB_NAME:-scv_main}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-fh_user} -d ${DB_NAME:-fh_main}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   # 5. Cache & Queue (Valkey)
   valkey:
-    container_name: scv-valkey
+    container_name: fh-valkey
     image: valkey/valkey:8-alpine
     restart: unless-stopped
     environment:
@@ -114,7 +114,7 @@ services:
 
   # 6. OnlyOffice Document Server (Optional - use: docker compose --profile office up -d)
   onlyoffice:
-    container_name: scv-onlyoffice
+    container_name: fh-onlyoffice
     image: onlyoffice/documentserver:8.2
     restart: unless-stopped
     profiles:
@@ -139,7 +139,7 @@ services:
 
   # 7. Keycloak SSO Server (Optional - use: docker compose --profile sso up -d)
   keycloak:
-    container_name: scv-keycloak
+    container_name: fh-keycloak
     image: quay.io/keycloak/keycloak:26.4.0
     restart: unless-stopped
     profiles:
