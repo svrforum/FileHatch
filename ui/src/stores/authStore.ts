@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { User, login, getProfile, LoginRequest, verify2FA, refreshToken } from '../api/auth'
+import { User, login, getProfile, LoginRequest, verify2FA, refreshToken, completeInitialSetup, InitialSetupRequest } from '../api/auth'
 import { ApiError } from '../api/client'
 
 interface AuthState {
@@ -12,9 +12,14 @@ interface AuthState {
   requires2FA: boolean
   pending2FAUserId: string | null
   pendingRememberMe: boolean  // Store rememberMe during 2FA flow
-  login: (data: LoginRequest) => Promise<boolean>  // returns true if 2FA is required
+  // Initial setup state
+  requiresSetup: boolean
+  pendingSetupToken: string | null
+  login: (data: LoginRequest) => Promise<'success' | '2fa' | 'setup'>
   verify2FACode: (code: string) => Promise<void>
   cancel2FA: () => void
+  completeSetup: (data: InitialSetupRequest) => Promise<void>
+  cancelSetup: () => void
   logout: () => void
   refreshProfile: () => Promise<void>
   refreshAuthToken: () => Promise<boolean>  // returns true if refresh succeeded
@@ -32,11 +37,31 @@ export const useAuthStore = create<AuthState>()(
       requires2FA: false,
       pending2FAUserId: null,
       pendingRememberMe: false,
+      requiresSetup: false,
+      pendingSetupToken: null,
 
       login: async (data) => {
-        set({ isLoading: true, error: null, requires2FA: false, pending2FAUserId: null, pendingRememberMe: false })
+        set({
+          isLoading: true,
+          error: null,
+          requires2FA: false,
+          pending2FAUserId: null,
+          pendingRememberMe: false,
+          requiresSetup: false,
+          pendingSetupToken: null
+        })
         try {
           const result = await login(data)
+
+          // Check if initial setup is required
+          if (result.requiresSetup && result.token) {
+            set({
+              isLoading: false,
+              requiresSetup: true,
+              pendingSetupToken: result.token
+            })
+            return 'setup'
+          }
 
           // Check if 2FA is required
           if (result.requires2fa && result.userId) {
@@ -46,14 +71,14 @@ export const useAuthStore = create<AuthState>()(
               pending2FAUserId: result.userId,
               pendingRememberMe: data.rememberMe || false  // Store for 2FA verification
             })
-            return true  // 2FA required
+            return '2fa'
           }
 
           // Normal login (no 2FA)
           if (result.token && result.user) {
             set({ token: result.token, user: result.user, isLoading: false })
           }
-          return false  // No 2FA required
+          return 'success'
         } catch (err) {
           set({ error: err instanceof Error ? err.message : 'Login failed', isLoading: false })
           throw err
@@ -98,6 +123,42 @@ export const useAuthStore = create<AuthState>()(
         })
       },
 
+      completeSetup: async (data: InitialSetupRequest) => {
+        const { pendingSetupToken } = get()
+        if (!pendingSetupToken) {
+          set({ error: 'No pending setup' })
+          return
+        }
+
+        set({ isLoading: true, error: null })
+        try {
+          const result = await completeInitialSetup(pendingSetupToken, data)
+          if (result.token && result.user) {
+            set({
+              token: result.token,
+              user: result.user,
+              isLoading: false,
+              requiresSetup: false,
+              pendingSetupToken: null
+            })
+          }
+        } catch (err) {
+          set({
+            error: err instanceof Error ? err.message : 'Setup failed',
+            isLoading: false
+          })
+          throw err
+        }
+      },
+
+      cancelSetup: () => {
+        set({
+          requiresSetup: false,
+          pendingSetupToken: null,
+          error: null
+        })
+      },
+
       logout: () => {
         set({
           token: null,
@@ -105,7 +166,9 @@ export const useAuthStore = create<AuthState>()(
           error: null,
           requires2FA: false,
           pending2FAUserId: null,
-          pendingRememberMe: false
+          pendingRememberMe: false,
+          requiresSetup: false,
+          pendingSetupToken: null
         })
       },
 

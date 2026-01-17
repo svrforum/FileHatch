@@ -83,18 +83,19 @@ func ValidateJWTToken(tokenString string) (*jwt.Token, error) {
 
 // User represents a user account
 type User struct {
-	ID           string    `json:"id"`
-	Username     string    `json:"username"`
-	Email        string    `json:"email,omitempty"`
-	Provider     string    `json:"provider"`
-	IsAdmin      bool      `json:"isAdmin"`
-	IsActive     bool      `json:"isActive"`
-	HasSMB       bool      `json:"hasSmb"`
-	Has2FA       bool      `json:"has2fa"`
-	StorageQuota int64     `json:"storageQuota"` // 0 = unlimited
-	StorageUsed  int64     `json:"storageUsed"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID             string    `json:"id"`
+	Username       string    `json:"username"`
+	Email          string    `json:"email,omitempty"`
+	Provider       string    `json:"provider"`
+	IsAdmin        bool      `json:"isAdmin"`
+	IsActive       bool      `json:"isActive"`
+	HasSMB         bool      `json:"hasSmb"`
+	Has2FA         bool      `json:"has2fa"`
+	SetupCompleted bool      `json:"setupCompleted"`
+	StorageQuota   int64     `json:"storageQuota"` // 0 = unlimited
+	StorageUsed    int64     `json:"storageUsed"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 // JWTClaims represents JWT claims
@@ -122,10 +123,11 @@ type RegisterRequest struct {
 
 // LoginResponse represents login response
 type LoginResponse struct {
-	Token       string `json:"token,omitempty"`
-	User        User   `json:"user,omitempty"`
-	Requires2FA bool   `json:"requires2fa,omitempty"`
-	UserID      string `json:"userId,omitempty"` // Only sent when 2FA is required
+	Token         string `json:"token,omitempty"`
+	User          User   `json:"user,omitempty"`
+	Requires2FA   bool   `json:"requires2fa,omitempty"`
+	RequiresSetup bool   `json:"requiresSetup,omitempty"` // For initial admin setup
+	UserID        string `json:"userId,omitempty"`        // Sent when 2FA or setup is required
 }
 
 // Register creates a new user account
@@ -238,13 +240,14 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	var smbHash sql.NullString
 	var provider sql.NullString
 	var totpEnabled sql.NullBool
+	var setupCompleted sql.NullBool
 
 	err := h.db.QueryRow(`
 		SELECT id, username, email, password_hash, smb_hash, provider, is_admin, is_active,
-		       COALESCE(totp_enabled, false), created_at, updated_at
+		       COALESCE(totp_enabled, false), COALESCE(setup_completed, true), created_at, updated_at
 		FROM users WHERE username = $1
 	`, req.Username).Scan(&user.ID, &user.Username, &email, &passwordHash, &smbHash, &provider,
-		&user.IsAdmin, &user.IsActive, &totpEnabled, &user.CreatedAt, &user.UpdatedAt)
+		&user.IsAdmin, &user.IsActive, &totpEnabled, &setupCompleted, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		// Record failed attempt for non-existent user (still track by IP)
@@ -290,6 +293,23 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 	user.HasSMB = smbHash.Valid && smbHash.String != ""
 	user.Has2FA = totpEnabled.Valid && totpEnabled.Bool
+	user.SetupCompleted = !setupCompleted.Valid || setupCompleted.Bool
+
+	// Check if admin needs initial setup (before 2FA check)
+	if user.IsAdmin && !user.SetupCompleted {
+		// Generate temporary token for setup API
+		expiration := 15 * time.Minute // Short-lived token for setup only
+		token, err := h.generateTokenWithExpiration(user.ID, user.Username, user.IsAdmin, false, expiration)
+		if err != nil {
+			return RespondError(c, ErrInternal("Failed to generate token"))
+		}
+
+		return c.JSON(http.StatusOK, LoginResponse{
+			RequiresSetup: true,
+			UserID:        user.ID,
+			Token:         token,
+		})
+	}
 
 	// Check if 2FA is enabled
 	if user.Has2FA {
@@ -719,5 +739,135 @@ func (h *AuthHandler) AdminMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		return next(c)
 	}
+}
+
+// InitialSetupRequest represents the initial admin setup request
+type InitialSetupRequest struct {
+	NewUsername string `json:"newUsername"`
+	NewPassword string `json:"newPassword"`
+	Email       string `json:"email"`
+}
+
+// InitialSetup completes the initial admin account setup
+// POST /api/auth/initial-setup
+func (h *AuthHandler) InitialSetup(c echo.Context) error {
+	claims, ok := c.Get("user").(*JWTClaims)
+	if !ok || claims == nil {
+		return RespondError(c, ErrUnauthorized("Invalid token"))
+	}
+
+	// Verify user is admin
+	if !claims.IsAdmin {
+		return RespondError(c, ErrForbidden("Admin access required"))
+	}
+
+	// Check if setup is still required
+	var setupCompleted bool
+	err := h.db.QueryRow("SELECT COALESCE(setup_completed, true) FROM users WHERE id = $1", claims.UserID).Scan(&setupCompleted)
+	if err != nil {
+		return RespondError(c, ErrInternal("Database error"))
+	}
+	if setupCompleted {
+		return RespondError(c, ErrBadRequest("Initial setup already completed"))
+	}
+
+	var req InitialSetupRequest
+	if err := c.Bind(&req); err != nil {
+		return RespondError(c, ErrBadRequest("Invalid request"))
+	}
+
+	// Validate new username
+	if len(req.NewUsername) < 3 || len(req.NewUsername) > 50 {
+		return RespondError(c, ErrBadRequest("Username must be between 3 and 50 characters"))
+	}
+
+	// Check if new username is different and not already taken
+	if req.NewUsername != claims.Username {
+		var exists bool
+		err := h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1 AND id != $2)", req.NewUsername, claims.UserID).Scan(&exists)
+		if err != nil {
+			return RespondError(c, ErrInternal("Database error"))
+		}
+		if exists {
+			return RespondError(c, ErrAlreadyExists("Username"))
+		}
+	}
+
+	// Validate password complexity
+	if err := ValidatePassword(req.NewPassword); err != nil {
+		return RespondError(c, ErrBadRequest(err.Error()))
+	}
+
+	// Validate email if provided
+	if req.Email != "" {
+		if err := ValidateEmail(req.Email); err != nil {
+			return RespondError(c, ErrBadRequest(err.Error()))
+		}
+	}
+
+	// Hash new password
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return RespondError(c, ErrInternal("Failed to hash password"))
+	}
+
+	// Update user: username, password, email, and mark setup as completed
+	_, err = h.db.Exec(`
+		UPDATE users
+		SET username = $1, password_hash = $2, email = $3, setup_completed = true, updated_at = NOW()
+		WHERE id = $4
+	`, req.NewUsername, string(passwordHash), req.Email, claims.UserID)
+	if err != nil {
+		return RespondError(c, ErrInternal("Failed to update user"))
+	}
+
+	// Generate new token with updated username
+	expiration := 24 * time.Hour
+	token, err := h.generateTokenWithExpiration(claims.UserID, req.NewUsername, claims.IsAdmin, false, expiration)
+	if err != nil {
+		return RespondError(c, ErrInternal("Failed to generate token"))
+	}
+
+	// Fetch updated user data
+	var user User
+	var emailVal sql.NullString
+	var smbHash sql.NullString
+	var providerVal sql.NullString
+	var totpEnabled sql.NullBool
+
+	err = h.db.QueryRow(`
+		SELECT id, username, email, smb_hash, provider, is_admin, is_active,
+		       COALESCE(totp_enabled, false), created_at, updated_at
+		FROM users WHERE id = $1
+	`, claims.UserID).Scan(&user.ID, &user.Username, &emailVal, &smbHash, &providerVal,
+		&user.IsAdmin, &user.IsActive, &totpEnabled, &user.CreatedAt, &user.UpdatedAt)
+
+	if err != nil {
+		return RespondError(c, ErrInternal("Failed to fetch user"))
+	}
+
+	if emailVal.Valid {
+		user.Email = emailVal.String
+	}
+	if providerVal.Valid {
+		user.Provider = providerVal.String
+	} else {
+		user.Provider = "local"
+	}
+	user.HasSMB = smbHash.Valid && smbHash.String != ""
+	user.Has2FA = totpEnabled.Valid && totpEnabled.Bool
+	user.SetupCompleted = true
+
+	// Log the setup completion
+	ip := c.RealIP()
+	_ = h.auditHandler.LogEvent(&user.ID, ip, "security.initial_setup", user.Username, map[string]interface{}{
+		"oldUsername": claims.Username,
+		"newUsername": req.NewUsername,
+	})
+
+	return c.JSON(http.StatusOK, LoginResponse{
+		Token: token,
+		User:  user,
+	})
 }
 

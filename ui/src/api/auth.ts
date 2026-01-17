@@ -19,6 +19,7 @@ export interface User {
   isActive: boolean
   hasSmb: boolean
   has2fa: boolean
+  setupCompleted: boolean
   storageQuota: number  // 0 = unlimited
   storageUsed: number
   createdAt: string
@@ -41,7 +42,14 @@ export interface AuthResponse {
   token?: string
   user?: User
   requires2fa?: boolean
+  requiresSetup?: boolean
   userId?: string
+}
+
+export interface InitialSetupRequest {
+  newUsername: string
+  newPassword: string
+  email?: string
 }
 
 export interface UpdateProfileRequest {
@@ -132,6 +140,19 @@ export interface SSOSettings {
  */
 export async function login(data: LoginRequest): Promise<AuthResponse> {
   return api.post<AuthResponse>('/auth/login', data, { noAuth: true })
+}
+
+/**
+ * Complete initial admin setup
+ * Requires temporary token from login response
+ */
+export async function completeInitialSetup(
+  token: string,
+  data: InitialSetupRequest
+): Promise<AuthResponse> {
+  return api.post<AuthResponse>('/auth/initial-setup', data, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
 }
 
 /**

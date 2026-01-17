@@ -247,6 +247,9 @@ func main() {
 	api.POST("/auth/login", authHandler.Login)
 	api.POST("/auth/2fa/verify", totpHandler.Verify2FA)
 
+	// Initial setup route (requires auth token from login)
+	api.POST("/auth/initial-setup", authHandler.InitialSetup, authHandler.JWTMiddleware)
+
 	// SSO routes (public)
 	api.GET("/auth/sso/providers", ssoHandler.GetProviders)
 	api.GET("/auth/sso/auth/:providerId", ssoHandler.GetAuthURL)

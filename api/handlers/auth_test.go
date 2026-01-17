@@ -22,13 +22,13 @@ func TestLogin_Success(t *testing.T) {
 	// Create password hash
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 
-	// Mock database query
+	// Mock database query (includes setup_completed column)
 	rows := sqlmock.NewRows([]string{
 		"id", "username", "email", "password_hash", "smb_hash", "provider",
-		"is_admin", "is_active", "totp_enabled", "created_at", "updated_at",
+		"is_admin", "is_active", "totp_enabled", "setup_completed", "created_at", "updated_at",
 	}).AddRow(
 		"user-123", "testuser", "test@example.com", string(passwordHash), nil, "local",
-		false, true, false, time.Now(), time.Now(),
+		false, true, false, true, time.Now(), time.Now(),
 	)
 
 	tc.Mock.ExpectQuery(regexp.QuoteMeta(`SELECT id, username, email, password_hash, smb_hash, provider, is_admin, is_active`)).
@@ -77,10 +77,10 @@ func TestLogin_InvalidPassword(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{
 		"id", "username", "email", "password_hash", "smb_hash", "provider",
-		"is_admin", "is_active", "totp_enabled", "created_at", "updated_at",
+		"is_admin", "is_active", "totp_enabled", "setup_completed", "created_at", "updated_at",
 	}).AddRow(
 		"user-123", "testuser", "test@example.com", string(passwordHash), nil, "local",
-		false, true, false, time.Now(), time.Now(),
+		false, true, false, true, time.Now(), time.Now(),
 	)
 
 	tc.Mock.ExpectQuery(regexp.QuoteMeta(`SELECT id, username, email, password_hash, smb_hash, provider, is_admin, is_active`)).
@@ -152,10 +152,10 @@ func TestLogin_DisabledAccount(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{
 		"id", "username", "email", "password_hash", "smb_hash", "provider",
-		"is_admin", "is_active", "totp_enabled", "created_at", "updated_at",
+		"is_admin", "is_active", "totp_enabled", "setup_completed", "created_at", "updated_at",
 	}).AddRow(
 		"user-123", "testuser", "test@example.com", string(passwordHash), nil, "local",
-		false, false, false, time.Now(), time.Now(), // is_active = false
+		false, false, false, true, time.Now(), time.Now(), // is_active = false
 	)
 
 	tc.Mock.ExpectQuery(regexp.QuoteMeta(`SELECT id, username, email, password_hash, smb_hash, provider, is_admin, is_active`)).

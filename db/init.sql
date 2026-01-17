@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS users (
     locked_until TIMESTAMPTZ DEFAULT NULL,
     failed_login_count INT DEFAULT 0,
     last_failed_login TIMESTAMPTZ DEFAULT NULL,
+    setup_completed BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -270,8 +271,9 @@ CREATE INDEX IF NOT EXISTS idx_shared_folders_quota ON shared_folders(storage_qu
 -- =============================================================================
 
 -- Create default admin account (password: admin1234)
-INSERT INTO users (username, email, password_hash, is_admin, is_active)
-VALUES ('admin', 'admin@localhost', '$2a$10$mRaibXXeo0eBpeg3gDgequkcQynn8GuvLflrbR9pRYAVDO/nf5pqW', TRUE, TRUE)
+-- setup_completed = FALSE to force initial setup on first login
+INSERT INTO users (username, email, password_hash, is_admin, is_active, setup_completed)
+VALUES ('admin', 'admin@localhost', '$2a$10$mRaibXXeo0eBpeg3gDgequkcQynn8GuvLflrbR9pRYAVDO/nf5pqW', TRUE, TRUE, FALSE)
 ON CONFLICT (username) DO NOTHING;
 
 -- Insert default settings
@@ -310,7 +312,8 @@ INSERT INTO schema_migrations (version, name) VALUES
     ('20240109000001', '004_starred_and_locks'),
     ('20240110000001', '005_login_lockout'),
     ('20240111000001', '006_performance_indexes'),
-    ('20240112000001', '007_shared_folder_storage')
+    ('20240112000001', '007_shared_folder_storage'),
+    ('20240113000001', '008_initial_setup')
 ON CONFLICT (version) DO NOTHING;
 
 -- =============================================================================

@@ -4,7 +4,7 @@ package main
 // These can be overridden at build time using ldflags:
 // go build -ldflags "-X main.Version=1.0.0 -X main.BuildTime=2024-01-01 -X main.GitCommit=abc123"
 var (
-	Version   = "0.1.0"
+	Version   = "0.2.0"
 	BuildTime = ""
 	GitCommit = ""
 )

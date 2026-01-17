@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { getSSOProviders, getSSOAuthURL, SSOProviderPublic } from '../api/auth'
+import InitialSetupModal from './InitialSetupModal'
 import './LoginPage.css'
 
 // Provider icons
@@ -41,7 +42,7 @@ function LoginPage() {
   const [ssoLoading, setSSOLoading] = useState<string | null>(null)
   const [ssoError, setSSOError] = useState<string | null>(null)
 
-  const { login, verify2FACode, cancel2FA, isLoading, error, clearError, requires2FA, setToken } = useAuthStore()
+  const { login, verify2FACode, cancel2FA, isLoading, error, clearError, requires2FA, requiresSetup, setToken } = useAuthStore()
 
   // Check for SSO callback token on mount
   useEffect(() => {
@@ -85,12 +86,13 @@ function LoginPage() {
     setSSOError(null)
 
     try {
-      const needs2FA = await login({ username, password, rememberMe })
-      if (!needs2FA) {
+      const result = await login({ username, password, rememberMe })
+      if (result === 'success') {
         // Force page reload to ensure state is properly updated
         window.location.reload()
       }
       // If 2FA is required, the UI will switch to 2FA form
+      // If setup is required, the UI will switch to setup modal
     } catch {
       // Error is handled by the store
     }
@@ -150,6 +152,11 @@ function LoginPage() {
       default:
         return { backgroundColor: '#6c757d', color: '#fff' }
     }
+  }
+
+  // Initial setup modal (shown when admin needs to change default credentials)
+  if (requiresSetup) {
+    return <InitialSetupModal />
   }
 
   // 2FA verification form
