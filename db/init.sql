@@ -1,5 +1,5 @@
 -- FileHatch Database Initialization
--- Version: 2.0.0
+-- Version: 2.1.0
 --
 -- 이 파일은 Docker 컨테이너 첫 실행 시 자동으로 실행됩니다.
 -- 마이그레이션 시스템을 사용하여 스키마를 관리합니다.
@@ -36,9 +36,14 @@ CREATE TABLE IF NOT EXISTS users (
     is_admin BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
     storage_quota BIGINT DEFAULT 0,
+    storage_used BIGINT DEFAULT 0,
+    trash_used BIGINT DEFAULT 0,
     totp_secret VARCHAR(255),
     totp_enabled BOOLEAN DEFAULT FALSE,
     totp_backup_codes TEXT,
+    locked_until TIMESTAMPTZ DEFAULT NULL,
+    failed_login_count INT DEFAULT 0,
+    last_failed_login TIMESTAMPTZ DEFAULT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -84,7 +89,9 @@ CREATE TABLE IF NOT EXISTS shares (
     allowed_extensions TEXT,
     upload_count INT DEFAULT 0,
     max_total_size BIGINT DEFAULT 0,
-    total_uploaded_size BIGINT DEFAULT 0
+    total_uploaded_size BIGINT DEFAULT 0,
+    expiration_notified BOOLEAN DEFAULT FALSE,
+    expiration_notified_at TIMESTAMPTZ
 );
 
 -- 5. Shared Folders (Team Drives)
@@ -93,6 +100,7 @@ CREATE TABLE IF NOT EXISTS shared_folders (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     storage_quota BIGINT DEFAULT 0,
+    storage_used BIGINT DEFAULT 0,
     created_by UUID REFERENCES users(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -183,6 +191,26 @@ CREATE TABLE IF NOT EXISTS sso_providers (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 12. Starred Files (Favorites)
+CREATE TABLE IF NOT EXISTS starred_files (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    file_path VARCHAR(1024) NOT NULL,
+    starred_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, file_path)
+);
+
+-- 13. File Locks (Concurrent Edit Prevention)
+CREATE TABLE IF NOT EXISTS file_locks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    file_path VARCHAR(1024) NOT NULL UNIQUE,
+    locked_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    locked_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ,
+    lock_type VARCHAR(20) DEFAULT 'exclusive',
+    reason VARCHAR(255)
+);
+
 -- =============================================================================
 -- Indexes
 -- =============================================================================
@@ -211,6 +239,32 @@ CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at
 CREATE INDEX IF NOT EXISTS idx_sso_providers_enabled ON sso_providers(is_enabled);
 CREATE INDEX IF NOT EXISTS idx_sso_providers_type ON sso_providers(provider_type);
 
+-- Migration 003: Storage tracking
+CREATE INDEX IF NOT EXISTS idx_users_storage ON users(storage_used);
+
+-- Migration 004: Starred files and locks
+CREATE INDEX IF NOT EXISTS idx_starred_files_user ON starred_files(user_id);
+CREATE INDEX IF NOT EXISTS idx_starred_files_path ON starred_files(file_path);
+CREATE INDEX IF NOT EXISTS idx_file_locks_path ON file_locks(file_path);
+CREATE INDEX IF NOT EXISTS idx_file_locks_user ON file_locks(locked_by);
+CREATE INDEX IF NOT EXISTS idx_file_locks_expires ON file_locks(expires_at) WHERE expires_at IS NOT NULL;
+
+-- Migration 005: Login lockout
+CREATE INDEX IF NOT EXISTS idx_users_locked_until ON users(locked_until) WHERE locked_until IS NOT NULL;
+
+-- Migration 006: Performance indexes
+CREATE INDEX IF NOT EXISTS idx_sfm_user_folder ON shared_folder_members(user_id, shared_folder_id);
+CREATE INDEX IF NOT EXISTS idx_shared_folders_name_active ON shared_folders(name, is_active) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_file_shares_recipient_path ON file_shares(shared_with_id, item_path);
+CREATE INDEX IF NOT EXISTS idx_file_shares_owner_path ON file_shares(owner_id, item_path);
+CREATE INDEX IF NOT EXISTS idx_audit_type_ts ON audit_logs(event_type, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_security_events ON audit_logs(event_type, ts DESC) WHERE event_type LIKE 'security.%';
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, created_at DESC) WHERE is_read = FALSE;
+CREATE INDEX IF NOT EXISTS idx_users_active ON users(username, is_active) WHERE is_active = TRUE;
+
+-- Migration 007: Shared folder storage
+CREATE INDEX IF NOT EXISTS idx_shared_folders_quota ON shared_folders(storage_quota, storage_used) WHERE is_active = TRUE AND storage_quota > 0;
+
 -- =============================================================================
 -- Default Data (Migration: 002)
 -- =============================================================================
@@ -236,7 +290,14 @@ INSERT INTO system_settings (key, value, description) VALUES
     ('sso_enabled', 'false', 'SSO 로그인 활성화 여부'),
     ('sso_only_mode', 'false', 'SSO 전용 모드 (로컬 로그인 비활성화)'),
     ('sso_auto_register', 'true', 'SSO 최초 로그인 시 자동 사용자 생성'),
-    ('sso_allowed_domains', '', 'SSO 허용 이메일 도메인 (쉼표로 구분, 비어있으면 모두 허용)')
+    ('sso_allowed_domains', '', 'SSO 허용 이메일 도메인 (쉼표로 구분, 비어있으면 모두 허용)'),
+    -- Migration 005: Brute force protection settings
+    ('bruteforce_max_attempts', '5', '사용자별 로그인 최대 시도 횟수'),
+    ('bruteforce_window_minutes', '5', '시도 횟수 추적 시간 (분)'),
+    ('bruteforce_lock_minutes', '15', '계정 잠금 시간 (분)'),
+    ('bruteforce_ip_max_attempts', '20', 'IP별 최대 로그인 시도 횟수'),
+    ('bruteforce_ip_lock_minutes', '30', 'IP 잠금 시간 (분)'),
+    ('bruteforce_enabled', 'true', '브루트포스 방어 활성화 여부')
 ON CONFLICT (key) DO NOTHING;
 
 -- =============================================================================
@@ -244,7 +305,12 @@ ON CONFLICT (key) DO NOTHING;
 -- =============================================================================
 INSERT INTO schema_migrations (version, name) VALUES
     ('20240101000001', '001_initial_schema'),
-    ('20240101000002', '002_default_data')
+    ('20240101000002', '002_default_data'),
+    ('20240108000001', '003_storage_tracking'),
+    ('20240109000001', '004_starred_and_locks'),
+    ('20240110000001', '005_login_lockout'),
+    ('20240111000001', '006_performance_indexes'),
+    ('20240112000001', '007_shared_folder_storage')
 ON CONFLICT (version) DO NOTHING;
 
 -- =============================================================================
@@ -261,3 +327,5 @@ COMMENT ON TABLE system_settings IS 'System-wide configuration settings';
 COMMENT ON TABLE file_metadata IS 'File descriptions and tags for organization';
 COMMENT ON TABLE notifications IS 'In-app notification alerts for users';
 COMMENT ON TABLE sso_providers IS 'OAuth2/OIDC SSO provider configurations';
+COMMENT ON TABLE starred_files IS 'User favorite files and folders';
+COMMENT ON TABLE file_locks IS 'File locking for concurrent edit prevention';

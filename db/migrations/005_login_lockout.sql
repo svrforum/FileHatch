@@ -1,6 +1,6 @@
 -- Migration: 005_login_lockout
 -- Description: Add login lockout fields for brute force protection
--- Date: 2026-01-13
+-- Version: 20240110000001
 
 -- Add login lockout fields to users table
 ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ DEFAULT NULL;
@@ -23,5 +23,5 @@ ON CONFLICT (key) DO NOTHING;
 
 -- Record migration
 INSERT INTO schema_migrations (version, name, checksum)
-VALUES ('005', 'login_lockout', md5('005_login_lockout'))
+VALUES ('20240110000001', '005_login_lockout', md5('005_login_lockout'))
 ON CONFLICT (version) DO NOTHING;

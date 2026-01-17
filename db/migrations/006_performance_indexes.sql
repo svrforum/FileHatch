@@ -1,6 +1,6 @@
 -- Migration: 006_performance_indexes
 -- Description: Add composite indexes for frequently used query patterns
--- Date: 2026-01-13
+-- Version: 20240111000001
 
 -- =============================================================================
 -- Composite Indexes for Permission Checks
@@ -66,5 +66,5 @@ CREATE INDEX IF NOT EXISTS idx_users_active
 -- Record Migration
 -- =============================================================================
 INSERT INTO schema_migrations (version, name, checksum)
-VALUES ('20260113000006', '006_performance_indexes', 'performance_idx_v1')
+VALUES ('20240111000001', '006_performance_indexes', 'performance_idx_v1')
 ON CONFLICT (version) DO NOTHING;
