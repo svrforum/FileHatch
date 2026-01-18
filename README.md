@@ -264,8 +264,7 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
 mkdir -p filehatch && cd filehatch && \
 curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -o .env && \
 curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml -o docker-compose.yml && \
-mkdir -p config db && touch config/smb.conf && \
-curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/db/init.sql -o db/init.sql && \
+mkdir -p config && touch config/smb.conf && \
 sed -i "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env && \
 sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env && \
 sed -i "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env && \
@@ -286,21 +285,18 @@ curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-comp
 # 3. config 디렉토리 및 SMB 설정 파일 생성
 mkdir -p config && touch config/smb.conf
 
-# 4. 데이터베이스 초기화 스크립트 다운로드
-mkdir -p db && curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/db/init.sql -o db/init.sql
-
-# 5. 보안 키 자동 생성 (중요!)
+# 4. 보안 키 자동 생성 (중요!)
 sed -i "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env
 sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env
 sed -i "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env
 
-# 6. 서비스 시작
+# 5. 서비스 시작
 docker compose up -d
 
-# 7. 상태 확인
+# 6. 상태 확인
 docker compose ps
 
-# 8. 로그 확인
+# 7. 로그 확인
 docker compose logs -f
 ```
 
@@ -310,8 +306,7 @@ docker compose logs -f
 mkdir -p filehatch && cd filehatch && \
 wget -q https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -O .env && \
 wget -q https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml && \
-mkdir -p config db && touch config/smb.conf && \
-wget -q https://raw.githubusercontent.com/svrforum/FileHatch/main/db/init.sql -O db/init.sql && \
+mkdir -p config && touch config/smb.conf && \
 sed -i "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env && \
 sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env && \
 sed -i "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env && \
@@ -324,8 +319,7 @@ docker compose up -d
 mkdir -p filehatch && cd filehatch && \
 curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -o .env && \
 curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml -o docker-compose.yml && \
-mkdir -p config db && touch config/smb.conf && \
-curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/db/init.sql -o db/init.sql && \
+mkdir -p config && touch config/smb.conf && \
 sed -i '' "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env && \
 sed -i '' "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env && \
 sed -i '' "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env && \

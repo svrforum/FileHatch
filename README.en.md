@@ -264,8 +264,7 @@ Run on any server with Docker installed:
 mkdir -p filehatch && cd filehatch && \
 curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -o .env && \
 curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml -o docker-compose.yml && \
-mkdir -p config db && touch config/smb.conf && \
-curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/db/init.sql -o db/init.sql && \
+mkdir -p config && touch config/smb.conf && \
 sed -i "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env && \
 sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env && \
 sed -i "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env && \
@@ -277,8 +276,7 @@ For macOS (sed syntax differs):
 mkdir -p filehatch && cd filehatch && \
 curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -o .env && \
 curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml -o docker-compose.yml && \
-mkdir -p config db && touch config/smb.conf && \
-curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/db/init.sql -o db/init.sql && \
+mkdir -p config && touch config/smb.conf && \
 sed -i '' "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env && \
 sed -i '' "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env && \
 sed -i '' "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env && \
@@ -290,8 +288,7 @@ Using wget:
 mkdir -p filehatch && cd filehatch && \
 wget -q https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -O .env && \
 wget -q https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml -O docker-compose.yml && \
-mkdir -p config db && touch config/smb.conf && \
-wget -q https://raw.githubusercontent.com/svrforum/FileHatch/main/db/init.sql -O db/init.sql && \
+mkdir -p config && touch config/smb.conf && \
 sed -i "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env && \
 sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env && \
 sed -i "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env && \
@@ -311,18 +308,15 @@ curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-comp
 # 3. Create config directory and SMB config file
 mkdir -p config && touch config/smb.conf
 
-# 4. Download database initialization script
-mkdir -p db && curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/db/init.sql -o db/init.sql
-
-# 5. Generate security keys (IMPORTANT!)
+# 4. Generate security keys (IMPORTANT!)
 sed -i "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env
 sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env
 sed -i "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env
 
-# 6. Start services
+# 5. Start services
 docker compose up -d
 
-# 7. Check status
+# 6. Check status
 docker compose ps
 ```
 
