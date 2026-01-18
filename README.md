@@ -256,32 +256,93 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
 - 최소 4GB RAM
 - 사용 가능한 포트: 3080 (웹), 445/139 (SMB)
 
-### 기본 설치 (권장)
+### 원라인 설치 (가장 쉬움)
+
+아래 명령어를 복사하여 서버에서 실행하세요:
+
+```bash
+mkdir -p filehatch && cd filehatch && \
+curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -o .env && \
+curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml -o docker-compose.yml && \
+mkdir -p config && \
+sed -i "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env && \
+sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env && \
+sed -i "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env && \
+docker compose up -d && \
+echo "✅ FileHatch 설치 완료! http://localhost:3080 에서 접속하세요."
+```
+
+### 단계별 설치
+
+```bash
+# 1. 설치 디렉토리 생성
+mkdir -p filehatch && cd filehatch
+
+# 2. 설정 파일 다운로드
+curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -o .env
+curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml -o docker-compose.yml
+
+# 3. config 디렉토리 생성 (SMB용)
+mkdir -p config
+
+# 4. 보안 키 자동 생성 (중요!)
+sed -i "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env
+sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env
+sed -i "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env
+
+# 5. 서비스 시작
+docker compose up -d
+
+# 6. 상태 확인
+docker compose ps
+
+# 7. 로그 확인
+docker compose logs -f
+```
+
+### wget 사용 시
+
+```bash
+mkdir -p filehatch && cd filehatch && \
+wget -q https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -O .env && \
+wget -q https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml && \
+mkdir -p config && \
+sed -i "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env && \
+sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env && \
+sed -i "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env && \
+docker compose up -d
+```
+
+### macOS에서 설치
+
+```bash
+mkdir -p filehatch && cd filehatch && \
+curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -o .env && \
+curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml -o docker-compose.yml && \
+mkdir -p config && \
+sed -i '' "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env && \
+sed -i '' "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env && \
+sed -i '' "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env && \
+docker compose up -d
+```
+
+### 소스에서 설치 (개발용)
 
 ```bash
 # 저장소 클론
-git clone https://github.com/your-org/FileHatch.git
+git clone https://github.com/svrforum/FileHatch.git
 cd FileHatch
 
-# 자동 설정 스크립트 실행 (환경설정, 보안키 생성, 빌드, 시작)
-./scripts/setup.sh
-```
-
-또는 수동 설치:
-
-```bash
 # 환경 변수 설정
 cp .env.example .env
-# .env 파일을 편집하여 JWT_SECRET, ENCRYPTION_KEY 등 설정
+
+# 보안 키 생성
+sed -i "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env
+sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env
+sed -i "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env
 
 # 모든 서비스 빌드 및 시작
 docker compose up -d --build
-
-# 상태 확인
-docker compose ps
-
-# 로그 확인
-docker compose logs -f
 ```
 
 > 💡 **참고**: 데이터베이스 마이그레이션은 API 서버 시작 시 자동으로 실행됩니다.
@@ -300,10 +361,9 @@ docker compose logs -f
 ```
 사용자명: admin
 비밀번호: admin1234
-이메일: admin@localhost
 ```
 
-> ⚠️ **보안 주의**: 프로덕션 환경에서는 반드시 비밀번호를 변경하세요!
+> 🔐 **초기 설정**: 첫 로그인 시 관리자 계정의 사용자명과 비밀번호를 변경하는 **초기 설정 화면**이 표시됩니다. 이 과정을 완료해야 시스템을 사용할 수 있습니다.
 
 ---
 

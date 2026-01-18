@@ -256,11 +256,75 @@ Shared workspace for team collaboration
 - Minimum 4GB RAM
 - Available ports: 3080 (web), 445/139 (SMB)
 
-### Basic Installation (Recommended)
+### One-Line Install (Recommended)
+
+Run on any server with Docker installed:
+
+```bash
+mkdir -p filehatch && cd filehatch && \
+curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -o .env && \
+curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml -o docker-compose.yml && \
+mkdir -p config && \
+sed -i "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env && \
+sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env && \
+sed -i "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env && \
+docker compose up -d
+```
+
+For macOS (sed syntax differs):
+```bash
+mkdir -p filehatch && cd filehatch && \
+curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -o .env && \
+curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml -o docker-compose.yml && \
+mkdir -p config && \
+sed -i '' "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env && \
+sed -i '' "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env && \
+sed -i '' "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env && \
+docker compose up -d
+```
+
+Using wget:
+```bash
+mkdir -p filehatch && cd filehatch && \
+wget -q https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -O .env && \
+wget -q https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml -O docker-compose.yml && \
+mkdir -p config && \
+sed -i "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env && \
+sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env && \
+sed -i "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env && \
+docker compose up -d
+```
+
+### Step-by-Step Install
+
+```bash
+# 1. Create directory
+mkdir -p filehatch && cd filehatch
+
+# 2. Download config files
+curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/.env.example -o .env
+curl -fsSL https://raw.githubusercontent.com/svrforum/FileHatch/main/docker-compose.yml -o docker-compose.yml
+
+# 3. Create config directory
+mkdir -p config
+
+# 4. Generate security keys (IMPORTANT!)
+sed -i "s/JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env
+sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env
+sed -i "s/DB_PASS=.*/DB_PASS=$(openssl rand -base64 16 | tr -d '=+/')/" .env
+
+# 5. Start services
+docker compose up -d
+
+# 6. Check status
+docker compose ps
+```
+
+### Source Install (Development)
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/FileHatch.git
+git clone https://github.com/svrforum/FileHatch.git
 cd FileHatch
 
 # Run auto setup script (environment config, security key generation, build, start)
@@ -300,10 +364,11 @@ docker compose logs -f
 ```
 Username: admin
 Password: admin1234
-Email: admin@localhost
 ```
 
-> **Security Warning**: Make sure to change the password in production environments!
+> **First Login**: On first login with the default admin account, you will be prompted to change your username and password through the initial setup screen. This is a mandatory step for security.
+
+> **Security Warning**: The initial setup screen only appears once. Make sure to remember your new credentials!
 
 ---
 
