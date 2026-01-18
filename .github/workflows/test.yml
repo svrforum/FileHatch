@@ -1,13 +1,12 @@
 name: Test Suite
 
-# Test workflow runs on push/PR to main and develop branches
+# Test workflow runs on pull requests only
+# For releases, tests are run as part of the release workflow
 # Uses:
 #   - docker-compose-dev.yaml: For build validation (local builds)
 #   - docker-compose.yml: For E2E and health tests (Docker Hub production images)
 
 on:
-  push:
-    branches: [main, develop]
   pull_request:
     branches: [main, develop]
 
