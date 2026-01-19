@@ -72,8 +72,10 @@ sync_users() {
 
             # Set Samba password
             if [ -n "$password" ]; then
-                (echo "$password"; echo "$password") | smbpasswd -a -s "$username" 2>/dev/null
-                smbpasswd -e "$username" 2>/dev/null || true
+                # Use sed to get password and pass directly to smbpasswd
+                # Duplicate line using sed and pipe directly to avoid bash variable expansion
+                sed -n "s/^${username}://p" "$SYNC_FILE" | head -1 | sed 'p' | smbpasswd -a -s "$username"
+                smbpasswd -e "$username" || true
                 echo "[FileHatch-Samba] Updated Samba user: $username"
             fi
         done < "$SYNC_FILE"
@@ -82,7 +84,15 @@ sync_users() {
     fi
 }
 
-# Initial sync
+# Start smbd and nmbd first (needed for TDB backend initialization)
+echo "[FileHatch-Samba] Starting Samba services..."
+nmbd -D 2>/dev/null || true
+smbd -D 2>/dev/null || true
+
+# Wait for Samba to initialize
+sleep 2
+
+# Initial sync (after Samba is running)
 sync_users
 
 # Real-time file watcher in background
@@ -106,7 +116,5 @@ sync_users
 
 echo "[FileHatch-Samba] User sync service started."
 
-# Start smbd and nmbd directly
-echo "[FileHatch-Samba] Starting Samba services..."
-nmbd -D 2>/dev/null || true
-exec smbd -F --no-process-group "$@"
+# Keep container running
+wait

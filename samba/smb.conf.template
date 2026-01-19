@@ -51,7 +51,7 @@
 # When user 'admin' connects, they see 'admin' share pointing to /data/users/admin
 [homes]
    comment = Home Directory (%U)
-   browseable = yes
+   browseable = no
    read only = no
    valid users = %S
    create mask = 0644

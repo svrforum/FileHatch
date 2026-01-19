@@ -408,17 +408,29 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
                         </svg>
                         <span>SMB (Windows)</span>
                       </div>
-                      <div className="connection-url" onClick={() => {
-                        const smbUrl = `\\\\${window.location.hostname}\\${user.username}`
-                        navigator.clipboard.writeText(smbUrl)
-                        setMessage({ type: 'success', text: 'SMB 주소가 복사되었습니다.' })
+                      <div className="connection-url" onClick={async () => {
+                        const smbUrl = `\\\\${window.location.hostname}`
+                        try {
+                          await navigator.clipboard.writeText(smbUrl)
+                          setMessage({ type: 'success', text: 'SMB 주소가 복사되었습니다.' })
+                        } catch {
+                          // Fallback for non-HTTPS environments
+                          const textArea = document.createElement('textarea')
+                          textArea.value = smbUrl
+                          document.body.appendChild(textArea)
+                          textArea.select()
+                          document.execCommand('copy')
+                          document.body.removeChild(textArea)
+                          setMessage({ type: 'success', text: 'SMB 주소가 복사되었습니다.' })
+                        }
                       }}>
-                        <code>\\{window.location.hostname}\{user.username}</code>
+                        <code>{'\\\\' + window.location.hostname}</code>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                           <path d="M8 4V16C8 17.1046 8.89543 18 10 18H18C19.1046 18 20 17.1046 20 16V7.242C20 6.711 19.789 6.201 19.414 5.828L16.172 2.586C15.799 2.211 15.289 2 14.758 2H10C8.89543 2 8 2.89543 8 4Z" stroke="currentColor" strokeWidth="2"/>
                           <path d="M16 18V20C16 21.1046 15.1046 22 14 22H6C4.89543 22 4 21.1046 4 20V9C4 7.89543 4.89543 7 6 7H8" stroke="currentColor" strokeWidth="2"/>
                         </svg>
                       </div>
+                      <span className="connection-hint">{user.username}(내 파일), shared(공유 폴더) 접근 가능</span>
                     </div>
 
                     <div className="connection-card">
@@ -430,10 +442,21 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
                         </svg>
                         <span>WebDAV</span>
                       </div>
-                      <div className="connection-url" onClick={() => {
+                      <div className="connection-url" onClick={async () => {
                         const webdavUrl = `${window.location.protocol}//${window.location.host}/webdav/`
-                        navigator.clipboard.writeText(webdavUrl)
-                        setMessage({ type: 'success', text: 'WebDAV 주소가 복사되었습니다.' })
+                        try {
+                          await navigator.clipboard.writeText(webdavUrl)
+                          setMessage({ type: 'success', text: 'WebDAV 주소가 복사되었습니다.' })
+                        } catch {
+                          // Fallback for non-HTTPS environments
+                          const textArea = document.createElement('textarea')
+                          textArea.value = webdavUrl
+                          document.body.appendChild(textArea)
+                          textArea.select()
+                          document.execCommand('copy')
+                          document.body.removeChild(textArea)
+                          setMessage({ type: 'success', text: 'WebDAV 주소가 복사되었습니다.' })
+                        }
                       }}>
                         <code>{window.location.protocol}//{window.location.host}/webdav/</code>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
