@@ -1,48 +1,9 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useCallback, useRef, useState, useEffect } from 'react'
 import { useModalKeyboard } from '../hooks/useModalKeyboard'
-import * as tus from 'tus-js-client'
-import { formatFileSize, checkFileExists } from '../api/files'
+import { formatFileSize } from '../api/files'
 import { useAuthStore } from '../stores/authStore'
-import { useToastStore, parseUploadError } from '../stores/toastStore'
+import { useUploadStore } from '../stores/uploadStore'
 import './UploadModal.css'
-
-// Helper to get auth token
-function getAuthToken(): string | null {
-  const stored = localStorage.getItem('filehatch-auth')
-  if (stored) {
-    try {
-      const { state } = JSON.parse(stored)
-      return state?.token || null
-    } catch {
-      return null
-    }
-  }
-  return null
-}
-
-// No-op URL storage to prevent caching of internal URLs
-const noopUrlStorage: tus.UrlStorage = {
-  findAllUploads: async () => [],
-  findUploadsByFingerprint: async () => [],
-  removeUpload: async () => {},
-  addUpload: async () => '',
-}
-
-interface UploadFile {
-  id: string
-  file: File
-  relativePath: string // For folder uploads, stores the relative path
-  progress: number
-  status: 'pending' | 'uploading' | 'completed' | 'error' | 'duplicate'
-  error?: string
-  upload?: tus.Upload
-  overwrite?: boolean
-}
-
-interface DuplicateInfo {
-  fileId: string
-  filename: string
-}
 
 interface UploadModalProps {
   isOpen: boolean
@@ -52,44 +13,43 @@ interface UploadModalProps {
 }
 
 function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadModalProps) {
-  const [files, setFiles] = useState<UploadFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
-  const [duplicateInfo, setDuplicateInfo] = useState<DuplicateInfo | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
   const { user } = useAuthStore()
 
-  const addFiles = useCallback((newFiles: FileList | File[], isFolder: boolean = false) => {
-    const fileArray = Array.from(newFiles)
-    const uploadFiles: UploadFile[] = fileArray
-      .filter((file) => file.size > 0) // Filter out empty directory entries
-      .map((file) => {
-        // Get relative path from webkitRelativePath or default to filename
-        let relativePath = ''
-        if (isFolder && 'webkitRelativePath' in file && file.webkitRelativePath) {
-          // webkitRelativePath includes the folder name, e.g., "myFolder/subfolder/file.txt"
-          relativePath = file.webkitRelativePath
-        }
-        return {
-          id: `${relativePath || file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          file,
-          relativePath,
-          progress: 0,
-          status: 'pending' as const,
-        }
-      })
-    setFiles((prev) => [...prev, ...uploadFiles])
-  }, [])
+  // Use global upload store
+  const {
+    items,
+    duplicateFile,
+    addFiles,
+    resolveDuplicate,
+    removeUpload,
+    getPendingCount,
+    getUploadingCount,
+    getCompletedCount,
+    hasActiveUploads,
+  } = useUploadStore()
 
+  // Handle file selection
+  const handleFilesSelected = useCallback(
+    (fileList: FileList | null, isFolder: boolean = false) => {
+      if (!fileList || fileList.length === 0) return
+      addFiles(Array.from(fileList), currentPath, isFolder)
+    },
+    [addFiles, currentPath]
+  )
+
+  // Drag and drop handlers
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragging(false)
       if (e.dataTransfer.files.length > 0) {
-        addFiles(e.dataTransfer.files)
+        handleFilesSelected(e.dataTransfer.files, false)
       }
     },
-    [addFiles]
+    [handleFilesSelected]
   )
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -102,217 +62,54 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
     setIsDragging(false)
   }, [])
 
-  const doUpload = useCallback(
-    (uploadFile: UploadFile, overwrite: boolean) => {
-      // Calculate the target path including any folder structure from relative path
-      let targetPath = currentPath
-      if (uploadFile.relativePath) {
-        // Get the directory part of the relative path (exclude filename)
-        const pathParts = uploadFile.relativePath.split('/')
-        pathParts.pop() // Remove filename
-        if (pathParts.length > 0) {
-          const relativeDirPath = pathParts.join('/')
-          targetPath = currentPath === '/'
-            ? '/' + relativeDirPath
-            : currentPath + '/' + relativeDirPath
-        }
-      }
-
-      const token = getAuthToken()
-      const upload = new tus.Upload(uploadFile.file, {
-        endpoint: `${window.location.origin}/api/upload/`,
-        retryDelays: [0, 1000, 3000, 5000],
-        removeFingerprintOnSuccess: true,
-        urlStorage: noopUrlStorage,
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        metadata: {
-          filename: uploadFile.file.name,
-          filetype: uploadFile.file.type,
-          path: targetPath,
-          username: user?.username || '',
-          overwrite: overwrite ? 'true' : 'false',
-        },
-        onError: (error) => {
-          // Parse error message for user-friendly display
-          const errorMessage = parseUploadError(error.message)
-
-          // Show toast notification for the error
-          useToastStore.getState().showError(errorMessage)
-
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === uploadFile.id
-                ? { ...f, status: 'error', error: errorMessage }
-                : f
-            )
-          )
-        },
-        onProgress: (bytesUploaded, bytesTotal) => {
-          const progress = Math.round((bytesUploaded / bytesTotal) * 100)
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === uploadFile.id ? { ...f, progress, status: 'uploading' } : f
-            )
-          )
-        },
-        onSuccess: () => {
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === uploadFile.id ? { ...f, progress: 100, status: 'completed' } : f
-            )
-          )
-          onUploadComplete()
-        },
-      })
-
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.id === uploadFile.id ? { ...f, upload, status: 'uploading' } : f
-        )
-      )
-
-      upload.start()
+  // Remove file from queue
+  const handleRemoveFile = useCallback(
+    (id: string) => {
+      removeUpload(id)
     },
-    [currentPath, onUploadComplete]
+    [removeUpload]
   )
 
-  const checkAndUpload = useCallback(
-    async (uploadFile: UploadFile) => {
-      try {
-        // Calculate the target path including any folder structure from relative path
-        let targetPath = currentPath
-        if (uploadFile.relativePath) {
-          const pathParts = uploadFile.relativePath.split('/')
-          pathParts.pop() // Remove filename
-          if (pathParts.length > 0) {
-            const relativeDirPath = pathParts.join('/')
-            targetPath = currentPath === '/'
-              ? '/' + relativeDirPath
-              : currentPath + '/' + relativeDirPath
-          }
-        }
-
-        const result = await checkFileExists(targetPath, uploadFile.file.name)
-        if (result.exists) {
-          // Show duplicate modal
-          setDuplicateInfo({ fileId: uploadFile.id, filename: uploadFile.relativePath || uploadFile.file.name })
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === uploadFile.id ? { ...f, status: 'duplicate' } : f
-            )
-          )
-        } else {
-          // No duplicate, upload directly
-          doUpload(uploadFile, false)
-        }
-      } catch {
-        // If check fails, just upload (backend will handle duplicates)
-        doUpload(uploadFile, false)
-      }
-    },
-    [currentPath, doUpload]
-  )
-
+  // Handle duplicate actions
   const handleDuplicateAction = useCallback(
-    (action: 'overwrite' | 'rename' | 'cancel') => {
-      if (!duplicateInfo) return
-
-      const file = files.find((f) => f.id === duplicateInfo.fileId)
-      if (!file) {
-        setDuplicateInfo(null)
-        return
-      }
-
-      if (action === 'overwrite') {
-        doUpload(file, true)
-      } else if (action === 'rename') {
-        doUpload(file, false)
-      } else {
-        // Cancel - remove the file
-        setFiles((prev) => prev.filter((f) => f.id !== duplicateInfo.fileId))
-      }
-
-      setDuplicateInfo(null)
-
-      // Continue with next pending file
-      setTimeout(() => {
-        const nextPending = files.find(
-          (f) => f.status === 'pending' && f.id !== duplicateInfo.fileId
-        )
-        if (nextPending) {
-          checkAndUpload(nextPending)
-        }
-      }, 100)
+    (action: 'overwrite' | 'rename' | 'cancel' | 'overwrite_all') => {
+      resolveDuplicate(action)
     },
-    [duplicateInfo, files, doUpload, checkAndUpload]
+    [resolveDuplicate]
   )
 
-  const startAllUploads = useCallback(async () => {
-    const pendingFiles = files.filter((f) => f.status === 'pending')
-    if (pendingFiles.length === 0) return
-
-    // Start with the first pending file
-    checkAndUpload(pendingFiles[0])
-  }, [files, checkAndUpload])
-
-  const removeFile = useCallback((id: string) => {
-    setFiles((prev) => {
-      const file = prev.find((f) => f.id === id)
-      if (file?.upload && file.status === 'uploading') {
-        file.upload.abort()
-      }
-      return prev.filter((f) => f.id !== id)
-    })
-  }, [])
-
+  // Close modal (uploads continue in background)
   const handleClose = useCallback(() => {
-    // Abort all ongoing uploads
-    files.forEach((f) => {
-      if (f.upload && f.status === 'uploading') {
-        f.upload.abort()
-      }
-    })
-    setFiles([])
-    setDuplicateInfo(null)
     onClose()
-  }, [files, onClose])
+  }, [onClose])
 
-  // Handle keyboard shortcuts (Escape to close)
+  // Handle keyboard shortcuts
   useModalKeyboard({
     isOpen,
     onCancel: handleClose,
-    hasInput: true,  // Has file inputs
+    hasInput: true,
   })
 
-  // Auto-close when all uploads are completed
+  // Auto-close when all uploads complete
   useEffect(() => {
-    if (files.length > 0) {
-      const allCompleted = files.every((f) => f.status === 'completed')
-      const hasUploading = files.some((f) => f.status === 'uploading')
-
-      if (allCompleted && !hasUploading) {
-        // Wait a moment to show completion status, then close
+    if (items.length > 0 && !hasActiveUploads()) {
+      const allCompleted = items.every((f) => f.status === 'completed' || f.status === 'error')
+      if (allCompleted) {
         const timer = setTimeout(() => {
-          setFiles([])
           onClose()
         }, 1000)
         return () => clearTimeout(timer)
       }
     }
-  }, [files, onClose])
+  }, [items, hasActiveUploads, onClose])
 
-  // Continue uploading when duplicate is resolved
+  // Notify parent when uploads complete
   useEffect(() => {
-    if (!duplicateInfo && files.length > 0) {
-      const nextPending = files.find((f) => f.status === 'pending')
-      if (nextPending) {
-        const hasUploading = files.some((f) => f.status === 'uploading')
-        if (!hasUploading) {
-          checkAndUpload(nextPending)
-        }
-      }
+    const completedCount = getCompletedCount()
+    if (completedCount > 0) {
+      onUploadComplete()
     }
-  }, [duplicateInfo, files, checkAndUpload])
+  }, [getCompletedCount, onUploadComplete])
 
   if (!isOpen) return null
 
@@ -321,9 +118,12 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
   const isHomeWithoutLogin = currentPath.startsWith('/home') && !user
   const canUpload = !isAtRoot && !isHomeWithoutLogin
 
-  const pendingCount = files.filter((f) => f.status === 'pending' || f.status === 'duplicate').length
-  const uploadingCount = files.filter((f) => f.status === 'uploading').length
-  const completedCount = files.filter((f) => f.status === 'completed').length
+  const pendingCount = getPendingCount()
+  const uploadingCount = getUploadingCount()
+  const completedCount = getCompletedCount()
+
+  // Filter items for current path only (for display in modal)
+  const currentPathItems = items.filter((item) => item.path.startsWith(currentPath))
 
   return (
     <>
@@ -333,7 +133,7 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
             <h2>파일 업로드</h2>
             <button className="close-btn" onClick={handleClose}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </button>
           </div>
@@ -341,8 +141,8 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
           {!canUpload ? (
             <div className="upload-error-state">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-                <path d="M12 8V12M12 16H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                <path d="M12 8V12M12 16H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
               {isAtRoot ? (
                 <>
@@ -364,31 +164,55 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
               onDragLeave={handleDragLeave}
             >
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-                <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M17 8L12 3L7 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M12 3V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path
+                  d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path d="M17 8L12 3L7 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M12 3V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <p className="drop-text">파일을 여기에 드래그하세요</p>
-              <p className="drop-hint">이어올리기를 지원합니다</p>
+              <p className="drop-hint">동시 업로드 3개, 이어올리기 지원</p>
               <div className="upload-buttons">
                 <button
                   type="button"
                   className="upload-select-btn"
-                  onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    fileInputRef.current?.click()
+                  }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M14 2V8H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path
+                      d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path d="M14 2V8H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   파일 선택
                 </button>
                 <button
                   type="button"
                   className="upload-select-btn"
-                  onClick={(e) => { e.stopPropagation(); folderInputRef.current?.click() }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    folderInputRef.current?.click()
+                  }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H9L11 6H20C20.5304 6 21.0391 6.21071 21.4142 6.58579C21.7893 6.96086 22 7.46957 22 8V19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path
+                      d="M22 19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V5C2 4.46957 2.21071 3.96086 2.58579 3.58579C2.96086 3.21071 3.46957 3 4 3H9L11 6H20C20.5304 6 21.0391 6.21071 21.4142 6.58579C21.7893 6.96086 22 7.46957 22 8V19Z"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                   폴더 선택
                 </button>
@@ -397,7 +221,10 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
                 ref={fileInputRef}
                 type="file"
                 multiple
-                onChange={(e) => { e.target.files && addFiles(e.target.files, false); e.target.value = '' }}
+                onChange={(e) => {
+                  handleFilesSelected(e.target.files, false)
+                  e.target.value = ''
+                }}
                 style={{ display: 'none' }}
               />
               <input
@@ -406,13 +233,16 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
                 multiple
                 // @ts-expect-error webkitdirectory is not in the type definition
                 webkitdirectory=""
-                onChange={(e) => { e.target.files && addFiles(e.target.files, true); e.target.value = '' }}
+                onChange={(e) => {
+                  handleFilesSelected(e.target.files, true)
+                  e.target.value = ''
+                }}
                 style={{ display: 'none' }}
               />
             </div>
           )}
 
-          {files.length > 0 && (
+          {currentPathItems.length > 0 && (
             <>
               <div className="upload-stats">
                 <span>대기: {pendingCount}</span>
@@ -421,7 +251,7 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
               </div>
 
               <div className="file-list">
-                {files.map((file) => (
+                {currentPathItems.map((file) => (
                   <div key={file.id} className={`file-item ${file.status}`}>
                     <div className="file-info">
                       <span className="file-name" title={file.relativePath || file.file.name}>
@@ -431,22 +261,16 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
                     </div>
                     <div className="file-progress">
                       <div className="progress-bar">
-                        <div
-                          className="progress-fill"
-                          style={{ width: `${file.progress}%` }}
-                        />
+                        <div className="progress-fill" style={{ width: `${file.progress}%` }} />
                       </div>
                       <span className="progress-text">
-                        {file.status === 'duplicate' ? '중복' : `${file.progress}%`}
+                        {file.status === 'duplicate' ? '중복' : file.status === 'error' ? '오류' : `${file.progress}%`}
                       </span>
                     </div>
                     {file.error && <p className="file-error">{file.error}</p>}
-                    <button
-                      className="remove-btn"
-                      onClick={() => removeFile(file.id)}
-                    >
+                    <button className="remove-btn" onClick={() => handleRemoveFile(file.id)}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                       </svg>
                     </button>
                   </div>
@@ -454,15 +278,8 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
               </div>
 
               <div className="modal-actions">
-                <button className="btn-secondary" onClick={handleClose}>
-                  취소
-                </button>
-                <button
-                  className="btn-primary"
-                  onClick={startAllUploads}
-                  disabled={pendingCount === 0 || uploadingCount > 0}
-                >
-                  업로드 시작 ({pendingCount})
+                <button className="btn-primary" onClick={handleClose}>
+                  {hasActiveUploads() ? '백그라운드에서 계속' : '닫기'}
                 </button>
               </div>
             </>
@@ -471,18 +288,25 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
       </div>
 
       {/* Duplicate File Modal */}
-      {duplicateInfo && (
+      {duplicateFile && (
         <div className="modal-overlay" style={{ zIndex: 1001 }} onClick={() => handleDuplicateAction('cancel')}>
           <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="confirm-icon warning">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                <path d="M12 9V13M12 17H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path
+                  d="M12 9V13M12 17H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </div>
             <h3 className="confirm-title">파일이 이미 존재합니다</h3>
             <p className="confirm-message">
-              <strong>{duplicateInfo.filename}</strong> 파일이 이미 존재합니다.
-              <br />어떻게 처리할까요?
+              <strong>{duplicateFile.filename}</strong> 파일이 이미 존재합니다.
+              <br />
+              어떻게 처리할까요?
             </p>
             <div className="confirm-actions duplicate-actions">
               <button className="btn-secondary" onClick={() => handleDuplicateAction('cancel')}>
@@ -494,6 +318,11 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
               <button className="btn-danger" onClick={() => handleDuplicateAction('overwrite')}>
                 덮어쓰기
               </button>
+              {pendingCount > 1 && (
+                <button className="btn-warning" onClick={() => handleDuplicateAction('overwrite_all')}>
+                  모두 덮어쓰기
+                </button>
+              )}
             </div>
           </div>
         </div>

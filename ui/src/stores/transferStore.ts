@@ -57,7 +57,6 @@ export const useTransferStore = create<TransferState>((set, get) => ({
   isPanelMinimized: false,
 
   addTransfer: (type, sources, destination) => {
-    console.log('[TransferStore] addTransfer called:', { type, sources, destination })
     const newItems: TransferItem[] = sources.map(source => ({
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
@@ -69,14 +68,11 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       isDirectory: source.isDirectory,
     }))
 
-    set(state => {
-      console.log('[TransferStore] Adding items:', newItems)
-      return {
-        items: [...state.items, ...newItems],
-        isPanelOpen: true,
-        isPanelMinimized: false,
-      }
-    })
+    set(state => ({
+      items: [...state.items, ...newItems],
+      isPanelOpen: true,
+      isPanelMinimized: false,
+    }))
   },
 
   startTransfers: () => {
@@ -92,11 +88,9 @@ export const useTransferStore = create<TransferState>((set, get) => ({
   },
 
   executeTransfer: async (id: string) => {
-    console.log('[TransferStore] executeTransfer called:', id)
     const { items } = get()
     const item = items.find(i => i.id === id)
     if (!item || item.status !== 'pending') {
-      console.log('[TransferStore] Item not found or not pending:', { item, status: item?.status })
       return
     }
 

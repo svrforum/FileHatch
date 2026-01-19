@@ -2,23 +2,18 @@ import { create } from 'zustand'
 import * as tus from 'tus-js-client'
 import { checkFileExists, getStorageUsage, formatFileSize } from '../api/files'
 import { useToastStore, parseUploadError } from './toastStore'
+import {
+  noopUrlStorage,
+  getAuthInfo,
+  getTargetPath,
+  getCachedStorageUsage,
+  invalidateStorageCache,
+  calculateUploadSpeed,
+} from '../utils/uploadUtils'
 
-// Helper to get auth info
-function getAuthInfo(): { token: string | null; username: string | null } {
-  const stored = localStorage.getItem('filehatch-auth')
-  if (stored) {
-    try {
-      const { state } = JSON.parse(stored)
-      return {
-        token: state?.token || null,
-        username: state?.user?.username || null
-      }
-    } catch {
-      return { token: null, username: null }
-    }
-  }
-  return { token: null, username: null }
-}
+// Constants
+const MAX_CONCURRENT_UPLOADS = 3
+const API_TIMEOUT = 3000 // 3 seconds
 
 export interface UploadItem {
   id: string
@@ -28,9 +23,10 @@ export interface UploadItem {
   error?: string
   upload?: tus.Upload
   path: string
+  relativePath?: string // For folder uploads
   overwrite?: boolean
   // Speed tracking
-  uploadSpeed?: number // bytes per second
+  uploadSpeed?: number
   lastBytesUploaded?: number
   lastUpdateTime?: number
 }
@@ -57,17 +53,22 @@ interface UploadState {
   isPanelOpen: boolean
   duplicateFile: DuplicateFile | null
   overwriteAll: boolean
-  addFiles: (files: File[], path: string) => void
+
+  // Upload functions
+  addFiles: (files: File[], currentPath: string, isFolder?: boolean) => void
   startUpload: (id: string, overwrite?: boolean) => void
-  startAllUploads: () => void
+  startAllUploads: () => Promise<void>
+  startNextUpload: () => void
   checkAndStartUpload: (id: string) => Promise<void>
   resolveDuplicate: (action: 'overwrite' | 'rename' | 'cancel' | 'overwrite_all') => void
   pauseUpload: (id: string) => void
+  resumeUpload: (id: string) => void
   removeUpload: (id: string) => void
   clearCompleted: () => void
   updateProgress: (id: string, progress: number, uploadSpeed?: number, lastBytesUploaded?: number, lastUpdateTime?: number) => void
   setStatus: (id: string, status: UploadItem['status'], error?: string) => void
   setUpload: (id: string, upload: tus.Upload) => void
+
   // Download functions
   addDownload: (filename: string, size: number) => string
   updateDownloadProgress: (id: string, progress: number) => void
@@ -75,9 +76,27 @@ interface UploadState {
   setDownloadController: (id: string, controller: AbortController) => void
   removeDownload: (id: string) => void
   clearCompletedDownloads: () => void
+
+  // Panel functions
   togglePanel: () => void
   openPanel: () => void
   closePanel: () => void
+
+  // Getters
+  getPendingCount: () => number
+  getUploadingCount: () => number
+  getCompletedCount: () => number
+  hasActiveUploads: () => boolean
+}
+
+// Helper: Create timeout promise
+function createTimeout<T>(ms: number, message: string): Promise<T> {
+  return new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))
+}
+
+// Helper: Generate unique ID
+function generateId(filename: string): string {
+  return `${filename}-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 export const useUploadStore = create<UploadState>((set, get) => ({
@@ -87,30 +106,66 @@ export const useUploadStore = create<UploadState>((set, get) => ({
   duplicateFile: null,
   overwriteAll: false,
 
-  addFiles: (files, path) => {
-    // Reset overwriteAll when adding new files
+  // Add files to upload queue
+  addFiles: (files, currentPath, isFolder = false) => {
     set({ overwriteAll: false })
-    const newItems: UploadItem[] = files.map((file) => ({
-      id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      file,
-      progress: 0,
-      status: 'pending',
-      path,
-    }))
+    const existingItems = get().items
+
+    const fileArray = Array.from(files).filter((file) => file.size > 0)
+
+    // Filter out duplicates already in queue
+    const newItems: UploadItem[] = fileArray
+      .map((file) => {
+        // Get relative path for folder uploads
+        let relativePath = ''
+        if (isFolder && 'webkitRelativePath' in file && file.webkitRelativePath) {
+          relativePath = file.webkitRelativePath as string
+        }
+
+        const targetPath = getTargetPath(currentPath, relativePath)
+
+        return {
+          id: generateId(relativePath || file.name),
+          file,
+          progress: 0,
+          status: 'pending' as const,
+          path: targetPath,
+          relativePath,
+        }
+      })
+      .filter((item) => {
+        // Check if already exists in queue
+        const isDuplicate = existingItems.some(
+          (existing) =>
+            existing.file.name === item.file.name &&
+            existing.file.size === item.file.size &&
+            existing.path === item.path &&
+            (existing.status === 'pending' || existing.status === 'uploading')
+        )
+        return !isDuplicate
+      })
+
+    if (newItems.length === 0) return
+
     set((state) => ({ items: [...state.items, ...newItems] }))
+
+    // Auto-start uploads
+    setTimeout(() => get().startAllUploads(), 100)
   },
 
-  startUpload: async (id, overwrite = false) => {
+  // Start a single upload
+  startUpload: (id, overwrite = false) => {
     const item = get().items.find((i) => i.id === id)
     if (!item || item.status === 'uploading') return
 
     const { token, username } = getAuthInfo()
+
     const upload = new tus.Upload(item.file, {
       endpoint: `${window.location.origin}/api/upload/`,
       retryDelays: [0, 1000, 3000, 5000],
       removeFingerprintOnSuccess: true,
-      // Use default localStorage-based URL storage for resumable uploads
-      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      urlStorage: noopUrlStorage,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
       metadata: {
         filename: item.file.name,
         filetype: item.file.type,
@@ -119,129 +174,148 @@ export const useUploadStore = create<UploadState>((set, get) => ({
         overwrite: overwrite ? 'true' : 'false',
       },
       onError: (error) => {
-        // Parse error message for user-friendly display
         const errorMessage = parseUploadError(error.message)
-
-        // Show toast notification for the error
         useToastStore.getState().showError(errorMessage)
-
         get().setStatus(id, 'error', errorMessage)
+        setTimeout(() => get().startNextUpload(), 100)
       },
       onProgress: (bytesUploaded, bytesTotal) => {
         const progress = Math.round((bytesUploaded / bytesTotal) * 100)
-        const currentTime = Date.now()
-        const currentItem = get().items.find(i => i.id === id)
-
-        let uploadSpeed = 0
-        if (currentItem?.lastBytesUploaded !== undefined && currentItem?.lastUpdateTime !== undefined) {
-          const timeDiff = (currentTime - currentItem.lastUpdateTime) / 1000 // seconds
-          const bytesDiff = bytesUploaded - currentItem.lastBytesUploaded
-          if (timeDiff > 0) {
-            uploadSpeed = bytesDiff / timeDiff
-          }
-        }
-
-        get().updateProgress(id, progress, uploadSpeed, bytesUploaded, currentTime)
+        const currentItem = get().items.find((i) => i.id === id)
+        const uploadSpeed = calculateUploadSpeed(
+          bytesUploaded,
+          currentItem?.lastBytesUploaded,
+          currentItem?.lastUpdateTime
+        )
+        get().updateProgress(id, progress, uploadSpeed, bytesUploaded, Date.now())
       },
       onSuccess: () => {
         get().setStatus(id, 'completed')
+        invalidateStorageCache() // Clear cache after upload
+        setTimeout(() => get().startNextUpload(), 100)
       },
     })
 
     get().setUpload(id, upload)
     get().setStatus(id, 'uploading')
-
-    // Check for previous uploads and resume if found
-    try {
-      const previousUploads = await upload.findPreviousUploads()
-      if (previousUploads.length > 0) {
-        // Resume from the most recent previous upload
-        console.log('[TUS] Found previous upload, resuming...', previousUploads[0])
-        upload.resumeFromPreviousUpload(previousUploads[0])
-      }
-    } catch (e) {
-      console.log('[TUS] No previous uploads found or error:', e)
-    }
-
     upload.start()
   },
 
+  // Check for duplicates and quota before starting upload
   checkAndStartUpload: async (id) => {
     const item = get().items.find((i) => i.id === id)
     if (!item || item.status === 'uploading') return
 
-    // Pre-upload quota check - show specific error before TUS upload starts
+    // Quota check with caching and timeout
     try {
-      const storage = await getStorageUsage()
+      const storagePromise = getCachedStorageUsage(getStorageUsage)
+      const storage = await Promise.race([
+        storagePromise,
+        createTimeout<never>(API_TIMEOUT, 'Quota check timeout'),
+      ])
+
       const remaining = storage.quota - storage.totalUsed
-      console.log('[QuotaCheck] fileSize:', item.file.size, 'remaining:', remaining, 'quota:', storage.quota, 'totalUsed:', storage.totalUsed)
       if (item.file.size > remaining) {
         const errorMessage = `저장 공간이 부족합니다. 필요: ${formatFileSize(item.file.size)}, 남은 공간: ${formatFileSize(remaining)}`
         useToastStore.getState().showError(errorMessage)
         get().setStatus(id, 'error', errorMessage)
+        setTimeout(() => get().startNextUpload(), 100)
         return
       }
-    } catch (e) {
-      console.error('[QuotaCheck] Failed:', e)
-      // Continue with upload if quota check fails (backend will validate)
+    } catch {
+      // Continue - backend will validate
     }
 
+    // Duplicate check with timeout
     try {
-      const result = await checkFileExists(item.path, item.file.name)
+      const checkPromise = checkFileExists(item.path, item.file.name)
+      const result = await Promise.race([
+        checkPromise,
+        createTimeout<never>(API_TIMEOUT, 'File check timeout'),
+      ])
+
       if (result.exists) {
-        // If overwriteAll mode is enabled, skip the modal
         if (get().overwriteAll) {
           get().startUpload(id, true)
           return
         }
-        // File exists, show duplicate modal
-        set({ duplicateFile: { id, filename: item.file.name, path: item.path } })
+        // Show duplicate modal
+        set({
+          duplicateFile: {
+            id,
+            filename: item.relativePath || item.file.name,
+            path: item.path,
+          },
+        })
         get().setStatus(id, 'duplicate')
-      } else {
-        // No duplicate, start upload directly
-        get().startUpload(id, false)
+        return
       }
     } catch {
-      // If check fails, just start upload (backend will handle duplicates)
-      get().startUpload(id, false)
+      // If check fails, let backend handle it
     }
+
+    get().startUpload(id, false)
   },
 
+  // Resolve duplicate file conflict
   resolveDuplicate: (action) => {
     const { duplicateFile } = get()
     if (!duplicateFile) return
 
     const { id } = duplicateFile
 
-    if (action === 'overwrite') {
-      get().startUpload(id, true)
-    } else if (action === 'overwrite_all') {
-      // Enable overwrite all mode and start this upload
-      set({ overwriteAll: true })
-      get().startUpload(id, true)
-    } else if (action === 'rename') {
-      get().startUpload(id, false)
-    } else {
-      // Cancel - remove the upload
-      get().removeUpload(id)
+    switch (action) {
+      case 'overwrite':
+        get().startUpload(id, true)
+        break
+      case 'overwrite_all':
+        set({ overwriteAll: true })
+        get().startUpload(id, true)
+        break
+      case 'rename':
+        get().startUpload(id, false)
+        break
+      case 'cancel':
+        get().removeUpload(id)
+        break
     }
 
     set({ duplicateFile: null })
-
-    // Continue with remaining pending uploads
-    setTimeout(() => {
-      get().startAllUploads()
-    }, 100)
+    setTimeout(() => get().startAllUploads(), 100)
   },
 
+  // Start all pending uploads (up to MAX_CONCURRENT)
   startAllUploads: async () => {
-    const { items, checkAndStartUpload } = get()
-    const pendingItems = items.filter((item) => item.status === 'pending')
+    const { items, duplicateFile } = get()
+    if (duplicateFile) return // Wait for duplicate resolution
 
-    for (const item of pendingItems) {
-      await checkAndStartUpload(item.id)
-      // If duplicate modal is shown, wait for it to be resolved
+    const uploadingCount = items.filter((i) => i.status === 'uploading').length
+    const pendingItems = items.filter((i) => i.status === 'pending')
+
+    const slotsAvailable = MAX_CONCURRENT_UPLOADS - uploadingCount
+    const toStart = pendingItems.slice(0, slotsAvailable)
+
+    // Stagger start to prevent server overload
+    for (let i = 0; i < toStart.length; i++) {
+      if (i > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      get().checkAndStartUpload(toStart[i].id)
       if (get().duplicateFile) break
+    }
+  },
+
+  // Start next pending upload (called when one completes)
+  startNextUpload: () => {
+    const { items, duplicateFile } = get()
+    if (duplicateFile) return
+
+    const uploadingCount = items.filter((i) => i.status === 'uploading').length
+    if (uploadingCount >= MAX_CONCURRENT_UPLOADS) return
+
+    const pendingItems = items.filter((i) => i.status === 'pending')
+    if (pendingItems.length > 0) {
+      get().checkAndStartUpload(pendingItems[0].id)
     }
   },
 
@@ -253,15 +327,20 @@ export const useUploadStore = create<UploadState>((set, get) => ({
     }
   },
 
+  resumeUpload: (id) => {
+    const item = get().items.find((i) => i.id === id)
+    if (item?.upload && item.status === 'paused') {
+      item.upload.start()
+      get().setStatus(id, 'uploading')
+    }
+  },
+
   removeUpload: async (id) => {
     const item = get().items.find((i) => i.id === id)
     if (item?.upload) {
       try {
-        // Abort with shouldTerminate=true to delete partial upload from server
-        await item.upload.abort(true)
-      } catch (e) {
-        console.log('[TUS] Error terminating upload:', e)
-        // Still try to abort even if terminate fails
+        await item.upload.abort(true) // Terminate on server
+      } catch {
         item.upload.abort()
       }
     }
@@ -270,7 +349,7 @@ export const useUploadStore = create<UploadState>((set, get) => ({
 
   clearCompleted: () => {
     set((state) => ({
-      items: state.items.filter((item) => item.status !== 'completed'),
+      items: state.items.filter((i) => i.status !== 'completed'),
     }))
   },
 
@@ -284,47 +363,34 @@ export const useUploadStore = create<UploadState>((set, get) => ({
 
   setStatus: (id, status, error) => {
     set((state) => ({
-      items: state.items.map((item) =>
-        item.id === id ? { ...item, status, error } : item
-      ),
+      items: state.items.map((item) => (item.id === id ? { ...item, status, error } : item)),
     }))
   },
 
   setUpload: (id, upload) => {
     set((state) => ({
-      items: state.items.map((item) =>
-        item.id === id ? { ...item, upload } : item
-      ),
+      items: state.items.map((item) => (item.id === id ? { ...item, upload } : item)),
     }))
   },
 
   // Download functions
   addDownload: (filename, size) => {
     const id = `dl-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const newDownload: DownloadItem = {
-      id,
-      filename,
-      size,
-      progress: 0,
-      status: 'downloading',
-    }
-    set((state) => ({ downloads: [...state.downloads, newDownload] }))
+    set((state) => ({
+      downloads: [...state.downloads, { id, filename, size, progress: 0, status: 'downloading' }],
+    }))
     return id
   },
 
   updateDownloadProgress: (id, progress) => {
     set((state) => ({
-      downloads: state.downloads.map((item) =>
-        item.id === id ? { ...item, progress } : item
-      ),
+      downloads: state.downloads.map((item) => (item.id === id ? { ...item, progress } : item)),
     }))
   },
 
   setDownloadStatus: (id, status, error) => {
     set((state) => ({
-      downloads: state.downloads.map((item) =>
-        item.id === id ? { ...item, status, error } : item
-      ),
+      downloads: state.downloads.map((item) => (item.id === id ? { ...item, status, error } : item)),
     }))
   },
 
@@ -338,19 +404,24 @@ export const useUploadStore = create<UploadState>((set, get) => ({
 
   removeDownload: (id) => {
     const item = get().downloads.find((i) => i.id === id)
-    if (item?.abortController) {
-      item.abortController.abort()
-    }
+    item?.abortController?.abort()
     set((state) => ({ downloads: state.downloads.filter((i) => i.id !== id) }))
   },
 
   clearCompletedDownloads: () => {
     set((state) => ({
-      downloads: state.downloads.filter((item) => item.status !== 'completed'),
+      downloads: state.downloads.filter((i) => i.status !== 'completed'),
     }))
   },
 
+  // Panel functions
   togglePanel: () => set((state) => ({ isPanelOpen: !state.isPanelOpen })),
   openPanel: () => set({ isPanelOpen: true }),
   closePanel: () => set({ isPanelOpen: false }),
+
+  // Getters
+  getPendingCount: () => get().items.filter((i) => i.status === 'pending' || i.status === 'duplicate').length,
+  getUploadingCount: () => get().items.filter((i) => i.status === 'uploading').length,
+  getCompletedCount: () => get().items.filter((i) => i.status === 'completed').length,
+  hasActiveUploads: () => get().items.some((i) => i.status === 'uploading' || i.status === 'pending'),
 }))

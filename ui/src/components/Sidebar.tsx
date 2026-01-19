@@ -192,13 +192,6 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
   const hasCompletedTransfers = completedUploads.length > 0 || completedDownloads.length > 0 || completedMoveCopy.length > 0
   const hasTransfers = safeItems.length > 0 || safeDownloads.length > 0 || safeTransferItems.length > 0
 
-  // Debug logging for transfers
-  if (safeTransferItems.length > 0) {
-    console.log('[Sidebar] Transfer items:', transferItems)
-    console.log('[Sidebar] Active move/copy:', activeMoveCopy)
-    console.log('[Sidebar] hasTransfers:', hasTransfers, 'hasActiveTransfers:', hasActiveTransfers)
-  }
-
   // Calculate overall upload progress
   const uploadProgress = activeUploads.length > 0
     ? Math.round(activeUploads.reduce((sum, i) => sum + i.progress, 0) / activeUploads.length)

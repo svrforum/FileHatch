@@ -43,6 +43,7 @@ interface ContextMenuProps {
   onShare: (file: FileInfo) => void
   onLinkShare: (file: FileInfo) => void
   onDelete: (file: FileInfo) => void
+  onMultiDelete: (paths: string[]) => void
   onUnshare: (shareId: number) => Promise<void>
   onDeleteLink: (linkId: string) => Promise<void>
   onCopyLink: (token: string) => void
@@ -90,6 +91,7 @@ function ContextMenu({
   onShare,
   onLinkShare,
   onDelete,
+  onMultiDelete,
   onUnshare,
   onDeleteLink,
   onCopyLink,
@@ -469,12 +471,18 @@ function ContextMenu({
             링크로 공유
           </button>
           <div className="context-menu-divider" />
-          <button className="context-menu-item danger" onClick={() => onDelete(contextMenu.file)}>
+          <button className="context-menu-item danger" onClick={() => {
+            if (contextMenu.selectedPaths.length > 1) {
+              onMultiDelete(contextMenu.selectedPaths)
+            } else {
+              onDelete(contextMenu.file)
+            }
+          }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path d="M3 6H5H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            삭제
+            {contextMenu.selectedPaths.length > 1 ? `${contextMenu.selectedPaths.length}개 삭제` : '삭제'}
           </button>
         </>
       )}

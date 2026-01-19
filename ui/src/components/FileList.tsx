@@ -57,6 +57,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [focusedIndex, setFocusedIndex] = useState<number>(-1)
   const [contextMenu, setContextMenu] = useState<ContextMenuType>(null)
   const [deleteTarget, setDeleteTarget] = useState<FileInfo | null>(null)
+  const [deleteTargets, setDeleteTargets] = useState<string[] | null>(null)
   const [renameTarget, setRenameTarget] = useState<FileInfo | null>(null)
   const [newName, setNewName] = useState('')
   const [copyTarget, setCopyTarget] = useState<FileInfo | null>(null)
@@ -584,6 +585,11 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     closeContextMenu()
   }, [closeContextMenu])
 
+  const handleMultiDeleteClick = useCallback((paths: string[]) => {
+    setDeleteTargets(paths)
+    closeContextMenu()
+  }, [closeContextMenu])
+
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return
 
@@ -599,6 +605,35 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     }
     setDeleteTarget(null)
   }, [deleteTarget, currentPath, queryClient])
+
+  const handleMultiDeleteConfirm = useCallback(async () => {
+    if (!deleteTargets || deleteTargets.length === 0) return
+
+    let successCount = 0
+    let errorCount = 0
+
+    for (const path of deleteTargets) {
+      try {
+        await moveToTrash(path)
+        successCount++
+      } catch {
+        errorCount++
+      }
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+    queryClient.invalidateQueries({ queryKey: ['trash'] })
+    queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
+    setSelectedFiles(new Set())
+    setSelectedFile(null)
+    setDeleteTargets(null)
+
+    if (errorCount === 0) {
+      showSuccess(`${successCount}개 항목이 휴지통으로 이동되었습니다`)
+    } else {
+      showError(`${successCount}개 이동 성공, ${errorCount}개 실패`)
+    }
+  }, [deleteTargets, currentPath, queryClient])
 
   const handleDownload = useCallback((file: FileInfo) => {
     downloadFileWithProgress(file.path, file.size, downloadStore)
@@ -1009,7 +1044,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   }, [])
 
   // Keyboard navigation hook
-  const modalsOpen = !!(viewingFile || editingFile || onlyOfficeConfig || deleteTarget || renameTarget || showNewFileModal || showCompressModal || showDownloadModal)
+  const modalsOpen = !!(viewingFile || editingFile || onlyOfficeConfig || deleteTarget || deleteTargets || renameTarget || showNewFileModal || showCompressModal || showDownloadModal)
 
   useKeyboardNavigation({
     displayFiles,
@@ -1352,6 +1387,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         onShare={(file) => setShareTarget(file)}
         onLinkShare={(file) => setLinkShareTarget(file)}
         onDelete={handleDeleteClick}
+        onMultiDelete={handleMultiDeleteClick}
         onUnshare={async (shareId) => {
           try {
             await deleteFileShare(shareId)
@@ -1413,6 +1449,18 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         danger
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* Multi-delete Confirm Modal */}
+      <ConfirmModal
+        isOpen={!!deleteTargets && deleteTargets.length > 0}
+        title="휴지통으로 이동"
+        message={deleteTargets ? `선택한 ${deleteTargets.length}개 항목을 휴지통으로 이동하시겠습니까?` : ''}
+        confirmText="휴지통으로 이동"
+        cancelText="취소"
+        danger
+        onConfirm={handleMultiDeleteConfirm}
+        onCancel={() => setDeleteTargets(null)}
       />
 
       {/* Rename Modal */}
