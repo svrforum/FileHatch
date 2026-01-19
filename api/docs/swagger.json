@@ -4,8 +4,8 @@
         "description": "Enterprise-grade cloud file sharing and management API.\nFileHatch provides comprehensive file management, sharing, and collaboration features.",
         "title": "FileHatch API",
         "contact": {
-            "name": "API Support",
-            "email": "support@filehatch.io"
+            "name": "GitHub Issues",
+            "url": "https://github.com/svrforum/FileHatch/issues"
         },
         "license": {
             "name": "MIT",

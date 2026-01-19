@@ -10,8 +10,8 @@ const docTemplate = `{
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
         "contact": {
-            "name": "API Support",
-            "email": "support@filehatch.io"
+            "name": "GitHub Issues",
+            "url": "https://github.com/svrforum/FileHatch/issues"
         },
         "license": {
             "name": "MIT",
