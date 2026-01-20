@@ -7,8 +7,9 @@ AUDIT_LOG="/etc/filehatch/smb_audit.log"
 
 echo "[FileHatch-Samba] Starting user sync service..."
 
-# Copy default smb.conf if not exists
-if [ ! -f "/etc/samba/smb.conf" ] && [ -f "/smb.conf.template" ]; then
+# Copy default smb.conf if not exists or is empty
+# -s checks if file exists AND has size > 0
+if [ ! -s "/etc/samba/smb.conf" ] && [ -f "/smb.conf.template" ]; then
     echo "[FileHatch-Samba] Installing default smb.conf..."
     cp /smb.conf.template /etc/samba/smb.conf
 fi
