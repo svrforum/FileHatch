@@ -14,6 +14,17 @@ console.log('API_URL:', API_URL);
 console.log('ONLYOFFICE_URL:', ONLYOFFICE_URL);
 console.log('ONLYOFFICE_PUBLIC_URL:', ONLYOFFICE_PUBLIC_URL || '(not set, will use default)');
 
+// Helper function to detect protocol from request
+function getRequestProtocol(req) {
+  // Check X-Forwarded-Proto header from reverse proxy first
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  if (forwardedProto) {
+    return forwardedProto.split(',')[0].trim();
+  }
+  // Fallback to connection protocol
+  return req.secure ? 'https' : 'http';
+}
+
 // Tus upload proxy - needs special handling for Location header
 const tusProxy = createProxyMiddleware({
   target: API_URL,
@@ -26,15 +37,17 @@ const tusProxy = createProxyMiddleware({
   on: {
     proxyReq: (proxyReq, req, res) => {
       const host = req.headers.host || 'localhost:3000';
+      const proto = getRequestProtocol(req);
       proxyReq.setHeader('X-Forwarded-Host', host);
-      proxyReq.setHeader('X-Forwarded-Proto', 'http');
-      console.log(`[TusProxy] ${req.method} ${req.originalUrl} -> ${proxyReq.path}`);
+      proxyReq.setHeader('X-Forwarded-Proto', proto);
+      console.log(`[TusProxy] ${req.method} ${req.originalUrl} -> ${proxyReq.path} (proto: ${proto})`);
     },
     proxyRes: responseInterceptor(async (responseBuffer, proxyRes, req, res) => {
       const location = proxyRes.headers['location'];
       if (location) {
         const host = req.headers.host || 'localhost:3000';
-        let fixedLocation = location.replace(/http:\/\/[^\/]+/, `http://${host}`);
+        const proto = getRequestProtocol(req);
+        let fixedLocation = location.replace(/https?:\/\/[^\/]+/, `${proto}://${host}`);
         if (!fixedLocation.includes('/api/upload/')) {
           fixedLocation = fixedLocation.replace(/^(https?:\/\/[^\/]+)\//, '$1/api/upload/');
         }
@@ -77,8 +90,9 @@ const apiProxy = createProxyMiddleware({
   on: {
     proxyReq: (proxyReq, req, res) => {
       const host = req.headers.host || 'localhost:3000';
+      const proto = getRequestProtocol(req);
       proxyReq.setHeader('X-Forwarded-Host', host);
-      proxyReq.setHeader('X-Forwarded-Proto', 'http');
+      proxyReq.setHeader('X-Forwarded-Proto', proto);
       console.log(`[Proxy] ${req.method} ${req.originalUrl}`);
     },
     error: (err, req, res) => {
@@ -106,8 +120,9 @@ const webdavProxy = createProxyMiddleware({
   on: {
     proxyReq: (proxyReq, req, res) => {
       const host = req.headers.host || 'localhost:3000';
+      const proto = getRequestProtocol(req);
       proxyReq.setHeader('X-Forwarded-Host', host);
-      proxyReq.setHeader('X-Forwarded-Proto', 'http');
+      proxyReq.setHeader('X-Forwarded-Proto', proto);
       console.log(`[WebDAV] ${req.method} ${req.originalUrl} -> ${proxyReq.path}`);
     },
     error: (err, req, res) => {
