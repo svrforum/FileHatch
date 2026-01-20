@@ -18,14 +18,19 @@ groupadd -f users 2>/dev/null || true
 
 # Ensure directories exist
 mkdir -p /data/users /data/shared /var/log/samba
-chmod 775 /data/shared
-chown root:users /data/shared 2>/dev/null || true
 
-# Fix permissions on all subdirectories in /data/shared
-# This ensures SMB users can write to shared folders
+# /data/shared root: 755 (root:root) - users cannot create folders at root level
+# Only admin-created shared drive folders are writable
+chmod 755 /data/shared
+chown root:root /data/shared 2>/dev/null || true
+
+# Fix permissions on SUBDIRECTORIES only in /data/shared
+# This ensures SMB users can write inside shared drive folders, but not at root
 echo "[FileHatch-Samba] Fixing shared folder permissions..."
-find /data/shared -type d -exec chmod 775 {} \; 2>/dev/null || true
-find /data/shared -type d -exec chown :users {} \; 2>/dev/null || true
+find /data/shared -mindepth 1 -type d -exec chmod 775 {} \; 2>/dev/null || true
+find /data/shared -mindepth 1 -type d -exec chown :users {} \; 2>/dev/null || true
+find /data/shared -mindepth 1 -type f -exec chmod 664 {} \; 2>/dev/null || true
+find /data/shared -mindepth 1 -type f -exec chown :users {} \; 2>/dev/null || true
 
 # Create audit log files
 echo "[FileHatch-Samba] Setting up audit logging..."

@@ -852,3 +852,45 @@ func (h *Handler) GetSharedFileOwnerPath(userID, virtualPath string) (realPath s
 
 	return "", "", fmt.Errorf("shared file not found")
 }
+
+// Shared folder permission constants
+// SMB uses "users" group (GID 100) for shared folder access
+const (
+	SharedDirPerm  = 0775 // rwxrwxr-x: owner/group can write, others can read
+	SharedFilePerm = 0664 // rw-rw-r--: owner/group can write, others can read
+	UsersGroupID   = 100  // "users" group GID in Alpine Linux
+)
+
+// SetSharedPermissions sets appropriate permissions for files/folders in shared drives
+// This ensures SMB users in the "users" group can read/write
+func SetSharedPermissions(path string, isDir bool) error {
+	var perm os.FileMode
+	if isDir {
+		perm = SharedDirPerm
+	} else {
+		perm = SharedFilePerm
+	}
+
+	// Set permissions
+	if err := os.Chmod(path, perm); err != nil {
+		return fmt.Errorf("failed to chmod %s: %w", path, err)
+	}
+
+	// Set group to "users" (GID 100)
+	// -1 means don't change the owner
+	if err := os.Chown(path, -1, UsersGroupID); err != nil {
+		return fmt.Errorf("failed to chown %s: %w", path, err)
+	}
+
+	return nil
+}
+
+// MkdirAllShared creates directories with shared folder permissions
+// Use this instead of os.MkdirAll for shared folder paths
+func MkdirAllShared(path string) error {
+	if err := os.MkdirAll(path, SharedDirPerm); err != nil {
+		return err
+	}
+	// Also set the group ownership
+	return os.Chown(path, -1, UsersGroupID)
+}

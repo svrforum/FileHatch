@@ -123,10 +123,21 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 		})
 	}
 
-	if err := os.MkdirAll(folderPath, 0755); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create folder",
-		})
+	// Use appropriate permissions based on storage type
+	if storageType == StorageShared {
+		// Shared folder: 0775 with users group for SMB access
+		if err := MkdirAllShared(folderPath); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to create folder",
+			})
+		}
+	} else {
+		// Home folder: standard 0755 permissions
+		if err := os.MkdirAll(folderPath, 0755); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to create folder",
+			})
+		}
 	}
 
 	newFolderPath := filepath.Join(displayPath, req.Name)

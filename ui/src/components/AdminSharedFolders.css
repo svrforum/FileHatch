@@ -335,46 +335,84 @@
   border-top: 1px solid var(--border-light);
 }
 
-.action-btn {
+.folder-actions .action-btn {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 10px 14px;
   background: var(--bg-secondary);
-  border: none;
+  border: 1px solid var(--border-light);
   border-radius: 10px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
+  opacity: 1;
+  width: auto;
+  height: auto;
 }
 
-.action-btn:hover {
+.folder-actions .action-btn:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
+  border-color: var(--border-medium);
 }
 
-.action-btn.members {
+.folder-actions .action-btn.members {
   flex: 1;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(167, 139, 250, 0.1) 100%);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(167, 139, 250, 0.15) 100%);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: #7C3AED;
+}
+
+[data-theme='dark'] .folder-actions .action-btn.members {
+  color: var(--color-admin-purple);
+  border-color: rgba(167, 139, 250, 0.3);
+}
+
+.folder-actions .action-btn.members:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(167, 139, 250, 0.25) 100%);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #6D28D9;
+}
+
+[data-theme='dark'] .folder-actions .action-btn.members:hover {
   color: var(--color-admin-purple);
 }
 
-.action-btn.members:hover {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(167, 139, 250, 0.2) 100%);
-  color: var(--color-admin-purple);
-}
-
-.action-btn.edit:hover {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(96, 165, 250, 0.1) 100%);
+.folder-actions .action-btn.edit:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(96, 165, 250, 0.15) 100%);
+  border-color: rgba(59, 130, 246, 0.3);
   color: var(--color-primary);
 }
 
-.action-btn.delete:hover {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(248, 113, 113, 0.1) 100%);
+.folder-actions .action-btn.delete:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(248, 113, 113, 0.15) 100%);
+  border-color: rgba(239, 68, 68, 0.3);
   color: var(--color-error);
+}
+
+/* SVG icon visibility fix */
+.folder-actions .action-btn svg {
+  flex-shrink: 0;
+  stroke: currentColor;
+}
+
+.folder-actions .action-btn svg path,
+.folder-actions .action-btn svg circle {
+  stroke: currentColor;
+}
+
+.folder-actions .action-btn.members svg path,
+.folder-actions .action-btn.members svg circle {
+  stroke: #7C3AED;
+}
+
+[data-theme='dark'] .folder-actions .action-btn.members svg path,
+[data-theme='dark'] .folder-actions .action-btn.members svg circle {
+  stroke: var(--color-admin-purple);
 }
 
 /* Empty State */
@@ -1438,10 +1476,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   background: var(--bg-secondary);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -1449,10 +1487,12 @@
 .row-action-btn:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
+  border-color: var(--border-medium);
 }
 
 .row-action-btn.danger:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
   color: var(--color-error);
 }
 

@@ -345,10 +345,18 @@ func (h *UploadHandler) handleCompletedUploads() {
 		srcPath := filepath.Join(h.dataRoot, ".uploads", event.Upload.ID)
 		finalPath := filepath.Join(realDestPath, filename)
 
-		// Ensure destination directory exists
-		if err := os.MkdirAll(filepath.Dir(finalPath), 0755); err != nil {
-			fmt.Printf("Failed to create directory: %v\n", err)
-			continue
+		// Ensure destination directory exists with appropriate permissions
+		destDir := filepath.Dir(finalPath)
+		if strings.HasPrefix(destPath, "/shared/") {
+			if err := MkdirAllShared(destDir); err != nil {
+				fmt.Printf("Failed to create directory: %v\n", err)
+				continue
+			}
+		} else {
+			if err := os.MkdirAll(destDir, 0755); err != nil {
+				fmt.Printf("Failed to create directory: %v\n", err)
+				continue
+			}
 		}
 
 		// Check if file already exists
@@ -367,6 +375,11 @@ func (h *UploadHandler) handleCompletedUploads() {
 			fmt.Printf("Failed to move file: %v\n", err)
 			tracker.UnmarkUploading(finalPath)
 			continue
+		}
+
+		// Set permissions for shared folders
+		if strings.HasPrefix(destPath, "/shared/") {
+			_ = SetSharedPermissions(finalPath, false)
 		}
 
 		// Clean up .info file

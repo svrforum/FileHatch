@@ -72,11 +72,19 @@ func (h *Handler) CreateFile(c echo.Context) error {
 		})
 	}
 
-	// Ensure target directory exists
-	if err := os.MkdirAll(realPath, 0755); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create target directory",
-		})
+	// Ensure target directory exists with appropriate permissions
+	if storageType == StorageShared {
+		if err := MkdirAllShared(realPath); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to create target directory",
+			})
+		}
+	} else {
+		if err := os.MkdirAll(realPath, 0755); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to create target directory",
+			})
+		}
 	}
 
 	// Build full file path
@@ -92,11 +100,20 @@ func (h *Handler) CreateFile(c echo.Context) error {
 	// Get template content based on file type
 	content := getTemplateContent(req.FileType)
 
-	// Create the file
-	if err := os.WriteFile(filePath, content, 0644); err != nil {
+	// Create the file with appropriate permissions
+	filePerm := os.FileMode(0644)
+	if storageType == StorageShared {
+		filePerm = SharedFilePerm
+	}
+	if err := os.WriteFile(filePath, content, filePerm); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Failed to create file",
 		})
+	}
+
+	// Set group ownership for shared folders
+	if storageType == StorageShared {
+		_ = SetSharedPermissions(filePath, false)
 	}
 
 	// Log audit event
@@ -190,11 +207,19 @@ func (h *Handler) SimpleUpload(c echo.Context) error {
 		})
 	}
 
-	// Ensure target directory exists
-	if err := os.MkdirAll(realPath, 0755); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create target directory",
-		})
+	// Ensure target directory exists with appropriate permissions
+	if storageType == StorageShared {
+		if err := MkdirAllShared(realPath); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to create target directory",
+			})
+		}
+	} else {
+		if err := os.MkdirAll(realPath, 0755); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to create target directory",
+			})
+		}
 	}
 
 	// Open the uploaded file
@@ -228,6 +253,11 @@ func (h *Handler) SimpleUpload(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Failed to save file",
 		})
+	}
+
+	// Set permissions for shared folders
+	if storageType == StorageShared {
+		_ = SetSharedPermissions(destPath, false)
 	}
 
 	// Keep the mark for 10 seconds then remove it
