@@ -11,7 +11,7 @@ echo "[FileHatch-Samba] Starting user sync service..."
 # -s checks if file exists AND has size > 0
 if [ ! -s "/etc/samba/smb.conf" ] && [ -f "/smb.conf.template" ]; then
     echo "[FileHatch-Samba] Installing default smb.conf..."
-    cp /smb.conf.template /etc/samba/smb.conf
+    cat /smb.conf.template > /etc/samba/smb.conf
 fi
 
 # Create users group if not exists

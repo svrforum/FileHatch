@@ -89,7 +89,7 @@ services:
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${CONFIG_PATH:-./config}:/etc/filehatch
-      - ${CONFIG_PATH:-./config}/smb.conf:/etc/samba/smb.conf:ro
+      - ${CONFIG_PATH:-./config}/smb.conf:/etc/samba/smb.conf
 
   # 4. Database (PostgreSQL)
   db:
