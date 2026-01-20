@@ -268,6 +268,7 @@ function AdminLogs() {
       'user.logout': '로그아웃',
       'share.create': '공유 생성',
       'share.access': '공유 접근',
+      'share.delete': '공유 삭제',
       'admin.user.create': '사용자 생성',
       'admin.user.update': '사용자 수정',
       'admin.user.delete': '사용자 삭제',
