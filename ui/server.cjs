@@ -8,14 +8,41 @@ const PORT = process.env.PORT || 3000;
 const API_URL = process.env.API_URL || 'http://localhost:8080';
 const ONLYOFFICE_URL = process.env.ONLYOFFICE_URL || 'http://onlyoffice';
 const ONLYOFFICE_PUBLIC_URL = process.env.ONLYOFFICE_PUBLIC_URL || '';
+const EXTERNAL_URL = process.env.EXTERNAL_URL || '';
 
 console.log('Starting server...');
 console.log('API_URL:', API_URL);
 console.log('ONLYOFFICE_URL:', ONLYOFFICE_URL);
 console.log('ONLYOFFICE_PUBLIC_URL:', ONLYOFFICE_PUBLIC_URL || '(not set, will use default)');
+console.log('EXTERNAL_URL:', EXTERNAL_URL || '(not set, will use request host)');
+
+// Helper function to get base URL for Location header rewriting
+// Priority: EXTERNAL_URL > X-Forwarded headers > request host
+function getBaseUrl(req) {
+  // 1. Use EXTERNAL_URL if set (highest priority for reverse proxy setups)
+  if (EXTERNAL_URL) {
+    return EXTERNAL_URL.replace(/\/$/, ''); // Remove trailing slash
+  }
+
+  // 2. Build from X-Forwarded headers or request
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const proto = forwardedProto ? forwardedProto.split(',')[0].trim() : (req.secure ? 'https' : 'http');
+
+  return `${proto}://${host}`;
+}
 
 // Helper function to detect protocol from request
 function getRequestProtocol(req) {
+  // Use EXTERNAL_URL if set
+  if (EXTERNAL_URL) {
+    try {
+      const url = new URL(EXTERNAL_URL);
+      return url.protocol.replace(':', '');
+    } catch (e) {
+      // Invalid EXTERNAL_URL, fall through
+    }
+  }
   // Check X-Forwarded-Proto header from reverse proxy first
   const forwardedProto = req.headers['x-forwarded-proto'];
   if (forwardedProto) {
@@ -45,9 +72,8 @@ const tusProxy = createProxyMiddleware({
     proxyRes: responseInterceptor(async (responseBuffer, proxyRes, req, res) => {
       const location = proxyRes.headers['location'];
       if (location) {
-        const host = req.headers.host || 'localhost:3000';
-        const proto = getRequestProtocol(req);
-        let fixedLocation = location.replace(/https?:\/\/[^\/]+/, `${proto}://${host}`);
+        const baseUrl = getBaseUrl(req);
+        let fixedLocation = location.replace(/https?:\/\/[^\/]+/, baseUrl);
         if (!fixedLocation.includes('/api/upload/')) {
           fixedLocation = fixedLocation.replace(/^(https?:\/\/[^\/]+)\//, '$1/api/upload/');
         }
