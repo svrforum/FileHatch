@@ -347,6 +347,23 @@ docker compose up -d --build
 
 > 💡 **참고**: 데이터베이스 마이그레이션은 API 서버 시작 시 자동으로 실행됩니다.
 
+### 리버스 프록시 사용 시 (NPM, Nginx 등)
+
+외부 도메인으로 접속하는 경우 `.env` 파일에 다음을 설정하세요:
+
+```bash
+# 외부 접속 URL (필수 - Mixed Content 에러 방지)
+EXTERNAL_URL=https://your-domain.com
+
+# CORS 허용 오리진
+CORS_ALLOWED_ORIGINS=https://your-domain.com
+
+# WebSocket 허용 오리진
+ALLOWED_ORIGINS=https://your-domain.com
+```
+
+> 📖 **상세 가이드**: [리버스 프록시 설정 가이드](./docs/REVERSE_PROXY_SETUP.md)
+
 ### 접속 정보
 
 | 프로토콜 | URL | 설명 |
@@ -496,8 +513,10 @@ docker compose build --no-cache
 | `VALKEY_HOST` | valkey | Valkey 호스트 |
 | `VALKEY_PORT` | 6379 | Valkey 포트 |
 | `JWT_SECRET` | (자동생성) | JWT 서명 키 (**프로덕션에서 변경 필수**) |
-| `CORS_ALLOWED_ORIGINS` | * | 허용된 CORS 오리진 |
 | `ENCRYPTION_KEY` | (자동생성) | 민감 데이터 암호화 키 |
+| `EXTERNAL_URL` | - | 외부 접속 URL (리버스 프록시 사용 시 필수) |
+| `CORS_ALLOWED_ORIGINS` | * | 허용된 CORS 오리진 |
+| `ALLOWED_ORIGINS` | - | WebSocket 허용 오리진 (리버스 프록시 사용 시 필수) |
 
 #### UI 서버
 | 변수 | 기본값 | 설명 |
