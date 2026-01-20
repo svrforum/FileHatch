@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -53,6 +54,39 @@ func getCORSOrigins() []string {
 	}
 	log.Printf("CORS: Configured origins: %v", result)
 	return result
+}
+
+// fixLocationHeader rewrites the Location header to use the correct scheme and host
+// for reverse proxy setups. Priority: EXTERNAL_URL > X-Forwarded-Proto/Host > original
+func fixLocationHeader(location string, req *http.Request) string {
+	// Parse the original location URL
+	parsedLoc, err := url.Parse(location)
+	if err != nil {
+		return location
+	}
+
+	// 1. Check EXTERNAL_URL environment variable first
+	if extURL := os.Getenv("EXTERNAL_URL"); extURL != "" {
+		parsedExt, err := url.Parse(extURL)
+		if err == nil && parsedExt.Scheme != "" && parsedExt.Host != "" {
+			parsedLoc.Scheme = parsedExt.Scheme
+			parsedLoc.Host = parsedExt.Host
+			return parsedLoc.String()
+		}
+	}
+
+	// 2. Check X-Forwarded-Proto and X-Forwarded-Host headers
+	forwardedProto := req.Header.Get("X-Forwarded-Proto")
+	forwardedHost := req.Header.Get("X-Forwarded-Host")
+
+	if forwardedProto != "" {
+		parsedLoc.Scheme = forwardedProto
+	}
+	if forwardedHost != "" {
+		parsedLoc.Host = forwardedHost
+	}
+
+	return parsedLoc.String()
 }
 
 func main() {
@@ -515,13 +549,20 @@ func main() {
 				}
 			}
 			tusHandler.PostFile(res, req)
-			// Capture client IP for this upload
+			// Capture client IP and fix Location header for reverse proxy
 			if location := res.Header().Get("Location"); location != "" {
 				// Extract upload ID from location header
 				uploadID := filepath.Base(location)
 				clientIP := c.RealIP()
 				handlers.GetTusIPTracker().StoreIP(uploadID, clientIP)
 				log.Printf("[TUS] Stored IP %s for upload %s", clientIP, uploadID)
+
+				// Fix Location header for reverse proxy (EXTERNAL_URL or X-Forwarded-Proto)
+				fixedLocation := fixLocationHeader(location, req)
+				if fixedLocation != location {
+					res.Header().Set("Location", fixedLocation)
+					log.Printf("[TUS] Fixed Location header: %s -> %s", location, fixedLocation)
+				}
 			}
 		case http.MethodHead:
 			tusHandler.HeadFile(res, req)

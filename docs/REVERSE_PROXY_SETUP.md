@@ -24,7 +24,7 @@ ALLOWED_ORIGINS=http://file.example.com
 
 | 변수 | 설명 |
 |------|------|
-| `EXTERNAL_URL` | SSO 콜백, 공유 링크 등 외부 URL 생성에 사용 |
+| `EXTERNAL_URL` | SSO 콜백, 파일 업로드 URL 등 외부 URL 생성에 사용 (Mixed Content 에러 방지) |
 | `CORS_ALLOWED_ORIGINS` | API CORS 정책에서 허용할 오리진 (`*` = 모두 허용) |
 | `ALLOWED_ORIGINS` | WebSocket 연결 허용 오리진 (쉼표로 구분) |
 
@@ -109,7 +109,46 @@ server {
 }
 ```
 
-## 3. 컨테이너 재시작
+## 3. Nginx Proxy Manager (NPM) 설정
+
+NPM을 사용하는 경우 다음과 같이 설정합니다.
+
+### 기본 설정
+
+1. **Proxy Hosts** → **Add Proxy Host**
+2. **Details** 탭:
+   - Domain Names: `file.example.com`
+   - Scheme: `http`
+   - Forward Hostname / IP: `192.168.1.100` (FileHatch 서버 IP)
+   - Forward Port: `3080`
+   - ☑️ Websockets Support (반드시 체크!)
+
+3. **SSL** 탭 (HTTPS 사용 시):
+   - ☑️ Force SSL
+   - SSL Certificate 선택 또는 새로 발급
+
+### Custom Nginx Configuration (중요!)
+
+NPM은 기본적으로 `X-Forwarded-Proto` 헤더를 전달하지 않을 수 있습니다.
+
+**Proxy Host** → **Advanced** 탭에 다음 내용을 추가:
+
+```nginx
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-Host $host;
+```
+
+### 또는 EXTERNAL_URL 사용 (권장)
+
+NPM에서 헤더 설정이 어려운 경우, `.env` 파일에 `EXTERNAL_URL`을 설정하면 됩니다:
+
+```bash
+EXTERNAL_URL=https://file.example.com
+```
+
+이 설정은 리버스 프록시 헤더보다 우선 적용됩니다.
+
+## 4. 컨테이너 재시작
 
 환경변수 변경 후 컨테이너를 재시작하세요:
 
@@ -117,7 +156,7 @@ server {
 docker compose down && docker compose up -d
 ```
 
-## 4. 설정 확인
+## 5. 설정 확인
 
 ### 환경변수 확인
 
@@ -159,6 +198,17 @@ EXTERNAL_URL=https://file.example.com
 
 - `EXTERNAL_URL`이 올바르게 설정되어 있는지 확인
 - 또는 Nginx에서 `X-Forwarded-Proto`와 `X-Forwarded-Host` 헤더가 전달되는지 확인
+
+### Mixed Content 에러 (파일 업로드 실패)
+
+HTTPS 페이지에서 HTTP API 호출 시 발생합니다:
+```
+Mixed Content: The page was loaded over HTTPS, but requested an insecure XMLHttpRequest endpoint 'http://...'
+```
+
+**해결 방법:**
+1. `.env`에 `EXTERNAL_URL=https://your-domain.com` 설정 (권장)
+2. 또는 리버스 프록시에서 `X-Forwarded-Proto: https` 헤더 전달
 
 ## OnlyOffice와 함께 사용
 
