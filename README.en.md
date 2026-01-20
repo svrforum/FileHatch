@@ -350,6 +350,23 @@ docker compose logs -f
 
 > **Note**: Database migrations run automatically when the API server starts.
 
+### Using a Reverse Proxy (NPM, Nginx, etc.)
+
+If accessing via an external domain, add the following to your `.env` file:
+
+```bash
+# External URL (required - prevents Mixed Content errors)
+EXTERNAL_URL=https://your-domain.com
+
+# CORS allowed origins
+CORS_ALLOWED_ORIGINS=https://your-domain.com
+
+# WebSocket allowed origins
+ALLOWED_ORIGINS=https://your-domain.com
+```
+
+> 📖 **Detailed Guide**: [Reverse Proxy Setup Guide](./docs/REVERSE_PROXY_SETUP.md)
+
 ### Access Information
 
 | Protocol | URL | Description |
@@ -501,8 +518,10 @@ docker compose build --no-cache
 | `VALKEY_HOST` | valkey | Valkey host |
 | `VALKEY_PORT` | 6379 | Valkey port |
 | `JWT_SECRET` | (auto-generated) | JWT signing key (**must change in production**) |
-| `CORS_ALLOWED_ORIGINS` | * | Allowed CORS origins |
 | `ENCRYPTION_KEY` | (auto-generated) | Sensitive data encryption key |
+| `EXTERNAL_URL` | - | External access URL (required for reverse proxy) |
+| `CORS_ALLOWED_ORIGINS` | * | Allowed CORS origins |
+| `ALLOWED_ORIGINS` | - | WebSocket allowed origins (required for reverse proxy) |
 
 #### UI Server
 | Variable | Default | Description |
