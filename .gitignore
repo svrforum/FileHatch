@@ -27,6 +27,7 @@ build/
 *.dll
 *.so
 *.dylib
+*.tsbuildinfo
 
 # IDE
 .idea/
