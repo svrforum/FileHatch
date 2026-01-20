@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
+	"os/exec"
 	"strconv"
 	"sync"
 	"time"
@@ -286,6 +288,13 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 
 		// Invalidate cache
 		h.InvalidateCache(key)
+
+		// Handle SMB container control
+		if key == "smb_enabled" {
+			if err := controlSambaContainer(value == "true"); err != nil {
+				fmt.Printf("Warning: Failed to control Samba container: %v\n", err)
+			}
+		}
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -310,4 +319,24 @@ func GetGlobalSettingsHandler() *SettingsHandler {
 // SetGlobalSettingsHandler sets the global settings handler
 func SetGlobalSettingsHandler(h *SettingsHandler) {
 	globalSettingsHandler = h
+}
+
+// controlSambaContainer starts or stops the Samba container based on the enabled flag
+func controlSambaContainer(enabled bool) error {
+	var cmd *exec.Cmd
+	if enabled {
+		cmd = exec.Command("docker", "start", "fh-samba")
+		fmt.Println("[SMB] Starting Samba container...")
+	} else {
+		cmd = exec.Command("docker", "stop", "fh-samba")
+		fmt.Println("[SMB] Stopping Samba container...")
+	}
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker command failed: %v, output: %s", err, string(output))
+	}
+
+	fmt.Printf("[SMB] Container control successful: %s\n", string(output))
+	return nil
 }
