@@ -225,6 +225,18 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 		shareURL = fmt.Sprintf("/s/%s", token)
 	}
 
+	// Audit log for share creation
+	h.auditHandler.LogEventFromContext(c, EventShareCreate, storedPath, map[string]interface{}{
+		"shareId":        shareID,
+		"shareType":      shareType,
+		"hasPassword":    req.Password != "",
+		"expiresInHours": req.ExpiresIn,
+		"maxAccess":      req.MaxAccess,
+		"requireLogin":   req.RequireLogin,
+		"editable":       editable,
+		"isDir":          fileInfo.IsDir(),
+	})
+
 	return RespondCreated(c, map[string]interface{}{
 		"id":           shareID,
 		"token":        token,
@@ -330,6 +342,18 @@ func (h *ShareHandler) DeleteShare(c echo.Context) error {
 	}
 	shareID := c.Param("id")
 
+	// Get share details before deletion for audit
+	var sharePath, shareType string
+	err = h.db.QueryRow(`
+		SELECT path, share_type FROM shares WHERE id = $1 AND created_by = $2
+	`, shareID, claims.UserID).Scan(&sharePath, &shareType)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return RespondError(c, ErrNotFound("Share not found"))
+		}
+		return RespondError(c, ErrOperationFailed("query share", err))
+	}
+
 	result, err := h.db.Exec(`
 		DELETE FROM shares WHERE id = $1 AND created_by = $2
 	`, shareID, claims.UserID)
@@ -342,6 +366,12 @@ func (h *ShareHandler) DeleteShare(c echo.Context) error {
 	if rowsAffected == 0 {
 		return RespondError(c, ErrNotFound("Share not found"))
 	}
+
+	// Audit log for share deletion
+	h.auditHandler.LogEventFromContext(c, EventShareDelete, sharePath, map[string]interface{}{
+		"shareId":   shareID,
+		"shareType": shareType,
+	})
 
 	return RespondSuccess(c, map[string]interface{}{
 		"message": "Share deleted",

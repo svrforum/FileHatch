@@ -196,7 +196,7 @@
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  border: 2px solid var(--border-default);
+  border: 2px solid var(--border-medium);
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;

@@ -225,8 +225,9 @@
   border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   background: var(--bg-secondary);
+  border: 1px solid var(--border-medium);
   transition: all var(--transition-fast);
 }
 

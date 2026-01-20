@@ -94,6 +94,7 @@ const (
 	// Share events
 	EventShareCreate = "share.create"
 	EventShareAccess = "share.access"
+	EventShareDelete = "share.delete"
 
 	// Admin events
 	EventAdminUserCreate     = "admin.user.create"

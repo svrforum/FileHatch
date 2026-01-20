@@ -18,6 +18,8 @@ interface SystemSettings {
   hsts_enabled: string
   csp_enabled: string
   x_frame_options: string
+  // SMB Settings
+  smb_enabled: string
   [key: string]: string
 }
 
@@ -39,7 +41,9 @@ function AdminSettings() {
     xss_protection_enabled: 'true',
     hsts_enabled: 'true',
     csp_enabled: 'true',
-    x_frame_options: 'SAMEORIGIN'
+    x_frame_options: 'SAMEORIGIN',
+    // SMB Settings
+    smb_enabled: 'true'
   })
 
   // Convert bytes to GB for display
@@ -76,7 +80,9 @@ function AdminSettings() {
           xss_protection_enabled: 'true',
           hsts_enabled: 'true',
           csp_enabled: 'true',
-          x_frame_options: 'SAMEORIGIN'
+          x_frame_options: 'SAMEORIGIN',
+          // SMB Settings
+          smb_enabled: 'true'
         }
         data.settings?.forEach((s: { key: string; value: string }) => {
           if (s.key in loadedSettings) {
@@ -437,7 +443,7 @@ function AdminSettings() {
           </div>
         </div>
 
-        {/* SMB Settings - Read Only */}
+        {/* SMB Settings */}
         <div className="as-section">
           <div className="as-section-header">
             <div className="as-section-icon smb">
@@ -454,35 +460,42 @@ function AdminSettings() {
               <h3>SMB/CIFS 설정</h3>
               <p>네트워크 드라이브 접근 설정입니다.</p>
             </div>
-            <span className="as-readonly-badge">읽기 전용</span>
           </div>
           <div className="as-section-content">
             <div className="as-setting-row">
               <div className="as-setting-info">
-                <label>SMB 서버 상태</label>
-                <span className="as-setting-desc">Samba 서버의 현재 실행 상태입니다.</span>
+                <label>SMB 서버 활성화</label>
+                <span className="as-setting-desc">Samba 서버를 활성화하여 네트워크 드라이브 접근을 허용합니다.</span>
               </div>
-              <div className="as-status-badge active">
-                <span className="as-status-dot"></span>
-                실행 중
-              </div>
+              <label className="as-toggle">
+                <input
+                  type="checkbox"
+                  checked={settings.smb_enabled === 'true'}
+                  onChange={(e) => setSettings({ ...settings, smb_enabled: e.target.checked ? 'true' : 'false' })}
+                />
+                <span className="as-toggle-slider"></span>
+              </label>
             </div>
-            <div className="as-divider"></div>
-            <div className="as-setting-row">
-              <div className="as-setting-info">
-                <label>작업 그룹</label>
-                <span className="as-setting-desc">Windows 네트워크 작업 그룹 이름입니다.</span>
-              </div>
-              <div className="as-readonly-value">WORKGROUP</div>
-            </div>
-            <div className="as-divider"></div>
-            <div className="as-setting-row">
-              <div className="as-setting-info">
-                <label>프로토콜 버전</label>
-                <span className="as-setting-desc">지원되는 SMB 프로토콜 버전입니다.</span>
-              </div>
-              <div className="as-readonly-value">SMB2 / SMB3</div>
-            </div>
+            {settings.smb_enabled === 'true' && (
+              <>
+                <div className="as-divider"></div>
+                <div className="as-setting-row">
+                  <div className="as-setting-info">
+                    <label>작업 그룹</label>
+                    <span className="as-setting-desc">Windows 네트워크 작업 그룹 이름입니다.</span>
+                  </div>
+                  <div className="as-readonly-value">WORKGROUP</div>
+                </div>
+                <div className="as-divider"></div>
+                <div className="as-setting-row">
+                  <div className="as-setting-info">
+                    <label>프로토콜 버전</label>
+                    <span className="as-setting-desc">지원되는 SMB 프로토콜 버전입니다.</span>
+                  </div>
+                  <div className="as-readonly-value">SMB2 / SMB3</div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
