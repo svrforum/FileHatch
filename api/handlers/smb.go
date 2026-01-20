@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,6 +14,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// errSMBDisabled is returned when SMB is disabled in system settings
+var errSMBDisabled = errors.New("SMB service is disabled")
 
 type SMBHandler struct {
 	db         *sql.DB
@@ -43,6 +47,28 @@ func NewSMBHandler(db *sql.DB, configPath string) *SMBHandler {
 	return handler
 }
 
+// IsSMBEnabled checks if SMB is enabled in system settings
+func (h *SMBHandler) IsSMBEnabled() bool {
+	var value string
+	err := h.db.QueryRow("SELECT value FROM system_settings WHERE key = 'smb_enabled'").Scan(&value)
+	if err != nil {
+		// Default to true if setting doesn't exist
+		return true
+	}
+	return value == "true"
+}
+
+// checkSMBEnabled returns an error response if SMB is disabled
+func (h *SMBHandler) checkSMBEnabled(c echo.Context) error {
+	if !h.IsSMBEnabled() {
+		c.JSON(http.StatusServiceUnavailable, map[string]string{
+			"error": "SMB service is disabled. Enable it in system settings.",
+		})
+		return errSMBDisabled
+	}
+	return nil
+}
+
 // SMBUser represents an SMB user
 type SMBUser struct {
 	ID        string    `json:"id"`
@@ -68,6 +94,10 @@ type SetPasswordRequest struct {
 
 // ListSMBUsers returns list of users with SMB info
 func (h *SMBHandler) ListSMBUsers(c echo.Context) error {
+	if err := h.checkSMBEnabled(c); err != nil {
+		return err
+	}
+
 	rows, err := h.db.Query(`
 		SELECT id, username, is_active,
 		       CASE WHEN smb_hash IS NOT NULL AND smb_hash != '' THEN true ELSE false END as has_smb,
@@ -99,6 +129,10 @@ func (h *SMBHandler) ListSMBUsers(c echo.Context) error {
 
 // CreateSMBUser creates a new user with SMB access
 func (h *SMBHandler) CreateSMBUser(c echo.Context) error {
+	if err := h.checkSMBEnabled(c); err != nil {
+		return err
+	}
+
 	var req SetPasswordRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -169,6 +203,10 @@ func (h *SMBHandler) CreateSMBUser(c echo.Context) error {
 
 // SetSMBPassword sets SMB password for an existing user
 func (h *SMBHandler) SetSMBPassword(c echo.Context) error {
+	if err := h.checkSMBEnabled(c); err != nil {
+		return err
+	}
+
 	var req SetPasswordRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -226,6 +264,10 @@ func (h *SMBHandler) SetSMBPassword(c echo.Context) error {
 
 // DeleteSMBUser removes SMB access for a user
 func (h *SMBHandler) DeleteSMBUser(c echo.Context) error {
+	if err := h.checkSMBEnabled(c); err != nil {
+		return err
+	}
+
 	username := c.Param("username")
 	if username == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -263,6 +305,10 @@ func (h *SMBHandler) DeleteSMBUser(c echo.Context) error {
 
 // GetSMBConfig returns current SMB configuration
 func (h *SMBHandler) GetSMBConfig(c echo.Context) error {
+	if err := h.checkSMBEnabled(c); err != nil {
+		return err
+	}
+
 	configPath := filepath.Join(h.configPath, "smb.conf")
 	content, err := os.ReadFile(configPath)
 	if err != nil {
@@ -295,6 +341,10 @@ func (h *SMBHandler) GetSMBConfig(c echo.Context) error {
 
 // UpdateSMBConfig updates SMB configuration
 func (h *SMBHandler) UpdateSMBConfig(c echo.Context) error {
+	if err := h.checkSMBEnabled(c); err != nil {
+		return err
+	}
+
 	var config SMBConfig
 	if err := c.Bind(&config); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{

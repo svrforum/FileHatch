@@ -544,8 +544,26 @@ type SetSMBPasswordRequest struct {
 	Password string `json:"password"`
 }
 
+// isSMBEnabled checks if SMB is enabled in system settings
+func (h *AuthHandler) isSMBEnabled() bool {
+	var value string
+	err := h.db.QueryRow("SELECT value FROM system_settings WHERE key = 'smb_enabled'").Scan(&value)
+	if err != nil {
+		// Default to true if setting doesn't exist
+		return true
+	}
+	return value == "true"
+}
+
 // SetMySMBPassword sets the current user's SMB/WebDAV password
 func (h *AuthHandler) SetMySMBPassword(c echo.Context) error {
+	// Check if SMB is enabled
+	if !h.isSMBEnabled() {
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{
+			"error": "SMB service is disabled. Enable it in system settings.",
+		})
+	}
+
 	claims := c.Get("user").(*JWTClaims)
 
 	var req SetSMBPasswordRequest
