@@ -68,6 +68,12 @@ func (h *Handler) GetStorageUsage(c echo.Context) error {
 		quota = storageQuota.Int64
 	}
 
+	// For admin users, show actual disk capacity instead of quota
+	if claims.IsAdmin {
+		diskInfo := getDiskInfo(h.dataRoot)
+		quota = int64(diskInfo.Total)
+	}
+
 	// Calculate shared folder usage (cached separately)
 	sharedSize := h.getSharedStorageUsage()
 
