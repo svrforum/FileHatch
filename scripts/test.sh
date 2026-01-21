@@ -24,6 +24,7 @@ echo ""
 RUN_BACKEND=true
 RUN_FRONTEND=true
 RUN_BUILD=true
+RUN_LINT=true
 VERBOSE=false
 
 while [[ $# -gt 0 ]]; do
@@ -35,10 +36,15 @@ while [[ $# -gt 0 ]]; do
             ;;
         --frontend-only)
             RUN_BACKEND=false
+            RUN_LINT=false
             shift
             ;;
         --no-build)
             RUN_BUILD=false
+            shift
+            ;;
+        --no-lint)
+            RUN_LINT=false
             shift
             ;;
         --verbose|-v)
@@ -52,6 +58,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --backend-only    Run only backend tests"
             echo "  --frontend-only   Run only frontend tests"
             echo "  --no-build        Skip build verification"
+            echo "  --no-lint         Skip Go lint check"
             echo "  --verbose, -v     Show verbose output"
             echo "  --help, -h        Show this help"
             exit 0
@@ -67,12 +74,40 @@ done
 BACKEND_RESULT=0
 FRONTEND_RESULT=0
 BUILD_RESULT=0
+LINT_RESULT=0
+
+# ========================================
+# Go Lint
+# ========================================
+if [ "$RUN_LINT" = true ]; then
+    echo -e "${YELLOW}[1/4] Running Go Lint...${NC}"
+    cd "$PROJECT_ROOT/api"
+
+    # Check if golangci-lint is available locally or use Docker
+    if command -v golangci-lint &> /dev/null; then
+        if golangci-lint run --timeout=5m ./...; then
+            echo -e "${GREEN}✓ Go lint passed${NC}"
+        else
+            LINT_RESULT=1
+            echo -e "${RED}✗ Go lint failed${NC}"
+        fi
+    else
+        echo -e "  ${BLUE}Using Docker for lint (golangci-lint not found locally)...${NC}"
+        if docker run --rm -v "$PROJECT_ROOT/api:/app" -w /app golangci/golangci-lint:latest golangci-lint run --timeout=5m ./...; then
+            echo -e "${GREEN}✓ Go lint passed${NC}"
+        else
+            LINT_RESULT=1
+            echo -e "${RED}✗ Go lint failed${NC}"
+        fi
+    fi
+    echo ""
+fi
 
 # ========================================
 # Backend Tests (Go)
 # ========================================
 if [ "$RUN_BACKEND" = true ]; then
-    echo -e "${YELLOW}[1/3] Running Backend Tests (Go)...${NC}"
+    echo -e "${YELLOW}[2/4] Running Backend Tests (Go)...${NC}"
     cd "$PROJECT_ROOT/api"
 
     if [ "$VERBOSE" = true ]; then
@@ -97,7 +132,7 @@ fi
 # Frontend Tests (Vitest)
 # ========================================
 if [ "$RUN_FRONTEND" = true ]; then
-    echo -e "${YELLOW}[2/3] Running Frontend Tests (Vitest)...${NC}"
+    echo -e "${YELLOW}[3/4] Running Frontend Tests (Vitest)...${NC}"
     cd "$PROJECT_ROOT/ui"
 
     if [ "$VERBOSE" = true ]; then
@@ -122,7 +157,7 @@ fi
 # Build Verification
 # ========================================
 if [ "$RUN_BUILD" = true ]; then
-    echo -e "${YELLOW}[3/3] Verifying Build...${NC}"
+    echo -e "${YELLOW}[4/4] Verifying Build...${NC}"
 
     # Backend build check
     echo -e "  ${BLUE}Checking backend build...${NC}"
@@ -154,6 +189,15 @@ echo -e "${BLUE}  Test Summary${NC}"
 echo -e "${BLUE}========================================${NC}"
 
 TOTAL_RESULT=0
+
+if [ "$RUN_LINT" = true ]; then
+    if [ $LINT_RESULT -eq 0 ]; then
+        echo -e "  Go Lint:        ${GREEN}PASSED${NC}"
+    else
+        echo -e "  Go Lint:        ${RED}FAILED${NC}"
+        TOTAL_RESULT=1
+    fi
+fi
 
 if [ "$RUN_BACKEND" = true ]; then
     if [ $BACKEND_RESULT -eq 0 ]; then

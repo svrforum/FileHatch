@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,9 +13,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
 )
-
-// errSMBDisabled is returned when SMB is disabled in system settings
-var errSMBDisabled = errors.New("SMB service is disabled")
 
 type SMBHandler struct {
 	db         *sql.DB
@@ -61,10 +57,9 @@ func (h *SMBHandler) IsSMBEnabled() bool {
 // checkSMBEnabled returns an error response if SMB is disabled
 func (h *SMBHandler) checkSMBEnabled(c echo.Context) error {
 	if !h.IsSMBEnabled() {
-		c.JSON(http.StatusServiceUnavailable, map[string]string{
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{
 			"error": "SMB service is disabled. Enable it in system settings.",
 		})
-		return errSMBDisabled
 	}
 	return nil
 }
