@@ -327,7 +327,7 @@ func main() {
 	api.GET("/files", h.ListFiles, authHandler.OptionalJWTMiddleware)
 	api.GET("/files/check", h.CheckFileExists, authHandler.OptionalJWTMiddleware)
 	api.GET("/files/search", h.SearchFiles, authHandler.OptionalJWTMiddleware)
-	api.GET("/subtitle/*", h.GetSubtitle, authHandler.OptionalJWTMiddleware)
+	api.Match([]string{http.MethodGet, http.MethodHead}, "/subtitle/*", h.GetSubtitle, authHandler.OptionalJWTMiddleware)
 	api.GET("/files/*", h.GetFile, authHandler.OptionalJWTMiddleware)
 	api.PUT("/files/content/*", h.SaveFileContent, authHandler.OptionalJWTMiddleware)
 	api.DELETE("/files/*", h.DeleteFile, authHandler.OptionalJWTMiddleware)
@@ -362,7 +362,7 @@ func main() {
 	api.GET("/preview/*", h.GetPreview, authHandler.OptionalJWTMiddleware)
 
 	// Thumbnail API
-	api.GET("/thumbnail/*", h.GetThumbnail, authHandler.OptionalJWTMiddleware)
+	api.Match([]string{http.MethodGet, http.MethodHead}, "/thumbnail/*", h.GetThumbnail, authHandler.OptionalJWTMiddleware)
 	api.GET("/thumbnails/responsive/*", h.GetResponsiveThumbnail, authHandler.OptionalJWTMiddleware)
 	api.POST("/thumbnails/batch", h.GetBatchThumbnails, authHandler.OptionalJWTMiddleware)
 	api.POST("/thumbnails/preload/*", h.PreloadThumbnails, authHandler.OptionalJWTMiddleware)

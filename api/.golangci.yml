@@ -1,6 +1,8 @@
 # FileHatch Go Linter Configuration
 # 이 설정은 코드 품질을 유지하기 위한 린트 규칙입니다.
 
+version: "2"
+
 run:
   timeout: 5m
   tests: true
@@ -8,10 +10,9 @@ run:
 linters:
   enable:
     - errcheck      # 에러 반환값 체크 필수
-    - gosimple      # 코드 단순화 제안
     - govet         # Go vet 검사
     - ineffassign   # 비효율적인 할당 검사
-    - staticcheck   # 정적 분석
+    - staticcheck   # 정적 분석 (gosimple 포함)
     - unused        # 사용되지 않는 코드 검사
 
 linters-settings:

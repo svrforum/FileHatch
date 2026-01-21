@@ -328,22 +328,30 @@ func generateVideoThumbnail(filePath string, size ThumbnailSize) ([]byte, error)
 
 	// FFmpeg command to extract frame at 10% of video duration
 	// -ss 00:00:05 seeks to 5 seconds (or use -vf "thumbnail" for smart selection)
+	// scale filter: force_original_aspect_ratio=decrease maintains aspect ratio
+	// pad filter: ensures even dimensions required by mjpeg encoder
 	args := []string{
 		"-i", filePath,
 		"-ss", "00:00:05",
 		"-vframes", "1",
-		"-vf", fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", size.Width, size.Height),
+		"-vf", fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease,pad=ceil(iw/2)*2:ceil(ih/2)*2", size.Width, size.Height),
 		"-q:v", "2",
 		"-y",
 		tmpPath,
 	}
 
 	cmd := exec.Command("ffmpeg", args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		fmt.Printf("[Thumbnail] FFmpeg first attempt failed for %s: %v, stderr: %s\n", filePath, err, stderr.String())
 		// Try at beginning of video if seek fails
-		args[2] = "00:00:01"
+		args[3] = "00:00:01"
 		cmd = exec.Command("ffmpeg", args...)
+		stderr.Reset()
+		cmd.Stderr = &stderr
 		if err := cmd.Run(); err != nil {
+			fmt.Printf("[Thumbnail] FFmpeg second attempt failed for %s: %v, stderr: %s\n", filePath, err, stderr.String())
 			return nil, fmt.Errorf("ffmpeg failed: %w", err)
 		}
 	}
