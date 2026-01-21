@@ -389,6 +389,14 @@ export interface StorageUsage {
   trashUsed: number
   totalUsed: number
   quota: number
+  // Admin-only fields
+  isAdmin?: boolean
+  disk?: {
+    total: number
+    used: number
+    free: number
+  }
+  dataUsed?: number
 }
 
 export async function getStorageUsage(): Promise<StorageUsage> {

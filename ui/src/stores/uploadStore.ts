@@ -214,13 +214,16 @@ export const useUploadStore = create<UploadState>((set, get) => ({
         createTimeout<never>(API_TIMEOUT, 'Quota check timeout'),
       ])
 
-      const remaining = storage.quota - storage.totalUsed
-      if (item.file.size > remaining) {
-        const errorMessage = `저장 공간이 부족합니다. 필요: ${formatFileSize(item.file.size)}, 남은 공간: ${formatFileSize(remaining)}`
-        useToastStore.getState().showError(errorMessage)
-        get().setStatus(id, 'error', errorMessage)
-        setTimeout(() => get().startNextUpload(), 100)
-        return
+      // quota === 0 means unlimited
+      if (storage.quota > 0) {
+        const remaining = storage.quota - storage.totalUsed
+        if (item.file.size > remaining) {
+          const errorMessage = `저장 공간이 부족합니다. 필요: ${formatFileSize(item.file.size)}, 남은 공간: ${formatFileSize(remaining)}`
+          useToastStore.getState().showError(errorMessage)
+          get().setStatus(id, 'error', errorMessage)
+          setTimeout(() => get().startNextUpload(), 100)
+          return
+        }
       }
     } catch {
       // Continue - backend will validate

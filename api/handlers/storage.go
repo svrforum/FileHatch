@@ -62,20 +62,41 @@ func (h *Handler) GetStorageUsage(c echo.Context) error {
 	trashUsedVal := trashUsed.Int64
 	totalUsed := homeUsed + trashUsedVal
 
-	// Default quota 10GB
+	// Default quota 10GB, 0 means unlimited
 	quota := int64(10 * 1024 * 1024 * 1024)
-	if storageQuota.Valid && storageQuota.Int64 > 0 {
-		quota = storageQuota.Int64
-	}
-
-	// For admin users, show actual disk capacity instead of quota
-	if claims.IsAdmin {
-		diskInfo := getDiskInfo(h.dataRoot)
-		quota = int64(diskInfo.Total)
+	if storageQuota.Valid {
+		if storageQuota.Int64 == 0 {
+			// 0 means unlimited
+			quota = 0
+		} else if storageQuota.Int64 > 0 {
+			quota = storageQuota.Int64
+		}
 	}
 
 	// Calculate shared folder usage (cached separately)
 	sharedSize := h.getSharedStorageUsage()
+
+	// For admin users, include disk info and total data usage
+	if claims.IsAdmin {
+		diskInfo := getDiskInfo(h.dataRoot)
+		// Calculate total data directory usage
+		dataUsed, _ := h.calculateDirSize(h.dataRoot)
+
+		return c.JSON(http.StatusOK, map[string]any{
+			"homeUsed":   homeUsed,
+			"sharedUsed": sharedSize,
+			"trashUsed":  trashUsedVal,
+			"totalUsed":  totalUsed,
+			"quota":      quota,
+			"isAdmin":    true,
+			"disk": map[string]any{
+				"total": int64(diskInfo.Total),
+				"used":  int64(diskInfo.Used),
+				"free":  int64(diskInfo.Free),
+			},
+			"dataUsed": dataUsed,
+		})
+	}
 
 	return c.JSON(http.StatusOK, map[string]any{
 		"homeUsed":   homeUsed,
