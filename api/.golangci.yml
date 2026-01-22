@@ -1,8 +1,6 @@
 # FileHatch Go Linter Configuration
 # 이 설정은 코드 품질을 유지하기 위한 린트 규칙입니다.
 
-version: "2"
-
 run:
   timeout: 5m
   tests: true
