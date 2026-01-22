@@ -584,7 +584,7 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 		)
 	}
 
-	c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, info.Name()))
+	setContentDisposition(c, info.Name())
 	return c.File(fullPath)
 }
 

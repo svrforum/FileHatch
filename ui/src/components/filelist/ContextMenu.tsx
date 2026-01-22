@@ -1,7 +1,7 @@
 // 컨텍스트 메뉴 컴포넌트
 // 파일/폴더 우클릭 시 표시되는 메뉴
 
-import React from 'react'
+import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { FileInfo } from '../../api/files'
 import { ContextMenuType } from './types'
 
@@ -105,6 +105,57 @@ function ContextMenu({
   onLockFile,
   onUnlockFile,
 }: ContextMenuProps) {
+  const submenuParentRef = useRef<HTMLDivElement>(null)
+  const submenuRef = useRef<HTMLDivElement>(null)
+  const [submenuPosition, setSubmenuPosition] = useState<{ left: string; right: string; top: string; bottom: string }>({
+    left: '100%',
+    right: 'auto',
+    top: '0',
+    bottom: 'auto'
+  })
+
+  // Calculate submenu position when it's shown
+  const calculateSubmenuPosition = useCallback(() => {
+    if (!submenuParentRef.current || !submenuRef.current) return
+
+    const parentRect = submenuParentRef.current.getBoundingClientRect()
+    const submenuRect = submenuRef.current.getBoundingClientRect()
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+
+    let newPosition = {
+      left: '100%',
+      right: 'auto',
+      top: '0',
+      bottom: 'auto'
+    }
+
+    // Check if submenu fits on the right
+    if (parentRect.right + submenuRect.width > viewportWidth - 10) {
+      // Show on the left instead
+      newPosition.left = 'auto'
+      newPosition.right = '100%'
+    }
+
+    // Check if submenu fits below
+    if (parentRect.top + submenuRect.height > viewportHeight - 10) {
+      // Align to bottom
+      newPosition.top = 'auto'
+      newPosition.bottom = '0'
+    }
+
+    setSubmenuPosition(newPosition)
+  }, [])
+
+  // Recalculate when submenu is shown
+  useEffect(() => {
+    if (showNewFileSubmenu) {
+      // Small delay to ensure submenu is rendered
+      const timer = setTimeout(calculateSubmenuPosition, 10)
+      return () => clearTimeout(timer)
+    }
+  }, [showNewFileSubmenu, calculateSubmenuPosition])
+
   if (!contextMenu) return null
 
   // Filter out Office file types when OnlyOffice is not available
@@ -216,6 +267,7 @@ function ContextMenu({
             </button>
             <div className="context-menu-divider" />
             <div
+              ref={submenuParentRef}
               className="context-menu-item has-submenu"
               onMouseEnter={() => onSetShowNewFileSubmenu(true)}
               onMouseLeave={() => onSetShowNewFileSubmenu(false)}
@@ -226,11 +278,20 @@ function ContextMenu({
                 <path d="M12 18V12M9 15H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
               새 파일
-              <svg className="submenu-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <svg className={`submenu-arrow ${submenuPosition.right !== 'auto' ? 'flipped' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none">
                 <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
               {showNewFileSubmenu && (
-                <div className="context-submenu">
+                <div
+                  ref={submenuRef}
+                  className="context-submenu"
+                  style={{
+                    left: submenuPosition.left,
+                    right: submenuPosition.right,
+                    top: submenuPosition.top,
+                    bottom: submenuPosition.bottom
+                  }}
+                >
                   {filteredFileTypeOptions.map((option) => (
                     <button
                       key={option.type}

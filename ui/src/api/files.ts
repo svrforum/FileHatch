@@ -30,6 +30,32 @@ export interface ListFilesResponse {
 
 const API_BASE = '/api'
 
+/**
+ * Parse filename from Content-Disposition header.
+ * Supports RFC 5987 encoding (filename*=UTF-8''...) for non-ASCII characters.
+ */
+function parseContentDisposition(header: string | null, fallback: string): string {
+  if (!header) return fallback
+
+  // Try RFC 5987 format first: filename*=UTF-8''encoded_filename
+  const rfc5987Match = header.match(/filename\*=UTF-8''([^;\s]+)/i)
+  if (rfc5987Match) {
+    try {
+      return decodeURIComponent(rfc5987Match[1])
+    } catch {
+      // Fall through to simple format
+    }
+  }
+
+  // Try simple format: filename="filename" or filename=filename
+  const simpleMatch = header.match(/filename="?([^";\s]+)"?/i)
+  if (simpleMatch) {
+    return simpleMatch[1]
+  }
+
+  return fallback
+}
+
 export async function fetchFiles(
   path: string = '/',
   sort: string = 'name',
@@ -61,13 +87,7 @@ export async function downloadFile(
 
   // Get filename from Content-Disposition header or path
   const disposition = response.headers.get('Content-Disposition')
-  let filename = path.split('/').pop() || 'download'
-  if (disposition) {
-    const match = disposition.match(/filename="?([^"]+)"?/)
-    if (match) {
-      filename = match[1]
-    }
-  }
+  const filename = parseContentDisposition(disposition, path.split('/').pop() || 'download')
 
   // Get content length for progress tracking
   const contentLength = response.headers.get('Content-Length')
@@ -729,11 +749,7 @@ export async function downloadAsZip(
 
   // Get filename from Content-Disposition header
   const contentDisposition = response.headers.get('Content-Disposition')
-  let filename = 'download.zip'
-  if (contentDisposition) {
-    const match = contentDisposition.match(/filename="(.+)"/)
-    if (match) filename = match[1]
-  }
+  const filename = parseContentDisposition(contentDisposition, 'download.zip')
 
   // Get total size for progress
   const contentLength = response.headers.get('Content-Length')

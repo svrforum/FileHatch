@@ -10,14 +10,14 @@
 
 ```bash
 # HTTPS 사용 시 (권장)
-EXTERNAL_URL=https://file.example.com
-CORS_ALLOWED_ORIGINS=https://file.example.com
-ALLOWED_ORIGINS=https://file.example.com
+EXTERNAL_URL=https://files.your-domain.com
+CORS_ALLOWED_ORIGINS=https://files.your-domain.com
+ALLOWED_ORIGINS=https://files.your-domain.com
 
 # HTTP만 사용 시 (권장하지 않음)
-EXTERNAL_URL=http://file.example.com
-CORS_ALLOWED_ORIGINS=http://file.example.com
-ALLOWED_ORIGINS=http://file.example.com
+EXTERNAL_URL=http://files.your-domain.com
+CORS_ALLOWED_ORIGINS=http://files.your-domain.com
+ALLOWED_ORIGINS=http://files.your-domain.com
 ```
 
 ### 환경변수 설명
@@ -37,7 +37,7 @@ ALLOWED_ORIGINS=http://file.example.com
 ```nginx
 server {
     listen 80;
-    server_name file.example.com;
+    server_name files.your-domain.com;
 
     location / {
         proxy_pass http://192.168.1.100:3080;
@@ -68,18 +68,18 @@ server {
 # HTTP -> HTTPS 리다이렉트
 server {
     listen 80;
-    server_name file.example.com;
+    server_name files.your-domain.com;
     return 301 https://$server_name$request_uri;
 }
 
 # HTTPS 서버
 server {
     listen 443 ssl http2;
-    server_name file.example.com;
+    server_name files.your-domain.com;
 
     # SSL 인증서 설정
-    ssl_certificate /etc/nginx/ssl/file.example.com.crt;
-    ssl_certificate_key /etc/nginx/ssl/file.example.com.key;
+    ssl_certificate /etc/nginx/ssl/files.your-domain.com.crt;
+    ssl_certificate_key /etc/nginx/ssl/files.your-domain.com.key;
 
     # SSL 보안 설정
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -117,7 +117,7 @@ NPM을 사용하는 경우 다음과 같이 설정합니다.
 
 1. **Proxy Hosts** → **Add Proxy Host**
 2. **Details** 탭:
-   - Domain Names: `file.example.com`
+   - Domain Names: `files.your-domain.com`
    - Scheme: `http`
    - Forward Hostname / IP: `192.168.1.100` (FileHatch 서버 IP)
    - Forward Port: `3080`
@@ -143,7 +143,7 @@ proxy_set_header X-Forwarded-Host $host;
 NPM에서 헤더 설정이 어려운 경우, `.env` 파일에 `EXTERNAL_URL`을 설정하면 됩니다:
 
 ```bash
-EXTERNAL_URL=https://file.example.com
+EXTERNAL_URL=https://files.your-domain.com
 ```
 
 이 설정은 리버스 프록시 헤더보다 우선 적용됩니다.
@@ -166,9 +166,9 @@ docker compose exec api env | grep -E "(CORS|ALLOWED|EXTERNAL)"
 
 예상 출력:
 ```
-CORS_ALLOWED_ORIGINS=https://file.example.com
-ALLOWED_ORIGINS=https://file.example.com
-EXTERNAL_URL=https://file.example.com
+CORS_ALLOWED_ORIGINS=https://files.your-domain.com
+ALLOWED_ORIGINS=https://files.your-domain.com
+EXTERNAL_URL=https://files.your-domain.com
 ```
 
 ### 연결 테스트

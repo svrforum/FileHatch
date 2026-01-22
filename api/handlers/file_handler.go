@@ -98,7 +98,7 @@ func (h *Handler) GetFile(c echo.Context) error {
 	// Check if download is requested
 	isDownload := c.QueryParam("download") == "true"
 	if isDownload {
-		c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, info.Name()))
+		setContentDisposition(c, info.Name())
 	}
 
 	// Log audit event for downloads

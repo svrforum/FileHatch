@@ -59,18 +59,45 @@ function OnlyOfficeEditor({ config, publicUrl, onClose, onError }: OnlyOfficeEdi
   const [error, setError] = useState<string | null>(null)
   const editorRef = useRef<OnlyOfficeDocEditor | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const isMountedRef = useRef(true)
+  const initializingRef = useRef(false)
 
   useEffect(() => {
+    isMountedRef.current = true
+
     // Load OnlyOffice Document Server API script
     const scriptId = 'onlyoffice-api-script'
     let script = document.getElementById(scriptId) as HTMLScriptElement | null
 
     const initEditor = () => {
+      // Prevent double initialization and check if component is still mounted
+      if (!isMountedRef.current || initializingRef.current) return
       if (!window.DocsAPI) {
-        setError('OnlyOffice Document Server API not loaded')
-        setIsLoading(false)
+        if (isMountedRef.current) {
+          setError('OnlyOffice Document Server API not loaded')
+          setIsLoading(false)
+        }
         return
       }
+
+      // Check if editor container exists
+      const editorElement = document.getElementById('onlyoffice-editor')
+      if (!editorElement) {
+        console.error('[OnlyOffice] Editor container not found')
+        return
+      }
+
+      // Destroy existing editor if any
+      if (editorRef.current) {
+        try {
+          editorRef.current.destroyEditor()
+        } catch {
+          // Ignore destroy errors
+        }
+        editorRef.current = null
+      }
+
+      initializingRef.current = true
 
       try {
         const editorConfig: OnlyOfficeEditorConfig = {
@@ -87,13 +114,19 @@ function OnlyOfficeEditor({ config, publicUrl, onClose, onError }: OnlyOfficeEdi
           },
           events: {
             onDocumentReady: () => {
-              setIsLoading(false)
+              initializingRef.current = false
+              if (isMountedRef.current) {
+                setIsLoading(false)
+              }
             },
             onError: (event) => {
+              initializingRef.current = false
               const errMsg = event.data?.errorDescription || 'Unknown error'
-              setError(errMsg)
-              onError?.(errMsg)
-              setIsLoading(false)
+              if (isMountedRef.current) {
+                setError(errMsg)
+                onError?.(errMsg)
+                setIsLoading(false)
+              }
             },
             onRequestClose: () => {
               onClose()
@@ -105,34 +138,52 @@ function OnlyOfficeEditor({ config, publicUrl, onClose, onError }: OnlyOfficeEdi
 
         editorRef.current = new window.DocsAPI.DocEditor('onlyoffice-editor', editorConfig)
       } catch (err) {
+        initializingRef.current = false
         const errMsg = err instanceof Error ? err.message : 'Failed to initialize editor'
-        setError(errMsg)
-        onError?.(errMsg)
-        setIsLoading(false)
+        if (isMountedRef.current) {
+          setError(errMsg)
+          onError?.(errMsg)
+          setIsLoading(false)
+        }
       }
     }
 
     // Get OnlyOffice server URL - use publicUrl if configured, otherwise default to current host:8088
     const onlyOfficeUrl = publicUrl || `${window.location.protocol}//${window.location.hostname}:8088`
 
+    // Delayed initialization to ensure DOM is ready
+    const delayedInit = () => {
+      if (!isMountedRef.current) return
+      // Small delay to ensure DOM is fully rendered
+      setTimeout(() => {
+        if (isMountedRef.current) {
+          initEditor()
+        }
+      }, 100)
+    }
+
     if (!script) {
       script = document.createElement('script')
       script.id = scriptId
       script.src = `${onlyOfficeUrl}/web-apps/apps/api/documents/api.js`
       script.async = true
-      script.onload = initEditor
+      script.onload = delayedInit
       script.onerror = () => {
-        setError('OnlyOffice가 설치되어 있지 않습니다. docker compose --profile office up -d 로 시작하세요.')
-        setIsLoading(false)
+        if (isMountedRef.current) {
+          setError('OnlyOffice가 설치되어 있지 않습니다. docker compose --profile office up -d 로 시작하세요.')
+          setIsLoading(false)
+        }
       }
       document.head.appendChild(script)
     } else if (window.DocsAPI) {
-      initEditor()
+      delayedInit()
     } else {
-      script.onload = initEditor
+      script.onload = delayedInit
     }
 
     return () => {
+      isMountedRef.current = false
+      initializingRef.current = false
       if (editorRef.current) {
         try {
           editorRef.current.destroyEditor()

@@ -54,6 +54,13 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     const saved = localStorage.getItem('fileViewMode')
     return (saved === 'grid' ? 'grid' : 'list') as ViewMode
   })
+  // Mobile detection for touch-friendly folder navigation
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
   const [focusedIndex, setFocusedIndex] = useState<number>(-1)
   const [contextMenu, setContextMenu] = useState<ContextMenuType>(null)
   const [deleteTarget, setDeleteTarget] = useState<FileInfo | null>(null)
@@ -343,12 +350,22 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
 
       // Adjust horizontal position if menu goes beyond right edge
       if (contextMenu.x + rect.width > viewportWidth - 10) {
-        adjustedX = viewportWidth - rect.width - 10
+        adjustedX = contextMenu.x - rect.width // Show to the left of click
+        if (adjustedX < 10) {
+          adjustedX = viewportWidth - rect.width - 10
+        }
       }
 
       // Adjust vertical position if menu goes beyond bottom edge
       if (contextMenu.y + rect.height > viewportHeight - 10) {
-        adjustedY = viewportHeight - rect.height - 10
+        // Try showing above the click point first
+        const aboveY = contextMenu.y - rect.height
+        if (aboveY >= 10) {
+          adjustedY = aboveY
+        } else {
+          // If can't fit above, push to top of screen
+          adjustedY = 10
+        }
       }
 
       // Make sure menu doesn't go beyond left or top edge
@@ -925,6 +942,12 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   }, [queryClient])
 
   const handleSelectFile = useCallback((file: FileInfo, e: React.MouseEvent) => {
+    // On mobile, tap on folder navigates directly (no info panel blocking the view)
+    if (isMobile && file.isDir) {
+      onNavigate(file.path)
+      return
+    }
+
     if (e.ctrlKey || e.metaKey) {
       setSelectedFiles(prev => {
         const newSet = new Set(prev)
@@ -954,7 +977,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       setSelectedFiles(new Set([file.path]))
     }
     setSelectedFile(file)
-  }, [selectedFile, selectedFiles, data])
+  }, [selectedFile, selectedFiles, data, isMobile, onNavigate])
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedFiles.size === 0) return

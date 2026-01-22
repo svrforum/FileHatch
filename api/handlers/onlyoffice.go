@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
@@ -58,22 +61,23 @@ func (h *Handler) OnlyOfficeCallback(c echo.Context) error {
 			return c.JSON(http.StatusBadRequest, map[string]int{"error": 1})
 		}
 
-		// The key format is: base64EncodedPath_timestamp
-		// e.g., "L2hvbWUvdGVzdC5kb2N4_1766418834" -> path="/home/test.docx"
-		lastUnderscore := strings.LastIndex(req.Key, "_")
-		if lastUnderscore == -1 || lastUnderscore == 0 {
-			log.Printf("[OnlyOffice] Invalid key format (no underscore): %s", req.Key)
-			return c.JSON(http.StatusBadRequest, map[string]int{"error": 1})
-		}
-
-		// Extract encoded path (everything before the last underscore)
-		encodedPath := req.Key[:lastUnderscore]
-
-		// Decode the path
-		decodedPath := decodeOnlyOfficePath(encodedPath)
+		// Try to get the path from query parameter first (new format)
+		decodedPath := c.QueryParam("path")
 		if decodedPath == "" {
-			log.Printf("[OnlyOffice] Failed to decode path from key: %s", req.Key)
-			return c.JSON(http.StatusBadRequest, map[string]int{"error": 1})
+			// Fallback: Try to decode from the key (old format: base64EncodedPath_timestamp)
+			lastUnderscore := strings.LastIndex(req.Key, "_")
+			if lastUnderscore == -1 || lastUnderscore == 0 {
+				log.Printf("[OnlyOffice] Invalid key format and no path param: %s", req.Key)
+				return c.JSON(http.StatusBadRequest, map[string]int{"error": 1})
+			}
+
+			// Extract encoded path (everything before the last underscore)
+			encodedPath := req.Key[:lastUnderscore]
+			decodedPath = decodeOnlyOfficePath(encodedPath)
+			if decodedPath == "" {
+				log.Printf("[OnlyOffice] Failed to decode path from key: %s", req.Key)
+				return c.JSON(http.StatusBadRequest, map[string]int{"error": 1})
+			}
 		}
 		log.Printf("[OnlyOffice] Callback for path: %s, status: %d", decodedPath, req.Status)
 
@@ -239,7 +243,9 @@ func (h *Handler) GetOnlyOfficeConfig(c echo.Context) error {
 	}
 
 	// Generate unique key for this document (path + modtime for version control)
-	documentKey := encodeOnlyOfficePath(virtualPath) + "_" + fmt.Sprintf("%d", info.ModTime().Unix())
+	// Use SHA256 hash to ensure the key contains only safe characters (hex digits)
+	// OnlyOffice document key should only contain: 0-9, a-z, A-Z, -, _
+	documentKey := generateDocumentKey(virtualPath, info.ModTime().Unix())
 
 	// Build the host URL - use internal Docker network address for OnlyOffice to access
 	// OnlyOffice container needs to reach API via Docker internal network
@@ -278,11 +284,18 @@ func (h *Handler) GetOnlyOfficeConfig(c echo.Context) error {
 			"autosave":  canEdit,
 			"forcesave": canEdit,
 		},
+		// Disable co-editing to avoid potential SDK bugs with presentations
+		"coEditing": map[string]interface{}{
+			"mode":   "strict",
+			"change": false,
+		},
 	}
 
 	// Only add callback URL if user can edit
+	// Include encoded path in callback URL so the handler knows which file to update
 	if canEdit {
-		editorConfig["callbackUrl"] = fmt.Sprintf("%s/api/onlyoffice/callback?token=%s", internalBaseURL, token)
+		encodedVirtualPath := url.QueryEscape(virtualPath)
+		editorConfig["callbackUrl"] = fmt.Sprintf("%s/api/onlyoffice/callback?token=%s&path=%s", internalBaseURL, token, encodedVirtualPath)
 	}
 
 	config := map[string]interface{}{
@@ -302,16 +315,40 @@ func (h *Handler) GetOnlyOfficeConfig(c echo.Context) error {
 // GetOnlyOfficeSettings returns OnlyOffice configuration settings for the frontend
 func (h *Handler) GetOnlyOfficeSettings(c echo.Context) error {
 	publicURL := getOnlyOfficePublicURL()
+	internalURL := getOnlyOfficeInternalURL()
+
+	// Actually check if OnlyOffice is running by making a healthcheck request
+	available := checkOnlyOfficeHealth(internalURL)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"publicUrl": publicURL,
-		"available": publicURL != "",
+		"available": available,
 	})
 }
 
-// encodeOnlyOfficePath encodes path for OnlyOffice document key using URL-safe base64
-func encodeOnlyOfficePath(path string) string {
-	return base64.URLEncoding.EncodeToString([]byte(path))
+// checkOnlyOfficeHealth checks if OnlyOffice is running by making a healthcheck request
+func checkOnlyOfficeHealth(internalURL string) bool {
+	client := &http.Client{
+		Timeout: 3 * time.Second,
+	}
+
+	resp, err := client.Get(internalURL + "/healthcheck")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	return resp.StatusCode == http.StatusOK
+}
+
+// generateDocumentKey creates a unique document key for OnlyOffice using SHA256 hash
+// The key contains only safe characters (hex digits) to avoid issues with non-ASCII paths
+// Format: first 20 chars of SHA256(path) + "_" + modtime
+func generateDocumentKey(path string, modTime int64) string {
+	hash := sha256.Sum256([]byte(path))
+	hashStr := hex.EncodeToString(hash[:])
+	// Use first 20 chars of hash (enough uniqueness) + timestamp for versioning
+	return hashStr[:20] + fmt.Sprintf("_%d", modTime)
 }
 
 // decodeOnlyOfficePath decodes path from OnlyOffice document key

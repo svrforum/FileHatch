@@ -498,7 +498,7 @@ curl -X PUT http://localhost:3080/api/admin/sso/settings \
 
 ```json
 {
-  "iconUrl": "https://example.com/my-icon.svg",
+  "iconUrl": "https://your-domain.com/my-icon.svg",
   "buttonColor": "#4285F4"
 }
 ```

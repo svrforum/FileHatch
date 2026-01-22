@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, Suspense, lazy } from 'react'
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from './stores/authStore'
+import { useUploadStore } from './stores/uploadStore'
 import Header from './components/Header'
 import Sidebar, { AdminView } from './components/Sidebar'
 import FileList from './components/FileList'
@@ -454,7 +455,10 @@ function App() {
 
         <UploadModal
           isOpen={isUploadModalOpen}
-          onClose={() => setUploadModalOpen(false)}
+          onClose={() => {
+            setUploadModalOpen(false)
+            useUploadStore.getState().clearCompleted()
+          }}
           currentPath={currentPath}
           onUploadComplete={handleUploadComplete}
         />

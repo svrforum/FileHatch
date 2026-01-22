@@ -76,7 +76,7 @@ func (h *Handler) DownloadAsZip(c echo.Context) error {
 
 	// Set response headers
 	c.Response().Header().Set("Content-Type", "application/zip")
-	c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, zipName))
+	setContentDisposition(c, zipName)
 	c.Response().WriteHeader(http.StatusOK)
 
 	// Create ZIP writer
@@ -278,7 +278,7 @@ func (h *Handler) DownloadFolderAsZip(c echo.Context) error {
 
 	// Set response headers
 	c.Response().Header().Set("Content-Type", "application/zip")
-	c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, zipName))
+	setContentDisposition(c, zipName)
 	c.Response().WriteHeader(http.StatusOK)
 
 	// Create ZIP writer
