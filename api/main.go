@@ -343,6 +343,7 @@ func main() {
 	api.GET("/storage/usage", h.GetStorageUsage, authHandler.OptionalJWTMiddleware)
 	api.POST("/files/create", h.CreateFile, authHandler.OptionalJWTMiddleware)
 	api.POST("/files/compress", h.CompressFiles, authHandler.OptionalJWTMiddleware)
+	api.GET("/files/compress-stream", h.CompressFilesStream, authHandler.OptionalJWTMiddleware)
 	api.POST("/files/extract", h.ExtractZip, authHandler.OptionalJWTMiddleware)
 
 	// ZIP Download API routes
@@ -409,6 +410,8 @@ func main() {
 	api.GET("/s/:token", shareHandler.AccessShare, authHandler.OptionalJWTMiddleware)
 	api.POST("/s/:token", shareHandler.AccessShare, authHandler.OptionalJWTMiddleware)
 	api.GET("/s/:token/download", shareHandler.DownloadShare, authHandler.OptionalJWTMiddleware)
+	api.GET("/s/:token/list", shareHandler.ListShareContents, authHandler.OptionalJWTMiddleware)
+	api.GET("/s/:token/file", shareHandler.DownloadShareFile, authHandler.OptionalJWTMiddleware)
 
 	// Edit share access (for OnlyOffice editable shares)
 	api.GET("/e/:token", shareHandler.AccessShare, authHandler.OptionalJWTMiddleware)

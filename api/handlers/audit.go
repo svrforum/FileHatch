@@ -211,6 +211,7 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 
 	// Category filter
 	categoryFilter := ""
+	//nolint:staticcheck // 스타일 제안 무시 - switch 문 변환 불필요
 	if category == "file" {
 		// Include both smb.% (legacy watcher) and smb_% (vfs_full_audit)
 		categoryFilter = " AND (al.event_type LIKE 'file.%' OR al.event_type LIKE 'folder.%' OR al.event_type LIKE 'smb.%' OR al.event_type LIKE 'smb\\_%')"

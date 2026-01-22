@@ -133,12 +133,14 @@
 
 .stat.uploading::before { background: var(--color-primary); }
 .stat.transferring::before { background: #F59E0B; }
+.stat.compressing::before { background: #9C27B0; }
 .stat.pending::before { background: var(--text-tertiary); }
 .stat.completed::before { background: var(--color-success); }
 .stat.error::before { background: var(--color-error); }
 
 .stat.uploading { color: var(--color-primary); }
 .stat.transferring { color: var(--color-warning); }
+.stat.compressing { color: #9C27B0; }
 .stat.pending { color: var(--text-tertiary); }
 .stat.completed { color: var(--color-success); }
 .stat.error { color: var(--color-error); }
@@ -241,6 +243,7 @@
 }
 
 .spinner-small.transfer { border-top-color: var(--color-warning); }
+.spinner-small.compress { border-top-color: #9C27B0; }
 
 .item-details {
   flex: 1;
@@ -367,6 +370,7 @@
 
 .upload-panel-item.transfer.move { border-left-color: var(--color-warning); }
 .upload-panel-item.transfer.copy { border-left-color: var(--color-admin-purple); }
+.upload-panel-item.transfer.compress { border-left-color: #9C27B0; }
 .upload-panel-item.transfer.completed { border-left-color: var(--color-success); }
 .upload-panel-item.transfer.error { border-left-color: var(--color-error); }
 
@@ -385,6 +389,10 @@
 
 .upload-panel-item.copy .transfer-type-icon {
   color: var(--color-admin-purple);
+}
+
+.upload-panel-item.compress .transfer-type-icon {
+  color: #9C27B0;
 }
 
 .item-dest {
@@ -413,6 +421,10 @@
   background: linear-gradient(90deg, #8B5CF6 0%, #A78BFA 100%);
 }
 
+.progress-fill.compress {
+  background: linear-gradient(90deg, #9C27B0 0%, #BA68C8 100%);
+}
+
 .speed-text.move {
   background: rgba(245, 158, 11, 0.1);
   color: var(--color-warning);
@@ -421,6 +433,11 @@
 .speed-text.copy {
   background: rgba(139, 92, 246, 0.1);
   color: var(--color-admin-purple);
+}
+
+.speed-text.compress {
+  background: rgba(156, 39, 176, 0.1);
+  color: #9C27B0;
 }
 
 .current-file {

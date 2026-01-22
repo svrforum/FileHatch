@@ -1,8 +1,8 @@
-// 파일 이동/복사 전송 상태 관리 스토어
+// 파일 이동/복사/압축 전송 상태 관리 스토어
 import { create } from 'zustand'
-import { moveItemStream, copyItemStream, TransferProgress } from '../api/files'
+import { moveItemStream, copyItemStream, compressFilesStream, TransferProgress, CompressionProgress } from '../api/files'
 
-export type TransferType = 'move' | 'copy'
+export type TransferType = 'move' | 'copy' | 'compress'
 export type TransferStatus = 'pending' | 'transferring' | 'completed' | 'error'
 
 export interface TransferItemInfo {
@@ -33,6 +33,11 @@ export interface TransferItem {
   bytesPerSec?: number
   progress?: number // 0-100
   cancel?: () => void
+  // Compression specific
+  compressPaths?: string[]
+  outputName?: string
+  outputPath?: string
+  outputSize?: number
 }
 
 interface TransferState {
@@ -42,6 +47,7 @@ interface TransferState {
 
   // Actions
   addTransfer: (type: TransferType, sources: TransferItemInfo[], destination: string) => void
+  addCompression: (paths: string[], outputName: string, currentPath: string) => void
   startTransfers: () => void
   executeTransfer: (id: string) => Promise<void>
   removeItem: (id: string) => void
@@ -75,6 +81,35 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     }))
   },
 
+  addCompression: (paths, outputName, currentPath) => {
+    // Create display name for the compression task
+    const displayName = paths.length === 1
+      ? paths[0].split('/').pop() || outputName
+      : `${paths.length}개 항목`
+
+    const newItem: TransferItem = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: 'compress',
+      sourcePath: paths[0],
+      sourceName: displayName,
+      destination: currentPath,
+      status: 'pending',
+      compressPaths: paths,
+      outputName,
+    }
+
+    set(state => ({
+      items: [...state.items, newItem],
+      isPanelOpen: true,
+      isPanelMinimized: false,
+    }))
+
+    // Auto-start the compression
+    setTimeout(() => {
+      get().executeTransfer(newItem.id)
+    }, 100)
+  },
+
   startTransfers: () => {
     const { items } = get()
     const pendingItems = items.filter(item => item.status === 'pending')
@@ -101,7 +136,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       ),
     }))
 
-    // Progress callback
+    // Progress callback for move/copy
     const onProgress = (progress: TransferProgress) => {
       const progressPercent = progress.totalBytes > 0
         ? Math.round((progress.copiedBytes / progress.totalBytes) * 100)
@@ -123,10 +158,45 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       }))
     }
 
+    // Progress callback for compression
+    const onCompressionProgress = (progress: CompressionProgress) => {
+      const progressPercent = progress.totalBytes > 0
+        ? Math.round((progress.compressedBytes / progress.totalBytes) * 100)
+        : 0
+
+      set(state => ({
+        items: state.items.map(i =>
+          i.id === id ? {
+            ...i,
+            totalBytes: progress.totalBytes,
+            copiedBytes: progress.compressedBytes,
+            currentFile: progress.currentFile,
+            totalFiles: progress.totalFiles,
+            copiedFiles: progress.processedFiles,
+            bytesPerSec: progress.bytesPerSec,
+            progress: progressPercent,
+            outputPath: progress.outputPath,
+            outputSize: progress.outputSize,
+          } : i
+        ),
+      }))
+    }
+
     try {
-      const streamOp = item.type === 'move'
-        ? moveItemStream(item.sourcePath, item.destination, onProgress)
-        : copyItemStream(item.sourcePath, item.destination, onProgress)
+      let streamOp: { cancel: () => void; promise: Promise<unknown> }
+
+      if (item.type === 'compress') {
+        // Compression operation
+        if (!item.compressPaths || !item.outputName) {
+          throw new Error('Missing compression parameters')
+        }
+        streamOp = compressFilesStream(item.compressPaths, item.outputName, onCompressionProgress)
+      } else {
+        // Move/Copy operation
+        streamOp = item.type === 'move'
+          ? moveItemStream(item.sourcePath, item.destination, onProgress)
+          : copyItemStream(item.sourcePath, item.destination, onProgress)
+      }
 
       // Store cancel function
       set(state => ({

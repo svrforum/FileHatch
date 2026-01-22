@@ -1,22 +1,14 @@
-/* Wrapper for file list and details panel */
+/* Wrapper for file list - details panel is rendered via Portal to App grid area */
 .file-list-wrapper {
   display: flex;
+  flex-direction: column;
   height: 100%;
-  min-height: calc(100vh - 60px - 48px);
-  gap: 0;
-  align-items: flex-start;
-  /* Always reserve space for info panel to prevent layout shift */
-  padding-right: 320px;
+  min-height: calc(100vh - var(--header-height) - 48px);
 }
 
-/* Mobile overlay - hidden on desktop */
+/* Mobile overlay for details panel */
 .mobile-panel-overlay {
   display: none;
-}
-
-/* panel-open class no longer needed for layout, kept for compatibility */
-.file-list-wrapper.panel-open {
-  /* No change - space is always reserved */
 }
 
 .file-list-container {
@@ -715,35 +707,18 @@
   color: var(--text-secondary);
 }
 
-/* File Details Panel - Right Sidebar (Fixed) */
+/* File Details Panel - Right Sidebar (Grid Area) */
 .file-details-panel {
-  width: 320px;
-  min-width: 320px;
-  height: calc(100vh - 60px);
+  width: 100%;
+  height: calc(100vh - var(--header-height));
   background: var(--bg-primary);
-  border-left: 1px solid var(--border-light);
-  border-radius: 0;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
   overflow-y: auto;
-  position: fixed;
-  top: 60px;
-  right: 0;
-  z-index: 100;
-  animation: slideInRight 0.2s ease;
+  position: sticky;
+  top: var(--header-height);
 }
 
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
 
 /* Empty state for details panel */
 .file-details-panel.empty {
@@ -1698,16 +1673,15 @@
    ================================= */
 
 @media (max-width: 768px) {
-  /* File List Wrapper - Remove reserved space for panel on mobile */
+  /* File List Wrapper */
   .file-list-wrapper {
-    padding-right: 0;
-    min-height: calc(100vh - 56px - 32px);
+    min-height: calc(100vh - var(--mobile-header-height) - 32px);
   }
 
   /* File List Container */
   .file-list-container {
     padding: 0;
-    min-height: calc(100vh - 56px - 32px);
+    min-height: calc(100vh - var(--mobile-header-height) - 32px);
     border-radius: 0;
     box-shadow: none;
   }
@@ -1771,11 +1745,9 @@
     bottom: 0;
     top: auto;
     width: 100%;
-    min-width: 100%;
     max-height: 55vh;
     height: auto;
     z-index: 1200;
-    border-left: none;
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
     animation: slideInUp 0.3s var(--ease-out-expo);

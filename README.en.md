@@ -177,6 +177,23 @@ Shared workspace for team collaboration
 - **SMB/CIFS Access**: Windows Explorer, macOS Finder
 - **WebDAV Access**: Desktop app integration
 
+### WebDAV Configuration
+
+FileHatch fully supports the WebDAV protocol, allowing file access from various clients.
+
+| Item | Value |
+|------|-------|
+| URL | `http://server:3080/api/webdav/` |
+| Authentication | Username/Password (Basic Auth) |
+
+**Client Configuration**
+- **Windows**: Map Network Drive → `http://server:3080/api/webdav/`
+- **macOS**: Finder → Go → Connect to Server → `http://server:3080/api/webdav/`
+- **Linux**: davfs2, Nautilus, Dolphin - enter WebDAV URL
+- **Desktop Apps**: Cyberduck, Mountain Duck, WinSCP, etc.
+
+> ⚠️ **Note**: URL must include trailing `/`.
+
 ### User Experience
 - **Real-time Notifications**: WebSocket-based file change notifications
 - **Dark Mode**: System settings sync
@@ -235,7 +252,7 @@ Shared workspace for team collaboration
 |                              v                                       |
 |  +---------------------+  +-------------------------------------+   |
 |  |  PostgreSQL (DB)    |  |  Valkey (Cache/Session)             |   |
-|  |  +- 11 tables       |  |  +- Sessions, thumbnails, stats     |   |
+|  |  +- 13 tables       |  |  +- Sessions, thumbnails, stats     |   |
 |  +---------------------+  +-------------------------------------+   |
 |                                                                      |
 |  Optional Services:                                                  |
@@ -522,6 +539,10 @@ docker compose build --no-cache
 | `EXTERNAL_URL` | - | External access URL (required for reverse proxy) |
 | `CORS_ALLOWED_ORIGINS` | * | Allowed CORS origins |
 | `ALLOWED_ORIGINS` | - | WebSocket allowed origins (required for reverse proxy) |
+| `LOGIN_ATTEMPT_LIMIT` | 5 | Login attempt limit |
+| `LOGIN_LOCKOUT_DURATION` | 15m | Login lockout duration |
+| `TRASH_RETENTION_DAYS` | 30 | Trash retention period (days) |
+| `FILE_LOCK_TIMEOUT` | 30m | File lock auto-release timeout |
 
 #### UI Server
 | Variable | Default | Description |
@@ -537,7 +558,7 @@ docker compose build --no-cache
 ```
 FileHatch/
 ├── api/                          # Go backend
-│   ├── handlers/                 # HTTP handlers (~50 files)
+│   ├── handlers/                 # HTTP handlers (~61 files)
 │   │   ├── auth.go               # Authentication (JWT, Login)
 │   │   ├── auth_user.go          # User CRUD
 │   │   ├── handler.go            # File/folder CRUD
@@ -585,7 +606,7 @@ FileHatch/
 │   ├── entrypoint.sh
 │   └── Dockerfile
 ├── db/                           # Database
-│   └── init.sql                  # Schema (11 tables)
+│   └── init.sql                  # Schema (13 tables)
 ├── scripts/                      # Utility scripts
 │   └── setup-keycloak.sh
 ├── data/                         # File storage (volume)
@@ -640,6 +661,22 @@ FileHatch/
 | PATCH | `/api/upload/*` | Chunk upload |
 | HEAD | `/api/upload/*` | Upload status |
 | DELETE | `/api/upload/*` | Cancel upload |
+
+### File Locking
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/files/lock/*` | Lock file |
+| DELETE | `/api/files/lock/*` | Unlock file |
+| GET | `/api/files/lock/*` | Check lock status |
+
+### Starred/Favorites
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/starred` | List starred files |
+| POST | `/api/starred/*` | Add to starred |
+| DELETE | `/api/starred/*` | Remove from starred |
 
 ### Share Links
 
@@ -727,6 +764,8 @@ FileHatch/
 | `notifications` | Notifications | user_id, type, title, message, is_read |
 | `system_settings` | System settings | key, value, description |
 | `sso_providers` | SSO providers | name, provider_type, client_id, issuer_url |
+| `starred_files` | Starred/Favorites | user_id, file_path, created_at |
+| `file_locks` | File locks | file_path, user_id, locked_at, expires_at |
 
 ---
 
@@ -837,6 +876,22 @@ netstat -an | grep 445
 **Q: OnlyOffice documents won't open.**
 - Verify started with OnlyOffice profile: `docker compose --profile office up -d`
 - Check OnlyOffice container status: `docker compose logs onlyoffice`
+
+**Q: WebDAV connection fails.**
+- URL must include trailing `/`: `http://server:3080/api/webdav/`
+- Verify authentication method is Basic Auth
+- Verify username/password are correct
+- For Windows, check if WebClient service is running
+
+**Q: Login is blocked (brute-force protection).**
+- Automatically unlocks after 15 minutes
+- Admin can manually unlock the account
+- `LOGIN_LOCKOUT_DURATION` environment variable adjusts lockout time
+
+**Q: File is locked and cannot be edited.**
+- Wait for the lock owner to complete editing
+- Automatically unlocks after 30 minutes (`FILE_LOCK_TIMEOUT`)
+- Admin can force unlock the file
 
 ---
 

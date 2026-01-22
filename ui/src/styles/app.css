@@ -5,32 +5,86 @@
 }
 
 .app-container {
-  display: flex;
   flex: 1;
-  padding-top: 60px; /* Header height */
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr var(--details-panel-width);
+  grid-template-areas: "sidebar main details";
+  margin-top: var(--header-height);
+  min-height: calc(100vh - var(--header-height));
+}
+
+/* When details panel is empty/hidden, main takes full remaining space */
+.app-container.no-details-panel {
+  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-areas: "sidebar main";
+}
+
+.sidebar {
+  grid-area: sidebar;
 }
 
 .main-content {
-  flex: 1;
-  padding: var(--spacing-lg);
+  grid-area: main;
+  padding: var(--spacing-sm);
   overflow-y: auto;
   overflow-x: hidden;
-  min-height: calc(100vh - 60px);
-  /* Make room for fixed sidebar */
-  margin-left: var(--sidebar-width);
+  min-height: calc(100vh - var(--header-height));
+  min-width: 0; /* Allow shrinking for text overflow */
+}
+
+.details-sidebar {
+  grid-area: details;
+  border-left: 1px solid var(--border-light);
+  overflow-y: auto;
+  background: var(--bg-primary);
+  height: calc(100vh - var(--header-height));
+  position: sticky;
+  top: var(--header-height);
 }
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .app-container {
-    padding-top: 56px; /* Mobile header height */
+    grid-template-columns: 1fr;
+    grid-template-areas: "main";
+    margin-top: var(--mobile-header-height);
+  }
+
+  .app-container.no-details-panel {
+    grid-template-columns: 1fr;
+    grid-template-areas: "main";
   }
 
   .main-content {
     margin-left: 0;
     padding: var(--spacing-sm);
-    min-height: calc(100vh - 56px);
+    min-height: calc(100vh - var(--mobile-header-height));
     /* Safe area support for notched devices */
     padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Sidebar becomes overlay on mobile */
+  .sidebar {
+    position: fixed;
+    top: var(--mobile-header-height);
+    left: 0;
+    z-index: 1200;
+    height: calc(100vh - var(--mobile-header-height));
+  }
+
+  /* Details sidebar becomes bottom sheet on mobile */
+  .details-sidebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    max-height: 55vh;
+    height: auto;
+    z-index: 1200;
+    border-left: none;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
   }
 }

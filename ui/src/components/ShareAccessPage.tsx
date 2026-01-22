@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { listShareContents, getShareFileDownloadUrl, ShareFileItem } from '../api/fileShares'
 import './ShareAccessPage.css'
 
 interface ShareInfo {
@@ -64,6 +65,11 @@ function ShareAccessPage() {
   const [onlyOfficeConfig, setOnlyOfficeConfig] = useState<OnlyOfficeConfig | null>(null)
   const [onlyOfficeAvailable, setOnlyOfficeAvailable] = useState(false)
   const [onlyOfficePublicUrl, setOnlyOfficePublicUrl] = useState('')
+  // Folder contents state
+  const [folderContents, setFolderContents] = useState<ShareFileItem[]>([])
+  const [currentSubpath, setCurrentSubpath] = useState('')
+  const [loadingContents, setLoadingContents] = useState(false)
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
   const videoRef = useRef<HTMLVideoElement>(null)
   const editorRef = useRef<HTMLDivElement>(null)
 
@@ -356,6 +362,141 @@ function ShareAccessPage() {
     fetchShareInfo(password)
   }
 
+  // Fetch folder contents when shareInfo is a directory
+  const fetchFolderContents = useCallback(async (subpath: string = '') => {
+    if (!token || !shareInfo?.isDir) return
+
+    setLoadingContents(true)
+    try {
+      const contents = await listShareContents(token, subpath, password || undefined)
+      if (contents.requiresPassword || contents.requiresLogin) {
+        // Handle auth requirements
+        return
+      }
+      setFolderContents(contents.files)
+      setCurrentSubpath(subpath)
+    } catch (err) {
+      console.error('Failed to load folder contents:', err)
+    } finally {
+      setLoadingContents(false)
+    }
+  }, [token, shareInfo?.isDir, password])
+
+  // Load folder contents when shareInfo changes
+  useEffect(() => {
+    if (shareInfo?.isDir) {
+      fetchFolderContents('')
+    }
+  }, [shareInfo?.isDir, fetchFolderContents])
+
+  // Navigate to subfolder
+  const handleNavigateFolder = (item: ShareFileItem) => {
+    if (item.isDir) {
+      fetchFolderContents(item.path)
+    }
+  }
+
+  // Navigate back to parent folder
+  const handleNavigateBack = () => {
+    const parts = currentSubpath.split('/').filter(Boolean)
+    parts.pop()
+    fetchFolderContents(parts.join('/'))
+  }
+
+  // Toggle file selection
+  const handleToggleSelect = (filepath: string) => {
+    setSelectedFiles(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(filepath)) {
+        newSet.delete(filepath)
+      } else {
+        newSet.add(filepath)
+      }
+      return newSet
+    })
+  }
+
+  // Select all files
+  const handleSelectAll = () => {
+    const allFiles = folderContents.filter(f => !f.isDir).map(f => f.path)
+    if (selectedFiles.size === allFiles.length) {
+      setSelectedFiles(new Set())
+    } else {
+      setSelectedFiles(new Set(allFiles))
+    }
+  }
+
+  // Download selected files (individual downloads)
+  const handleDownloadSelected = () => {
+    if (!token) return
+    selectedFiles.forEach(filepath => {
+      const url = getShareFileDownloadUrl(token, filepath, password || undefined)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filepath.split('/').pop() || filepath
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    })
+  }
+
+  // Get file extension
+  const getFileExtension = (filename: string): string => {
+    return filename.split('.').pop()?.toLowerCase() || ''
+  }
+
+  // Get file type icon
+  const getItemIcon = (item: ShareFileItem) => {
+    if (item.isDir) {
+      return (
+        <svg className="folder-item-icon folder" viewBox="0 0 24 24" fill="none">
+          <path d="M3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V9C21 7.89543 20.1046 7 19 7H12L10 5H5C3.89543 5 3 5.89543 3 7Z" fill="currentColor"/>
+        </svg>
+      )
+    }
+
+    const ext = getFileExtension(item.name)
+    const videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'm4v']
+    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico']
+    const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a']
+
+    if (videoExts.includes(ext)) {
+      return (
+        <svg className="folder-item-icon video" viewBox="0 0 24 24" fill="none">
+          <rect x="2" y="4" width="20" height="16" rx="2" fill="currentColor"/>
+          <path d="M10 8L16 12L10 16V8Z" fill="white"/>
+        </svg>
+      )
+    }
+
+    if (imageExts.includes(ext)) {
+      return (
+        <svg className="folder-item-icon image" viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor"/>
+          <circle cx="8.5" cy="8.5" r="1.5" fill="white"/>
+          <path d="M21 15L16 10L5 21" stroke="white" strokeWidth="2"/>
+        </svg>
+      )
+    }
+
+    if (audioExts.includes(ext)) {
+      return (
+        <svg className="folder-item-icon audio" viewBox="0 0 24 24" fill="none">
+          <path d="M9 18V5L21 3V16" fill="currentColor"/>
+          <circle cx="6" cy="18" r="3" fill="currentColor"/>
+          <circle cx="18" cy="16" r="3" fill="currentColor"/>
+        </svg>
+      )
+    }
+
+    return (
+      <svg className="folder-item-icon file" viewBox="0 0 24 24" fill="none">
+        <path d="M14 2H6C4.89543 2 4 2.89543 4 4V20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V8L14 2Z" fill="currentColor"/>
+        <path d="M14 2V8H20" stroke="white" strokeWidth="1.5"/>
+      </svg>
+    )
+  }
+
   // Check if file is editable with OnlyOffice
   const isOnlyOfficeEditable = (filename: string): boolean => {
     const ext = filename.split('.').pop()?.toLowerCase() || ''
@@ -530,6 +671,119 @@ function ShareAccessPage() {
                   </svg>
                   다운로드
                 </a>
+              </div>
+            )}
+
+            {/* Folder Contents */}
+            {shareInfo.isDir && (
+              <div className="share-folder-contents">
+                {/* Folder navigation header */}
+                <div className="share-folder-header">
+                  <div className="share-folder-path">
+                    {currentSubpath && (
+                      <button className="share-folder-back-btn" onClick={handleNavigateBack}>
+                        <svg viewBox="0 0 24 24" fill="none">
+                          <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        상위 폴더
+                      </button>
+                    )}
+                    <span className="share-folder-current">
+                      {currentSubpath ? `/${currentSubpath}` : '/'}
+                    </span>
+                  </div>
+                  {folderContents.some(f => !f.isDir) && (
+                    <div className="share-folder-actions">
+                      <button className="share-folder-select-all" onClick={handleSelectAll}>
+                        {selectedFiles.size === folderContents.filter(f => !f.isDir).length ? '선택 해제' : '전체 선택'}
+                      </button>
+                      {selectedFiles.size > 0 && (
+                        <button className="share-btn-primary share-download-selected" onClick={handleDownloadSelected}>
+                          <svg viewBox="0 0 24 24" fill="none" className="share-btn-icon">
+                            <path d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                            <path d="M12 3V15M12 15L7 10M12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          {selectedFiles.size}개 다운로드
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* File list */}
+                {loadingContents ? (
+                  <div className="share-folder-loading">
+                    <div className="share-spinner"></div>
+                    <p>폴더 내용을 불러오는 중...</p>
+                  </div>
+                ) : folderContents.length === 0 ? (
+                  <div className="share-folder-empty">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V9C21 7.89543 20.1046 7 19 7H12L10 5H5C3.89543 5 3 5.89543 3 7Z" stroke="currentColor" strokeWidth="2"/>
+                    </svg>
+                    <p>폴더가 비어 있습니다</p>
+                  </div>
+                ) : (
+                  <div className="share-folder-list">
+                    {folderContents.map((item) => (
+                      <div
+                        key={item.path}
+                        className={`share-folder-item ${item.isDir ? 'is-folder' : ''} ${selectedFiles.has(item.path) ? 'selected' : ''}`}
+                      >
+                        {!item.isDir && (
+                          <label className="share-folder-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={selectedFiles.has(item.path)}
+                              onChange={() => handleToggleSelect(item.path)}
+                            />
+                            <span className="checkmark"></span>
+                          </label>
+                        )}
+                        <div
+                          className="share-folder-item-content"
+                          onClick={() => item.isDir ? handleNavigateFolder(item) : handleToggleSelect(item.path)}
+                        >
+                          {getItemIcon(item)}
+                          <div className="share-folder-item-info">
+                            <span className="share-folder-item-name">{item.name}</span>
+                            {!item.isDir && (
+                              <span className="share-folder-item-size">{formatFileSize(item.size)}</span>
+                            )}
+                          </div>
+                        </div>
+                        {!item.isDir && (
+                          <a
+                            href={getShareFileDownloadUrl(token!, item.path, password || undefined)}
+                            className="share-folder-item-download"
+                            download={item.name}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none">
+                              <path d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                              <path d="M12 3V15M12 15L7 10M12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Download entire folder */}
+                <div className="share-folder-download-all">
+                  <a
+                    href={getDownloadUrl()}
+                    className="share-btn-secondary share-download-all-btn"
+                    download={`${shareInfo.name}.zip`}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" className="share-btn-icon">
+                      <path d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      <path d="M12 3V15M12 15L7 10M12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    전체 폴더 다운로드 (ZIP)
+                  </a>
+                </div>
               </div>
             )}
 

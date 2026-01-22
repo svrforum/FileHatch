@@ -392,16 +392,17 @@
 
   .file-viewer-header {
     padding: var(--spacing-sm) var(--spacing-md);
-    min-height: 48px;
+    min-height: auto;
     flex-wrap: wrap;
     gap: var(--spacing-sm);
   }
 
   .file-viewer-title {
     font-size: 13px;
-    flex: 1;
-    min-width: 0;
+    flex: 1 1 auto;
+    min-width: 120px;
     overflow: hidden;
+    order: 1;
   }
 
   .file-viewer-title span {
@@ -412,6 +413,14 @@
 
   .file-viewer-actions {
     gap: var(--spacing-xs);
+    order: 2;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .zoom-controls,
+  .page-controls {
+    flex-shrink: 0;
   }
 
   .zoom-controls button,
@@ -422,8 +431,8 @@
 
   .zoom-level,
   .page-info {
-    min-width: 45px;
-    font-size: 12px;
+    min-width: 40px;
+    font-size: 11px;
   }
 
   .close-btn {

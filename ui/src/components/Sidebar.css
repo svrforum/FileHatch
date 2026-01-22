@@ -1,6 +1,6 @@
 .sidebar {
-  width: 280px;
-  min-width: 280px;
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
   background: var(--bg-primary);
   border-right: none;
   box-shadow: 1px 0 0 var(--border-light);
@@ -8,11 +8,9 @@
   display: flex;
   flex-direction: column;
   height: calc(100vh - var(--header-height));
-  /* Fixed position to follow scroll like the file info panel */
-  position: fixed;
+  /* Sticky position for scroll behavior within grid */
+  position: sticky;
   top: var(--header-height);
-  left: 0;
-  z-index: 100;
   overflow-y: auto;
   transition: transform var(--duration-normal, 0.25s) var(--ease-out-expo, ease);
 }
@@ -20,6 +18,10 @@
 /* Mobile Sidebar - slide in from left */
 @media (max-width: 768px) {
   .sidebar {
+    position: fixed;
+    top: var(--mobile-header-height);
+    left: 0;
+    height: calc(100vh - var(--mobile-header-height));
     transform: translateX(-100%);
     z-index: 1200;
     box-shadow: none;

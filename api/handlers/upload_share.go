@@ -158,7 +158,7 @@ func (h *UploadShareHandler) AccessUploadShare(c echo.Context) error {
 	if share.RequireLogin {
 		claims, _ := c.Get("user").(*JWTClaims)
 		if claims == nil {
-			return c.JSON(http.StatusOK, map[string]interface{}{
+			return RespondSuccess(c, map[string]interface{}{
 				"requiresLogin": true,
 				"token":         token,
 			})
@@ -171,7 +171,7 @@ func (h *UploadShareHandler) AccessUploadShare(c echo.Context) error {
 			Password string `json:"password"`
 		}
 		if err := c.Bind(&req); err != nil || req.Password == "" {
-			return c.JSON(http.StatusOK, map[string]interface{}{
+			return RespondSuccess(c, map[string]interface{}{
 				"requiresPassword": true,
 				"token":            token,
 			})
@@ -179,38 +179,36 @@ func (h *UploadShareHandler) AccessUploadShare(c echo.Context) error {
 
 		// Verify password
 		if err := bcrypt.CompareHashAndPassword([]byte(share.PasswordHash.String), []byte(req.Password)); err != nil {
-			return c.JSON(http.StatusUnauthorized, map[string]string{
-				"error": "Invalid password",
-			})
+			return RespondError(c, ErrUnauthorized("Invalid password"))
 		}
 	}
 
 	// Build response
-	info := UploadShareInfo{
-		Token:             share.Token,
-		FolderName:        filepath.Base(share.Path),
-		MaxFileSize:       share.MaxFileSize,
-		UploadCount:       share.UploadCount,
-		MaxTotalSize:      share.MaxTotalSize,
-		TotalUploadedSize: share.TotalUploadedSize,
+	info := map[string]interface{}{
+		"token":             share.Token,
+		"folderName":        filepath.Base(share.Path),
+		"maxFileSize":       share.MaxFileSize,
+		"uploadCount":       share.UploadCount,
+		"maxTotalSize":      share.MaxTotalSize,
+		"totalUploadedSize": share.TotalUploadedSize,
 	}
 
 	if share.ExpiresAt.Valid {
-		info.ExpiresAt = &share.ExpiresAt.Time
+		info["expiresAt"] = share.ExpiresAt.Time
 	}
 	if share.AllowedExtensions.Valid {
-		info.AllowedExtensions = share.AllowedExtensions.String
+		info["allowedExtensions"] = share.AllowedExtensions.String
 	}
 	if share.MaxAccess.Valid {
 		val := int(share.MaxAccess.Int32)
-		info.MaxAccess = &val
-		info.RemainingUploads = val - share.UploadCount
+		info["maxAccess"] = val
+		info["remainingUploads"] = val - share.UploadCount
 	}
 	if share.MaxTotalSize > 0 {
-		info.RemainingSize = share.MaxTotalSize - share.TotalUploadedSize
+		info["remainingSize"] = share.MaxTotalSize - share.TotalUploadedSize
 	}
 
-	return c.JSON(http.StatusOK, info)
+	return RespondSuccess(c, info)
 }
 
 // preUploadValidation validates uploads before they start

@@ -16,8 +16,17 @@ function formatSpeed(bytesPerSecond: number): string {
 }
 
 function UploadPanel() {
-  const { items, isPanelOpen, closePanel, removeUpload, clearCompleted, startUpload, pauseUpload } = useUploadStore()
-  const { items: transferItems, removeItem: removeTransfer, clearCompleted: clearCompletedTransfers } = useTransferStore()
+  const { items, isPanelOpen: uploadPanelOpen, closePanel: closeUploadPanel, removeUpload, clearCompleted, startUpload, pauseUpload } = useUploadStore()
+  const { items: transferItems, isPanelOpen: transferPanelOpen, closePanel: closeTransferPanel, removeItem: removeTransfer, clearCompleted: clearCompletedTransfers } = useTransferStore()
+
+  // Panel is open if either upload or transfer panel is open
+  const isPanelOpen = uploadPanelOpen || transferPanelOpen
+
+  // Close both panels
+  const closePanel = () => {
+    closeUploadPanel()
+    closeTransferPanel()
+  }
   const autoCloseTimerRef = useRef<number | null>(null)
 
   const uploadingCount = items.filter((i) => i.status === 'uploading').length
@@ -25,15 +34,21 @@ function UploadPanel() {
   const pendingCount = items.filter((i) => i.status === 'pending').length
   const errorCount = items.filter((i) => i.status === 'error').length
 
-  // Move/Copy counts
-  const transferringCount = transferItems.filter((t) => t.status === 'transferring').length
-  const transferPendingCount = transferItems.filter((t) => t.status === 'pending').length
-  const transferCompletedCount = transferItems.filter((t) => t.status === 'completed').length
-  const transferErrorCount = transferItems.filter((t) => t.status === 'error').length
+  // Move/Copy counts (excluding compress)
+  const transferringCount = transferItems.filter((t) => t.status === 'transferring' && t.type !== 'compress').length
+  const transferPendingCount = transferItems.filter((t) => t.status === 'pending' && t.type !== 'compress').length
+  const transferCompletedCount = transferItems.filter((t) => t.status === 'completed' && t.type !== 'compress').length
+  const transferErrorCount = transferItems.filter((t) => t.status === 'error' && t.type !== 'compress').length
 
-  const totalActiveCount = uploadingCount + pendingCount + transferringCount + transferPendingCount
-  const totalCompletedCount = completedCount + transferCompletedCount
-  const totalErrorCount = errorCount + transferErrorCount
+  // Compress counts
+  const compressingCount = transferItems.filter((t) => t.status === 'transferring' && t.type === 'compress').length
+  const compressPendingCount = transferItems.filter((t) => t.status === 'pending' && t.type === 'compress').length
+  const compressCompletedCount = transferItems.filter((t) => t.status === 'completed' && t.type === 'compress').length
+  const compressErrorCount = transferItems.filter((t) => t.status === 'error' && t.type === 'compress').length
+
+  const totalActiveCount = uploadingCount + pendingCount + transferringCount + transferPendingCount + compressingCount + compressPendingCount
+  const totalCompletedCount = completedCount + transferCompletedCount + compressCompletedCount
+  const totalErrorCount = errorCount + transferErrorCount + compressErrorCount
   const hasItems = items.length > 0 || transferItems.length > 0
 
   // Auto-close panel when all uploads complete (with no errors)
@@ -113,17 +128,26 @@ function UploadPanel() {
           </svg>
         )
       case 'transferring':
-        return <div className="spinner-small transfer" />
+        return <div className={`spinner-small ${item.type === 'compress' ? 'compress' : 'transfer'}`} />
       default:
         return null
     }
   }
 
-  const getTransferTypeIcon = (type: 'move' | 'copy') => {
+  const getTransferTypeIcon = (type: 'move' | 'copy' | 'compress') => {
     if (type === 'move') {
       return (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
           <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      )
+    }
+    if (type === 'compress') {
+      return (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M12 3V9M12 9L15 6M12 9L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M12 21V15M12 15L15 18M12 15L9 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <rect x="4" y="9" width="16" height="6" rx="1" stroke="currentColor" strokeWidth="2"/>
         </svg>
       )
     }
@@ -162,7 +186,8 @@ function UploadPanel() {
       <div className="upload-panel-stats">
         {uploadingCount > 0 && <span className="stat uploading">업로드 중 {uploadingCount}</span>}
         {transferringCount > 0 && <span className="stat transferring">이동/복사 중 {transferringCount}</span>}
-        {(pendingCount > 0 || transferPendingCount > 0) && <span className="stat pending">대기 {pendingCount + transferPendingCount}</span>}
+        {compressingCount > 0 && <span className="stat compressing">압축 중 {compressingCount}</span>}
+        {(pendingCount > 0 || transferPendingCount > 0 || compressPendingCount > 0) && <span className="stat pending">대기 {pendingCount + transferPendingCount + compressPendingCount}</span>}
         {totalCompletedCount > 0 && <span className="stat completed">완료 {totalCompletedCount}</span>}
         {totalErrorCount > 0 && <span className="stat error">오류 {totalErrorCount}</span>}
         {!hasItems && <span className="stat empty">전송 중인 파일이 없습니다</span>}
@@ -256,7 +281,11 @@ function UploadPanel() {
                   <span className="transfer-type-icon">{getTransferTypeIcon(item.type)}</span>
                   <span className="item-name">{item.sourceName}</span>
                 </div>
-                <span className="item-dest">→ {item.destination}</span>
+                {item.type === 'compress' ? (
+                  <span className="item-dest">→ {item.outputName || '압축 파일'}</span>
+                ) : (
+                  <span className="item-dest">→ {item.destination}</span>
+                )}
               </div>
             </div>
             <div className="item-progress">
@@ -287,7 +316,9 @@ function UploadPanel() {
               )}
               {item.status === 'completed' && item.bytesPerSec && (
                 <span className="transfer-complete-info">
-                  {formatFileSize(item.totalBytes || 0)} · {formatSpeed(item.bytesPerSec)}
+                  {item.type === 'compress' && item.outputSize
+                    ? formatFileSize(item.outputSize)
+                    : formatFileSize(item.totalBytes || 0)} · {formatSpeed(item.bytesPerSec)}
                 </span>
               )}
               {item.status === 'error' && (

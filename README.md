@@ -177,6 +177,23 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
 - **SMB/CIFS 접근**: Windows 탐색기, macOS Finder
 - **WebDAV 접근**: 데스크톱 앱 연동
 
+### WebDAV 상세 설정
+
+FileHatch는 WebDAV 프로토콜을 완벽하게 지원하여 다양한 클라이언트에서 파일에 접근할 수 있습니다.
+
+| 항목 | 값 |
+|------|-----|
+| URL | `http://서버:3080/api/webdav/` |
+| 인증 | 사용자명/비밀번호 (Basic Auth) |
+
+**클라이언트 설정**
+- **Windows**: 네트워크 드라이브 연결 → `http://서버:3080/api/webdav/`
+- **macOS**: Finder → 이동 → 서버에 연결 → `http://서버:3080/api/webdav/`
+- **Linux**: davfs2, Nautilus, Dolphin 등에서 WebDAV URL 입력
+- **데스크톱 앱**: Cyberduck, Mountain Duck, WinSCP 등
+
+> ⚠️ **주의**: URL 끝에 `/`를 포함해야 합니다.
+
 ### 사용자 경험
 - **실시간 알림**: WebSocket 기반 파일 변경 알림
 - **다크 모드**: 시스템 설정 연동
@@ -235,7 +252,7 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
 │                              ▼                                       │
 │  ┌─────────────────────┐  ┌─────────────────────────────────────┐   │
 │  │  PostgreSQL (DB)    │  │  Valkey (Cache/Session)             │   │
-│  │  └─ 11 tables       │  │  └─ Sessions, thumbnails, stats     │   │
+│  │  └─ 13 tables       │  │  └─ Sessions, thumbnails, stats     │   │
 │  └─────────────────────┘  └─────────────────────────────────────┘   │
 │                                                                      │
 │  Optional Services:                                                  │
@@ -517,6 +534,10 @@ docker compose build --no-cache
 | `EXTERNAL_URL` | - | 외부 접속 URL (리버스 프록시 사용 시 필수) |
 | `CORS_ALLOWED_ORIGINS` | * | 허용된 CORS 오리진 |
 | `ALLOWED_ORIGINS` | - | WebSocket 허용 오리진 (리버스 프록시 사용 시 필수) |
+| `LOGIN_ATTEMPT_LIMIT` | 5 | 로그인 시도 제한 횟수 |
+| `LOGIN_LOCKOUT_DURATION` | 15m | 로그인 차단 시간 |
+| `TRASH_RETENTION_DAYS` | 30 | 휴지통 보관 기간 (일) |
+| `FILE_LOCK_TIMEOUT` | 30m | 파일 잠금 자동 해제 시간 |
 
 #### UI 서버
 | 변수 | 기본값 | 설명 |
@@ -532,7 +553,7 @@ docker compose build --no-cache
 ```
 FileHatch/
 ├── api/                          # Go 백엔드
-│   ├── handlers/                 # HTTP 핸들러 (~50개 파일)
+│   ├── handlers/                 # HTTP 핸들러 (~61개 파일)
 │   │   ├── auth.go               # 인증 (JWT, Login)
 │   │   ├── auth_user.go          # 사용자 CRUD
 │   │   ├── handler.go            # 파일/폴더 CRUD
@@ -580,7 +601,7 @@ FileHatch/
 │   ├── entrypoint.sh
 │   └── Dockerfile
 ├── db/                           # 데이터베이스
-│   └── init.sql                  # 스키마 (11개 테이블)
+│   └── init.sql                  # 스키마 (13개 테이블)
 ├── scripts/                      # 유틸리티 스크립트
 │   └── setup-keycloak.sh
 ├── data/                         # 파일 저장소 (볼륨)
@@ -635,6 +656,22 @@ FileHatch/
 | PATCH | `/api/upload/*` | 청크 업로드 |
 | HEAD | `/api/upload/*` | 업로드 상태 |
 | DELETE | `/api/upload/*` | 업로드 취소 |
+
+### 파일 잠금
+
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| POST | `/api/files/lock/*` | 파일 잠금 |
+| DELETE | `/api/files/lock/*` | 잠금 해제 |
+| GET | `/api/files/lock/*` | 잠금 상태 확인 |
+
+### 별표/즐겨찾기
+
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| GET | `/api/starred` | 별표 파일 목록 |
+| POST | `/api/starred/*` | 별표 추가 |
+| DELETE | `/api/starred/*` | 별표 제거 |
 
 ### 공유 링크
 
@@ -722,6 +759,8 @@ FileHatch/
 | `notifications` | 알림 | user_id, type, title, message, is_read |
 | `system_settings` | 시스템 설정 | key, value, description |
 | `sso_providers` | SSO 프로바이더 | name, provider_type, client_id, issuer_url |
+| `starred_files` | 별표/즐겨찾기 | user_id, file_path, created_at |
+| `file_locks` | 파일 잠금 | file_path, user_id, locked_at, expires_at |
 
 ---
 
@@ -832,6 +871,22 @@ netstat -an | grep 445
 **Q: OnlyOffice 문서가 열리지 않습니다.**
 - OnlyOffice 프로필로 시작했는지 확인: `docker compose --profile office up -d`
 - OnlyOffice 컨테이너 상태 확인: `docker compose logs onlyoffice`
+
+**Q: WebDAV 연결이 안됩니다.**
+- URL 끝에 `/` 포함 필수: `http://서버:3080/api/webdav/`
+- 인증 방식이 Basic Auth인지 확인
+- 사용자명/비밀번호가 올바른지 확인
+- Windows의 경우 WebClient 서비스가 실행 중인지 확인
+
+**Q: 로그인이 차단되었습니다 (브루트포스 방지).**
+- 15분 후 자동으로 해제됩니다
+- 관리자에게 수동 해제를 요청할 수 있습니다
+- `LOGIN_LOCKOUT_DURATION` 환경 변수로 차단 시간 조정 가능
+
+**Q: 파일이 잠겨 있어 편집할 수 없습니다.**
+- 잠금 소유자가 편집을 완료할 때까지 대기
+- 30분 후 자동으로 해제됩니다 (`FILE_LOCK_TIMEOUT`)
+- 관리자에게 강제 해제를 요청할 수 있습니다
 
 ---
 

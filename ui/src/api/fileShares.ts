@@ -217,6 +217,7 @@ export async function accessUploadShare(
   token: string,
   password?: string
 ): Promise<UploadShareInfo> {
+  // API returns {success: true, data: UploadShareInfo}
   const response = await api.post<{ data: UploadShareInfo }>(`/u/${token}`, { password }, { noAuth: true })
   return response.data
 }
@@ -226,6 +227,57 @@ export async function accessUploadShare(
  */
 export function getUploadShareTusUrl(token: string): string {
   return `/api/u/${token}/upload/`
+}
+
+// ========== Folder Share Contents API ==========
+
+export interface ShareFileItem {
+  name: string
+  path: string
+  isDir: boolean
+  size: number
+  modTime: string
+}
+
+export interface ShareContentsResponse {
+  token: string
+  path: string
+  files: ShareFileItem[]
+  total: number
+  totalSize: number
+  requiresPassword?: boolean
+  requiresLogin?: boolean
+}
+
+/**
+ * List contents of a shared folder
+ */
+export async function listShareContents(
+  token: string,
+  subpath?: string,
+  password?: string
+): Promise<ShareContentsResponse> {
+  const params = new URLSearchParams()
+  if (subpath) params.append('subpath', subpath)
+  if (password) params.append('password', password)
+  const queryString = params.toString()
+  const url = `/s/${token}/list${queryString ? `?${queryString}` : ''}`
+  const response = await api.get<{ data: ShareContentsResponse }>(url, { noAuth: true })
+  return response.data
+}
+
+/**
+ * Get download URL for a file within a shared folder
+ */
+export function getShareFileDownloadUrl(
+  token: string,
+  filepath: string,
+  password?: string
+): string {
+  const params = new URLSearchParams()
+  params.append('filepath', filepath)
+  if (password) params.append('password', password)
+  return `/api/s/${token}/file?${params.toString()}`
 }
 
 // ========== Helper Functions ==========

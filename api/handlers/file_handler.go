@@ -138,6 +138,13 @@ func (h *Handler) DeleteFile(c echo.Context) error {
 		return RespondError(c, ErrMissingParameter("path"))
 	}
 
+	// URL decode the path for proper handling of special characters
+	decodedPath, err := url.PathUnescape(requestPath)
+	if err != nil {
+		decodedPath = requestPath // fallback to original if decode fails
+	}
+	requestPath = decodedPath
+
 	// Get user claims
 	var claims *JWTClaims
 	if user, ok := c.Get("user").(*JWTClaims); ok {

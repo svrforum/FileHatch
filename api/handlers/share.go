@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -928,4 +929,300 @@ func generateShareToken() string {
 		return MustGenerateSecureToken(16)
 	}
 	return token
+}
+
+// ListShareContents lists files inside a shared folder
+// @Summary		List shared folder contents
+// @Description	List files and folders inside a shared folder link
+// @Tags		Shares
+// @Produce		json
+// @Param		token	path	string	true	"Share token"
+// @Param		subpath	query	string	false	"Subpath within the shared folder"
+// @Success		200		{object}	map[string]interface{}
+// @Failure		400		{object}	map[string]string
+// @Failure		404		{object}	map[string]string
+// @Router		/s/{token}/list [get]
+func (h *ShareHandler) ListShareContents(c echo.Context) error {
+	token := c.Param("token")
+	subpath := c.QueryParam("subpath")
+
+	var share Share
+	var passwordHash sql.NullString
+	var expiresAt sql.NullTime
+	var maxAccess sql.NullInt32
+
+	err := h.db.QueryRow(`
+		SELECT id, token, path, created_by, created_at, expires_at,
+		       password_hash, access_count, max_access, is_active, require_login,
+		       share_type
+		FROM shares
+		WHERE token = $1
+	`, token).Scan(&share.ID, &share.Token, &share.Path, &share.CreatedBy,
+		&share.CreatedAt, &expiresAt, &passwordHash, &share.AccessCount,
+		&maxAccess, &share.IsActive, &share.RequireLogin, &share.ShareType)
+
+	if err == sql.ErrNoRows {
+		return RespondError(c, ErrNotFound("Share not found"))
+	}
+	if err != nil {
+		return RespondError(c, ErrInternal("Database error"))
+	}
+
+	// Validate share
+	if !share.IsActive {
+		return c.JSON(http.StatusGone, map[string]string{"error": "Share is no longer available"})
+	}
+	if expiresAt.Valid && time.Now().After(expiresAt.Time) {
+		return c.JSON(http.StatusGone, map[string]string{"error": "Share has expired"})
+	}
+	if maxAccess.Valid && share.AccessCount >= int(maxAccess.Int32) {
+		return c.JSON(http.StatusGone, map[string]string{"error": "Access limit reached"})
+	}
+
+	// Check if login is required
+	if share.RequireLogin {
+		claims, _ := c.Get("user").(*JWTClaims)
+		if claims == nil {
+			return RespondSuccess(c, map[string]interface{}{
+				"requiresLogin": true,
+			})
+		}
+	}
+
+	// Check password if required
+	if passwordHash.Valid {
+		password := c.QueryParam("password")
+		if password == "" {
+			return RespondSuccess(c, map[string]interface{}{
+				"requiresPassword": true,
+			})
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash.String), []byte(password)); err != nil {
+			return RespondError(c, ErrUnauthorized("Invalid password"))
+		}
+	}
+
+	// Build full path
+	fullPath := filepath.Join(h.dataRoot, share.Path)
+	if subpath != "" {
+		// Validate subpath to prevent path traversal
+		cleanSubpath := filepath.Clean(subpath)
+		if strings.Contains(cleanSubpath, "..") {
+			return RespondError(c, ErrBadRequest("Invalid subpath"))
+		}
+		fullPath = filepath.Join(fullPath, cleanSubpath)
+	}
+
+	// Check if path exists and is a directory
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return RespondError(c, ErrNotFound("Folder not found"))
+	}
+	if !info.IsDir() {
+		return RespondError(c, ErrBadRequest("Path is not a folder"))
+	}
+
+	// Read directory contents
+	entries, err := os.ReadDir(fullPath)
+	if err != nil {
+		return RespondError(c, ErrInternal("Failed to read directory"))
+	}
+
+	type FileItem struct {
+		Name    string    `json:"name"`
+		Path    string    `json:"path"`
+		IsDir   bool      `json:"isDir"`
+		Size    int64     `json:"size"`
+		ModTime time.Time `json:"modTime"`
+	}
+
+	files := make([]FileItem, 0, len(entries))
+	var totalSize int64
+
+	for _, entry := range entries {
+		// Skip hidden files
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+
+		entryInfo, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		// Calculate relative path from share root
+		relativePath := entry.Name()
+		if subpath != "" {
+			relativePath = filepath.Join(subpath, entry.Name())
+		}
+
+		item := FileItem{
+			Name:    entry.Name(),
+			Path:    relativePath,
+			IsDir:   entry.IsDir(),
+			Size:    entryInfo.Size(),
+			ModTime: entryInfo.ModTime(),
+		}
+
+		if !entry.IsDir() {
+			totalSize += entryInfo.Size()
+		}
+
+		files = append(files, item)
+	}
+
+	// Sort: folders first, then by name
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].IsDir != files[j].IsDir {
+			return files[i].IsDir
+		}
+		return strings.ToLower(files[i].Name) < strings.ToLower(files[j].Name)
+	})
+
+	return RespondSuccess(c, map[string]interface{}{
+		"token":     token,
+		"path":      subpath,
+		"files":     files,
+		"total":     len(files),
+		"totalSize": totalSize,
+	})
+}
+
+// DownloadShareFile downloads a specific file from inside a shared folder
+// @Summary		Download file from shared folder
+// @Description	Download a specific file from inside a shared folder link
+// @Tags		Shares
+// @Produce		octet-stream
+// @Param		token	path	string	true	"Share token"
+// @Param		filepath	query	string	true	"File path within the shared folder"
+// @Param		password	query	string	false	"Share password if required"
+// @Success		200		{file}		binary
+// @Failure		400		{object}	map[string]string
+// @Failure		404		{object}	map[string]string
+// @Router		/s/{token}/file [get]
+func (h *ShareHandler) DownloadShareFile(c echo.Context) error {
+	token := c.Param("token")
+	filePath := c.QueryParam("filepath")
+
+	if filePath == "" {
+		return RespondError(c, ErrBadRequest("File path is required"))
+	}
+
+	var share Share
+	var passwordHash sql.NullString
+	var expiresAt sql.NullTime
+	var maxAccess sql.NullInt32
+
+	err := h.db.QueryRow(`
+		SELECT id, token, path, created_by, expires_at,
+		       password_hash, access_count, max_access, is_active, require_login
+		FROM shares
+		WHERE token = $1
+	`, token).Scan(&share.ID, &share.Token, &share.Path, &share.CreatedBy,
+		&expiresAt, &passwordHash, &share.AccessCount, &maxAccess, &share.IsActive, &share.RequireLogin)
+
+	if err == sql.ErrNoRows {
+		return RespondError(c, ErrNotFound("Share not found"))
+	}
+	if err != nil {
+		return RespondError(c, ErrInternal("Database error"))
+	}
+
+	// Validate share
+	if !share.IsActive {
+		return c.JSON(http.StatusGone, map[string]string{"error": "Share is no longer available"})
+	}
+	if expiresAt.Valid && time.Now().After(expiresAt.Time) {
+		return c.JSON(http.StatusGone, map[string]string{"error": "Share has expired"})
+	}
+	if maxAccess.Valid && share.AccessCount >= int(maxAccess.Int32) {
+		return c.JSON(http.StatusGone, map[string]string{"error": "Access limit reached"})
+	}
+
+	// Check if login is required
+	if share.RequireLogin {
+		claims, _ := c.Get("user").(*JWTClaims)
+		if claims == nil {
+			return RespondError(c, ErrUnauthorized("Login required"))
+		}
+	}
+
+	// Check password if required
+	if passwordHash.Valid {
+		password := c.QueryParam("password")
+		if password == "" {
+			return RespondError(c, ErrUnauthorized("Password required"))
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash.String), []byte(password)); err != nil {
+			return RespondError(c, ErrUnauthorized("Invalid password"))
+		}
+	}
+
+	// Validate filepath to prevent path traversal
+	cleanPath := filepath.Clean(filePath)
+	if strings.Contains(cleanPath, "..") {
+		return RespondError(c, ErrBadRequest("Invalid file path"))
+	}
+
+	// Build full path
+	fullPath := filepath.Join(h.dataRoot, share.Path, cleanPath)
+
+	// Security check: ensure path is within share root
+	shareRoot := filepath.Join(h.dataRoot, share.Path)
+	if !strings.HasPrefix(fullPath, shareRoot) {
+		return RespondError(c, ErrForbidden("Access denied"))
+	}
+
+	// Check if file exists
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return RespondError(c, ErrNotFound("File not found"))
+	}
+	if info.IsDir() {
+		return RespondError(c, ErrBadRequest("Cannot download a directory"))
+	}
+
+	// Log audit event
+	var userID *string
+	var accessorUsername string
+	if claims, ok := c.Get("user").(*JWTClaims); ok && claims != nil {
+		userID = &claims.UserID
+		accessorUsername = claims.Username
+	}
+	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventShareAccess, share.Path, map[string]interface{}{
+		"action":   "download_file",
+		"token":    token,
+		"filename": info.Name(),
+		"filepath": filePath,
+		"size":     info.Size(),
+	})
+
+	// Send notification to share owner
+	if h.notificationService != nil {
+		title := "공유 폴더에서 파일이 다운로드되었습니다"
+		var message string
+		if accessorUsername != "" {
+			message = accessorUsername + "님이 '" + info.Name() + "' 파일을 다운로드했습니다"
+		} else {
+			message = "누군가가 '" + info.Name() + "' 파일을 다운로드했습니다 (IP: " + c.RealIP() + ")"
+		}
+		_, _ = h.notificationService.Create(
+			share.CreatedBy,
+			NotifShareLinkAccessed,
+			title,
+			message,
+			"/shared-by-me",
+			userID,
+			map[string]interface{}{
+				"token":    token,
+				"filename": info.Name(),
+				"filepath": filePath,
+				"size":     info.Size(),
+				"clientIP": c.RealIP(),
+			},
+		)
+	}
+
+	setContentDisposition(c, info.Name())
+	return c.File(fullPath)
 }

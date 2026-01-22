@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -183,6 +184,13 @@ func (h *Handler) DeleteFolder(c echo.Context) error {
 			"error": "Folder path required",
 		})
 	}
+
+	// URL decode the path for proper handling of special characters
+	decodedPath, err := url.PathUnescape(requestPath)
+	if err != nil {
+		decodedPath = requestPath // fallback to original if decode fails
+	}
+	requestPath = decodedPath
 
 	// Get user claims
 	var claims *JWTClaims

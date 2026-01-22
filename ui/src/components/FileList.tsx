@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchFiles, downloadFileWithProgress, getFolderStats, renameItem, copyItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, compressFiles, extractZip, downloadAsZip } from '../api/files'
+import { fetchFiles, downloadFileWithProgress, getFolderStats, renameItem, copyItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, extractZip, downloadAsZip } from '../api/files'
 import { useSharedFolders } from '../hooks/useSharedFolders'
 import { getSharedWithMe, getSharedByMe, getMyShareLinks, SharedWithMeItem, SharedByMeItem, LinkShare, deleteFileShare, deleteShareLink } from '../api/fileShares'
 import { useUploadStore } from '../stores/uploadStore'
@@ -737,25 +738,28 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     setSelectedFile(null)
   }, [pathsToTransfer, displayFiles, transferStore, queryClient, setSelectedFiles, setSelectedFile])
 
-  // Actually execute compression
-  const handleCompressConfirm = useCallback(async () => {
+  // Actually execute compression with streaming progress
+  const handleCompressConfirm = useCallback(() => {
     if (pathsToCompress.length === 0 || !compressFileName.trim()) return
     setShowCompressModal(false)
 
-    try {
-      const outputName = compressFileName.trim().endsWith('.zip')
-        ? compressFileName.trim()
-        : `${compressFileName.trim()}.zip`
-      const result = await compressFiles(pathsToCompress, outputName)
+    const outputName = compressFileName.trim().endsWith('.zip')
+      ? compressFileName.trim()
+      : `${compressFileName.trim()}.zip`
+
+    // Use transferStore for streaming compression with progress
+    transferStore.addCompression(pathsToCompress, outputName, currentPath)
+
+    // Invalidate queries after compression completes (done via WebSocket file change events)
+    // But we also manually invalidate after a short delay to ensure UI is updated
+    setTimeout(() => {
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
-      showSuccess(`${pathsToCompress.length}개 항목이 "${result.outputName}"으로 압축되었습니다`)
-      setSelectedFiles(new Set())
-    } catch (err) {
-      showError(err instanceof Error ? err.message : '압축에 실패했습니다')
-    }
+    }, 500)
+
+    setSelectedFiles(new Set())
     setPathsToCompress([])
     setCompressFileName('')
-  }, [pathsToCompress, compressFileName, currentPath, queryClient])
+  }, [pathsToCompress, compressFileName, currentPath, queryClient, transferStore, setSelectedFiles])
 
   // Extract zip file handler
   const handleExtract = useCallback(async (file: FileInfo) => {
@@ -1136,15 +1140,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   }
 
   return (
-    <div className={`file-list-wrapper ${selectedFile ? 'panel-open' : ''}`}>
-    {/* Mobile overlay - click to close details panel */}
-    {selectedFile && (
-      <div
-        className="mobile-panel-overlay"
-        onClick={() => setSelectedFile(null)}
-        aria-hidden="true"
-      />
-    )}
+    <div className="file-list-wrapper">
     <div
       className={`file-list-container ${isDraggingFiles ? 'dragging-files' : ''} ${isMarqueeSelecting ? 'marquee-selecting' : ''}`}
       ref={containerRef}
@@ -1350,34 +1346,47 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     </div>
     {/* End of file-list-container */}
 
-    {/* File Details Panel - Always visible to prevent layout shift */}
-    <FileInfoPanel
-      selectedFile={selectedFile}
-      thumbnailUrl={thumbnailUrl}
-      folderStats={folderStats}
-      loadingStats={loadingStats}
-      fileMetadata={fileMetadata}
-      loadingMetadata={loadingMetadata}
-      editingDescription={editingDescription}
-      descriptionInput={descriptionInput}
-      tagInput={tagInput}
-      tagSuggestions={tagSuggestions}
-      isSpecialShareView={isSpecialShareView}
-      onClose={() => setSelectedFile(null)}
-      onView={(file) => setViewingFile(file)}
-      onDownload={(file) => downloadFileWithProgress(file.path, file.size, downloadStore)}
-      onShare={(file) => setShareTarget(file)}
-      onLinkShare={(file) => setLinkShareTarget(file)}
-      onDelete={(file) => setDeleteTarget(file)}
-      onDescriptionChange={(value) => setDescriptionInput(value)}
-      onDescriptionSave={handleSaveDescription}
-      onDescriptionEdit={(editing) => setEditingDescription(editing)}
-      onDescriptionInputChange={(value) => setDescriptionInput(value)}
-      onTagInputChange={(value) => setTagInput(value)}
-      onAddTag={handleAddTag}
-      onRemoveTag={handleRemoveTag}
-      getFileIcon={getFileIcon}
-    />
+    {/* Mobile overlay for details panel - rendered to body for proper overlay */}
+    {selectedFile && createPortal(
+      <div
+        className="mobile-panel-overlay"
+        onClick={() => setSelectedFile(null)}
+        aria-hidden="true"
+      />,
+      document.body
+    )}
+
+    {/* File Details Panel - Rendered via Portal to details-sidebar-root in App.tsx */}
+    {document.getElementById('details-sidebar-root') && createPortal(
+      <FileInfoPanel
+        selectedFile={selectedFile}
+        thumbnailUrl={thumbnailUrl}
+        folderStats={folderStats}
+        loadingStats={loadingStats}
+        fileMetadata={fileMetadata}
+        loadingMetadata={loadingMetadata}
+        editingDescription={editingDescription}
+        descriptionInput={descriptionInput}
+        tagInput={tagInput}
+        tagSuggestions={tagSuggestions}
+        isSpecialShareView={isSpecialShareView}
+        onClose={() => setSelectedFile(null)}
+        onView={(file) => setViewingFile(file)}
+        onDownload={(file) => downloadFileWithProgress(file.path, file.size, downloadStore)}
+        onShare={(file) => setShareTarget(file)}
+        onLinkShare={(file) => setLinkShareTarget(file)}
+        onDelete={(file) => setDeleteTarget(file)}
+        onDescriptionChange={(value) => setDescriptionInput(value)}
+        onDescriptionSave={handleSaveDescription}
+        onDescriptionEdit={(editing) => setEditingDescription(editing)}
+        onDescriptionInputChange={(value) => setDescriptionInput(value)}
+        onTagInputChange={(value) => setTagInput(value)}
+        onAddTag={handleAddTag}
+        onRemoveTag={handleRemoveTag}
+        getFileIcon={getFileIcon}
+      />,
+      document.getElementById('details-sidebar-root')!
+    )}
 
       <ContextMenu
         contextMenu={contextMenu}

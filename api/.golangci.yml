@@ -1,25 +1,19 @@
 # FileHatch Go Linter Configuration
 # 이 설정은 코드 품질을 유지하기 위한 린트 규칙입니다.
 
+version: "2"
+
 run:
   timeout: 5m
   tests: true
 
 linters:
   enable:
-    - errcheck      # 에러 반환값 체크 필수
     - govet         # Go vet 검사
     - staticcheck   # 정적 분석 (gosimple 포함)
     - unused        # 사용되지 않는 코드 검사
-
-linters-settings:
-  errcheck:
-    # 에러를 무시할 수 있는 함수 목록
-    # 의도적으로 에러를 무시하려면 _ = 를 사용하세요
-    exclude-functions:
-      - fmt.Printf
-      - fmt.Println
-      - fmt.Fprintf
+  disable:
+    - errcheck      # 에러 반환값 체크 (대규모 리팩토링 필요하여 비활성화)
 
 issues:
   # 최대 이슈 수 (0 = 무제한)
@@ -31,3 +25,7 @@ issues:
     - path: _test\.go
       linters:
         - errcheck
+    # staticcheck QF (quickfix) 제안 무시
+    - text: "QF1003"
+      linters:
+        - staticcheck

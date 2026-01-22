@@ -542,7 +542,7 @@ export interface OnlyOfficeStatus {
 // Check if OnlyOffice is available
 export async function checkOnlyOfficeStatus(): Promise<OnlyOfficeStatus> {
   try {
-    const response = await fetch(`${API_BASE}/onlyoffice/status`)
+    const response = await fetch(`${API_BASE}/onlyoffice/settings`)
     if (!response.ok) {
       return { available: false, publicUrl: null }
     }
@@ -689,6 +689,77 @@ export async function compressFiles(
   outputName?: string
 ): Promise<CompressResponse> {
   return api.post<CompressResponse>('/files/compress', { paths, outputName })
+}
+
+// Compression progress for streaming
+export interface CompressionProgress {
+  status: 'started' | 'progress' | 'completed' | 'error'
+  totalBytes: number
+  compressedBytes: number
+  currentFile?: string
+  totalFiles?: number
+  processedFiles?: number
+  error?: string
+  outputPath?: string
+  outputName?: string
+  outputSize?: number
+  bytesPerSec?: number
+}
+
+// Compress files/folders with streaming progress
+export function compressFilesStream(
+  paths: string[],
+  outputName: string,
+  onProgress: (progress: CompressionProgress) => void
+): { cancel: () => void; promise: Promise<CompressResponse> } {
+  const encodedPaths = paths.map(p => encodeURIComponent(p)).join(',')
+  const encodedOutputName = encodeURIComponent(outputName)
+
+  const token = _getAuthToken()
+  const url = `${API_BASE}/files/compress-stream?paths=${encodedPaths}&outputName=${encodedOutputName}${token ? `&token=${token}` : ''}`
+
+  let eventSource: EventSource | null = null
+  let rejectFn: ((reason: Error) => void) | null = null
+
+  const promise = new Promise<CompressResponse>((resolve, reject) => {
+    rejectFn = reject
+    eventSource = new EventSource(url)
+
+    eventSource.onmessage = (event) => {
+      try {
+        const progress: CompressionProgress = JSON.parse(event.data)
+        onProgress(progress)
+
+        if (progress.status === 'completed') {
+          eventSource?.close()
+          resolve({
+            success: true,
+            outputPath: progress.outputPath || '',
+            outputName: progress.outputName || '',
+            size: progress.outputSize || 0
+          })
+        } else if (progress.status === 'error') {
+          eventSource?.close()
+          reject(new Error(progress.error || 'Compression failed'))
+        }
+      } catch (e) {
+        console.error('Failed to parse compression progress:', e)
+      }
+    }
+
+    eventSource.onerror = () => {
+      eventSource?.close()
+      reject(new Error('Connection error during compression'))
+    }
+  })
+
+  return {
+    cancel: () => {
+      eventSource?.close()
+      if (rejectFn) rejectFn(new Error('Operation cancelled'))
+    },
+    promise
+  }
 }
 
 // Extract zip response

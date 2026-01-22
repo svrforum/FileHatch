@@ -308,7 +308,7 @@ function App() {
           isAdminMode={isAdminMode}
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
-        <div className="app-container">
+        <div className={`app-container ${isAdminMode || isTrashView ? 'no-details-panel' : ''}`}>
           <Sidebar
             currentPath={currentPath}
             onNavigate={handleNavigate}
@@ -451,6 +451,10 @@ function App() {
             </Routes>
           </Suspense>
           </main>
+          {/* Portal target for FileDetailsPanel - only shown when not in admin/trash mode */}
+          {!isAdminMode && !isTrashView && (
+            <div id="details-sidebar-root" className="details-sidebar" />
+          )}
         </div>
 
         <UploadModal

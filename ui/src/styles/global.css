@@ -58,8 +58,10 @@
   --color-form-bg-disabled: #F9FAFB;
 
   /* Layout */
-  --sidebar-width: 260px;
+  --sidebar-width: 280px;
+  --details-panel-width: 320px;
   --header-height: 60px;
+  --mobile-header-height: 56px;
 
   /* Background - Apple/Toss-like layering */
   --bg-primary: #FFFFFF;
