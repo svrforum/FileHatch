@@ -412,7 +412,7 @@ export default function Trash({ onNavigate }: TrashProps) {
                 </div>
               </div>
               <div className="trash-item-size">
-                {formatFileSize(item.size)}
+                {item.isDir ? '폴더' : formatFileSize(item.size)}
               </div>
               <div className="trash-item-actions">
                 <button
