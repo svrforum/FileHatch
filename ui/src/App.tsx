@@ -194,7 +194,7 @@ function App() {
 
     // Handle shared-drive routes: /shared-drive/{folderName}/... -> /shared/{folderName}/...
     if (pathname.startsWith('/shared-drive/')) {
-      const pathAfterPrefix = pathname.substring('/shared-drive/'.length)
+      const pathAfterPrefix = decodeURIComponent(pathname.substring('/shared-drive/'.length))
       const newPath = `/shared/${pathAfterPrefix}`
       if (currentPath !== newPath) {
         setCurrentPath(newPath)
@@ -202,7 +202,7 @@ function App() {
     }
     // Handle files routes: /files/xxx -> /home/xxx
     else if (pathname.startsWith('/files/')) {
-      const pathAfterPrefix = pathname.substring('/files/'.length)
+      const pathAfterPrefix = decodeURIComponent(pathname.substring('/files/'.length))
       const newPath = `/home/${pathAfterPrefix}`
       if (currentPath !== newPath) {
         setCurrentPath(newPath)
