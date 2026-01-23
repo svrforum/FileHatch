@@ -42,6 +42,7 @@ export interface SharedFileInfo extends FileInfo {
   hasPassword?: boolean
   isActive?: boolean
   requireLogin?: boolean
+  shareType?: 'download' | 'upload' | 'edit'
 }
 
 export interface FileListState {

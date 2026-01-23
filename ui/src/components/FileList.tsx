@@ -235,7 +235,8 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
           hasPassword: share.hasPassword,
           isActive: share.isActive,
           requireLogin: share.requireLogin,
-        } as FileInfo & { linkToken?: string; linkId?: string; accessCount?: number; maxAccess?: number; expiresAt?: string; hasPassword?: boolean; isActive?: boolean; requireLogin?: boolean }
+          shareType: share.shareType,
+        } as FileInfo & { linkToken?: string; linkId?: string; accessCount?: number; maxAccess?: number; expiresAt?: string; hasPassword?: boolean; isActive?: boolean; requireLogin?: boolean; shareType?: 'download' | 'upload' | 'edit' }
       })
     }
     return data?.files || []

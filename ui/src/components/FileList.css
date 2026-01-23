@@ -601,6 +601,26 @@
   color: var(--text-tertiary);
 }
 
+/* Share type badges */
+.share-option.share-type {
+  font-weight: 600;
+}
+
+.share-option.share-type-download {
+  background: rgba(59, 130, 246, 0.15);
+  color: #2563eb;
+}
+
+.share-option.share-type-upload {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+}
+
+.share-option.share-type-edit {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+}
+
 .col-unshare {
   display: flex;
   align-items: center;
