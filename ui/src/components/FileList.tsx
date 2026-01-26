@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchFiles, downloadFileWithProgress, getFolderStats, renameItem, copyItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, extractZip, downloadAsZip } from '../api/files'
+import { fetchFiles, downloadFileDirect, getFolderStats, renameItem, copyItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, extractZip, downloadAsZip } from '../api/files'
 import { useSharedFolders } from '../hooks/useSharedFolders'
 import { getSharedWithMe, getSharedByMe, getMyShareLinks, SharedWithMeItem, SharedByMeItem, LinkShare, deleteFileShare, deleteShareLink } from '../api/fileShares'
 import { useUploadStore } from '../stores/uploadStore'
@@ -136,7 +136,6 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const uploadStore = useUploadStore()
   const transferStore = useTransferStore()
   const user = useAuthStore((state) => state.user)
-  const downloadStore = uploadStore
 
 
   // Real-time file change notifications via WebSocket
@@ -347,6 +346,10 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       const viewportWidth = window.innerWidth
       const viewportHeight = window.innerHeight
 
+      // Header height to avoid menu being hidden behind fixed header
+      const HEADER_HEIGHT = 64
+      const MIN_Y = HEADER_HEIGHT + 10 // 74px minimum from top
+
       let adjustedX = contextMenu.x
       let adjustedY = contextMenu.y
 
@@ -362,17 +365,17 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       if (contextMenu.y + rect.height > viewportHeight - 10) {
         // Try showing above the click point first
         const aboveY = contextMenu.y - rect.height
-        if (aboveY >= 10) {
+        if (aboveY >= MIN_Y) {
           adjustedY = aboveY
         } else {
-          // If can't fit above, push to top of screen
-          adjustedY = 10
+          // If can't fit above, push to below header
+          adjustedY = MIN_Y
         }
       }
 
-      // Make sure menu doesn't go beyond left or top edge
+      // Make sure menu doesn't go beyond left or top edge (below header)
       if (adjustedX < 10) adjustedX = 10
-      if (adjustedY < 10) adjustedY = 10
+      if (adjustedY < MIN_Y) adjustedY = MIN_Y
 
       setContextMenuPosition({ x: adjustedX, y: adjustedY })
     } else {
@@ -568,9 +571,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     } else if (onlyOfficeAvailable && isOnlyOfficeSupported(file.extension)) {
       handleOnlyOfficeEdit(file)
     } else {
-      downloadFileWithProgress(file.path, file.size, downloadStore)
+      downloadFileDirect(file.path)
     }
-  }, [onNavigate, downloadStore, isEditableFile, isViewableFile, isZipFile, onlyOfficeAvailable, handleOnlyOfficeEdit])
+  }, [onNavigate, isEditableFile, isViewableFile, isZipFile, onlyOfficeAvailable, handleOnlyOfficeEdit])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, file: FileInfo) => {
     e.preventDefault()
@@ -655,9 +658,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   }, [deleteTargets, currentPath, queryClient])
 
   const handleDownload = useCallback((file: FileInfo) => {
-    downloadFileWithProgress(file.path, file.size, downloadStore)
+    downloadFileDirect(file.path)
     closeContextMenu()
-  }, [closeContextMenu, downloadStore])
+  }, [closeContextMenu])
 
   // Compress files handler - opens modal to enter filename
   const handleCompress = useCallback((paths: string[]) => {
@@ -817,14 +820,14 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     // Download each file with a delay to prevent browser from blocking multiple downloads
     for (let i = 0; i < filesToDownloadFiltered.length; i++) {
       const file = filesToDownloadFiltered[i]
-      downloadFileWithProgress(file.path, file.size, downloadStore)
+      downloadFileDirect(file.path)
 
       // Add delay between downloads (except for the last one)
       if (i < filesToDownloadFiltered.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 500))
       }
     }
-  }, [pathsToDownload, displayFiles, downloadStore])
+  }, [pathsToDownload, displayFiles])
 
   const handleRenameClick = useCallback((file: FileInfo) => {
     setRenameTarget(file)
@@ -1373,7 +1376,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         isSpecialShareView={isSpecialShareView}
         onClose={() => setSelectedFile(null)}
         onView={(file) => setViewingFile(file)}
-        onDownload={(file) => downloadFileWithProgress(file.path, file.size, downloadStore)}
+        onDownload={(file) => downloadFileDirect(file.path)}
         onShare={(file) => setShareTarget(file)}
         onLinkShare={(file) => setLinkShareTarget(file)}
         onDelete={(file) => setDeleteTarget(file)}
