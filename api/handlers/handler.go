@@ -412,8 +412,8 @@ func (h *Handler) ListFiles(c echo.Context) error {
 	var totalSize int64
 
 	for _, entry := range entries {
-		// Skip hidden files (starting with .)
-		if strings.HasPrefix(entry.Name(), ".") {
+		// Skip hidden files (dotfiles and system files)
+		if IsHiddenFile(entry.Name()) {
 			continue
 		}
 

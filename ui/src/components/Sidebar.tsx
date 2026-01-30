@@ -563,7 +563,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
         {/* Storage Info */}
         <div className="storage-info">
           {/* Admin: Show server disk info first */}
-          {displayStorage.isAdmin && displayStorage.disk && (
+          {displayStorage.isAdmin && displayStorage.disk && displayStorage.disk.total > 0 && (
             <>
               <div className="storage-header">
                 <span className="storage-label">서버 디스크</span>

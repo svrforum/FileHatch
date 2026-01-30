@@ -38,19 +38,26 @@ function parseContentDisposition(header: string | null, fallback: string): strin
   if (!header) return fallback
 
   // Try RFC 5987 format first: filename*=UTF-8''encoded_filename
-  const rfc5987Match = header.match(/filename\*=UTF-8''([^;\s]+)/i)
+  // Improved regex: allows spaces around '=', matches until ';' or end
+  const rfc5987Match = header.match(/filename\*\s*=\s*UTF-8''([^;]+)/i)
   if (rfc5987Match) {
     try {
-      return decodeURIComponent(rfc5987Match[1])
+      return decodeURIComponent(rfc5987Match[1].trim())
     } catch {
       // Fall through to simple format
     }
   }
 
-  // Try simple format: filename="filename" or filename=filename
-  const simpleMatch = header.match(/filename="?([^";\s]+)"?/i)
-  if (simpleMatch) {
-    return simpleMatch[1]
+  // Try quoted filename: filename="filename"
+  const quotedMatch = header.match(/filename\s*=\s*"([^"]+)"/i)
+  if (quotedMatch) {
+    return quotedMatch[1]
+  }
+
+  // Try unquoted filename: filename=filename (until ; or whitespace)
+  const unquotedMatch = header.match(/filename\s*=\s*([^;\s]+)/i)
+  if (unquotedMatch) {
+    return unquotedMatch[1]
   }
 
   return fallback
@@ -130,19 +137,58 @@ function triggerDownload(blob: Blob, filename: string) {
   window.URL.revokeObjectURL(blobUrl)
 }
 
-// Download with progress tracking via store
+// Direct browser download - lets the browser handle the download natively
+// This avoids double-downloading (fetch + blob trigger) and uses browser's built-in progress UI
+export function downloadFileDirect(path: string): void {
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path
+  const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
+  const token = _getAuthToken()
+  const url = `${API_BASE}/files/${encodedPath}?download=true${token ? `&token=${token}` : ''}`
+
+  // Create a temporary link and click it to trigger browser download
+  const a = document.createElement('a')
+  a.href = url
+  a.download = '' // Let server set the filename via Content-Disposition
+  a.style.display = 'none'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
+// Legacy: Download with progress tracking via store (kept for potential future use)
+export interface DownloadResult {
+  started: boolean
+  reason?: 'already_downloading'
+}
+
 export async function downloadFileWithProgress(
   path: string,
   size: number,
   store: {
-    addDownload: (filename: string, size: number) => string
+    addDownload: (filename: string, size: number, path: string) => string | null
     updateDownloadProgress: (id: string, progress: number) => void
     setDownloadStatus: (id: string, status: 'downloading' | 'completed' | 'error', error?: string) => void
     setDownloadController: (id: string, controller: AbortController) => void
+    openPanel?: () => void
+    isDownloading?: (path: string) => boolean
   }
-): Promise<void> {
+): Promise<DownloadResult> {
+  // Check if already downloading
+  if (store.isDownloading?.(path)) {
+    return { started: false, reason: 'already_downloading' }
+  }
+
   const filename = path.split('/').pop() || 'download'
-  const downloadId = store.addDownload(filename, size)
+  const downloadId = store.addDownload(filename, size, path)
+
+  // If addDownload returns null, it means the file is already being downloaded
+  if (downloadId === null) {
+    return { started: false, reason: 'already_downloading' }
+  }
+
+  // Open the panel to show download progress
+  store.openPanel?.()
+
   const abortController = new AbortController()
   store.setDownloadController(downloadId, abortController)
 
@@ -153,10 +199,11 @@ export async function downloadFileWithProgress(
       abortController.signal
     )
     store.setDownloadStatus(downloadId, 'completed')
+    return { started: true }
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       // Download was cancelled, already handled
-      return
+      return { started: true }
     }
     store.setDownloadStatus(downloadId, 'error', err instanceof Error ? err.message : 'Download failed')
     throw err

@@ -234,7 +234,7 @@ func (h *Handler) searchInDirParallel(realPath, displayPath, query string, isGlo
 	var files []os.DirEntry
 	var dirs []os.DirEntry
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".") {
+		if IsHiddenFile(entry.Name()) {
 			continue
 		}
 		if entry.IsDir() {
@@ -327,7 +327,7 @@ func (h *Handler) searchInDirParallel(realPath, displayPath, query string, isGlo
 				}
 
 				// Skip hidden files
-				if strings.HasPrefix(info.Name(), ".") {
+				if IsHiddenFile(info.Name()) {
 					if info.IsDir() {
 						return filepath.SkipDir
 					}

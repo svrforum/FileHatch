@@ -453,7 +453,7 @@ func (h *Handler) computeFolderStatsInternal(realPath string) (*CachedFolderStat
 		}
 
 		// Skip hidden files
-		if strings.HasPrefix(info.Name(), ".") {
+		if IsHiddenFile(info.Name()) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}

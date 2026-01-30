@@ -224,7 +224,7 @@
 
 .image-container img {
   max-width: 100%;
-  max-height: calc(95vh - 80px);
+  max-height: calc(100dvh - 120px);
   object-fit: contain;
   border-radius: var(--radius-md);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -268,7 +268,7 @@
 
 .video-container video {
   max-width: 100%;
-  max-height: calc(95vh - 100px);
+  max-height: calc(100dvh - 120px);
   border-radius: var(--radius-md);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
@@ -445,13 +445,13 @@
   }
 
   .image-container img {
-    max-height: calc(100vh - 60px);
-    max-height: calc(100dvh - 60px);
+    max-height: calc(100vh - 80px);
+    max-height: calc(100dvh - 80px);
   }
 
   .video-container video {
-    max-height: calc(100vh - 60px);
-    max-height: calc(100dvh - 60px);
+    max-height: calc(100vh - 80px);
+    max-height: calc(100dvh - 80px);
   }
 
   .nav-arrow {
