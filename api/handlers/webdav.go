@@ -20,14 +20,16 @@ type WebDAVHandler struct {
 	db         *sql.DB
 	dataRoot   string
 	lockSystem webdav.LockSystem
+	handler    *Handler // For trash functionality
 }
 
 // NewWebDAVHandler creates a new WebDAV handler
-func NewWebDAVHandler(db *sql.DB, dataRoot string) *WebDAVHandler {
+func NewWebDAVHandler(db *sql.DB, dataRoot string, handler *Handler) *WebDAVHandler {
 	return &WebDAVHandler{
 		db:         db,
 		dataRoot:   dataRoot,
 		lockSystem: webdav.NewMemLS(),
+		handler:    handler,
 	}
 }
 
@@ -63,6 +65,7 @@ func (h *WebDAVHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		db:       h.db,
 		dataRoot: h.dataRoot,
 		user:     user,
+		handler:  h.handler,
 	}
 
 	// Create WebDAV handler with shared lock system
@@ -198,6 +201,7 @@ type VirtualFS struct {
 	db       *sql.DB
 	dataRoot string
 	user     *UserInfo
+	handler  *Handler // For trash functionality
 }
 
 // Mkdir creates a directory
@@ -235,13 +239,47 @@ func (vfs *VirtualFS) OpenFile(ctx context.Context, name string, flag int, perm 
 	return os.OpenFile(realPath, flag, perm)
 }
 
-// RemoveAll removes a file or directory
+// RemoveAll removes a file or directory (moves to trash instead of permanent deletion)
 func (vfs *VirtualFS) RemoveAll(ctx context.Context, name string) error {
 	realPath, err := vfs.resolvePath(name, true)
 	if err != nil {
 		return err
 	}
+
+	// Get virtual path for trash metadata
+	virtualPath := vfs.getVirtualPath(name)
+
+	// Use trash functionality if handler is available
+	if vfs.handler != nil {
+		return vfs.handler.MoveToTrashInternal(
+			vfs.user.Username,
+			vfs.user.ID,
+			virtualPath,
+			realPath,
+		)
+	}
+
+	// Fallback to permanent deletion if handler is not available
 	return os.RemoveAll(realPath)
+}
+
+// getVirtualPath converts WebDAV path to virtual display path
+// This maintains consistency with web UI trash paths
+func (vfs *VirtualFS) getVirtualPath(name string) string {
+	name = filepath.Clean(name)
+
+	// /home/* -> /home/* (keep as-is for consistency with web UI)
+	// WebDAV /home/file.txt maps to user's home, same as web UI /home/file.txt
+	if strings.HasPrefix(name, "/home/") || name == "/home" {
+		return name
+	}
+
+	// /shared/* remains as is
+	if strings.HasPrefix(name, "/shared/") {
+		return name
+	}
+
+	return name
 }
 
 // Rename renames a file or directory

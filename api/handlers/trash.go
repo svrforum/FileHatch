@@ -62,6 +62,133 @@ func (h *Handler) saveTrashMeta(username string, items map[string]TrashItem) err
 	return os.WriteFile(metaPath, data, 0644)
 }
 
+// syncSMBTrash synchronizes SMB-deleted files (via vfs_recycle) with web UI trash metadata
+// SMB recycle module puts files in /data/trash/{username}/.smb/ with directory structure preserved
+func (h *Handler) syncSMBTrash(username string) {
+	trashPath := h.getTrashPath(username)
+	smbTrashPath := filepath.Join(trashPath, ".smb")
+
+	// Create trash directory if it doesn't exist
+	if err := os.MkdirAll(trashPath, 0755); err != nil {
+		return
+	}
+
+	// Check if SMB trash directory exists
+	if _, err := os.Stat(smbTrashPath); os.IsNotExist(err) {
+		return
+	}
+
+	// Load existing metadata
+	meta, err := h.loadTrashMeta(username)
+	if err != nil {
+		meta = make(map[string]TrashItem)
+	}
+
+	// Build a set of known trash IDs
+	knownIDs := make(map[string]bool)
+	for id := range meta {
+		knownIDs[id] = true
+	}
+
+	modified := false
+
+	// Walk through SMB trash directory recursively
+	err = filepath.Walk(smbTrashPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip errors
+		}
+
+		// Skip the root .smb directory itself
+		if path == smbTrashPath {
+			return nil
+		}
+
+		// Skip directories (we only track files, directories are implicit)
+		if info.IsDir() {
+			return nil
+		}
+
+		// Get relative path from .smb directory
+		relPath, err := filepath.Rel(smbTrashPath, path)
+		if err != nil {
+			return nil
+		}
+
+		// Generate unique trash ID using timestamp and relative path
+		trashID := fmt.Sprintf("smb_%d_%s", info.ModTime().UnixNano(), strings.ReplaceAll(relPath, "/", "_"))
+
+		// Check if already tracked
+		if knownIDs[trashID] {
+			return nil
+		}
+
+		// Also check if any existing entry has the same SMB path
+		alreadyTracked := false
+		for _, item := range meta {
+			if strings.HasPrefix(item.ID, "smb_") && item.OriginalPath == "/home/"+relPath {
+				alreadyTracked = true
+				break
+			}
+		}
+		if alreadyTracked {
+			return nil
+		}
+
+		// Extract original filename (remove version suffix like "Copy #2 of file.txt")
+		fileName := info.Name()
+		originalName := fileName
+		if strings.HasPrefix(fileName, "Copy #") {
+			// Format: "Copy #N of filename.ext"
+			if idx := strings.Index(fileName, " of "); idx > 0 {
+				originalName = fileName[idx+4:]
+			}
+		}
+
+		// Build original path: /home/relative/path/to/file.txt
+		originalPath := "/home/" + relPath
+
+		meta[trashID] = TrashItem{
+			ID:           trashID,
+			Name:         originalName,
+			OriginalPath: originalPath,
+			Size:         info.Size(),
+			IsDir:        false,
+			DeletedAt:    info.ModTime(),
+		}
+		knownIDs[trashID] = true
+		modified = true
+
+		return nil
+	})
+
+	if err != nil {
+		return
+	}
+
+	// Save updated metadata
+	if modified {
+		_ = h.saveTrashMeta(username, meta)
+	}
+}
+
+// cleanupEmptySMBDirs removes empty parent directories after restoring SMB files
+func (h *Handler) cleanupEmptySMBDirs(username string, restoredPath string) {
+	smbTrashPath := filepath.Join(h.getTrashPath(username), ".smb")
+
+	// Walk up the directory tree and remove empty directories
+	dir := filepath.Dir(restoredPath)
+	for dir != smbTrashPath && strings.HasPrefix(dir, smbTrashPath) {
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) > 0 {
+			break
+		}
+		if err := os.Remove(dir); err != nil {
+			break
+		}
+		dir = filepath.Dir(dir)
+	}
+}
+
 // MoveToTrash moves a file or folder to trash instead of deleting permanently
 // @Summary		Move to trash
 // @Description	Move a file or folder to the user's trash (soft delete)
@@ -184,6 +311,9 @@ func (h *Handler) ListTrash(c echo.Context) error {
 		return RespondError(c, ErrUnauthorized(""))
 	}
 
+	// Sync SMB trash items (files added by Samba vfs_recycle)
+	h.syncSMBTrash(claims.Username)
+
 	meta, err := h.loadTrashMeta(claims.Username)
 	if err != nil {
 		return RespondError(c, ErrOperationFailed("load trash", err))
@@ -243,10 +373,37 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 		return RespondError(c, ErrNotFound("Trash item"))
 	}
 
-	// Resolve original path
-	realPath, _, _, err := h.resolvePath(item.OriginalPath, claims)
-	if err != nil {
-		return RespondError(c, ErrInvalidPath("Cannot restore to original location"))
+	// Determine restore path and trash item location
+	var realPath string
+	var trashItemPath string
+	restorePath := item.OriginalPath
+
+	// Check if this is an SMB-deleted file (ID starts with "smb_")
+	isSMBFile := strings.HasPrefix(trashID, "smb_")
+
+	if isSMBFile {
+		// SMB files are stored in .smb subdirectory with original path structure
+		// originalPath is like "/home/folder/file.txt"
+		// actual location is "/data/trash/{username}/.smb/folder/file.txt"
+		relPath := strings.TrimPrefix(item.OriginalPath, "/home/")
+		trashItemPath = filepath.Join(h.getTrashPath(claims.Username), ".smb", relPath)
+
+		// Resolve destination path
+		var err error
+		realPath, _, _, err = h.resolvePath(item.OriginalPath, claims)
+		if err != nil {
+			return RespondError(c, ErrInvalidPath("Cannot restore to original location"))
+		}
+	} else {
+		// Normal trash items
+		trashItemPath = filepath.Join(h.getTrashPath(claims.Username), trashID)
+
+		// Resolve original path
+		var err error
+		realPath, _, _, err = h.resolvePath(item.OriginalPath, claims)
+		if err != nil {
+			return RespondError(c, ErrInvalidPath("Cannot restore to original location"))
+		}
 	}
 
 	// Check if destination already exists
@@ -255,6 +412,10 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 		ext := filepath.Ext(realPath)
 		base := strings.TrimSuffix(realPath, ext)
 		realPath = fmt.Sprintf("%s_restored_%d%s", base, time.Now().Unix(), ext)
+		// Update restorePath to reflect the new name
+		ext = filepath.Ext(restorePath)
+		base = strings.TrimSuffix(restorePath, ext)
+		restorePath = fmt.Sprintf("%s_restored_%d%s", base, time.Now().Unix(), ext)
 	}
 
 	// Ensure parent directory exists
@@ -264,9 +425,13 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 	}
 
 	// Move back from trash
-	trashItemPath := filepath.Join(h.getTrashPath(claims.Username), trashID)
 	if err := os.Rename(trashItemPath, realPath); err != nil {
 		return RespondError(c, ErrOperationFailed("restore item", err))
+	}
+
+	// For SMB files, clean up empty parent directories in .smb
+	if isSMBFile {
+		h.cleanupEmptySMBDirs(claims.Username, trashItemPath)
 	}
 
 	// Update metadata
@@ -274,7 +439,7 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 	_ = h.saveTrashMeta(claims.Username, meta)
 
 	// Log restore event for recent files tracking
-	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", item.OriginalPath, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", restorePath, map[string]interface{}{
 		"trashId": trashID,
 	})
 
@@ -285,7 +450,7 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success":      true,
-		"restoredPath": item.OriginalPath,
+		"restoredPath": restorePath,
 	})
 }
 
@@ -485,6 +650,63 @@ func (h *Handler) runTrashCleanup(retentionDays int) {
 		fmt.Printf("[Trash] Auto-cleanup completed: deleted %d items (%.2f MB) older than %d days\n",
 			totalCleaned, float64(totalSize)/(1024*1024), retentionDays)
 	}
+}
+
+// MoveToTrashInternal moves a file to trash (internal use for WebDAV/SMB)
+// This function is used by WebDAV RemoveAll to support trash functionality
+func (h *Handler) MoveToTrashInternal(username, userID, virtualPath, realPath string) error {
+	// 1. Check if file exists
+	info, err := os.Stat(realPath)
+	if err != nil {
+		return err
+	}
+
+	// 2. Create trash directory
+	trashPath := h.getTrashPath(username)
+	if err := os.MkdirAll(trashPath, 0755); err != nil {
+		return err
+	}
+
+	// 3. Generate unique ID and move to trash
+	trashID := fmt.Sprintf("%d_%s", time.Now().UnixNano(), info.Name())
+	trashItemPath := filepath.Join(trashPath, trashID)
+
+	if err := os.Rename(realPath, trashItemPath); err != nil {
+		return err
+	}
+
+	// 4. Calculate size
+	var size int64
+	if info.IsDir() {
+		size, _ = h.calculateDirSize(trashItemPath)
+	} else {
+		size = info.Size()
+	}
+
+	// 5. Save metadata
+	meta, _ := h.loadTrashMeta(username)
+	meta[trashID] = TrashItem{
+		ID:           trashID,
+		Name:         info.Name(),
+		OriginalPath: virtualPath,
+		Size:         size,
+		IsDir:        info.IsDir(),
+		DeletedAt:    time.Now(),
+	}
+	_ = h.saveTrashMeta(username, meta)
+
+	// 6. Update storage tracking
+	_ = h.UpdateStorageForMove(userID, size, true)
+
+	// 7. Log event
+	_ = h.auditHandler.LogEvent(&userID, "", EventFileDelete, virtualPath, map[string]interface{}{
+		"isDir":   info.IsDir(),
+		"size":    size,
+		"trashId": trashID,
+		"source":  "webdav",
+	})
+
+	return nil
 }
 
 // GetTrashStats returns statistics about trash usage

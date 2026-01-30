@@ -27,6 +27,12 @@
    printcap name = /dev/null
    disable spoolss = yes
 
+   # Reduce caching for better real-time sync
+   oplocks = no
+   level2 oplocks = no
+   kernel oplocks = no
+   strict locking = no
+
 # Shared drives - team folders accessible by all authenticated users
 [shared]
    path = /data/shared
@@ -38,9 +44,17 @@
    directory mask = 0775
    valid users = @users
    force group = users
+   # VFS modules: recycle (trash) + audit
+   vfs objects = recycle full_audit
+   # Recycle bin settings - integrates with web UI trash
+   recycle:repository = /data/trash/%U/.smb
+   recycle:keeptree = yes
+   recycle:versions = yes
+   recycle:touch = yes
+   recycle:maxsize = 0
+   recycle:exclude = *.tmp, ~$*, .DS_Store, Thumbs.db
+   recycle:exclude_dir = .Trash, @eaDir
    # Audit logging for file operations (Samba 4.22+ operation names)
-   # openat: file open/create, mkdirat: folder create, unlinkat: delete, renameat: rename
-   vfs objects = full_audit
    full_audit:prefix = SMB_AUDIT|%u|%I|%m|%S
    full_audit:success = openat mkdirat unlinkat renameat
    full_audit:failure = none
@@ -57,9 +71,17 @@
    create mask = 0644
    directory mask = 0755
    path = /data/users/%U
+   # VFS modules: recycle (trash) + audit
+   vfs objects = recycle full_audit
+   # Recycle bin settings - integrates with web UI trash
+   recycle:repository = /data/trash/%U/.smb
+   recycle:keeptree = yes
+   recycle:versions = yes
+   recycle:touch = yes
+   recycle:maxsize = 0
+   recycle:exclude = *.tmp, ~$*, .DS_Store, Thumbs.db
+   recycle:exclude_dir = .Trash, @eaDir
    # Audit logging for file operations (Samba 4.22+ operation names)
-   # openat: file open/create, mkdirat: folder create, unlinkat: delete, renameat: rename
-   vfs objects = full_audit
    full_audit:prefix = SMB_AUDIT|%u|%I|%m|%S
    full_audit:success = openat mkdirat unlinkat renameat
    full_audit:failure = none

@@ -7,10 +7,26 @@ AUDIT_LOG="/etc/filehatch/smb_audit.log"
 
 echo "[FileHatch-Samba] Starting user sync service..."
 
-# Copy default smb.conf if not exists or is empty
-# -s checks if file exists AND has size > 0
-if [ ! -s "/etc/samba/smb.conf" ] && [ -f "/smb.conf.template" ]; then
-    echo "[FileHatch-Samba] Installing default smb.conf..."
+# SMB configuration priority:
+# 1. User custom config with recycle settings at /etc/filehatch/smb.conf
+# 2. Default template from /smb.conf.template (also used if old config without recycle)
+USER_SMB_CONF="/etc/filehatch/smb.conf"
+if [ -s "$USER_SMB_CONF" ]; then
+    # Check if config has recycle settings (new format with trash integration)
+    if grep -q "vfs objects.*recycle" "$USER_SMB_CONF" 2>/dev/null; then
+        echo "[FileHatch-Samba] Using custom smb.conf from $USER_SMB_CONF (recycle enabled)"
+        cat "$USER_SMB_CONF" > /etc/samba/smb.conf
+    else
+        # Old format without recycle settings - auto-upgrade with backup
+        echo "[FileHatch-Samba] Detected old smb.conf format (no recycle bin settings)"
+        BACKUP_FILE="${USER_SMB_CONF}.bak.$(date +%Y%m%d%H%M%S)"
+        cp "$USER_SMB_CONF" "$BACKUP_FILE"
+        echo "[FileHatch-Samba] Backed up old config to $BACKUP_FILE"
+        echo "[FileHatch-Samba] Applying new template with trash integration..."
+        cat /smb.conf.template > /etc/samba/smb.conf
+    fi
+elif [ -f "/smb.conf.template" ]; then
+    echo "[FileHatch-Samba] Installing default smb.conf from template..."
     cat /smb.conf.template > /etc/samba/smb.conf
 fi
 

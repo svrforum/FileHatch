@@ -627,7 +627,7 @@ func main() {
 	}
 
 	// WebDAV handler
-	webdavHandler := handlers.NewWebDAVHandler(db, dataRoot)
+	webdavHandler := handlers.NewWebDAVHandler(db, dataRoot, h)
 
 	// Get port from environment or default
 	port := os.Getenv("PORT")

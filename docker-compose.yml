@@ -85,7 +85,7 @@ services:
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${CONFIG_PATH:-./config}:/etc/filehatch
-      - ${CONFIG_PATH:-./config}/smb.conf:/etc/samba/smb.conf:ro
+      # smb.conf is now managed by the container (entrypoint.sh copies from template)
     healthcheck:
       test: ["CMD-SHELL", "pgrep -x smbd > /dev/null && pgrep -x nmbd > /dev/null"]
       interval: 15s
