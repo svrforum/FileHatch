@@ -10,7 +10,7 @@
 
 > **Beta**: This project is currently in beta. Thorough testing is recommended before production use.
 
-[![Go Version](https://img.shields.io/badge/Go-1.23-00ADD8?logo=go)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go)](https://golang.org/)
 [![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)](https://www.docker.com/)
@@ -36,8 +36,8 @@ FileHatch is a secure and feature-rich self-hosted cloud storage solution. It ca
 ### Backend (Go API Server)
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| Go | 1.23 | Main language |
-| Echo | v4.12 | Web framework |
+| Go | 1.24 | Main language |
+| Echo | v4.15 | Web framework |
 | PostgreSQL | 17 | Primary database |
 | Valkey | 8.1 | Cache/Session (Redis compatible) |
 | TUS | v2.4 | Resumable file uploads |
@@ -66,7 +66,7 @@ FileHatch is a secure and feature-rich self-hosted cloud storage solution. It ca
 | Express.js 4.21 | UI reverse proxy |
 | Samba 4.20 | SMB/CIFS file sharing |
 | OnlyOffice (optional) | Office document editing |
-| Keycloak 26.4 (optional) | SSO/OIDC authentication |
+| Keycloak 26.5.1 (optional) | SSO/OIDC authentication |
 
 ---
 
@@ -93,6 +93,11 @@ FileHatch is a secure and feature-rich self-hosted cloud storage solution. It ca
   - Folder structure preserving uploads
   - Upload progress and speed display
   - Upload pause/resume/cancel
+  - Upload panel (overall progress, individual file management)
+- **Transfer Operations (Move/Copy/Compress)**
+  - Background task support
+  - Transfer panel (progress, speed, time remaining)
+  - Task cancellation
 - **Download**
   - Individual file download
   - ZIP folder download (with caching)
@@ -105,6 +110,12 @@ FileHatch is a secure and feature-rich self-hosted cloud storage solution. It ca
   - Batch operations (delete, download)
   - File locking (prevent concurrent editing)
   - Favorites/star feature
+  - File compression/extraction (ZIP)
+- **File Metadata**
+  - File description
+  - Tag system (with autocomplete)
+  - Tag-based search
+  - Marquee selection (drag to select area)
 - **File Creation**
   - Text files (txt, md, html, json)
   - Office documents (docx, xlsx, pptx)
@@ -116,18 +127,21 @@ FileHatch is a secure and feature-rich self-hosted cloud storage solution. It ca
 ### File Preview and Editing
 - **Preview Support**
   - Images (JPEG, PNG, GIF, WebP, SVG)
-  - Videos (MP4, WebM, MOV)
-  - Audio (MP3, WAV, OGG)
-  - PDF documents
-  - Text/code files
-  - ZIP files (content browsing and extraction)
+  - Videos (MP4, WebM, MOV) - inline player
+  - Audio (MP3, WAV, OGG) - inline player
+  - PDF documents - page navigation, zoom
+  - Text/code files - syntax highlighting
+  - ZIP files (content browsing, individual file download, extraction)
 - **Thumbnail System**
   - Automatic thumbnail generation
   - Responsive sizes (64px ~ 512px)
   - Disk + Valkey dual caching
 - **Document Editing**
   - Monaco Editor-based text/code editing
-  - Syntax highlighting support
+    - Syntax highlighting (JavaScript, TypeScript, Python, Go, etc.)
+    - Find and replace
+    - Line numbers, code folding
+    - Auto-save
   - OnlyOffice integration (optional)
     - Word, Excel, PowerPoint editing
     - Real-time auto-save
@@ -200,9 +214,30 @@ FileHatch fully supports the WebDAV protocol, allowing file access from various 
 - **Responsive Design**: Mobile/tablet support
 - **Virtual Scrolling**: Large folder performance optimization (100+ files)
 - **Context Menu**: Right-click quick actions
-- **Keyboard Shortcuts**: File navigation and operations
+- **Keyboard Shortcuts**: File navigation and operations (see table below)
 - **File Details Panel**: Metadata, statistics display
 - **Toast Notifications**: Operation result feedback
+
+#### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `↑` / `↓` / `←` / `→` | Navigate files |
+| `Enter` | Open file/folder |
+| `Delete` | Move to trash |
+| `F2` | Rename |
+| `Ctrl+C` | Copy |
+| `Ctrl+X` | Cut |
+| `Ctrl+V` | Paste |
+| `Ctrl+Z` | Undo |
+| `Ctrl+Y` | Redo |
+| `Ctrl+F` | Search |
+| `Ctrl+A` | Select all |
+| `Space` | Toggle selection |
+| `Shift+Click` | Range select |
+| `Ctrl+Click` | Multi-select |
+| `ESC` | Close modal / Clear selection |
+| Type characters | Type-ahead search (jump to filename) |
 
 ### Admin Features
 - **User Management**: CRUD, activate/deactivate
@@ -623,6 +658,9 @@ FileHatch/
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/auth/login` | Login |
+| POST | `/api/auth/logout` | Logout |
+| POST | `/api/auth/initial-setup` | Initial admin setup |
+| GET | `/api/auth/initial-setup/status` | Check initial setup status |
 | POST | `/api/auth/2fa/verify` | 2FA code verification |
 | GET | `/api/auth/profile` | Get profile |
 | PUT | `/api/auth/profile` | Update profile |
@@ -652,6 +690,9 @@ FileHatch/
 | POST | `/api/folders` | Create folder |
 | GET | `/api/folders/stats/*` | Folder stats |
 | GET | `/api/zip/*` | ZIP download |
+| POST | `/api/files/compress` | Compress files/folders |
+| POST | `/api/files/extract` | Extract ZIP archive |
+| GET | `/api/zip/preview/*` | Preview ZIP file contents |
 
 ### Upload (TUS Protocol)
 
@@ -741,8 +782,10 @@ FileHatch/
 | ANY | `/api/webdav/*` | WebDAV access |
 | GET | `/api/storage/usage` | Storage usage |
 | GET | `/api/thumbnail/*` | Get thumbnail |
-| GET | `/api/metadata/*` | File metadata |
-| PUT | `/api/metadata/*` | Update metadata |
+| GET | `/api/file-metadata/*` | Get file metadata |
+| PUT | `/api/file-metadata/*` | Update metadata (description, tags) |
+| DELETE | `/api/file-metadata/*` | Delete metadata |
+| GET | `/api/file-metadata/tags` | User tag list (for autocomplete) |
 | GET | `/api/trash` | Trash list |
 | POST | `/api/trash/restore/:id` | Restore from trash |
 | DELETE | `/api/trash/:id` | Permanent delete |

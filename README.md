@@ -10,7 +10,7 @@
 
 > **Beta**: 이 프로젝트는 현재 베타 단계입니다. 프로덕션 사용 전 충분한 테스트를 권장합니다.
 
-[![Go Version](https://img.shields.io/badge/Go-1.23-00ADD8?logo=go)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go)](https://golang.org/)
 [![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)](https://www.docker.com/)
@@ -36,8 +36,8 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
 ### Backend (Go API Server)
 | 기술 | 버전 | 용도 |
 |------|------|------|
-| Go | 1.23 | 메인 언어 |
-| Echo | v4.12 | 웹 프레임워크 |
+| Go | 1.24 | 메인 언어 |
+| Echo | v4.15 | 웹 프레임워크 |
 | PostgreSQL | 17 | 주 데이터베이스 |
 | Valkey | 8.1 | 캐시/세션 (Redis 호환) |
 | TUS | v2.4 | 재개 가능한 파일 업로드 |
@@ -66,7 +66,7 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
 | Express.js 4.21 | UI 리버스 프록시 |
 | Samba 4.20 | SMB/CIFS 파일 공유 |
 | OnlyOffice (선택) | Office 문서 편집 |
-| Keycloak 26.4 (선택) | SSO/OIDC 인증 |
+| Keycloak 26.5.1 (선택) | SSO/OIDC 인증 |
 
 ---
 
@@ -93,6 +93,11 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
   - 폴더 구조 유지 업로드
   - 업로드 진행률 및 속도 표시
   - 업로드 일시정지/재개/취소
+  - 업로드 패널 (전체 진행 상황, 개별 파일 관리)
+- **전송 작업 (이동/복사/압축)**
+  - 백그라운드 작업 지원
+  - 전송 패널 (진행률, 속도, 남은 시간)
+  - 작업 취소 가능
 - **다운로드**
   - 개별 파일 다운로드
   - ZIP 폴더 다운로드 (캐싱 지원)
@@ -105,6 +110,12 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
   - 일괄 작업 (삭제, 다운로드)
   - 파일 잠금 (동시 편집 방지)
   - 즐겨찾기/별표 기능
+  - 파일 압축/압축 해제 (ZIP)
+- **파일 메타데이터**
+  - 파일 설명 (description) 추가
+  - 태그 시스템 (자동완성 지원)
+  - 태그 기반 검색
+  - 마르키 선택 (드래그로 영역 선택)
 - **파일 생성**
   - 텍스트 파일 (txt, md, html, json)
   - Office 문서 (docx, xlsx, pptx)
@@ -116,18 +127,21 @@ FileHatch는 기업 환경에서 사용할 수 있는 안전하고 기능이 풍
 ### 파일 미리보기 및 편집
 - **미리보기 지원**
   - 이미지 (JPEG, PNG, GIF, WebP, SVG)
-  - 비디오 (MP4, WebM, MOV)
-  - 오디오 (MP3, WAV, OGG)
-  - PDF 문서
-  - 텍스트/코드 파일
-  - ZIP 파일 (내용 탐색 및 압축 해제)
+  - 비디오 (MP4, WebM, MOV) - 인라인 플레이어
+  - 오디오 (MP3, WAV, OGG) - 인라인 플레이어
+  - PDF 문서 - 페이지 네비게이션, 확대/축소
+  - 텍스트/코드 파일 - 구문 강조
+  - ZIP 파일 (내용 탐색, 개별 파일 다운로드, 압축 해제)
 - **썸네일 시스템**
   - 자동 썸네일 생성
   - 반응형 크기 (64px ~ 512px)
   - 디스크 + Valkey 이중 캐싱
 - **문서 편집**
   - Monaco Editor 기반 텍스트/코드 편집
-  - 구문 강조 지원
+    - 구문 강조 (JavaScript, TypeScript, Python, Go 등)
+    - 검색 및 바꾸기
+    - 줄 번호, 코드 접기
+    - 자동 저장
   - OnlyOffice 통합 (선택)
     - Word, Excel, PowerPoint 편집
     - 실시간 자동 저장
@@ -200,9 +214,30 @@ FileHatch는 WebDAV 프로토콜을 완벽하게 지원하여 다양한 클라�
 - **반응형 디자인**: 모바일/태블릿 지원
 - **가상 스크롤**: 대용량 폴더 성능 최적화 (100+ 파일)
 - **컨텍스트 메뉴**: 우클릭 빠른 작업
-- **키보드 단축키**: 파일 탐색 및 작업
+- **키보드 단축키**: 파일 탐색 및 작업 (아래 표 참조)
 - **파일 상세 패널**: 메타데이터, 통계 표시
 - **토스트 알림**: 작업 결과 피드백
+
+#### 키보드 단축키
+
+| 단축키 | 동작 |
+|--------|------|
+| `↑` / `↓` / `←` / `→` | 파일 탐색 |
+| `Enter` | 파일/폴더 열기 |
+| `Delete` | 휴지통으로 이동 |
+| `F2` | 이름 변경 |
+| `Ctrl+C` | 복사 |
+| `Ctrl+X` | 잘라내기 |
+| `Ctrl+V` | 붙여넣기 |
+| `Ctrl+Z` | 실행 취소 |
+| `Ctrl+Y` | 다시 실행 |
+| `Ctrl+F` | 검색 |
+| `Ctrl+A` | 전체 선택 |
+| `Space` | 선택 토글 |
+| `Shift+클릭` | 범위 선택 |
+| `Ctrl+클릭` | 다중 선택 |
+| `ESC` | 모달 닫기 / 선택 해제 |
+| 문자 입력 | 타입어헤드 검색 (파일명으로 이동) |
 
 ### 관리자 기능
 - **사용자 관리**: CRUD, 활성화/비활성화
@@ -618,6 +653,9 @@ FileHatch/
 | Method | Endpoint | 설명 |
 |--------|----------|------|
 | POST | `/api/auth/login` | 로그인 |
+| POST | `/api/auth/logout` | 로그아웃 |
+| POST | `/api/auth/initial-setup` | 초기 관리자 설정 |
+| GET | `/api/auth/initial-setup/status` | 초기 설정 상태 확인 |
 | POST | `/api/auth/2fa/verify` | 2FA 코드 검증 |
 | GET | `/api/auth/profile` | 프로필 조회 |
 | PUT | `/api/auth/profile` | 프로필 수정 |
@@ -647,6 +685,9 @@ FileHatch/
 | POST | `/api/folders` | 폴더 생성 |
 | GET | `/api/folders/stats/*` | 폴더 통계 |
 | GET | `/api/zip/*` | ZIP 다운로드 |
+| POST | `/api/files/compress` | 파일/폴더 압축 |
+| POST | `/api/files/extract` | ZIP 압축 해제 |
+| GET | `/api/zip/preview/*` | ZIP 파일 내용 미리보기 |
 
 ### 업로드 (TUS 프로토콜)
 
@@ -736,8 +777,10 @@ FileHatch/
 | ANY | `/api/webdav/*` | WebDAV 접근 |
 | GET | `/api/storage/usage` | 스토리지 사용량 |
 | GET | `/api/thumbnail/*` | 썸네일 조회 |
-| GET | `/api/metadata/*` | 파일 메타데이터 |
-| PUT | `/api/metadata/*` | 메타데이터 수정 |
+| GET | `/api/file-metadata/*` | 파일 메타데이터 조회 |
+| PUT | `/api/file-metadata/*` | 메타데이터 수정 (설명, 태그) |
+| DELETE | `/api/file-metadata/*` | 메타데이터 삭제 |
+| GET | `/api/file-metadata/tags` | 사용자 태그 목록 (자동완성용) |
 | GET | `/api/trash` | 휴지통 목록 |
 | POST | `/api/trash/restore/:id` | 휴지통 복원 |
 | DELETE | `/api/trash/:id` | 영구 삭제 |
