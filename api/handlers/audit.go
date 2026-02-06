@@ -2,27 +2,142 @@ package handlers
 
 import (
 	"bufio"
+	"context"
 	"database/sql"
 	"encoding/json"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/labstack/echo/v4"
 )
 
+// auditEntry represents a buffered audit log entry
+type auditEntry struct {
+	actorID        *string
+	ipAddr         string
+	eventType      string
+	targetResource string
+	detailsJSON    []byte
+}
+
 type AuditHandler struct {
 	db              *sql.DB
 	baseStoragePath string
+	eventCh         chan auditEntry
+	stopOnce        sync.Once
+	done            chan struct{}
 }
 
+const auditBufferSize = 1000
+const auditFlushInterval = 500 * time.Millisecond
+
 func NewAuditHandler(db *sql.DB, baseStoragePath string) *AuditHandler {
-	return &AuditHandler{db: db, baseStoragePath: baseStoragePath}
+	h := &AuditHandler{
+		db:              db,
+		baseStoragePath: baseStoragePath,
+		eventCh:         make(chan auditEntry, auditBufferSize),
+		done:            make(chan struct{}),
+	}
+	go h.flushLoop()
+	return h
 }
+
+// StopAuditLogger drains the buffer and stops the flush goroutine
+func (h *AuditHandler) StopAuditLogger() {
+	h.stopOnce.Do(func() {
+		close(h.eventCh)
+		<-h.done // wait for flush goroutine to finish
+	})
+}
+
+func (h *AuditHandler) flushLoop() {
+	defer close(h.done)
+	ticker := time.NewTicker(auditFlushInterval)
+	defer ticker.Stop()
+
+	var buf []auditEntry
+
+	for {
+		select {
+		case entry, ok := <-h.eventCh:
+			if !ok {
+				// Channel closed, flush remaining
+				if len(buf) > 0 {
+					h.flushBatch(buf)
+				}
+				return
+			}
+			buf = append(buf, entry)
+			if len(buf) >= 50 {
+				h.flushBatch(buf)
+				buf = buf[:0]
+			}
+		case <-ticker.C:
+			if len(buf) > 0 {
+				h.flushBatch(buf)
+				buf = buf[:0]
+			}
+		}
+	}
+}
+
+func (h *AuditHandler) flushBatch(entries []auditEntry) {
+	if len(entries) == 0 {
+		return
+	}
+
+	// Single entry fast path
+	if len(entries) == 1 {
+		e := entries[0]
+		_, err := h.db.Exec(`
+			INSERT INTO audit_logs (actor_id, ip_addr, event_type, target_resource, details)
+			VALUES ($1, $2::inet, $3, $4, $5)
+		`, e.actorID, e.ipAddr, e.eventType, e.targetResource, e.detailsJSON)
+		if err != nil {
+			log.Printf("[Audit] Failed to insert log: %v", err)
+		}
+		return
+	}
+
+	// Batch insert using a transaction
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		log.Printf("[Audit] Failed to begin batch tx: %v", err)
+		return
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO audit_logs (actor_id, ip_addr, event_type, target_resource, details)
+		VALUES ($1, $2::inet, $3, $4, $5)
+	`)
+	if err != nil {
+		log.Printf("[Audit] Failed to prepare batch stmt: %v", err)
+		return
+	}
+	defer stmt.Close()
+
+	for _, e := range entries {
+		if _, err := stmt.ExecContext(ctx, e.actorID, e.ipAddr, e.eventType, e.targetResource, e.detailsJSON); err != nil {
+			log.Printf("[Audit] Failed to insert log entry: %v", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("[Audit] Failed to commit batch: %v", err)
+	}
+}
+
 
 // resolveDisplayPath converts a display path to a real filesystem path
 func (h *AuditHandler) resolveDisplayPath(displayPath, username string) string {
@@ -115,16 +230,27 @@ const (
 	EventIPUnlocked       = "security.ip_unlocked"
 )
 
-// LogEvent records an audit event
+// LogEvent records an audit event asynchronously via a buffered channel
 func (h *AuditHandler) LogEvent(actorID *string, ipAddr, eventType, targetResource string, details map[string]interface{}) error {
 	detailsJSON, _ := json.Marshal(details)
 
-	_, err := h.db.Exec(`
-		INSERT INTO audit_logs (actor_id, ip_addr, event_type, target_resource, details)
-		VALUES ($1, $2::inet, $3, $4, $5)
-	`, actorID, ipAddr, eventType, targetResource, detailsJSON)
-
-	return err
+	select {
+	case h.eventCh <- auditEntry{
+		actorID:        actorID,
+		ipAddr:         ipAddr,
+		eventType:      eventType,
+		targetResource: targetResource,
+		detailsJSON:    detailsJSON,
+	}:
+		return nil
+	default:
+		// Buffer full, fall back to synchronous insert
+		_, err := h.db.Exec(`
+			INSERT INTO audit_logs (actor_id, ip_addr, event_type, target_resource, details)
+			VALUES ($1, $2::inet, $3, $4, $5)
+		`, actorID, ipAddr, eventType, targetResource, detailsJSON)
+		return err
+	}
 }
 
 // LogEventFromContext logs an event using context information

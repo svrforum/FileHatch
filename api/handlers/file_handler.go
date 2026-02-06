@@ -299,16 +299,39 @@ func (h *Handler) SaveFileContent(c echo.Context) error {
 		return RespondError(c, ErrBadRequest("Path is a directory"))
 	}
 
-	// Read request body
-	body, err := io.ReadAll(c.Request().Body)
+	// Stream request body to temp file to avoid buffering entire content in memory
+	dir := filepath.Dir(realPath)
+	tmpFile, err := os.CreateTemp(dir, ".fh-save-*")
 	if err != nil {
-		return RespondError(c, ErrBadRequest("Failed to read request body"))
+		return RespondError(c, ErrOperationFailed("create temp file", err))
+	}
+	tmpPath := tmpFile.Name()
+
+	// Clean up temp file on any failure
+	defer func() {
+		if tmpPath != "" {
+			os.Remove(tmpPath)
+		}
+	}()
+
+	written, err := io.Copy(tmpFile, c.Request().Body)
+	if closeErr := tmpFile.Close(); closeErr != nil && err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return RespondError(c, ErrOperationFailed("write file content", err))
 	}
 
-	// Write to file
-	if err := os.WriteFile(realPath, body, 0644); err != nil {
+	// Preserve original file permissions
+	if perm := info.Mode().Perm(); perm != 0 {
+		_ = os.Chmod(tmpPath, perm)
+	}
+
+	// Atomic rename
+	if err := os.Rename(tmpPath, realPath); err != nil {
 		return RespondError(c, ErrOperationFailed("save file", err))
 	}
+	tmpPath = "" // prevent deferred cleanup
 
 	// Log the action
 	var userID *string
@@ -317,7 +340,7 @@ func (h *Handler) SaveFileContent(c echo.Context) error {
 	}
 	clientIP := c.RealIP()
 	_ = h.auditHandler.LogEvent(userID, clientIP, EventFileEdit, "/"+requestPath, map[string]any{
-		"size":        len(body),
+		"size":        written,
 		"storageType": storageType,
 		"isShared":    isSharedFile,
 	})
@@ -325,7 +348,7 @@ func (h *Handler) SaveFileContent(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{
 		"success": true,
 		"message": "File saved successfully",
-		"size":    len(body),
+		"size":    written,
 	})
 }
 

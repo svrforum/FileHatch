@@ -12,9 +12,8 @@ import {
   createFile,
   compressFiles,
   downloadAsZip,
-  downloadFileWithProgress
+  downloadFileDirect
 } from '../api/files'
-import { useUploadStore } from '../stores/uploadStore'
 
 export type ToastType = 'success' | 'error' | 'info'
 
@@ -40,8 +39,6 @@ export interface UseFileOperationsOptions {
 
 export function useFileOperations({ currentPath, onToast }: UseFileOperationsOptions) {
   const queryClient = useQueryClient()
-  // Use uploadStore for download progress (same store handles both)
-  const downloadStore = useUploadStore()
 
   // History for undo/redo
   const [historyState, setHistoryState] = useState<{
@@ -232,8 +229,8 @@ export function useFileOperations({ currentPath, onToast }: UseFileOperationsOpt
 
   // Download single file
   const download = useCallback((file: FileInfo) => {
-    downloadFileWithProgress(file.path, file.size, downloadStore)
-  }, [downloadStore])
+    downloadFileDirect(file.path)
+  }, [])
 
   // Download multiple files as zip
   const downloadMultipleAsZip = useCallback(async (paths: string[]) => {

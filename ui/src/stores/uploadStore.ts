@@ -34,6 +34,7 @@ export interface UploadItem {
 export interface DownloadItem {
   id: string
   filename: string
+  path: string      // Full path for duplicate checking
   size: number
   progress: number
   status: 'downloading' | 'completed' | 'error'
@@ -70,12 +71,13 @@ interface UploadState {
   setUpload: (id: string, upload: tus.Upload) => void
 
   // Download functions
-  addDownload: (filename: string, size: number) => string
+  addDownload: (filename: string, size: number, path: string) => string | null
   updateDownloadProgress: (id: string, progress: number) => void
   setDownloadStatus: (id: string, status: DownloadItem['status'], error?: string) => void
   setDownloadController: (id: string, controller: AbortController) => void
   removeDownload: (id: string) => void
   clearCompletedDownloads: () => void
+  isDownloading: (path: string) => boolean
 
   // Panel functions
   togglePanel: () => void
@@ -181,6 +183,17 @@ export const useUploadStore = create<UploadState>((set, get) => ({
       },
       onProgress: (bytesUploaded, bytesTotal) => {
         const progress = Math.round((bytesUploaded / bytesTotal) * 100)
+        const isComplete = bytesUploaded >= bytesTotal
+
+        // Throttle progress updates to every 200ms (always update on completion)
+        if (!isComplete) {
+          const currentItem = get().items.find((i) => i.id === id)
+          const now = Date.now()
+          if (currentItem?.lastUpdateTime && (now - currentItem.lastUpdateTime) < 200) {
+            return
+          }
+        }
+
         const currentItem = get().items.find((i) => i.id === id)
         const uploadSpeed = calculateUploadSpeed(
           bytesUploaded,
@@ -377,10 +390,14 @@ export const useUploadStore = create<UploadState>((set, get) => ({
   },
 
   // Download functions
-  addDownload: (filename, size) => {
+  addDownload: (filename, size, path) => {
+    // Check if already downloading this path
+    if (get().isDownloading(path)) {
+      return null
+    }
     const id = `dl-${Date.now()}-${Math.random().toString(36).slice(2)}`
     set((state) => ({
-      downloads: [...state.downloads, { id, filename, size, progress: 0, status: 'downloading' }],
+      downloads: [...state.downloads, { id, filename, path, size, progress: 0, status: 'downloading' }],
     }))
     return id
   },
@@ -415,6 +432,10 @@ export const useUploadStore = create<UploadState>((set, get) => ({
     set((state) => ({
       downloads: state.downloads.filter((i) => i.status !== 'completed'),
     }))
+  },
+
+  isDownloading: (path) => {
+    return get().downloads.some((d) => d.path === path && d.status === 'downloading')
   },
 
   // Panel functions

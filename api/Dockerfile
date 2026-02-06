@@ -16,7 +16,7 @@ COPY . .
 RUN go mod tidy && go mod download
 
 # Build binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o main .
 
 # Runtime stage
 FROM alpine:3.23

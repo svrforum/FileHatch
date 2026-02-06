@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
 import { getRecentFiles, RecentFile, downloadFile, FileInfo, getFolderStats, FolderStats, getFileMetadata, FileMetadata, updateFileMetadata, getStarredFiles, StarredFile } from '../api/files'
 import { getFileIcon } from '../utils/fileIcons'
 import { FileRow, FileCard, VirtualizedFileTable, FileInfoPanel, VIRTUALIZATION_THRESHOLD } from './filelist'
-import FileViewer from './FileViewer'
-import TextEditor from './TextEditor'
+const FileViewer = lazy(() => import('./FileViewer'))
+const TextEditor = lazy(() => import('./TextEditor'))
 import './MyActivity.css'
 
 type FileTypeFilter = 'all' | 'document' | 'spreadsheet' | 'presentation' | 'image' | 'video' | 'audio' | 'archive' | 'folder'
@@ -774,24 +774,28 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
 
       {/* Text Editor */}
       {editingFile && (
-        <TextEditor
-          filePath={editingFile.path}
-          fileName={editingFile.name}
-          onClose={() => setEditingFile(null)}
-          onSaved={() => {}}
-        />
+        <Suspense fallback={null}>
+          <TextEditor
+            filePath={editingFile.path}
+            fileName={editingFile.name}
+            onClose={() => setEditingFile(null)}
+            onSaved={() => {}}
+          />
+        </Suspense>
       )}
 
       {/* File Viewer */}
       {viewingFile && (
-        <FileViewer
-          filePath={viewingFile.path}
-          fileName={viewingFile.name}
-          mimeType={viewingFile.mimeType}
-          onClose={() => setViewingFile(null)}
-          siblingFiles={displayFiles}
-          onNavigate={(file) => setViewingFile(file)}
-        />
+        <Suspense fallback={null}>
+          <FileViewer
+            filePath={viewingFile.path}
+            fileName={viewingFile.name}
+            mimeType={viewingFile.mimeType}
+            onClose={() => setViewingFile(null)}
+            siblingFiles={displayFiles}
+            onNavigate={(file) => setViewingFile(file)}
+          />
+        </Suspense>
       )}
     </div>
   )

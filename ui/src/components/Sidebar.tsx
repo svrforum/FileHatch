@@ -151,13 +151,13 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
   const safeDownloads = downloads || []
   const safeTransferItems = transferItems || []
 
-  // Fetch storage usage with React Query for real-time updates
+  // Fetch storage usage with React Query - longer cache to avoid blocking login
   const { data: storageUsage, isLoading: isStorageLoading } = useQuery({
     queryKey: ['storage-usage'],
     queryFn: getStorageUsage,
     enabled: !!token,
-    refetchInterval: 30000, // Still refresh every 30 seconds as backup
-    staleTime: 5000, // Consider data stale after 5 seconds
+    refetchInterval: 60000, // Refresh every 60 seconds
+    staleTime: 30000, // Consider data stale after 30 seconds
   })
 
   // Fetch version info

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bufio"
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -285,17 +286,31 @@ func (h *SMBAuditHandler) SyncSMBAuditLogs(c echo.Context) error {
 }
 
 // StartBackgroundSync starts a background goroutine that periodically syncs audit logs
-func (h *SMBAuditHandler) StartBackgroundSync(interval time.Duration) {
+// Accepts optional context for graceful shutdown
+func (h *SMBAuditHandler) StartBackgroundSync(interval time.Duration, ctx ...context.Context) {
+	var bgCtx context.Context
+	if len(ctx) > 0 && ctx[0] != nil {
+		bgCtx = ctx[0]
+	} else {
+		bgCtx = context.Background()
+	}
+
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
-		for range ticker.C {
-			count, err := h.ProcessAuditLog()
-			if err != nil {
-				fmt.Printf("SMB audit sync error: %v\n", err)
-			} else if count > 0 {
-				fmt.Printf("SMB audit sync: processed %d entries\n", count)
+		for {
+			select {
+			case <-bgCtx.Done():
+				fmt.Println("SMB audit sync: stopped")
+				return
+			case <-ticker.C:
+				count, err := h.ProcessAuditLog()
+				if err != nil {
+					fmt.Printf("SMB audit sync error: %v\n", err)
+				} else if count > 0 {
+					fmt.Printf("SMB audit sync: processed %d entries\n", count)
+				}
 			}
 		}
 	}()

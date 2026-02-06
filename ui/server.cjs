@@ -10,6 +10,9 @@ const ONLYOFFICE_URL = process.env.ONLYOFFICE_URL || 'http://onlyoffice';
 const ONLYOFFICE_PUBLIC_URL = process.env.ONLYOFFICE_PUBLIC_URL || '';
 const EXTERNAL_URL = process.env.EXTERNAL_URL || '';
 
+// Shared HTTP agent with keep-alive for connection reuse to API backend
+const keepAliveAgent = new http.Agent({ keepAlive: true, maxSockets: 100, keepAliveMsecs: 30000 });
+
 console.log('Starting server...');
 console.log('API_URL:', API_URL);
 console.log('ONLYOFFICE_URL:', ONLYOFFICE_URL);
@@ -57,6 +60,7 @@ const tusProxy = createProxyMiddleware({
   target: API_URL,
   changeOrigin: true,
   selfHandleResponse: true,
+  agent: keepAliveAgent,
   pathRewrite: (path, req) => {
     // Keep the full path including /api/upload
     return '/api/upload' + path;
@@ -113,6 +117,7 @@ const wsProxy = createProxyMiddleware({
 const apiProxy = createProxyMiddleware({
   target: API_URL,
   changeOrigin: true,
+  agent: keepAliveAgent,
   on: {
     proxyReq: (proxyReq, req, res) => {
       const host = req.headers.host || 'localhost:3000';
@@ -135,6 +140,7 @@ const apiProxy = createProxyMiddleware({
 const webdavProxy = createProxyMiddleware({
   target: API_URL,
   changeOrigin: true,
+  agent: keepAliveAgent,
   pathRewrite: (path, req) => {
     // Ensure path always starts with /webdav/
     let targetPath = req.originalUrl;

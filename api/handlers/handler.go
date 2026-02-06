@@ -567,70 +567,60 @@ func (h *Handler) CanWriteSharedDrive(userID, path string) bool {
 }
 
 // CheckSharedDriveQuota checks if upload would exceed storage quota
+// Uses the DB-tracked storage_used column instead of walking the filesystem
 func (h *Handler) CheckSharedDriveQuota(path string, uploadSize int64) (allowed bool, quota int64, used int64) {
 	folderName := ExtractSharedDriveFolderName(path)
 	if folderName == "" {
 		return false, 0, 0
 	}
 
-	// Get quota
+	// Get quota and current usage from DB in a single query
 	err := h.db.QueryRow(`
-		SELECT storage_quota FROM shared_folders WHERE name = $1 AND is_active = TRUE
-	`, folderName).Scan(&quota)
+		SELECT storage_quota, storage_used FROM shared_folders WHERE name = $1 AND is_active = TRUE
+	`, folderName).Scan(&quota, &used)
 	if err != nil {
 		return false, 0, 0
 	}
 
 	// 0 = unlimited
 	if quota == 0 {
-		return true, 0, 0
+		return true, 0, used
 	}
-
-	// Calculate current usage
-	folderPath := filepath.Join(h.dataRoot, "shared", folderName)
-	_ = filepath.Walk(folderPath, func(_ string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() {
-			used += info.Size()
-		}
-		return nil
-	})
 
 	return (used + uploadSize) <= quota, quota, used
 }
 
+// mimeTypes is a package-level read-only map (safe for concurrent access)
+var mimeTypes = map[string]string{
+	// Images
+	"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+	"gif": "image/gif", "webp": "image/webp", "svg": "image/svg+xml",
+	"ico": "image/x-icon", "bmp": "image/bmp",
+	// Videos
+	"mp4": "video/mp4", "webm": "video/webm", "avi": "video/x-msvideo",
+	"mov": "video/quicktime", "mkv": "video/x-matroska",
+	// Audio
+	"mp3": "audio/mpeg", "wav": "audio/wav", "ogg": "audio/ogg",
+	"flac": "audio/flac", "m4a": "audio/mp4",
+	// Documents
+	"pdf": "application/pdf", "doc": "application/msword",
+	"docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	"xls": "application/vnd.ms-excel",
+	"xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	"ppt": "application/vnd.ms-powerpoint",
+	"pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+	// Text
+	"txt": "text/plain", "md": "text/markdown", "json": "application/json",
+	"xml": "application/xml", "html": "text/html", "css": "text/css",
+	"js": "application/javascript", "ts": "application/typescript",
+	// Archives
+	"zip": "application/zip", "rar": "application/x-rar-compressed",
+	"7z": "application/x-7z-compressed", "tar": "application/x-tar",
+	"gz": "application/gzip",
+}
+
 // getMimeType returns the MIME type for a file extension
 func getMimeType(ext string) string {
-	mimeTypes := map[string]string{
-		// Images
-		"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
-		"gif": "image/gif", "webp": "image/webp", "svg": "image/svg+xml",
-		"ico": "image/x-icon", "bmp": "image/bmp",
-		// Videos
-		"mp4": "video/mp4", "webm": "video/webm", "avi": "video/x-msvideo",
-		"mov": "video/quicktime", "mkv": "video/x-matroska",
-		// Audio
-		"mp3": "audio/mpeg", "wav": "audio/wav", "ogg": "audio/ogg",
-		"flac": "audio/flac", "m4a": "audio/mp4",
-		// Documents
-		"pdf": "application/pdf", "doc": "application/msword",
-		"docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-		"xls": "application/vnd.ms-excel",
-		"xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-		"ppt": "application/vnd.ms-powerpoint",
-		"pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-		// Text
-		"txt": "text/plain", "md": "text/markdown", "json": "application/json",
-		"xml": "application/xml", "html": "text/html", "css": "text/css",
-		"js": "application/javascript", "ts": "application/typescript",
-		// Archives
-		"zip": "application/zip", "rar": "application/x-rar-compressed",
-		"7z": "application/x-7z-compressed", "tar": "application/x-tar",
-		"gz": "application/gzip",
-	}
-
 	if mime, ok := mimeTypes[ext]; ok {
 		return mime
 	}

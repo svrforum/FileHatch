@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -215,10 +218,14 @@ func main() {
 	// Create SMB handler
 	smbHandler := handlers.NewSMBHandler(db, "/etc/filehatch")
 
+	// Create shutdown context for background goroutines
+	shutdownCtx, shutdownCancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer shutdownCancel()
+
 	// Create SMB Audit handler
 	smbAuditHandler := handlers.NewSMBAuditHandler(db, "/etc/filehatch")
 	// Start background sync every 30 seconds
-	smbAuditHandler.StartBackgroundSync(30 * time.Second)
+	smbAuditHandler.StartBackgroundSync(30*time.Second, shutdownCtx)
 
 	// Create Auth handler
 	authHandler := handlers.NewAuthHandler(db)
@@ -239,7 +246,7 @@ func main() {
 
 	// Create share expiration checker (runs every hour to notify about expiring links)
 	shareExpirationChecker := handlers.NewShareExpirationChecker(db, notificationService)
-	shareExpirationChecker.StartBackgroundCheck(1 * time.Hour)
+	shareExpirationChecker.StartBackgroundCheck(1*time.Hour, shutdownCtx)
 
 	// Create Share handler
 	shareHandler := handlers.NewShareHandler(db, dataRoot, auditHandler, notificationService)
@@ -645,14 +652,33 @@ func main() {
 		e.ServeHTTP(w, r)
 	})
 
-	// Start server
+	// Start server with graceful shutdown
 	log.Printf("Starting server on port %s", port)
 	log.Printf("WebDAV available at /webdav (use application password)")
 	server := &http.Server{
 		Addr:    ":" + port,
 		Handler: combinedHandler,
 	}
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Failed to start server: %v", err)
+
+	// Start server in a goroutine
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
+
+	// Wait for shutdown signal
+	<-shutdownCtx.Done()
+	log.Println("Shutting down server...")
+
+	// Flush audit logs before exit
+	auditHandler.StopAuditLogger()
+
+	// Give active connections 10 seconds to finish
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("Server forced to shutdown: %v", err)
 	}
+	log.Println("Server stopped")
 }

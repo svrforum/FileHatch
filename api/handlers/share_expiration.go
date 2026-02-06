@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -28,7 +29,15 @@ func NewShareExpirationChecker(db *sql.DB, notificationService *NotificationServ
 
 // StartBackgroundCheck starts the background expiration check routine
 // Checks every hour for shares expiring within the next 24 hours
-func (c *ShareExpirationChecker) StartBackgroundCheck(checkInterval time.Duration) {
+// Accepts a context for graceful shutdown
+func (c *ShareExpirationChecker) StartBackgroundCheck(checkInterval time.Duration, ctx ...context.Context) {
+	var bgCtx context.Context
+	if len(ctx) > 0 && ctx[0] != nil {
+		bgCtx = ctx[0]
+	} else {
+		bgCtx = context.Background()
+	}
+
 	go func() {
 		// Initial check on startup
 		c.checkExpiringShares()
@@ -36,8 +45,14 @@ func (c *ShareExpirationChecker) StartBackgroundCheck(checkInterval time.Duratio
 		ticker := time.NewTicker(checkInterval)
 		defer ticker.Stop()
 
-		for range ticker.C {
-			c.checkExpiringShares()
+		for {
+			select {
+			case <-bgCtx.Done():
+				log.Println("[ShareExpiration] Background checker stopped")
+				return
+			case <-ticker.C:
+				c.checkExpiringShares()
+			}
 		}
 	}()
 	log.Printf("[ShareExpiration] Background checker started (interval: %v)", checkInterval)

@@ -318,4 +318,4 @@ const FileRow = React.forwardRef<HTMLDivElement, FileRowProps>(({
 
 FileRow.displayName = 'FileRow'
 
-export default FileRow
+export default React.memo(FileRow)

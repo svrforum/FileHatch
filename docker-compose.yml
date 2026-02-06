@@ -103,6 +103,16 @@ services:
       - POSTGRES_USER=${DB_USER:-fh_user}
       - POSTGRES_PASSWORD=${DB_PASS:-fh_password}
       - POSTGRES_DB=${DB_NAME:-fh_main}
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=512MB"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "log_min_duration_statement=1000"
     volumes:
       - ${DATABASE_PATH:-./database}:/var/lib/postgresql/data
     healthcheck:

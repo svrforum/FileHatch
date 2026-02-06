@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { useUploadStore, UploadItem } from '../stores/uploadStore'
+import { useEffect, useRef, useMemo } from 'react'
+import { useUploadStore, UploadItem, DownloadItem } from '../stores/uploadStore'
 import { useTransferStore, TransferItem } from '../stores/transferStore'
 import { formatFileSize } from '../api/files'
 import './UploadPanel.css'
@@ -16,7 +16,7 @@ function formatSpeed(bytesPerSecond: number): string {
 }
 
 function UploadPanel() {
-  const { items, isPanelOpen: uploadPanelOpen, closePanel: closeUploadPanel, removeUpload, clearCompleted, startUpload, pauseUpload } = useUploadStore()
+  const { items, downloads, isPanelOpen: uploadPanelOpen, closePanel: closeUploadPanel, removeUpload, clearCompleted, clearCompletedDownloads, removeDownload, startUpload, pauseUpload } = useUploadStore()
   const { items: transferItems, isPanelOpen: transferPanelOpen, closePanel: closeTransferPanel, removeItem: removeTransfer, clearCompleted: clearCompletedTransfers } = useTransferStore()
 
   // Panel is open if either upload or transfer panel is open
@@ -29,27 +29,52 @@ function UploadPanel() {
   }
   const autoCloseTimerRef = useRef<number | null>(null)
 
-  const uploadingCount = items.filter((i) => i.status === 'uploading').length
-  const completedCount = items.filter((i) => i.status === 'completed').length
-  const pendingCount = items.filter((i) => i.status === 'pending').length
-  const errorCount = items.filter((i) => i.status === 'error').length
+  // Memoize all counts in a single pass to avoid 13+ separate .filter() calls per render
+  const counts = useMemo(() => {
+    let uploading = 0, completed = 0, pending = 0, error = 0
+    for (const i of items) {
+      if (i.status === 'uploading') uploading++
+      else if (i.status === 'completed') completed++
+      else if (i.status === 'pending') pending++
+      else if (i.status === 'error') error++
+    }
 
-  // Move/Copy counts (excluding compress)
-  const transferringCount = transferItems.filter((t) => t.status === 'transferring' && t.type !== 'compress').length
-  const transferPendingCount = transferItems.filter((t) => t.status === 'pending' && t.type !== 'compress').length
-  const transferCompletedCount = transferItems.filter((t) => t.status === 'completed' && t.type !== 'compress').length
-  const transferErrorCount = transferItems.filter((t) => t.status === 'error' && t.type !== 'compress').length
+    let downloading = 0, dlCompleted = 0, dlError = 0
+    for (const d of downloads) {
+      if (d.status === 'downloading') downloading++
+      else if (d.status === 'completed') dlCompleted++
+      else if (d.status === 'error') dlError++
+    }
 
-  // Compress counts
-  const compressingCount = transferItems.filter((t) => t.status === 'transferring' && t.type === 'compress').length
-  const compressPendingCount = transferItems.filter((t) => t.status === 'pending' && t.type === 'compress').length
-  const compressCompletedCount = transferItems.filter((t) => t.status === 'completed' && t.type === 'compress').length
-  const compressErrorCount = transferItems.filter((t) => t.status === 'error' && t.type === 'compress').length
+    let transferring = 0, tPending = 0, tCompleted = 0, tError = 0
+    let compressing = 0, cPending = 0, cCompleted = 0, cError = 0
+    for (const t of transferItems) {
+      const isCompress = t.type === 'compress'
+      if (t.status === 'transferring') { if (isCompress) compressing++; else transferring++ }
+      else if (t.status === 'pending') { if (isCompress) cPending++; else tPending++ }
+      else if (t.status === 'completed') { if (isCompress) cCompleted++; else tCompleted++ }
+      else if (t.status === 'error') { if (isCompress) cError++; else tError++ }
+    }
 
-  const totalActiveCount = uploadingCount + pendingCount + transferringCount + transferPendingCount + compressingCount + compressPendingCount
-  const totalCompletedCount = completedCount + transferCompletedCount + compressCompletedCount
-  const totalErrorCount = errorCount + transferErrorCount + compressErrorCount
-  const hasItems = items.length > 0 || transferItems.length > 0
+    return {
+      uploadingCount: uploading, completedCount: completed, pendingCount: pending, errorCount: error,
+      downloadingCount: downloading, downloadCompletedCount: dlCompleted, downloadErrorCount: dlError,
+      transferringCount: transferring, transferPendingCount: tPending, transferCompletedCount: tCompleted, transferErrorCount: tError,
+      compressingCount: compressing, compressPendingCount: cPending, compressCompletedCount: cCompleted, compressErrorCount: cError,
+      totalActiveCount: uploading + pending + downloading + transferring + tPending + compressing + cPending,
+      totalCompletedCount: completed + dlCompleted + tCompleted + cCompleted,
+      totalErrorCount: error + dlError + tError + cError,
+      hasItems: items.length > 0 || downloads.length > 0 || transferItems.length > 0,
+    }
+  }, [items, downloads, transferItems])
+
+  const {
+    uploadingCount, pendingCount,
+    downloadingCount,
+    transferringCount, transferPendingCount,
+    compressingCount, compressPendingCount,
+    totalActiveCount, totalCompletedCount, totalErrorCount, hasItems,
+  } = counts
 
   // Auto-close panel when all uploads complete (with no errors)
   useEffect(() => {
@@ -74,7 +99,7 @@ function UploadPanel() {
         window.clearTimeout(autoCloseTimerRef.current)
       }
     }
-  }, [items, transferItems, totalActiveCount, totalCompletedCount, totalErrorCount, hasItems, isPanelOpen, closePanel])
+  }, [items, downloads, transferItems, totalActiveCount, totalCompletedCount, totalErrorCount, hasItems, isPanelOpen, closePanel])
 
   if (!isPanelOpen) return null
 
@@ -159,8 +184,32 @@ function UploadPanel() {
     )
   }
 
+  const getDownloadStatusIcon = (item: DownloadItem) => {
+    switch (item.status) {
+      case 'completed':
+        return (
+          <svg className="status-icon success" width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+            <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )
+      case 'error':
+        return (
+          <svg className="status-icon error" width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+            <path d="M15 9L9 15M9 9L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        )
+      case 'downloading':
+        return <div className="spinner-small download" />
+      default:
+        return null
+    }
+  }
+
   const handleClearAll = () => {
     clearCompleted()
+    clearCompletedDownloads()
     clearCompletedTransfers()
   }
 
@@ -185,6 +234,7 @@ function UploadPanel() {
 
       <div className="upload-panel-stats">
         {uploadingCount > 0 && <span className="stat uploading">업로드 중 {uploadingCount}</span>}
+        {downloadingCount > 0 && <span className="stat downloading">다운로드 중 {downloadingCount}</span>}
         {transferringCount > 0 && <span className="stat transferring">이동/복사 중 {transferringCount}</span>}
         {compressingCount > 0 && <span className="stat compressing">압축 중 {compressingCount}</span>}
         {(pendingCount > 0 || transferPendingCount > 0 || compressPendingCount > 0) && <span className="stat pending">대기 {pendingCount + transferPendingCount + compressPendingCount}</span>}
@@ -263,6 +313,56 @@ function UploadPanel() {
                 </button>
               )}
               <button className="item-btn remove" onClick={() => removeUpload(item.id)} title="삭제">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {/* Download items */}
+        {downloads.map((item) => (
+          <div key={item.id} className={`upload-panel-item download ${item.status}`}>
+            <div className="item-info">
+              {getDownloadStatusIcon(item)}
+              <div className="item-details">
+                <div className="item-name-row">
+                  <span className="download-type-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 3V15M12 15L7 10M12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M3 17V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </span>
+                  <span className="item-name">{item.filename}</span>
+                </div>
+                <span className="item-size">{formatFileSize(item.size)}</span>
+              </div>
+            </div>
+            <div className="item-progress">
+              {item.status === 'downloading' && (
+                <>
+                  <div className="progress-bar-mini download">
+                    <div className="progress-fill download" style={{ width: `${item.progress}%` }} />
+                  </div>
+                  <div className="progress-info">
+                    <span className="progress-text">{item.progress}%</span>
+                  </div>
+                </>
+              )}
+              {item.status === 'error' && (
+                <span className="error-text">{item.error}</span>
+              )}
+            </div>
+            <div className="item-actions">
+              {item.status === 'downloading' && (
+                <button className="item-btn" onClick={() => removeDownload(item.id)} title="취소">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>
+                  </svg>
+                </button>
+              )}
+              <button className="item-btn remove" onClick={() => removeDownload(item.id)} title="삭제">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                   <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                 </svg>

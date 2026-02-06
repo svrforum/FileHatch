@@ -169,10 +169,16 @@ function App() {
     }, timeUntilRefresh)
 
     // Also set up periodic activity-based refresh (refresh on user activity if token is old)
+    // Use 5-minute cooldown to avoid calling refreshAuthToken on every mousedown/keydown
+    let lastActivityRefresh = 0
+    const ACTIVITY_COOLDOWN = 5 * 60 * 1000 // 5 minutes
     const activityRefresh = () => {
-      const remaining = expiration - Date.now()
+      const now2 = Date.now()
+      if (now2 - lastActivityRefresh < ACTIVITY_COOLDOWN) return
+      const remaining = expiration - now2
       // If less than 50% of original duration remains, refresh on activity
       if (remaining < (expiration - now) / 2 && remaining > refreshBuffer) {
+        lastActivityRefresh = now2
         refreshAuthToken()
       }
     }

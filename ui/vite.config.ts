@@ -3,6 +3,16 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'monaco': ['@monaco-editor/react', 'monaco-editor'],
+          'pdf': ['react-pdf', 'pdfjs-dist'],
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
@@ -11,6 +21,7 @@ export default defineConfig({
       manifest: false, // We use our own manifest.json in public/
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB (Monaco worker is ~7MB)
         // Skip waiting and claim clients immediately for faster updates
         skipWaiting: true,
         clientsClaim: true,

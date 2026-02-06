@@ -175,4 +175,4 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(({
 
 FileCard.displayName = 'FileCard'
 
-export default FileCard
+export default React.memo(FileCard)

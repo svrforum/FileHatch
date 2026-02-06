@@ -132,6 +132,7 @@
 }
 
 .stat.uploading::before { background: var(--color-primary); }
+.stat.downloading::before { background: #10B981; }
 .stat.transferring::before { background: #F59E0B; }
 .stat.compressing::before { background: #9C27B0; }
 .stat.pending::before { background: var(--text-tertiary); }
@@ -139,6 +140,7 @@
 .stat.error::before { background: var(--color-error); }
 
 .stat.uploading { color: var(--color-primary); }
+.stat.downloading { color: #10B981; }
 .stat.transferring { color: var(--color-warning); }
 .stat.compressing { color: #9C27B0; }
 .stat.pending { color: var(--text-tertiary); }
@@ -244,6 +246,7 @@
 
 .spinner-small.transfer { border-top-color: var(--color-warning); }
 .spinner-small.compress { border-top-color: #9C27B0; }
+.spinner-small.download { border-top-color: #10B981; }
 
 .item-details {
   flex: 1;
@@ -473,4 +476,26 @@
   align-items: center;
   justify-content: center;
   color: var(--color-warning);
+}
+
+/* Download specific styles */
+.upload-panel-item.download {
+  border-left: 4px solid #10B981;
+  padding-left: 12px;
+}
+
+.upload-panel-item.download.completed { border-left-color: var(--color-success); }
+.upload-panel-item.download.error { border-left-color: var(--color-error); }
+
+.download-type-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #10B981;
+}
+
+.progress-bar-mini.download { height: 6px; }
+
+.progress-fill.download {
+  background: linear-gradient(90deg, #10B981 0%, #34D399 100%);
 }

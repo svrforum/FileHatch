@@ -266,6 +266,9 @@ CREATE INDEX IF NOT EXISTS idx_users_active ON users(username, is_active) WHERE 
 -- Migration 007: Shared folder storage
 CREATE INDEX IF NOT EXISTS idx_shared_folders_quota ON shared_folders(storage_quota, storage_used) WHERE is_active = TRUE AND storage_quota > 0;
 
+-- Migration 008: File shares composite index for shared-with-me queries
+CREATE INDEX IF NOT EXISTS idx_file_shares_shared_with_folder ON file_shares(shared_with_id, is_folder, created_at DESC);
+
 -- =============================================================================
 -- Default Data (Migration: 002)
 -- =============================================================================

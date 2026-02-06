@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchFiles, downloadFileDirect, getFolderStats, renameItem, copyItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, extractZip, downloadAsZip } from '../api/files'
@@ -20,8 +20,8 @@ import { useLocalSearch } from '../hooks/useLocalSearch'
 import { useFileMetadata } from '../hooks/useFileMetadata'
 import { useStarredAndLocked } from '../hooks/useStarredAndLocked'
 import ConfirmModal from './ConfirmModal'
-import TextEditor from './TextEditor'
-import FileViewer from './FileViewer'
+const TextEditor = lazy(() => import('./TextEditor'))
+const FileViewer = lazy(() => import('./FileViewer'))
 import ZipViewer from './ZipViewer'
 import OnlyOfficeEditor from './OnlyOfficeEditor'
 import ShareModal from './ShareModal'
@@ -1519,29 +1519,33 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         onCancel={() => setCopyTarget(null)}
       />
 
-      {/* Text Editor Modal */}
+      {/* Text Editor Modal (lazy loaded) */}
       {editingFile && (
-        <TextEditor
-          filePath={editingFile.path}
-          fileName={editingFile.name}
-          onClose={() => setEditingFile(null)}
-          onSaved={() => {
-            queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
-            showSuccess('파일이 저장되었습니다')
-          }}
-        />
+        <Suspense fallback={null}>
+          <TextEditor
+            filePath={editingFile.path}
+            fileName={editingFile.name}
+            onClose={() => setEditingFile(null)}
+            onSaved={() => {
+              queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+              showSuccess('파일이 저장되었습니다')
+            }}
+          />
+        </Suspense>
       )}
 
-      {/* File Viewer Modal */}
+      {/* File Viewer Modal (lazy loaded) */}
       {viewingFile && (
-        <FileViewer
-          filePath={viewingFile.path}
-          fileName={viewingFile.name}
-          mimeType={viewingFile.mimeType}
-          onClose={() => setViewingFile(null)}
-          siblingFiles={displayFiles}
-          onNavigate={(file) => setViewingFile(file)}
-        />
+        <Suspense fallback={null}>
+          <FileViewer
+            filePath={viewingFile.path}
+            fileName={viewingFile.name}
+            mimeType={viewingFile.mimeType}
+            onClose={() => setViewingFile(null)}
+            siblingFiles={displayFiles}
+            onNavigate={(file) => setViewingFile(file)}
+          />
+        </Suspense>
       )}
 
       {/* ZIP Viewer Modal */}
