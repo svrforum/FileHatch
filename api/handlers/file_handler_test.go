@@ -28,9 +28,10 @@ func SetupFileTest(t *testing.T) *FileTestContext {
 	dataRoot := t.TempDir()
 
 	handler := &Handler{
-		db:           tc.DB,
-		dataRoot:     dataRoot,
-		auditHandler: &AuditHandler{db: tc.DB, baseStoragePath: dataRoot},
+		db:            tc.DB,
+		dataRoot:      dataRoot,
+		auditHandler:  &AuditHandler{db: tc.DB, baseStoragePath: dataRoot},
+		storageRouter: NewStorageRouter(dataRoot, tc.DB),
 	}
 
 	return &FileTestContext{
