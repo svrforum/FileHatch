@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchFiles, downloadFileDirect, getFolderStats, renameItem, copyItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, extractZip, downloadAsZip } from '../api/files'
 import { useSharedFolders } from '../hooks/useSharedFolders'
+import { useExternalStorages, isExternalStorageReadonly } from '../hooks/useExternalStorages'
 import { getSharedWithMe, getSharedByMe, getMyShareLinks, SharedWithMeItem, SharedByMeItem, LinkShare, deleteFileShare, deleteShareLink } from '../api/fileShares'
 import { useUploadStore } from '../stores/uploadStore'
 import { useTransferStore } from '../stores/transferStore'
@@ -117,6 +118,11 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const isSharedByMeView = currentPath === '/shared-by-me'
   const isLinkSharesView = currentPath === '/link-shares'
   const isSpecialShareView = isSharedWithMeView || isSharedByMeView || isLinkSharesView
+
+  // External storage detection
+  const isExternalView = currentPath.startsWith('/external/')
+  const { externalStorages } = useExternalStorages()
+  const isExternalReadonly = isExternalView && isExternalStorageReadonly(externalStorages, currentPath)
 
   // Local search hook
   const {
@@ -1400,6 +1406,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         isSharedWithMeView={isSharedWithMeView}
         isSharedByMeView={isSharedByMeView}
         isLinkSharesView={isLinkSharesView}
+        isReadonly={isExternalReadonly}
         showNewFileSubmenu={showNewFileSubmenu}
         fileTypeOptions={fileTypeOptions}
         onlyOfficeAvailable={onlyOfficeAvailable}
@@ -1474,6 +1481,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         }}
         onDelete={handleBulkDelete}
         onClear={() => setSelectedFiles(new Set())}
+        isReadonly={isExternalReadonly}
       />
 
       <ConfirmModal

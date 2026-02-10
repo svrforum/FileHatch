@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -73,12 +74,15 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 	}
 
 	// Resolve parent path
-	realParentPath, storageType, displayPath, err := h.resolvePath(parentPath, claims)
+	result, realParentPath, err := h.resolveStorageForOperation(parentPath, claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 		})
 	}
+
+	storageType := result.StorageType
+	displayPath := result.DisplayPath
 
 	// Cannot create folder at root
 	if storageType == "root" {
@@ -91,6 +95,13 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 	if parentPath == "/shared" || parentPath == "/shared/" {
 		return c.JSON(http.StatusForbidden, map[string]string{
 			"error": "공유 드라이브는 관리자 설정에서만 생성할 수 있습니다",
+		})
+	}
+
+	// Check readonly
+	if err := checkReadonly(result); err != nil {
+		return c.JSON(http.StatusForbidden, map[string]string{
+			"error": err.Error(),
 		})
 	}
 
@@ -113,6 +124,54 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 				"error": "No permission to create folders in this shared drive",
 			})
 		}
+	}
+
+	newFolderPath := filepath.Join(displayPath, req.Name)
+
+	// Handle non-local external storage
+	if storageType == StorageExternal && realParentPath == "" {
+		if result.Backend == nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "No backend available",
+			})
+		}
+		ctx := c.Request().Context()
+		folderRelPath := result.RelPath
+		if folderRelPath != "" {
+			folderRelPath = filepath.Join(folderRelPath, req.Name)
+		} else {
+			folderRelPath = req.Name
+		}
+
+		// Check if already exists
+		exists, _ := result.Backend.Exists(ctx, folderRelPath)
+		if exists {
+			return c.JSON(http.StatusConflict, map[string]string{
+				"error": "Folder already exists",
+			})
+		}
+
+		if err := result.Backend.Mkdir(ctx, folderRelPath); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to create folder",
+			})
+		}
+
+		// Log audit event
+		var userID *string
+		if claims != nil {
+			userID = &claims.UserID
+		}
+		_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFolderCreate, newFolderPath, map[string]interface{}{
+			"name":       req.Name,
+			"parentPath": displayPath,
+		})
+
+		return c.JSON(http.StatusCreated, map[string]interface{}{
+			"success": true,
+			"path":    newFolderPath,
+			"name":    req.Name,
+		})
 	}
 
 	folderPath := filepath.Join(realParentPath, req.Name)
@@ -140,8 +199,6 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 			})
 		}
 	}
-
-	newFolderPath := filepath.Join(displayPath, req.Name)
 
 	// Log audit event
 	var userID *string
@@ -199,18 +256,28 @@ func (h *Handler) DeleteFolder(c echo.Context) error {
 	}
 
 	// Resolve path
-	realPath, storageType, displayPath, err := h.resolvePath("/"+requestPath, claims)
+	virtualPath := "/" + requestPath
+	result, realPath, err := h.resolveStorageForOperation(virtualPath, claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 		})
 	}
 
+	storageType := result.StorageType
+	displayPath := result.DisplayPath
+
 	// Cannot delete root storage types
-	virtualPath := "/" + requestPath
 	if storageType == "root" || displayPath == "/home" || displayPath == "/shared" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Cannot delete root folders",
+		})
+	}
+
+	// Check readonly
+	if err := checkReadonly(result); err != nil {
+		return c.JSON(http.StatusForbidden, map[string]string{
+			"error": err.Error(),
 		})
 	}
 
@@ -247,6 +314,61 @@ func (h *Handler) DeleteFolder(c echo.Context) error {
 		}
 	}
 
+	force := c.QueryParam("force") == "true"
+
+	// Handle non-local external storage
+	if storageType == StorageExternal && realPath == "" {
+		if result.Backend == nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "No backend available",
+			})
+		}
+		ctx := c.Request().Context()
+
+		info, err := result.Backend.Stat(ctx, result.RelPath)
+		if err != nil {
+			return c.JSON(http.StatusNotFound, map[string]string{
+				"error": "Folder not found",
+			})
+		}
+		if !info.IsDirectory {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "Path is not a directory",
+			})
+		}
+
+		if force {
+			if err := result.Backend.DeleteAll(ctx, result.RelPath); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{
+					"error": "Failed to delete folder",
+				})
+			}
+		} else {
+			// Check if empty
+			entries, err := result.Backend.ReadDir(ctx, result.RelPath)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{
+					"error": "Failed to read folder",
+				})
+			}
+			if len(entries) > 0 {
+				return c.JSON(http.StatusConflict, map[string]string{
+					"error": "Folder is not empty. Use ?force=true to delete anyway",
+				})
+			}
+			if err := result.Backend.Delete(ctx, result.RelPath); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{
+					"error": "Failed to delete folder",
+				})
+			}
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"success": true,
+			"path":    displayPath,
+		})
+	}
+
 	info, err := os.Stat(realPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -264,9 +386,6 @@ func (h *Handler) DeleteFolder(c echo.Context) error {
 			"error": "Path is not a directory",
 		})
 	}
-
-	// Check if force delete is requested
-	force := c.QueryParam("force") == "true"
 
 	// Calculate folder size before deleting (for storage tracking)
 	var folderSize int64
@@ -353,12 +472,15 @@ func (h *Handler) GetFolderStats(c echo.Context) error {
 
 	// Resolve path
 	virtualPath := "/" + requestPath
-	realPath, storageType, displayPath, err := h.resolvePath(virtualPath, claims)
+	result, realPath, err := h.resolveStorageForOperation(virtualPath, claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 		})
 	}
+
+	storageType := result.StorageType
+	displayPath := result.DisplayPath
 
 	if storageType == "root" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -378,6 +500,28 @@ func (h *Handler) GetFolderStats(c echo.Context) error {
 				"error": "No permission to access this shared drive",
 			})
 		}
+	}
+
+	// Handle non-local external storage
+	if storageType == StorageExternal && realPath == "" {
+		if result.Backend == nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "No backend available",
+			})
+		}
+		ctx := c.Request().Context()
+		stats, err := computeFolderStatsFromBackend(ctx, result.Backend, result.RelPath)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to calculate folder stats",
+			})
+		}
+		return c.JSON(http.StatusOK, FolderStats{
+			Path:        displayPath,
+			FileCount:   int(stats.FileCount),
+			FolderCount: int(stats.FolderCount),
+			TotalSize:   stats.TotalSize,
+		})
 	}
 
 	info, err := os.Stat(realPath)
@@ -485,6 +629,49 @@ func (h *Handler) computeFolderStatsInternal(realPath string) (*CachedFolderStat
 	}, nil
 }
 
+// computeFolderStatsFromBackend calculates folder statistics using a StorageBackend
+func computeFolderStatsFromBackend(ctx context.Context, backend StorageBackend, relPath string) (*CachedFolderStats, error) {
+	var fileCount, folderCount int64
+	var totalSize int64
+
+	err := backend.Walk(ctx, relPath, func(path string, info *StorageFileInfo, walkErr error) error {
+		if walkErr != nil {
+			return nil // Skip errors
+		}
+
+		// Skip root directory itself
+		if path == relPath || path == "." {
+			return nil
+		}
+
+		// Skip hidden files
+		if IsHiddenFile(info.FileName) {
+			if info.IsDirectory {
+				return ErrSkipDir
+			}
+			return nil
+		}
+
+		if info.IsDirectory {
+			folderCount++
+		} else {
+			fileCount++
+			totalSize += info.FileSize
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &CachedFolderStats{
+		FileCount:   fileCount,
+		FolderCount: folderCount,
+		TotalSize:   totalSize,
+	}, nil
+}
+
 // BatchGetFolderStats returns statistics for multiple folders at once
 // @Summary		Batch get folder statistics
 // @Description	Get statistics for multiple folders in a single request (max 50 folders)
@@ -519,25 +706,46 @@ func (h *Handler) BatchGetFolderStats(c echo.Context) error {
 
 	results := make(map[string]interface{})
 	cache := GetStatsCache()
+	ctx := c.Request().Context()
 
 	for _, path := range req.Paths {
-		realPath, storageType, displayPath, err := h.resolvePath(path, claims)
+		result, realPath, err := h.resolveStorageForOperation(path, claims)
 		if err != nil {
 			results[path] = map[string]string{"error": "access denied"}
 			continue
 		}
 
-		if storageType == "root" {
+		if result.StorageType == "root" {
 			results[path] = map[string]string{"error": "invalid path"}
 			continue
 		}
 
 		// Check shared read permission
-		if storageType == StorageShared {
+		if result.StorageType == StorageShared {
 			if claims == nil || !h.CanReadSharedDrive(claims.UserID, path) {
 				results[path] = map[string]string{"error": "no permission"}
 				continue
 			}
+		}
+
+		// Handle non-local external storage
+		if result.StorageType == StorageExternal && realPath == "" {
+			if result.Backend == nil {
+				results[path] = map[string]string{"error": "no backend"}
+				continue
+			}
+			stats, err := computeFolderStatsFromBackend(ctx, result.Backend, result.RelPath)
+			if err != nil {
+				results[path] = map[string]string{"error": "failed to compute"}
+				continue
+			}
+			results[path] = FolderStats{
+				Path:        result.DisplayPath,
+				FileCount:   int(stats.FileCount),
+				FolderCount: int(stats.FolderCount),
+				TotalSize:   stats.TotalSize,
+			}
+			continue
 		}
 
 		info, err := os.Stat(realPath)
@@ -553,7 +761,7 @@ func (h *Handler) BatchGetFolderStats(c echo.Context) error {
 			})
 			if err == nil {
 				results[path] = FolderStats{
-					Path:        displayPath,
+					Path:        result.DisplayPath,
 					FileCount:   int(stats.FileCount),
 					FolderCount: int(stats.FolderCount),
 					TotalSize:   stats.TotalSize,
@@ -570,7 +778,7 @@ func (h *Handler) BatchGetFolderStats(c echo.Context) error {
 		}
 
 		results[path] = FolderStats{
-			Path:        displayPath,
+			Path:        result.DisplayPath,
 			FileCount:   int(stats.FileCount),
 			FolderCount: int(stats.FolderCount),
 			TotalSize:   stats.TotalSize,

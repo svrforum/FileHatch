@@ -7,6 +7,7 @@ import { useAuthStore } from '../stores/authStore'
 import { getStorageUsage, formatFileSize } from '../api/files'
 import { PERMISSION_READ_WRITE } from '../api/sharedFolders'
 import { useSharedFolders } from '../hooks/useSharedFolders'
+import { useExternalStorages } from '../hooks/useExternalStorages'
 import { api } from '../api/client'
 import './Sidebar.css'
 
@@ -16,7 +17,7 @@ interface VersionInfo {
   git_commit?: string
 }
 
-export type AdminView = 'users' | 'shared-folders' | 'settings' | 'sso' | 'logs' | 'system-info'
+export type AdminView = 'users' | 'shared-folders' | 'external-storages' | 'settings' | 'sso' | 'logs' | 'system-info'
 
 interface SidebarProps {
   currentPath: string
@@ -134,6 +135,14 @@ const icons: Record<string, JSX.Element> = {
       <circle cx="6" cy="18" r="1" fill="currentColor"/>
     </svg>
   ),
+  externalStorage: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M22 12H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5.45 5.11L2 12V18C2 18.5304 2.21071 19.0391 2.58579 19.4142C2.96086 19.7893 3.46957 20 4 20H20C20.5304 20 21.0391 19.7893 21.4142 19.4142C21.7893 19.0391 22 18.5304 22 18V12L18.55 5.11C18.3844 4.77679 18.1292 4.49637 17.813 4.30028C17.4967 4.10419 17.1321 4.0002 16.76 4H7.24C6.86792 4.0002 6.50326 4.10419 6.18704 4.30028C5.87083 4.49637 5.61558 4.77679 5.45 5.11Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx="8" cy="16" r="1" fill="currentColor"/>
+      <circle cx="12" cy="16" r="1" fill="currentColor"/>
+    </svg>
+  ),
 }
 
 function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onAdminClick, isTrashView, isAdminMode, adminView, onExitAdminMode, isMobileOpen, onMobileClose }: SidebarProps) {
@@ -143,8 +152,10 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
   const location = useLocation()
   const queryClient = useQueryClient()
   const { sharedFolders } = useSharedFolders()
+  const { externalStorages } = useExternalStorages()
   const [sharedDrivesExpanded, setSharedDrivesExpanded] = useState(true)
   const [sharingExpanded, setSharingExpanded] = useState(true)
+  const [externalStoragesExpanded, setExternalStoragesExpanded] = useState(true)
 
   // Safe arrays to prevent undefined errors
   const safeItems = items || []
@@ -310,6 +321,48 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
               </div>
             )}
 
+            {/* External Storages Section */}
+            {user && externalStorages.length > 0 && (
+              <div className="shared-section">
+                <button
+                  className="shared-header"
+                  onClick={() => setExternalStoragesExpanded(!externalStoragesExpanded)}
+                  aria-expanded={externalStoragesExpanded}
+                  aria-label="외부 스토리지 섹션"
+                >
+                  {icons.externalStorage}
+                  <span>외부 스토리지</span>
+                  <svg
+                    className={`chevron ${externalStoragesExpanded ? 'expanded' : ''}`}
+                    aria-hidden="true"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                {externalStoragesExpanded && (
+                  <div className="shared-list">
+                    {externalStorages.map(storage => (
+                      <Link
+                        key={storage.id}
+                        to={`/external/${encodeURIComponent(storage.mountPath)}`}
+                        className={`nav-item shared-drive-item ${location.pathname.startsWith(`/external/${encodeURIComponent(storage.mountPath)}`) ? 'active' : ''}`}
+                        onClick={() => onMobileClose?.()}
+                      >
+                        <span className="drive-name">{storage.name}</span>
+                        <span className={`permission-badge ${storage.isReadonly ? 'r' : 'rw'}`}>
+                          {storage.isReadonly ? 'R' : 'RW'}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Sharing Section */}
             {user && (
               <div className="shared-section">
@@ -403,6 +456,14 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
             >
               {icons.sharedDrivesAdmin}
               <span>공유 드라이브</span>
+            </Link>
+            <Link
+              to="/fhadmin/external-storages"
+              className={`nav-item ${adminView === 'external-storages' ? 'active' : ''}`}
+              onClick={() => onMobileClose?.()}
+            >
+              {icons.externalStorage}
+              <span>외부 스토리지</span>
             </Link>
             <Link
               to="/fhadmin/settings"

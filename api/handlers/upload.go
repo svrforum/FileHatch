@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -26,13 +27,14 @@ func (e UploadError) Error() string {
 }
 
 type UploadHandler struct {
-	tusHandler   *tusd.UnroutedHandler
-	dataRoot     string
-	db           *sql.DB
-	auditHandler *AuditHandler
+	tusHandler     *tusd.UnroutedHandler
+	dataRoot       string
+	db             *sql.DB
+	auditHandler   *AuditHandler
+	storageRouter  *StorageRouter
 }
 
-func NewUploadHandler(dataRoot string, db *sql.DB) (*UploadHandler, error) {
+func NewUploadHandler(dataRoot string, db *sql.DB, storageRouter *StorageRouter) (*UploadHandler, error) {
 	// Create upload temp directory
 	uploadDir := filepath.Join(dataRoot, ".uploads")
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
@@ -47,9 +49,10 @@ func NewUploadHandler(dataRoot string, db *sql.DB) (*UploadHandler, error) {
 	store.UseIn(composer)
 
 	h := &UploadHandler{
-		dataRoot:     dataRoot,
-		db:           db,
-		auditHandler: NewAuditHandler(db, dataRoot),
+		dataRoot:      dataRoot,
+		db:            db,
+		auditHandler:  NewAuditHandler(db, dataRoot),
+		storageRouter: storageRouter,
 	}
 
 	// Create TUS handler with pre-upload validation
@@ -307,6 +310,46 @@ func (h *UploadHandler) resolveVirtualPath(virtualPath string, username string) 
 		// shared uses folder name as subdirectory
 		allowedRoot = filepath.Join(h.dataRoot, "shared")
 		realPath = filepath.Join(allowedRoot, subPath)
+	case "external":
+		// External storage: use StorageRouter to validate access
+		if h.storageRouter == nil {
+			return "", fmt.Errorf("external storage not configured")
+		}
+		if username == "" {
+			return "", fmt.Errorf("username required for external storage")
+		}
+		// Get user ID for the username
+		var userID string
+		err := h.db.QueryRow("SELECT id FROM users WHERE username = $1", username).Scan(&userID)
+		if err != nil {
+			return "", fmt.Errorf("user not found: %s", username)
+		}
+		claims := &JWTClaims{Username: username, UserID: userID}
+		result, resolveErr := h.storageRouter.Resolve(virtualPath, claims)
+		if resolveErr != nil {
+			return "", resolveErr
+		}
+		if result.IsReadonly {
+			return "", fmt.Errorf("external storage is read-only")
+		}
+		// For local-mount external storage, return the real path
+		if result.Backend != nil && result.Backend.IsLocal() {
+			rp, rpErr := result.Backend.GetRealPath(result.RelPath)
+			if rpErr != nil {
+				return "", rpErr
+			}
+			return rp, nil
+		}
+		// For non-local (S3, etc.), return a marker path
+		if len(pathParts) < 2 {
+			return "", fmt.Errorf("external storage mount path required")
+		}
+		mountPath := pathParts[1]
+		extRelPath := ""
+		if len(pathParts) > 2 {
+			extRelPath = filepath.Join(pathParts[2:]...)
+		}
+		return fmt.Sprintf("external:%s:%s", mountPath, extRelPath), nil
 	default:
 		return "", fmt.Errorf("invalid storage type: %s", root)
 	}
@@ -343,81 +386,139 @@ func (h *UploadHandler) handleCompletedUploads() {
 
 		// Move file to destination
 		srcPath := filepath.Join(h.dataRoot, ".uploads", event.Upload.ID)
-		finalPath := filepath.Join(realDestPath, filename)
 
-		// Ensure destination directory exists with appropriate permissions
-		destDir := filepath.Dir(finalPath)
-		if strings.HasPrefix(destPath, "/shared/") {
-			if err := MkdirAllShared(destDir); err != nil {
-				fmt.Printf("Failed to create directory: %v\n", err)
+		// Check if this is a non-local external storage (marker: "external:{mountPath}:{relPath}")
+		if strings.HasPrefix(realDestPath, "external:") {
+			// Non-local external storage upload
+			parts := strings.SplitN(realDestPath, ":", 3)
+			if len(parts) < 3 {
+				fmt.Printf("Invalid external storage marker: %s\n", realDestPath)
 				continue
 			}
-		} else {
-			if err := os.MkdirAll(destDir, 0755); err != nil {
-				fmt.Printf("Failed to create directory: %v\n", err)
+			mountPath := parts[1]
+			extRelPath := parts[2]
+
+			// Resolve the external backend
+			if h.storageRouter == nil {
+				fmt.Printf("Storage router not available for external upload\n")
 				continue
 			}
-		}
 
-		// Check if file already exists
-		if !overwrite {
-			// Generate unique name if file exists and overwrite is not requested
-			finalPath = h.getUniqueFilePath(finalPath)
-		}
-		// If overwrite is true, the existing file will be replaced by os.Rename
-
-		// Mark this file as a web upload before moving
-		tracker := GetWebUploadTracker()
-		tracker.MarkUploading(finalPath)
-
-		// Move file (will overwrite if exists)
-		if err := os.Rename(srcPath, finalPath); err != nil {
-			fmt.Printf("Failed to move file: %v\n", err)
-			tracker.UnmarkUploading(finalPath)
-			continue
-		}
-
-		// Set permissions for shared folders
-		if strings.HasPrefix(destPath, "/shared/") {
-			_ = SetSharedPermissions(finalPath, false)
-		}
-
-		// Clean up .info file
-		infoPath := srcPath + ".info"
-		os.Remove(infoPath)
-
-		fmt.Printf("Upload completed: %s -> %s (overwrite: %v)\n", filename, finalPath, overwrite)
-
-		// Update storage tracking for the user (home folder uploads)
-		if username != "" && h.auditHandler != nil && h.auditHandler.db != nil && !strings.HasPrefix(destPath, "/shared/") {
-			// Get file size after upload
-			fileSize := event.Upload.Size
-			_, err := h.auditHandler.db.Exec(`
-				UPDATE users
-				SET storage_used = GREATEST(0, COALESCE(storage_used, 0) + $1),
-				    updated_at = NOW()
-				WHERE username = $2
-			`, fileSize, username)
+			var userID string
+			_ = h.db.QueryRow("SELECT id FROM users WHERE username = $1", username).Scan(&userID)
+			claims := &JWTClaims{Username: username, UserID: userID}
+			extResult, err := h.storageRouter.Resolve("/external/"+mountPath+"/"+extRelPath, claims)
 			if err != nil {
-				fmt.Printf("[Storage] Failed to update storage for %s: %v\n", username, err)
+				fmt.Printf("Failed to resolve external storage: %v\n", err)
+				continue
 			}
-		}
 
-		// Update storage tracking for shared folders
-		if strings.HasPrefix(destPath, "/shared/") && h.auditHandler != nil && h.auditHandler.db != nil {
-			folderName := ExtractSharedDriveFolderName(destPath)
-			if folderName != "" {
-				fileSize := event.Upload.Size
-				_, err := h.auditHandler.db.Exec(`
-					UPDATE shared_folders
-					SET storage_used = GREATEST(0, COALESCE(storage_used, 0) + $1),
-					    updated_at = NOW()
-					WHERE name = $2 AND is_active = TRUE
-				`, fileSize, folderName)
-				if err != nil {
-					fmt.Printf("[Storage] Failed to update shared folder storage for %s: %v\n", folderName, err)
+			// Open the uploaded temp file
+			srcFile, err := os.Open(srcPath)
+			if err != nil {
+				fmt.Printf("Failed to open uploaded file: %v\n", err)
+				continue
+			}
+
+			// Write to external backend
+			fileRelPath := filepath.Join(extResult.RelPath, filename)
+			ctx := context.Background()
+			if err := extResult.Backend.WriteFile(ctx, fileRelPath, srcFile, event.Upload.Size); err != nil {
+				srcFile.Close()
+				fmt.Printf("Failed to write to external storage: %v\n", err)
+				continue
+			}
+			srcFile.Close()
+
+			// Clean up temp files
+			os.Remove(srcPath)
+			os.Remove(srcPath + ".info")
+
+			fmt.Printf("Upload completed (external): %s -> %s/%s (overwrite: %v)\n", filename, mountPath, extRelPath, overwrite)
+		} else {
+			// Local storage upload (home, shared, local-mount external)
+			finalPath := filepath.Join(realDestPath, filename)
+
+			// Ensure destination directory exists with appropriate permissions
+			destDir := filepath.Dir(finalPath)
+			if strings.HasPrefix(destPath, "/shared/") {
+				if err := MkdirAllShared(destDir); err != nil {
+					fmt.Printf("Failed to create directory: %v\n", err)
+					continue
+				}
+			} else {
+				if err := os.MkdirAll(destDir, 0755); err != nil {
+					fmt.Printf("Failed to create directory: %v\n", err)
+					continue
 				}
 			}
+
+			// Check if file already exists
+			if !overwrite {
+				// Generate unique name if file exists and overwrite is not requested
+				finalPath = h.getUniqueFilePath(finalPath)
+			}
+			// If overwrite is true, the existing file will be replaced by os.Rename
+
+			// Mark this file as a web upload before moving
+			tracker := GetWebUploadTracker()
+			tracker.MarkUploading(finalPath)
+
+			// Move file (will overwrite if exists)
+			if err := os.Rename(srcPath, finalPath); err != nil {
+				fmt.Printf("Failed to move file: %v\n", err)
+				tracker.UnmarkUploading(finalPath)
+				continue
+			}
+
+			// Set permissions for shared folders
+			if strings.HasPrefix(destPath, "/shared/") {
+				_ = SetSharedPermissions(finalPath, false)
+			}
+
+			// Clean up .info file
+			infoPath := srcPath + ".info"
+			os.Remove(infoPath)
+
+			fmt.Printf("Upload completed: %s -> %s (overwrite: %v)\n", filename, finalPath, overwrite)
+
+			// Update storage tracking for the user (home folder uploads)
+			if username != "" && h.auditHandler != nil && h.auditHandler.db != nil && !strings.HasPrefix(destPath, "/shared/") && !strings.HasPrefix(destPath, "/external/") {
+				// Get file size after upload
+				fileSize := event.Upload.Size
+				_, err := h.auditHandler.db.Exec(`
+					UPDATE users
+					SET storage_used = GREATEST(0, COALESCE(storage_used, 0) + $1),
+					    updated_at = NOW()
+					WHERE username = $2
+				`, fileSize, username)
+				if err != nil {
+					fmt.Printf("[Storage] Failed to update storage for %s: %v\n", username, err)
+				}
+			}
+
+			// Update storage tracking for shared folders
+			if strings.HasPrefix(destPath, "/shared/") && h.auditHandler != nil && h.auditHandler.db != nil {
+				folderName := ExtractSharedDriveFolderName(destPath)
+				if folderName != "" {
+					fileSize := event.Upload.Size
+					_, err := h.auditHandler.db.Exec(`
+						UPDATE shared_folders
+						SET storage_used = GREATEST(0, COALESCE(storage_used, 0) + $1),
+						    updated_at = NOW()
+						WHERE name = $2 AND is_active = TRUE
+					`, fileSize, folderName)
+					if err != nil {
+						fmt.Printf("[Storage] Failed to update shared folder storage for %s: %v\n", folderName, err)
+					}
+				}
+			}
+
+			// Keep the mark for 10 seconds then remove it
+			go func(path string) {
+				time.Sleep(10 * time.Second)
+				tracker.UnmarkUploading(path)
+			}(finalPath)
 		}
 
 		// Log audit event for file upload
@@ -435,12 +536,6 @@ func (h *UploadHandler) handleCompletedUploads() {
 			"size":     event.Upload.Size,
 			"source":   "web",
 		})
-
-		// Keep the mark for 10 seconds then remove it
-		go func(path string) {
-			time.Sleep(10 * time.Second)
-			tracker.UnmarkUploading(path)
-		}(finalPath)
 	}
 }
 

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -181,32 +182,58 @@ func (h *Handler) GetThumbnail(c echo.Context) error {
 	}
 
 	// Resolve path
-	realPath, _, _, err := h.resolvePath("/"+requestPath, claims)
+	result, realPath, err := h.resolveStorageForOperation("/"+requestPath, claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 		})
 	}
 
-	info, err := os.Stat(realPath)
-	if err != nil {
-		if os.IsNotExist(err) {
+	isNonLocal := result.StorageType == StorageExternal && realPath == ""
+
+	var fileName string
+	var fileSize int64
+	var fileModTime time.Time
+
+	if isNonLocal {
+		bgCtx := context.Background()
+		info, err := result.Backend.Stat(bgCtx, result.RelPath)
+		if err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{
 				"error": "File not found",
 			})
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to access file",
-		})
+		if info.IsDirectory {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "Path is a directory",
+			})
+		}
+		fileName = info.FileName
+		fileSize = info.FileSize
+		fileModTime = info.FileModTime
+	} else {
+		info, err := os.Stat(realPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return c.JSON(http.StatusNotFound, map[string]string{
+					"error": "File not found",
+				})
+			}
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to access file",
+			})
+		}
+		if info.IsDir() {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "Path is a directory",
+			})
+		}
+		fileName = info.Name()
+		fileSize = info.Size()
+		fileModTime = info.ModTime()
 	}
 
-	if info.IsDir() {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Path is a directory",
-		})
-	}
-
-	ext := strings.ToLower(filepath.Ext(info.Name()))
+	ext := strings.ToLower(filepath.Ext(fileName))
 	isImage := supportedImageExts[ext]
 	isVideo := supportedVideoExts[ext]
 
@@ -216,8 +243,14 @@ func (h *Handler) GetThumbnail(c echo.Context) error {
 		})
 	}
 
+	// Cache key
+	cacheKey := realPath
+	if isNonLocal {
+		cacheKey = fmt.Sprintf("ext:%s:%s", result.MountID, result.RelPath)
+	}
+
 	// Generate ETag
-	etag := GenerateETag(realPath+sizeName+format, info.ModTime(), info.Size())
+	etag := GenerateETag(cacheKey+sizeName+format, fileModTime, fileSize)
 
 	// Check If-None-Match
 	if !CheckETag(c.Request(), etag) {
@@ -228,7 +261,7 @@ func (h *Handler) GetThumbnail(c echo.Context) error {
 	cache := GetPreviewCache()
 	suffix := fmt.Sprintf("thumb:%s:%s", sizeName, format)
 	if cache != nil {
-		if data, ok := cache.Get(realPath, info.ModTime(), suffix); ok {
+		if data, ok := cache.Get(cacheKey, fileModTime, suffix); ok {
 			SetCacheHeaders(c.Response().Writer, etag, 604800) // 7 days
 			contentType := "image/jpeg"
 			if format == "webp" {
@@ -240,12 +273,28 @@ func (h *Handler) GetThumbnail(c echo.Context) error {
 		}
 	}
 
+	// For non-local: download to temp first for thumbnail generation
+	localFilePath := realPath
+	if isNonLocal {
+		bgCtx := context.Background()
+		tmpDir := filepath.Join(h.dataRoot, ".tmp")
+		_ = os.MkdirAll(tmpDir, 0755)
+		tmpFile := filepath.Join(tmpDir, fmt.Sprintf("thumb_%d%s", time.Now().UnixNano(), ext))
+		if err := downloadFileToLocal(bgCtx, result.Backend, result.RelPath, tmpFile); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to download file for thumbnail",
+			})
+		}
+		defer os.Remove(tmpFile)
+		localFilePath = tmpFile
+	}
+
 	// Generate thumbnail
 	var thumbData []byte
 	if isVideo {
-		thumbData, err = generateVideoThumbnail(realPath, size)
+		thumbData, err = generateVideoThumbnail(localFilePath, size)
 	} else {
-		thumbData, err = generateImageThumbnail(realPath, size)
+		thumbData, err = generateImageThumbnail(localFilePath, size)
 	}
 
 	if err != nil {
@@ -264,7 +313,7 @@ func (h *Handler) GetThumbnail(c echo.Context) error {
 
 	// Cache the result
 	if cache != nil && len(thumbData) > 0 {
-		_ = cache.Set(realPath, info.ModTime(), suffix, thumbData)
+		_ = cache.Set(cacheKey, fileModTime, suffix, thumbData)
 	}
 
 	SetCacheHeaders(c.Response().Writer, etag, 604800) // 7 days
@@ -446,19 +495,14 @@ func (h *Handler) PreloadThumbnails(c echo.Context) error {
 	}
 
 	// Resolve path
-	realPath, _, _, err := h.resolvePath("/"+requestPath, claims)
+	result, realPath, err := h.resolveStorageForOperation("/"+requestPath, claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 		})
 	}
 
-	info, err := os.Stat(realPath)
-	if err != nil || !info.IsDir() {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Invalid directory",
-		})
-	}
+	isNonLocal := result.StorageType == StorageExternal && realPath == ""
 
 	// Get limit (default 50)
 	limit := 50
@@ -471,6 +515,22 @@ func (h *Handler) PreloadThumbnails(c echo.Context) error {
 	pool := GetThumbnailWorkerPool()
 	cache := GetPreviewCache()
 	queued := 0
+
+	if isNonLocal {
+		// For non-local, skip preloading (thumbnail generation requires download)
+		// Individual thumbnails are generated on-demand via GetThumbnail
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"queued": 0,
+			"path":   requestPath,
+		})
+	}
+
+	info, err := os.Stat(realPath)
+	if err != nil || !info.IsDir() {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "Invalid directory",
+		})
+	}
 
 	entries, err := os.ReadDir(realPath)
 	if err != nil {
@@ -560,23 +620,41 @@ func (h *Handler) GetBatchThumbnails(c echo.Context) error {
 		claims = user
 	}
 
+	bgCtx := context.Background()
 	cache := GetPreviewCache()
 	results := make(map[string]interface{})
 
 	for _, path := range req.Paths {
-		realPath, _, _, err := h.resolvePath(path, claims)
+		result, realPath, err := h.resolveStorageForOperation(path, claims)
 		if err != nil {
 			results[path] = map[string]string{"error": "access denied"}
 			continue
 		}
 
-		info, err := os.Stat(realPath)
-		if err != nil {
-			results[path] = map[string]string{"error": "not found"}
-			continue
+		isNonLocal := result.StorageType == StorageExternal && realPath == ""
+
+		var fileName string
+		var fileModTime time.Time
+
+		if isNonLocal {
+			info, err := result.Backend.Stat(bgCtx, result.RelPath)
+			if err != nil {
+				results[path] = map[string]string{"error": "not found"}
+				continue
+			}
+			fileName = info.FileName
+			fileModTime = info.FileModTime
+		} else {
+			info, err := os.Stat(realPath)
+			if err != nil {
+				results[path] = map[string]string{"error": "not found"}
+				continue
+			}
+			fileName = info.Name()
+			fileModTime = info.ModTime()
 		}
 
-		ext := strings.ToLower(filepath.Ext(info.Name()))
+		ext := strings.ToLower(filepath.Ext(fileName))
 		isImage := supportedImageExts[ext]
 		isVideo := supportedVideoExts[ext]
 
@@ -585,10 +663,16 @@ func (h *Handler) GetBatchThumbnails(c echo.Context) error {
 			continue
 		}
 
+		// Cache key
+		cacheKey := realPath
+		if isNonLocal {
+			cacheKey = fmt.Sprintf("ext:%s:%s", result.MountID, result.RelPath)
+		}
+
 		// Try cache
 		suffix := fmt.Sprintf("thumb:%s:jpeg", sizeName)
 		if cache != nil {
-			if _, ok := cache.Get(realPath, info.ModTime(), suffix); ok {
+			if _, ok := cache.Get(cacheKey, fileModTime, suffix); ok {
 				results[path] = map[string]interface{}{
 					"status": "cached",
 					"url":    fmt.Sprintf("/api/thumbnail/%s?size=%s", strings.TrimPrefix(path, "/"), sizeName),
@@ -597,14 +681,16 @@ func (h *Handler) GetBatchThumbnails(c echo.Context) error {
 			}
 		}
 
-		// Queue for generation
-		pool := GetThumbnailWorkerPool()
-		pool.Submit(ThumbnailJob{
-			FilePath: realPath,
-			Size:     size,
-			IsVideo:  isVideo,
-			ModTime:  info.ModTime(),
-		})
+		// Queue for generation (only local files - non-local are generated on-demand)
+		if !isNonLocal {
+			pool := GetThumbnailWorkerPool()
+			pool.Submit(ThumbnailJob{
+				FilePath: realPath,
+				Size:     size,
+				IsVideo:  isVideo,
+				ModTime:  fileModTime,
+			})
+		}
 
 		results[path] = map[string]interface{}{
 			"status": "queued",
@@ -673,21 +759,37 @@ func (h *Handler) GetResponsiveThumbnail(c echo.Context) error {
 		claims = user
 	}
 
-	realPath, _, displayPath, err := h.resolvePath("/"+requestPath, claims)
+	result, realPath, err := h.resolveStorageForOperation("/"+requestPath, claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 		})
 	}
 
-	info, err := os.Stat(realPath)
-	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{
-			"error": "File not found",
-		})
+	displayPath := result.DisplayPath
+	isNonLocal := result.StorageType == StorageExternal && realPath == ""
+
+	var fileName string
+	if isNonLocal {
+		bgCtx := context.Background()
+		info, err := result.Backend.Stat(bgCtx, result.RelPath)
+		if err != nil {
+			return c.JSON(http.StatusNotFound, map[string]string{
+				"error": "File not found",
+			})
+		}
+		fileName = info.FileName
+	} else {
+		info, err := os.Stat(realPath)
+		if err != nil {
+			return c.JSON(http.StatusNotFound, map[string]string{
+				"error": "File not found",
+			})
+		}
+		fileName = info.Name()
 	}
 
-	ext := strings.ToLower(filepath.Ext(info.Name()))
+	ext := strings.ToLower(filepath.Ext(fileName))
 	if !supportedImageExts[ext] && !supportedVideoExts[ext] {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Unsupported file type",

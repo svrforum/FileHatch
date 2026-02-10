@@ -12,11 +12,11 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  /* Use more workers for faster execution */
+  workers: process.env.CI ? 2 : 4,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: [
-    ['html', { outputFolder: 'playwright-report' }],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
     ['list'],
     ...(process.env.CI ? [['github', {}] as const] : []),
   ],
@@ -33,15 +33,28 @@ export default defineConfig({
 
     /* Video recording on failure */
     video: 'on-first-retry',
+
+    /* Default locale for tests */
+    locale: 'ko-KR',
+
+    /* Default timezone */
+    timezoneId: 'Asia/Seoul',
   },
 
-  /* Global timeout for each test */
-  timeout: 60000,
+  /* Global timeout for each test - reduced for faster feedback */
+  timeout: 30000,
 
   /* Expect timeout */
   expect: {
-    timeout: 10000,
+    timeout: 5000,
   },
+
+  /* Global setup/teardown */
+  globalSetup: undefined,
+  globalTeardown: undefined,
+
+  /* Output directory for test artifacts */
+  outputDir: 'test-results/',
 
   /* Configure projects for major browsers */
   projects: [

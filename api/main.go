@@ -210,7 +210,7 @@ func main() {
 	h := handlers.NewHandler(db)
 
 	// Create upload handler with tus support
-	uploadHandler, err := handlers.NewUploadHandler(dataRoot, db)
+	uploadHandler, err := handlers.NewUploadHandler(dataRoot, db, h.GetStorageRouter())
 	if err != nil {
 		log.Fatalf("Failed to create upload handler: %v", err)
 	}
@@ -452,6 +452,22 @@ func main() {
 	// System Settings API (admin only)
 	adminApi.GET("/admin/settings", settingsHandler.GetAllSettings)
 	adminApi.PUT("/admin/settings", settingsHandler.UpdateSettings)
+
+	// External Storage API (admin)
+	externalStorageHandler := handlers.NewExternalStorageHandler(db, dataRoot)
+	adminApi.POST("/admin/external-storages", externalStorageHandler.CreateExternalStorage)
+	adminApi.GET("/admin/external-storages", externalStorageHandler.ListExternalStorages)
+	adminApi.GET("/admin/external-storages/:id", externalStorageHandler.GetExternalStorage)
+	adminApi.PUT("/admin/external-storages/:id", externalStorageHandler.UpdateExternalStorage)
+	adminApi.DELETE("/admin/external-storages/:id", externalStorageHandler.DeleteExternalStorage)
+	adminApi.POST("/admin/external-storages/:id/test", externalStorageHandler.TestExternalStorage)
+	adminApi.GET("/admin/external-storages/:id/access", externalStorageHandler.ListExternalStorageAccess)
+	adminApi.POST("/admin/external-storages/:id/access", externalStorageHandler.GrantExternalStorageAccess)
+	adminApi.PUT("/admin/external-storages/:id/access/:userId", externalStorageHandler.UpdateExternalStorageAccess)
+	adminApi.DELETE("/admin/external-storages/:id/access/:userId", externalStorageHandler.RevokeExternalStorageAccess)
+
+	// External Storage API (user - list my accessible storages)
+	authApi.GET("/external-storages", externalStorageHandler.ListMyExternalStorages)
 
 	// System Info API (admin only)
 	adminApi.GET("/admin/system-info", h.GetSystemInfo)

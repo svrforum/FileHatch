@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 )
@@ -46,10 +48,12 @@ func (h *Handler) GetFile(c echo.Context) error {
 
 	// Resolve path
 	virtualPath := "/" + decodedPath
-	realPath, storageType, _, err := h.resolvePath(virtualPath, claims)
+	result, realPath, err := h.resolveStorageForOperation(virtualPath, claims)
 	if err != nil {
 		return RespondError(c, ErrInvalidPath(err.Error()))
 	}
+
+	storageType := result.StorageType
 
 	// Check shared permission
 	if storageType == StorageShared {
@@ -59,6 +63,56 @@ func (h *Handler) GetFile(c echo.Context) error {
 		if !h.CanReadSharedDrive(claims.UserID, virtualPath) {
 			return RespondError(c, ErrForbidden("No permission to access this file"))
 		}
+	}
+
+	// Check if download is requested
+	isDownload := c.QueryParam("download") == "true"
+
+	// Handle non-local external storage backend
+	if storageType == StorageExternal && realPath == "" {
+		if result.Backend == nil {
+			return RespondError(c, ErrOperationFailed("access file", fmt.Errorf("no backend available")))
+		}
+		ctx := c.Request().Context()
+		reader, info, err := result.Backend.ReadFile(ctx, result.RelPath)
+		if err != nil {
+			return RespondError(c, ErrNotFound("File"))
+		}
+		defer reader.Close()
+
+		if info.IsDirectory {
+			return RespondError(c, ErrBadRequest("Path is a directory"))
+		}
+
+		// Set headers
+		fileName := info.FileName
+		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(fileName), "."))
+		contentType := getMimeType(ext)
+
+		c.Response().Header().Set("Content-Type", contentType)
+		if info.FileSize > 0 {
+			c.Response().Header().Set("Content-Length", strconv.FormatInt(info.FileSize, 10))
+		}
+		if isDownload {
+			setContentDisposition(c, fileName)
+		}
+
+		// Log audit event for downloads
+		if isDownload {
+			var userID *string
+			if claims != nil {
+				userID = &claims.UserID
+			}
+			_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileDownload, virtualPath, map[string]any{
+				"filename":    fileName,
+				"size":        info.FileSize,
+				"storageType": storageType,
+			})
+		}
+
+		c.Response().WriteHeader(http.StatusOK)
+		_, err = io.Copy(c.Response().Writer, reader)
+		return err
 	}
 
 	// For home folder files accessed by the owner, no additional check needed
@@ -95,8 +149,6 @@ func (h *Handler) GetFile(c echo.Context) error {
 		return RespondError(c, ErrBadRequest("Path is a directory"))
 	}
 
-	// Check if download is requested
-	isDownload := c.QueryParam("download") == "true"
 	if isDownload {
 		setContentDisposition(c, info.Name())
 	}
@@ -152,9 +204,18 @@ func (h *Handler) DeleteFile(c echo.Context) error {
 	}
 
 	// Resolve path
-	realPath, storageType, displayPath, err := h.resolvePath("/"+requestPath, claims)
+	virtualPath := "/" + requestPath
+	result, realPath, err := h.resolveStorageForOperation(virtualPath, claims)
 	if err != nil {
 		return RespondError(c, ErrInvalidPath(err.Error()))
+	}
+
+	storageType := result.StorageType
+	displayPath := result.DisplayPath
+
+	// Check readonly
+	if err := checkReadonly(result); err != nil {
+		return RespondError(c, ErrForbidden(err.Error()))
 	}
 
 	// Check permissions for home folder
@@ -163,7 +224,6 @@ func (h *Handler) DeleteFile(c echo.Context) error {
 	}
 
 	// Check shared write permission
-	virtualPath := "/" + requestPath
 	if storageType == StorageShared {
 		if claims == nil {
 			return RespondError(c, ErrUnauthorized(""))
@@ -171,6 +231,32 @@ func (h *Handler) DeleteFile(c echo.Context) error {
 		if !h.CanWriteSharedDrive(claims.UserID, virtualPath) {
 			return RespondError(c, ErrForbidden("No permission to delete files in this folder"))
 		}
+	}
+
+	// Handle non-local external storage
+	if storageType == StorageExternal && realPath == "" {
+		if result.Backend == nil {
+			return RespondError(c, ErrOperationFailed("delete file", fmt.Errorf("no backend available")))
+		}
+		ctx := c.Request().Context()
+
+		// Check if it exists and is not a directory
+		info, err := result.Backend.Stat(ctx, result.RelPath)
+		if err != nil {
+			return RespondError(c, ErrNotFound("File"))
+		}
+		if info.IsDirectory {
+			return RespondError(c, ErrBadRequest("Path is a directory, use DELETE /api/folders instead"))
+		}
+
+		if err := result.Backend.Delete(ctx, result.RelPath); err != nil {
+			return RespondError(c, ErrOperationFailed("delete file", err))
+		}
+
+		return c.JSON(http.StatusOK, map[string]any{
+			"success": true,
+			"path":    displayPath,
+		})
 	}
 
 	info, err := os.Stat(realPath)
@@ -240,9 +326,16 @@ func (h *Handler) SaveFileContent(c echo.Context) error {
 
 	// Resolve path
 	virtualPath := "/" + requestPath
-	realPath, storageType, _, err := h.resolvePath(virtualPath, claims)
+	result, realPath, err := h.resolveStorageForOperation(virtualPath, claims)
 	if err != nil {
 		return RespondError(c, ErrInvalidPath(err.Error()))
+	}
+
+	storageType := result.StorageType
+
+	// Check readonly
+	if err := checkReadonly(result); err != nil {
+		return RespondError(c, ErrForbidden(err.Error()))
 	}
 
 	// Check shared write permission
@@ -253,6 +346,47 @@ func (h *Handler) SaveFileContent(c echo.Context) error {
 		if !h.CanWriteSharedDrive(claims.UserID, virtualPath) {
 			return RespondError(c, ErrForbidden("No permission to edit files in this folder"))
 		}
+	}
+
+	// Handle non-local external storage
+	if storageType == StorageExternal && realPath == "" {
+		if result.Backend == nil {
+			return RespondError(c, ErrOperationFailed("save file", fmt.Errorf("no backend available")))
+		}
+		ctx := c.Request().Context()
+
+		// Check if the file exists (but allow saving to existing files)
+		info, err := result.Backend.Stat(ctx, result.RelPath)
+		if err != nil {
+			return RespondError(c, ErrNotFound("File"))
+		}
+		if info.IsDirectory {
+			return RespondError(c, ErrBadRequest("Path is a directory"))
+		}
+
+		// Get content length from header
+		size := c.Request().ContentLength
+
+		// Write file content directly via backend
+		if err := result.Backend.WriteFile(ctx, result.RelPath, c.Request().Body, size); err != nil {
+			return RespondError(c, ErrOperationFailed("save file", err))
+		}
+
+		// Log the action
+		var userID *string
+		if claims != nil {
+			userID = &claims.UserID
+		}
+		_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileEdit, virtualPath, map[string]any{
+			"size":        size,
+			"storageType": storageType,
+		})
+
+		return c.JSON(http.StatusOK, map[string]any{
+			"success": true,
+			"message": "File saved successfully",
+			"size":    size,
+		})
 	}
 
 	// Handle shared file editing
@@ -383,13 +517,33 @@ func (h *Handler) CheckFileExists(c echo.Context) error {
 	}
 
 	// Resolve path
-	realPath, storageType, displayPath, err := h.resolvePath(requestPath, claims)
+	result, realPath, err := h.resolveStorageForOperation(requestPath, claims)
 	if err != nil {
 		return RespondError(c, ErrInvalidPath(err.Error()))
 	}
 
-	if storageType == "root" {
+	if result.StorageType == "root" {
 		return RespondError(c, ErrBadRequest("Cannot check file at root"))
+	}
+
+	// Handle non-local external storage
+	if result.StorageType == StorageExternal && realPath == "" {
+		if result.Backend == nil {
+			return RespondError(c, ErrBadRequest("No backend available"))
+		}
+		ctx := c.Request().Context()
+		checkPath := result.RelPath
+		if checkPath != "" {
+			checkPath = filepath.Join(checkPath, filename)
+		} else {
+			checkPath = filename
+		}
+		exists, _ := result.Backend.Exists(ctx, checkPath)
+		return c.JSON(http.StatusOK, map[string]any{
+			"exists":   exists,
+			"path":     filepath.Join(result.DisplayPath, filename),
+			"filename": filename,
+		})
 	}
 
 	fullPath := filepath.Join(realPath, filename)
@@ -399,7 +553,7 @@ func (h *Handler) CheckFileExists(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]any{
 		"exists":   exists,
-		"path":     filepath.Join(displayPath, filename),
+		"path":     filepath.Join(result.DisplayPath, filename),
 		"filename": filename,
 	})
 }

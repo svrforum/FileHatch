@@ -51,19 +51,18 @@ func (h *Handler) CompressFiles(c echo.Context) error {
 	}
 
 	// Resolve parent path to get real path
-	parentRealPath, _, parentDisplayPath, err := h.resolvePath(parentPath, claims)
+	parentResult, parentRealPath, err := h.resolveStorageForOperation(parentPath, claims)
 	if err != nil {
 		return RespondError(c, ErrInvalidPath(err.Error()))
 	}
+	parentDisplayPath := parentResult.DisplayPath
 
 	// Generate output filename
 	outputName := req.OutputName
 	if outputName == "" {
 		if len(req.Paths) == 1 {
-			// Use the first item's name
 			outputName = filepath.Base(req.Paths[0])
 		} else {
-			// Use timestamp
 			outputName = fmt.Sprintf("archive_%s", time.Now().Format("20060102_150405"))
 		}
 	}
@@ -73,17 +72,29 @@ func (h *Handler) CompressFiles(c echo.Context) error {
 		outputName += ".zip"
 	}
 
-	// Check if output file already exists, add suffix if needed
-	outputPath := filepath.Join(parentRealPath, outputName)
-	baseName := strings.TrimSuffix(outputName, ".zip")
-	counter := 1
-	for {
-		if _, err := os.Stat(outputPath); os.IsNotExist(err) {
-			break
-		}
-		outputName = fmt.Sprintf("%s (%d).zip", baseName, counter)
+	parentIsNonLocal := parentResult.StorageType == StorageExternal && parentRealPath == ""
+
+	// For non-local output: write to temp, then upload
+	var outputPath string
+	var useTempOutput bool
+	if parentIsNonLocal {
+		tmpDir := filepath.Join(h.dataRoot, ".tmp")
+		os.MkdirAll(tmpDir, 0755)
+		outputPath = filepath.Join(tmpDir, fmt.Sprintf("compress_%d_%s", time.Now().UnixNano(), outputName))
+		useTempOutput = true
+	} else {
+		// Check if output file already exists, add suffix if needed
 		outputPath = filepath.Join(parentRealPath, outputName)
-		counter++
+		baseName := strings.TrimSuffix(outputName, ".zip")
+		counter := 1
+		for {
+			if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+				break
+			}
+			outputName = fmt.Sprintf("%s (%d).zip", baseName, counter)
+			outputPath = filepath.Join(parentRealPath, outputName)
+			counter++
+		}
 	}
 
 	// Create zip file
@@ -96,31 +107,44 @@ func (h *Handler) CompressFiles(c echo.Context) error {
 	zipWriter := zip.NewWriter(zipFile)
 	defer zipWriter.Close()
 
+	bgCtx := context.Background()
+
 	// Add each path to the zip
 	for _, path := range req.Paths {
-		realPath, _, _, err := h.resolvePath(path, claims)
+		result, realPath, err := h.resolveStorageForOperation(path, claims)
 		if err != nil {
-			continue // Skip invalid paths
+			continue
 		}
 
-		info, err := os.Stat(realPath)
-		if err != nil {
-			continue // Skip non-existent paths
-		}
+		itemBaseName := filepath.Base(path)
+		isNonLocal := result.StorageType == StorageExternal && realPath == ""
 
-		baseName := filepath.Base(path)
-
-		if info.IsDir() {
-			// Add directory recursively
-			err = h.addDirToZip(zipWriter, realPath, baseName)
+		var addErr error
+		if isNonLocal {
+			// Add from backend
+			info, statErr := result.Backend.Stat(bgCtx, result.RelPath)
+			if statErr != nil {
+				continue
+			}
+			if info.IsDirectory {
+				addErr = addBackendDirToZip(bgCtx, zipWriter, result.Backend, result.RelPath, itemBaseName)
+			} else {
+				addErr = addBackendFileToZip(bgCtx, zipWriter, result.Backend, result.RelPath, itemBaseName)
+			}
 		} else {
-			// Add single file
-			err = h.addFileToZip(zipWriter, realPath, baseName)
+			info, statErr := os.Stat(realPath)
+			if statErr != nil {
+				continue
+			}
+			if info.IsDir() {
+				addErr = h.addDirToZip(zipWriter, realPath, itemBaseName)
+			} else {
+				addErr = h.addFileToZip(zipWriter, realPath, itemBaseName)
+			}
 		}
 
-		if err != nil {
-			// Log error but continue with other files
-			fmt.Printf("[Compress] Error adding %s: %v\n", path, err)
+		if addErr != nil {
+			fmt.Printf("[Compress] Error adding %s: %v\n", path, addErr)
 		}
 	}
 
@@ -135,6 +159,15 @@ func (h *Handler) CompressFiles(c echo.Context) error {
 		finalSize = finalInfo.Size()
 	}
 
+	// Upload temp zip to non-local backend
+	if useTempOutput {
+		defer os.Remove(outputPath)
+		destRelPath := filepath.Join(parentResult.RelPath, outputName)
+		if err := uploadFileToBackend(bgCtx, outputPath, parentResult.Backend, destRelPath); err != nil {
+			return RespondError(c, ErrOperationFailed("upload zip to external storage", err))
+		}
+	}
+
 	// Log audit event
 	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "file.compress", parentDisplayPath+"/"+outputName, map[string]interface{}{
 		"sourceCount": len(req.Paths),
@@ -142,8 +175,8 @@ func (h *Handler) CompressFiles(c echo.Context) error {
 		"outputSize":  finalSize,
 	})
 
-	// Update storage tracking: add compressed file size
-	if finalSize > 0 {
+	// Update storage tracking: add compressed file size (skip for external)
+	if finalSize > 0 && !parentIsNonLocal {
 		_ = h.UpdateUserStorage(claims.UserID, finalSize)
 	}
 
@@ -152,6 +185,145 @@ func (h *Handler) CompressFiles(c echo.Context) error {
 		"outputPath": parentDisplayPath + "/" + outputName,
 		"outputName": outputName,
 		"size":       finalSize,
+	})
+}
+
+// addBackendFileToZip adds a single file from a StorageBackend to the zip archive
+func addBackendFileToZip(ctx context.Context, zipWriter *zip.Writer, backend StorageBackend, relPath, zipPath string) error {
+	reader, info, err := backend.ReadFile(ctx, relPath)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	header := &zip.FileHeader{
+		Name:     zipPath,
+		Method:   zip.Deflate,
+		Modified: info.FileModTime,
+	}
+	header.SetMode(os.FileMode(info.FileMode))
+
+	writer, err := zipWriter.CreateHeader(header)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(writer, reader)
+	return err
+}
+
+// addBackendDirToZip adds a directory recursively from a StorageBackend to the zip archive
+func addBackendDirToZip(ctx context.Context, zipWriter *zip.Writer, backend StorageBackend, relPath, zipBasePath string) error {
+	return backend.Walk(ctx, relPath, func(path string, info *StorageFileInfo, err error) error {
+		if err != nil {
+			return nil // Skip errors
+		}
+
+		// Skip hidden files
+		if strings.HasPrefix(info.FileName, ".") && path != relPath {
+			if info.IsDirectory {
+				return ErrSkipDir
+			}
+			return nil
+		}
+
+		// Calculate relative path within zip
+		rel, err := filepath.Rel(relPath, path)
+		if err != nil {
+			return nil
+		}
+
+		zp := filepath.Join(zipBasePath, rel)
+		zp = filepath.ToSlash(zp)
+
+		if info.IsDirectory {
+			_, err := zipWriter.Create(zp + "/")
+			return err
+		}
+
+		return addBackendFileToZip(ctx, zipWriter, backend, path, zp)
+	})
+}
+
+// addBackendFileToZipWithProgress adds a single file from a StorageBackend to the zip with progress tracking
+func addBackendFileToZipWithProgress(ctx context.Context, zipWriter *zip.Writer, backend StorageBackend, relPath, zipPath string, compCtx *CompressionContext) error {
+	reader, info, err := backend.ReadFile(ctx, relPath)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	header := &zip.FileHeader{
+		Name:     zipPath,
+		Method:   zip.Deflate,
+		Modified: info.FileModTime,
+	}
+	header.SetMode(os.FileMode(info.FileMode))
+
+	writer, err := zipWriter.CreateHeader(header)
+	if err != nil {
+		return err
+	}
+
+	buf := make([]byte, 1024*1024)
+	for {
+		if compCtx.IsCancelled() {
+			return ErrCompressionCancelled
+		}
+
+		n, readErr := reader.Read(buf)
+		if n > 0 {
+			_, writeErr := writer.Write(buf[:n])
+			if writeErr != nil {
+				return writeErr
+			}
+			compCtx.CompressedBytes += int64(n)
+			compCtx.SendCompressionProgress(filepath.Base(relPath))
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return readErr
+		}
+	}
+
+	compCtx.ProcessedFiles++
+	return nil
+}
+
+// addBackendDirToZipWithProgress adds a directory from a StorageBackend to the zip with progress tracking
+func addBackendDirToZipWithProgress(ctx context.Context, zipWriter *zip.Writer, backend StorageBackend, relPath, zipBasePath string, compCtx *CompressionContext) error {
+	return backend.Walk(ctx, relPath, func(path string, info *StorageFileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if compCtx.IsCancelled() {
+			return ErrCompressionCancelled
+		}
+
+		if strings.HasPrefix(info.FileName, ".") && path != relPath {
+			if info.IsDirectory {
+				return ErrSkipDir
+			}
+			return nil
+		}
+
+		rel, err := filepath.Rel(relPath, path)
+		if err != nil {
+			return nil
+		}
+
+		zp := filepath.Join(zipBasePath, rel)
+		zp = filepath.ToSlash(zp)
+
+		if info.IsDirectory {
+			_, err := zipWriter.Create(zp + "/")
+			return err
+		}
+
+		return addBackendFileToZipWithProgress(ctx, zipWriter, backend, path, zp, compCtx)
 	})
 }
 
@@ -242,53 +414,102 @@ func (h *Handler) ExtractZip(c echo.Context) error {
 		return RespondError(c, ErrUnauthorized(""))
 	}
 
-	// Resolve the zip file path
-	realZipPath, _, displayPath, err := h.resolvePath(req.Path, claims)
-	if err != nil {
-		return RespondError(c, ErrForbidden(err.Error()))
-	}
-
 	// Check if it's a zip file
 	if !strings.HasSuffix(strings.ToLower(req.Path), ".zip") {
 		return RespondError(c, ErrBadRequest("Only .zip files can be extracted"))
 	}
 
-	// Check if file exists
-	if _, err := os.Stat(realZipPath); os.IsNotExist(err) {
-		return RespondError(c, ErrNotFound("Zip file not found"))
+	bgCtx := context.Background()
+
+	// Resolve the zip file path
+	srcResult, srcRealPath, err := h.resolveStorageForOperation(req.Path, claims)
+	if err != nil {
+		return RespondError(c, ErrForbidden(err.Error()))
 	}
+	displayPath := srcResult.DisplayPath
+	srcIsNonLocal := srcResult.StorageType == StorageExternal && srcRealPath == ""
 
 	// Determine output directory
-	var outputDir string
+	var outputResult *ResolveResult
+	var outputRealPath string
 	var outputDisplayPath string
 	if req.OutputPath != "" {
-		outputDir, _, outputDisplayPath, err = h.resolvePath(req.OutputPath, claims)
+		outputResult, outputRealPath, err = h.resolveStorageForOperation(req.OutputPath, claims)
 		if err != nil {
 			return RespondError(c, ErrForbidden(err.Error()))
 		}
+		outputDisplayPath = outputResult.DisplayPath
 	} else {
 		// Extract to the same directory as the zip file
-		outputDir = filepath.Dir(realZipPath)
+		parentPath := filepath.Dir(req.Path)
+		if parentPath == "." {
+			parentPath = "/"
+		}
+		outputResult, outputRealPath, err = h.resolveStorageForOperation(parentPath, claims)
+		if err != nil {
+			return RespondError(c, ErrForbidden(err.Error()))
+		}
 		outputDisplayPath = filepath.Dir(displayPath)
+	}
+
+	// Check readonly on output
+	if err := checkReadonly(outputResult); err != nil {
+		return RespondError(c, ErrForbidden("Storage is read-only"))
+	}
+
+	outputIsNonLocal := outputResult.StorageType == StorageExternal && outputRealPath == ""
+
+	// For non-local source: download ZIP to temp first
+	var localZipPath string
+	var cleanupZip bool
+	if srcIsNonLocal {
+		tmpDir := filepath.Join(h.dataRoot, ".tmp")
+		_ = os.MkdirAll(tmpDir, 0755)
+		localZipPath = filepath.Join(tmpDir, fmt.Sprintf("extract_%d.zip", time.Now().UnixNano()))
+		cleanupZip = true
+		if err := downloadFileToLocal(bgCtx, srcResult.Backend, srcResult.RelPath, localZipPath); err != nil {
+			return RespondError(c, ErrOperationFailed("download zip from external storage", err))
+		}
+	} else {
+		localZipPath = srcRealPath
+		// Check if file exists
+		if _, err := os.Stat(localZipPath); os.IsNotExist(err) {
+			return RespondError(c, ErrNotFound("Zip file not found"))
+		}
+	}
+	if cleanupZip {
+		defer os.Remove(localZipPath)
 	}
 
 	// Create a folder with the zip file name (without extension)
 	zipBaseName := strings.TrimSuffix(filepath.Base(req.Path), ".zip")
-	extractDir := filepath.Join(outputDir, zipBaseName)
-	extractDisplayPath := filepath.Join(outputDisplayPath, zipBaseName)
 
-	// If folder already exists, add a number suffix
-	originalExtractDir := extractDir
-	originalExtractDisplayPath := extractDisplayPath
-	counter := 1
-	for {
-		if _, err := os.Stat(extractDir); os.IsNotExist(err) {
-			break
+	// Extract to local temp dir first (will upload later for non-local output)
+	var extractDir string
+	var cleanupExtractDir bool
+	if outputIsNonLocal {
+		tmpDir := filepath.Join(h.dataRoot, ".tmp")
+		_ = os.MkdirAll(tmpDir, 0755)
+		extractDir = filepath.Join(tmpDir, fmt.Sprintf("extracted_%d_%s", time.Now().UnixNano(), zipBaseName))
+		cleanupExtractDir = true
+	} else {
+		extractDir = filepath.Join(outputRealPath, zipBaseName)
+		// If folder already exists, add a number suffix
+		originalExtractDir := extractDir
+		counter := 1
+		for {
+			if _, err := os.Stat(extractDir); os.IsNotExist(err) {
+				break
+			}
+			extractDir = fmt.Sprintf("%s_%d", originalExtractDir, counter)
+			counter++
 		}
-		extractDir = fmt.Sprintf("%s_%d", originalExtractDir, counter)
-		extractDisplayPath = fmt.Sprintf("%s_%d", originalExtractDisplayPath, counter)
-		counter++
 	}
+	if cleanupExtractDir {
+		defer os.RemoveAll(extractDir)
+	}
+
+	extractDisplayPath := filepath.Join(outputDisplayPath, zipBaseName)
 
 	// Create extract directory
 	if err := os.MkdirAll(extractDir, 0755); err != nil {
@@ -296,9 +517,11 @@ func (h *Handler) ExtractZip(c echo.Context) error {
 	}
 
 	// Open the zip file
-	reader, err := zip.OpenReader(realZipPath)
+	reader, err := zip.OpenReader(localZipPath)
 	if err != nil {
-		os.RemoveAll(extractDir) // Cleanup on error
+		if !cleanupExtractDir {
+			os.RemoveAll(extractDir)
+		}
 		return RespondError(c, ErrInternal("Failed to open zip file"))
 	}
 	defer reader.Close()
@@ -329,6 +552,14 @@ func (h *Handler) ExtractZip(c echo.Context) error {
 		extractedCount++
 	}
 
+	// Upload extracted files to non-local backend
+	if outputIsNonLocal {
+		destRelPath := filepath.Join(outputResult.RelPath, zipBaseName)
+		if err := uploadDirToBackend(bgCtx, extractDir, outputResult.Backend, destRelPath); err != nil {
+			return RespondError(c, ErrOperationFailed("upload extracted files to external storage", err))
+		}
+	}
+
 	// Calculate extracted size for storage tracking
 	extractedSize, _ := GetFileSize(extractDir)
 
@@ -339,8 +570,8 @@ func (h *Handler) ExtractZip(c echo.Context) error {
 		"extractedSize":  extractedSize,
 	})
 
-	// Update storage tracking: add extracted files size
-	if extractedSize > 0 {
+	// Update storage tracking: add extracted files size (skip for external)
+	if extractedSize > 0 && !outputIsNonLocal {
 		_ = h.UpdateUserStorage(claims.UserID, extractedSize)
 	}
 
@@ -612,6 +843,8 @@ func (h *Handler) CompressFilesStream(c echo.Context) error {
 		return RespondError(c, ErrUnauthorized(""))
 	}
 
+	bgCtx := context.Background()
+
 	// Determine output directory (parent of first item)
 	firstPath := paths[0]
 	parentPath := filepath.Dir(firstPath)
@@ -619,11 +852,13 @@ func (h *Handler) CompressFilesStream(c echo.Context) error {
 		parentPath = "/"
 	}
 
-	// Resolve parent path to get real path
-	parentRealPath, _, parentDisplayPath, err := h.resolvePath(parentPath, claims)
+	// Resolve parent path
+	parentResult, parentRealPath, err := h.resolveStorageForOperation(parentPath, claims)
 	if err != nil {
 		return RespondError(c, ErrInvalidPath(err.Error()))
 	}
+	parentDisplayPath := parentResult.DisplayPath
+	parentIsNonLocal := parentResult.StorageType == StorageExternal && parentRealPath == ""
 
 	// Generate output filename
 	if outputName == "" {
@@ -639,44 +874,72 @@ func (h *Handler) CompressFilesStream(c echo.Context) error {
 		outputName += ".zip"
 	}
 
-	// Check if output file already exists, add suffix if needed
-	outputPath := filepath.Join(parentRealPath, outputName)
-	baseName := strings.TrimSuffix(outputName, ".zip")
-	counter := 1
-	for {
-		if _, err := os.Stat(outputPath); os.IsNotExist(err) {
-			break
-		}
-		outputName = fmt.Sprintf("%s (%d).zip", baseName, counter)
+	// Determine output path
+	var outputPath string
+	var useTempOutput bool
+	if parentIsNonLocal {
+		tmpDir := filepath.Join(h.dataRoot, ".tmp")
+		_ = os.MkdirAll(tmpDir, 0755)
+		outputPath = filepath.Join(tmpDir, fmt.Sprintf("compress_stream_%d_%s", time.Now().UnixNano(), outputName))
+		useTempOutput = true
+	} else {
 		outputPath = filepath.Join(parentRealPath, outputName)
-		counter++
+		baseName := strings.TrimSuffix(outputName, ".zip")
+		counter := 1
+		for {
+			if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+				break
+			}
+			outputName = fmt.Sprintf("%s (%d).zip", baseName, counter)
+			outputPath = filepath.Join(parentRealPath, outputName)
+			counter++
+		}
 	}
 
 	// Calculate total size and file count
 	var totalBytes int64
 	var totalFiles int
 	for _, path := range paths {
-		realPath, _, _, err := h.resolvePath(path, claims)
+		result, realPath, err := h.resolveStorageForOperation(path, claims)
 		if err != nil {
 			continue
 		}
 
-		info, err := os.Stat(realPath)
-		if err != nil {
-			continue
-		}
-
-		if info.IsDir() {
-			_ = filepath.Walk(realPath, func(_ string, fi os.FileInfo, _ error) error {
-				if fi != nil && !fi.IsDir() && !strings.HasPrefix(fi.Name(), ".") {
-					totalBytes += fi.Size()
-					totalFiles++
-				}
-				return nil
-			})
+		isNonLocal := result.StorageType == StorageExternal && realPath == ""
+		if isNonLocal {
+			info, err := result.Backend.Stat(bgCtx, result.RelPath)
+			if err != nil {
+				continue
+			}
+			if info.IsDirectory {
+				_ = result.Backend.Walk(bgCtx, result.RelPath, func(_ string, fi *StorageFileInfo, _ error) error {
+					if fi != nil && !fi.IsDirectory && !strings.HasPrefix(fi.FileName, ".") {
+						totalBytes += fi.FileSize
+						totalFiles++
+					}
+					return nil
+				})
+			} else {
+				totalBytes += info.FileSize
+				totalFiles++
+			}
 		} else {
-			totalBytes += info.Size()
-			totalFiles++
+			info, err := os.Stat(realPath)
+			if err != nil {
+				continue
+			}
+			if info.IsDir() {
+				_ = filepath.Walk(realPath, func(_ string, fi os.FileInfo, _ error) error {
+					if fi != nil && !fi.IsDir() && !strings.HasPrefix(fi.Name(), ".") {
+						totalBytes += fi.Size()
+						totalFiles++
+					}
+					return nil
+				})
+			} else {
+				totalBytes += info.Size()
+				totalFiles++
+			}
 		}
 	}
 
@@ -707,47 +970,54 @@ func (h *Handler) CompressFilesStream(c echo.Context) error {
 
 	// Add each path to the zip
 	for _, path := range paths {
-		// Check for cancellation before processing each path
 		if compCtx.IsCancelled() {
 			compressionErr = ErrCompressionCancelled
 			break
 		}
 
-		realPath, _, _, err := h.resolvePath(path, claims)
+		result, realPath, err := h.resolveStorageForOperation(path, claims)
 		if err != nil {
-			continue // Skip invalid paths
-		}
-
-		info, err := os.Stat(realPath)
-		if err != nil {
-			continue // Skip non-existent paths
+			continue
 		}
 
 		itemBaseName := filepath.Base(path)
+		isNonLocal := result.StorageType == StorageExternal && realPath == ""
 
-		if info.IsDir() {
-			// Add directory recursively with progress
-			err = h.addDirToZipWithProgress(zipWriter, realPath, itemBaseName, compCtx)
+		var addErr error
+		if isNonLocal {
+			info, statErr := result.Backend.Stat(bgCtx, result.RelPath)
+			if statErr != nil {
+				continue
+			}
+			if info.IsDirectory {
+				addErr = addBackendDirToZipWithProgress(bgCtx, zipWriter, result.Backend, result.RelPath, itemBaseName, compCtx)
+			} else {
+				addErr = addBackendFileToZipWithProgress(bgCtx, zipWriter, result.Backend, result.RelPath, itemBaseName, compCtx)
+			}
 		} else {
-			// Add single file with progress
-			err = h.addFileToZipWithProgress(zipWriter, realPath, itemBaseName, compCtx)
+			info, statErr := os.Stat(realPath)
+			if statErr != nil {
+				continue
+			}
+			if info.IsDir() {
+				addErr = h.addDirToZipWithProgress(zipWriter, realPath, itemBaseName, compCtx)
+			} else {
+				addErr = h.addFileToZipWithProgress(zipWriter, realPath, itemBaseName, compCtx)
+			}
 		}
 
-		if err != nil {
-			// Check for cancellation
-			if errors.Is(err, ErrCompressionCancelled) {
-				compressionErr = err
+		if addErr != nil {
+			if errors.Is(addErr, ErrCompressionCancelled) {
+				compressionErr = addErr
 				break
 			}
-			// Check for severe errors (disk full, permission denied, etc.)
-			if strings.Contains(err.Error(), "no space left") ||
-				strings.Contains(err.Error(), "permission denied") ||
-				strings.Contains(err.Error(), "disk quota exceeded") {
-				compressionErr = err
+			if strings.Contains(addErr.Error(), "no space left") ||
+				strings.Contains(addErr.Error(), "permission denied") ||
+				strings.Contains(addErr.Error(), "disk quota exceeded") {
+				compressionErr = addErr
 				break
 			}
-			// Log other errors but continue with other files
-			fmt.Printf("[CompressStream] Error adding %s: %v\n", path, err)
+			fmt.Printf("[CompressStream] Error adding %s: %v\n", path, addErr)
 		}
 	}
 
@@ -776,6 +1046,16 @@ func (h *Handler) CompressFilesStream(c echo.Context) error {
 		finalSize = finalInfo.Size()
 	}
 
+	// Upload temp zip to non-local backend
+	if useTempOutput {
+		defer os.Remove(outputPath)
+		destRelPath := filepath.Join(parentResult.RelPath, outputName)
+		if err := uploadFileToBackend(bgCtx, outputPath, parentResult.Backend, destRelPath); err != nil {
+			compCtx.SendCompressionError(fmt.Errorf("failed to upload zip to external storage: %w", err))
+			return nil
+		}
+	}
+
 	outputDisplayPath := parentDisplayPath + "/" + outputName
 
 	// Log audit event
@@ -785,8 +1065,8 @@ func (h *Handler) CompressFilesStream(c echo.Context) error {
 		"outputSize":  finalSize,
 	})
 
-	// Update storage tracking: add compressed file size
-	if finalSize > 0 {
+	// Update storage tracking: add compressed file size (skip for external)
+	if finalSize > 0 && !parentIsNonLocal {
 		_ = h.UpdateUserStorage(claims.UserID, finalSize)
 	}
 

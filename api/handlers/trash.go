@@ -1,18 +1,50 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/labstack/echo/v4"
 )
+
+// moveOrCopy attempts os.Rename first; on cross-device errors, falls back to copy+delete.
+func moveOrCopy(src, dst string) error {
+	err := os.Rename(src, dst)
+	if err == nil {
+		return nil
+	}
+	// Check for cross-device link error
+	var linkErr *os.LinkError
+	if errors.As(err, &linkErr) && errors.Is(linkErr.Err, syscall.EXDEV) {
+		// Cross-device: copy then delete
+		srcInfo, statErr := os.Stat(src)
+		if statErr != nil {
+			return statErr
+		}
+		if srcInfo.IsDir() {
+			if cpErr := copyDir(src, dst); cpErr != nil {
+				return cpErr
+			}
+		} else {
+			if cpErr := copyFile(src, dst); cpErr != nil {
+				return cpErr
+			}
+		}
+		return os.RemoveAll(src)
+	}
+	return err
+}
 
 // TrashItem represents an item in the trash
 type TrashItem struct {
@@ -22,6 +54,8 @@ type TrashItem struct {
 	Size         int64     `json:"size"`
 	IsDir        bool      `json:"isDir"`
 	DeletedAt    time.Time `json:"deletedAt"`
+	StorageType  string    `json:"storageType,omitempty"` // "home", "shared", "external"
+	MountID      string    `json:"mountId,omitempty"`     // external storage ID
 }
 
 // getTrashPath returns the trash directory path for a user
@@ -222,22 +256,20 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 	}
 
 	// Resolve path
-	realPath, storageType, displayPath, err := h.resolvePath("/"+requestPath, claims)
+	result, realPath, err := h.resolveStorageForOperation("/"+requestPath, claims)
 	if err != nil {
 		return RespondError(c, ErrInvalidPath(err.Error()))
 	}
+	storageType := result.StorageType
+	displayPath := result.DisplayPath
 
 	if storageType == "root" || displayPath == "/home" || displayPath == "/shared" {
 		return RespondError(c, ErrForbidden("Cannot delete root folders"))
 	}
 
-	// Check if source exists
-	info, err := os.Stat(realPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return RespondError(c, ErrNotFound("Item"))
-		}
-		return RespondError(c, ErrOperationFailed("access item", err))
+	// Check readonly
+	if err := checkReadonly(result); err != nil {
+		return RespondError(c, ErrForbidden(err.Error()))
 	}
 
 	// Create trash directory
@@ -246,45 +278,120 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 		return RespondError(c, ErrOperationFailed("create trash directory", err))
 	}
 
-	// Generate unique ID for trash item
-	trashID := fmt.Sprintf("%d_%s", time.Now().UnixNano(), info.Name())
-	trashItemPath := filepath.Join(trashPath, trashID)
-
-	// Move to trash
-	if err := os.Rename(realPath, trashItemPath); err != nil {
-		return RespondError(c, ErrOperationFailed("move to trash", err))
-	}
-
-	// Calculate size
+	var trashID string
 	var size int64
-	if info.IsDir() {
-		size, _ = h.calculateDirSize(trashItemPath)
-	} else {
-		size = info.Size()
-	}
+	var isDir bool
+	var itemName string
 
-	// Update trash metadata
-	meta, _ := h.loadTrashMeta(claims.Username)
-	meta[trashID] = TrashItem{
-		ID:           trashID,
-		Name:         info.Name(),
-		OriginalPath: displayPath,
-		Size:         size,
-		IsDir:        info.IsDir(),
-		DeletedAt:    time.Now(),
+	// Non-local external storage: download to local trash, then delete from backend
+	if storageType == StorageExternal && realPath == "" {
+		ctx := context.Background()
+
+		// Get source info
+		info, err := result.Backend.Stat(ctx, result.RelPath)
+		if err != nil {
+			return RespondError(c, ErrNotFound("Item"))
+		}
+		itemName = info.FileName
+		isDir = info.IsDirectory
+
+		trashID = fmt.Sprintf("%d_%s", time.Now().UnixNano(), itemName)
+		trashItemPath := filepath.Join(trashPath, trashID)
+
+		// Download from backend to local trash
+		if isDir {
+			if err := downloadDirToLocal(ctx, result.Backend, result.RelPath, trashItemPath); err != nil {
+				return RespondError(c, ErrOperationFailed("move to trash", err))
+			}
+		} else {
+			if err := downloadFileToLocal(ctx, result.Backend, result.RelPath, trashItemPath); err != nil {
+				return RespondError(c, ErrOperationFailed("move to trash", err))
+			}
+		}
+
+		// Delete from backend
+		if err := result.Backend.DeleteAll(ctx, result.RelPath); err != nil {
+			return RespondError(c, ErrOperationFailed("delete from external storage", err))
+		}
+
+		// Calculate size from local copy
+		if isDir {
+			size, _ = h.calculateDirSize(trashItemPath)
+		} else {
+			size = info.FileSize
+		}
+
+		// Save metadata with external storage info
+		meta, _ := h.loadTrashMeta(claims.Username)
+		meta[trashID] = TrashItem{
+			ID:           trashID,
+			Name:         itemName,
+			OriginalPath: displayPath,
+			Size:         size,
+			IsDir:        isDir,
+			DeletedAt:    time.Now(),
+			StorageType:  StorageExternal,
+			MountID:      result.MountID,
+		}
+		_ = h.saveTrashMeta(claims.Username, meta)
+	} else {
+		// Local storage (home, shared, local-mount external)
+		info, err := os.Stat(realPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return RespondError(c, ErrNotFound("Item"))
+			}
+			return RespondError(c, ErrOperationFailed("access item", err))
+		}
+		itemName = info.Name()
+		isDir = info.IsDir()
+
+		trashID = fmt.Sprintf("%d_%s", time.Now().UnixNano(), itemName)
+		trashItemPath := filepath.Join(trashPath, trashID)
+
+		// Move to trash (handles cross-device moves for external mounts)
+		if err := moveOrCopy(realPath, trashItemPath); err != nil {
+			return RespondError(c, ErrOperationFailed("move to trash", err))
+		}
+
+		// Calculate size
+		if isDir {
+			size, _ = h.calculateDirSize(trashItemPath)
+		} else {
+			size = info.Size()
+		}
+
+		// Update trash metadata
+		meta, _ := h.loadTrashMeta(claims.Username)
+		trashItem := TrashItem{
+			ID:           trashID,
+			Name:         itemName,
+			OriginalPath: displayPath,
+			Size:         size,
+			IsDir:        isDir,
+			DeletedAt:    time.Now(),
+			StorageType:  storageType,
+		}
+		// Include MountID for local-mount external storage (needed for restore)
+		if storageType == StorageExternal && result.MountID != "" {
+			trashItem.MountID = result.MountID
+		}
+		meta[trashID] = trashItem
+		_ = h.saveTrashMeta(claims.Username, meta)
 	}
-	_ = h.saveTrashMeta(claims.Username, meta)
 
 	// Log audit event
 	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventFileDelete, displayPath, map[string]interface{}{
-		"isDir":   info.IsDir(),
+		"isDir":   isDir,
 		"size":    size,
 		"trashId": trashID,
 	})
 
-	// Update storage tracking: move from home to trash
-	if err := h.UpdateStorageForMove(claims.UserID, size, true); err != nil {
-		fmt.Printf("[Storage] Failed to update storage for %s: %v\n", claims.Username, err)
+	// Update storage tracking: move from home to trash (skip for external)
+	if storageType != StorageExternal {
+		if err := h.UpdateStorageForMove(claims.UserID, size, true); err != nil {
+			fmt.Printf("[Storage] Failed to update storage for %s: %v\n", claims.Username, err)
+		}
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -374,31 +481,101 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 	}
 
 	// Determine restore path and trash item location
-	var realPath string
-	var trashItemPath string
+	trashItemPath := filepath.Join(h.getTrashPath(claims.Username), trashID)
 	restorePath := item.OriginalPath
 
 	// Check if this is an SMB-deleted file (ID starts with "smb_")
 	isSMBFile := strings.HasPrefix(trashID, "smb_")
-
 	if isSMBFile {
-		// SMB files are stored in .smb subdirectory with original path structure
-		// originalPath is like "/home/folder/file.txt"
-		// actual location is "/data/trash/{username}/.smb/folder/file.txt"
 		relPath := strings.TrimPrefix(item.OriginalPath, "/home/")
 		trashItemPath = filepath.Join(h.getTrashPath(claims.Username), ".smb", relPath)
+	}
 
-		// Resolve destination path
+	// Check if restoring to external non-local storage
+	if item.StorageType == StorageExternal && item.MountID != "" {
+		// Restore to external non-local storage
+		restoreResult, restoreRealPath, err := h.resolveStorageForOperation(item.OriginalPath, claims)
+		if err != nil {
+			return RespondError(c, ErrInvalidPath("Cannot restore to original location"))
+		}
+
+		if restoreResult.IsReadonly {
+			return RespondError(c, ErrForbidden("External storage is read-only"))
+		}
+
+		if restoreResult.Backend != nil && !restoreResult.Backend.IsLocal() {
+			// Upload from local trash to non-local backend
+			ctx := context.Background()
+			if item.IsDir {
+				if err := uploadDirToBackend(ctx, trashItemPath, restoreResult.Backend, restoreResult.RelPath); err != nil {
+					return RespondError(c, ErrOperationFailed("restore item", err))
+				}
+			} else {
+				if err := uploadFileToBackend(ctx, trashItemPath, restoreResult.Backend, restoreResult.RelPath); err != nil {
+					return RespondError(c, ErrOperationFailed("restore item", err))
+				}
+			}
+
+			// Delete local trash copy
+			os.RemoveAll(trashItemPath)
+
+			// Update metadata
+			delete(meta, trashID)
+			_ = h.saveTrashMeta(claims.Username, meta)
+
+			_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", restorePath, map[string]interface{}{
+				"trashId": trashID,
+			})
+
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"success":      true,
+				"restoredPath": restorePath,
+			})
+		}
+		// Local-mount external: use restoreRealPath directly
+		localRealPath := restoreRealPath
+
+		// Check if destination already exists
+		if _, existErr := os.Stat(localRealPath); existErr == nil {
+			ext := filepath.Ext(localRealPath)
+			base := strings.TrimSuffix(localRealPath, ext)
+			localRealPath = fmt.Sprintf("%s_restored_%d%s", base, time.Now().Unix(), ext)
+			ext = filepath.Ext(restorePath)
+			base = strings.TrimSuffix(restorePath, ext)
+			restorePath = fmt.Sprintf("%s_restored_%d%s", base, time.Now().Unix(), ext)
+		}
+
+		parentDir := filepath.Dir(localRealPath)
+		if mkErr := os.MkdirAll(parentDir, 0755); mkErr != nil {
+			return RespondError(c, ErrOperationFailed("create parent directory", mkErr))
+		}
+
+		if mvErr := moveOrCopy(trashItemPath, localRealPath); mvErr != nil {
+			return RespondError(c, ErrOperationFailed("restore item", mvErr))
+		}
+
+		delete(meta, trashID)
+		_ = h.saveTrashMeta(claims.Username, meta)
+
+		_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", restorePath, map[string]interface{}{
+			"trashId": trashID,
+		})
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"success":      true,
+			"restoredPath": restorePath,
+		})
+	}
+
+	// Local restore (home, shared)
+	var realPath string
+	if isSMBFile {
 		var err error
 		realPath, _, _, err = h.resolvePath(item.OriginalPath, claims)
 		if err != nil {
 			return RespondError(c, ErrInvalidPath("Cannot restore to original location"))
 		}
 	} else {
-		// Normal trash items
-		trashItemPath = filepath.Join(h.getTrashPath(claims.Username), trashID)
-
-		// Resolve original path
 		var err error
 		realPath, _, _, err = h.resolvePath(item.OriginalPath, claims)
 		if err != nil {
@@ -424,8 +601,8 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 		return RespondError(c, ErrOperationFailed("create parent directory", err))
 	}
 
-	// Move back from trash
-	if err := os.Rename(trashItemPath, realPath); err != nil {
+	// Move back from trash (handles cross-device moves for external mounts)
+	if err := moveOrCopy(trashItemPath, realPath); err != nil {
 		return RespondError(c, ErrOperationFailed("restore item", err))
 	}
 
@@ -443,9 +620,11 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 		"trashId": trashID,
 	})
 
-	// Update storage tracking: move from trash back to home
-	if err := h.UpdateStorageForMove(claims.UserID, item.Size, false); err != nil {
-		fmt.Printf("[Storage] Failed to update storage for %s: %v\n", claims.Username, err)
+	// Update storage tracking: move from trash back to home (skip for external)
+	if item.StorageType != StorageExternal {
+		if err := h.UpdateStorageForMove(claims.UserID, item.Size, false); err != nil {
+			fmt.Printf("[Storage] Failed to update storage for %s: %v\n", claims.Username, err)
+		}
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -772,4 +951,98 @@ func (h *Handler) GetTrashStats(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, stats)
+}
+
+// downloadFileToLocal downloads a single file from a StorageBackend to a local path
+func downloadFileToLocal(ctx context.Context, backend StorageBackend, relPath, localPath string) error {
+	reader, _, err := backend.ReadFile(ctx, relPath)
+	if err != nil {
+		return fmt.Errorf("failed to read from backend: %w", err)
+	}
+	defer reader.Close()
+
+	if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
+		return err
+	}
+
+	f, err := os.Create(localPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = io.Copy(f, reader)
+	return err
+}
+
+// downloadDirToLocal recursively downloads a directory from a StorageBackend to a local path
+func downloadDirToLocal(ctx context.Context, backend StorageBackend, relPath, localPath string) error {
+	if err := os.MkdirAll(localPath, 0755); err != nil {
+		return err
+	}
+
+	entries, err := backend.ReadDir(ctx, relPath)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		childRelPath := filepath.Join(relPath, entry.EntryName)
+		childLocalPath := filepath.Join(localPath, entry.EntryName)
+
+		if entry.IsDir {
+			if err := downloadDirToLocal(ctx, backend, childRelPath, childLocalPath); err != nil {
+				return err
+			}
+		} else {
+			if err := downloadFileToLocal(ctx, backend, childRelPath, childLocalPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// uploadFileToBackend uploads a local file to a StorageBackend
+func uploadFileToBackend(ctx context.Context, localPath string, backend StorageBackend, relPath string) error {
+	f, err := os.Open(localPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+
+	return backend.WriteFile(ctx, relPath, f, info.Size())
+}
+
+// uploadDirToBackend recursively uploads a local directory to a StorageBackend
+func uploadDirToBackend(ctx context.Context, localPath string, backend StorageBackend, relPath string) error {
+	if err := backend.Mkdir(ctx, relPath); err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(localPath)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		childLocalPath := filepath.Join(localPath, entry.Name())
+		childRelPath := filepath.Join(relPath, entry.Name())
+
+		if entry.IsDir() {
+			if err := uploadDirToBackend(ctx, childLocalPath, backend, childRelPath); err != nil {
+				return err
+			}
+		} else {
+			if err := uploadFileToBackend(ctx, childLocalPath, backend, childRelPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"archive/zip"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,33 +32,50 @@ func (h *Handler) DownloadAsZip(c echo.Context) error {
 
 	// Get user claims
 	claims := GetClaims(c)
+	bgCtx := context.Background()
 
-	// Validate all paths and collect real paths
+	// Validate all paths and collect info
 	type pathInfo struct {
 		realPath    string
 		displayPath string
 		isDir       bool
+		result      *ResolveResult
+		isNonLocal  bool
 	}
 	validPaths := make([]pathInfo, 0, len(req.Paths))
 
 	for _, path := range req.Paths {
-		realPath, _, displayPath, err := h.resolvePath(path, claims)
+		result, realPath, err := h.resolveStorageForOperation(path, claims)
 		if err != nil {
 			return RespondError(c, ErrInvalidPath(fmt.Sprintf("Invalid path: %s", path)))
 		}
 
-		info, err := os.Stat(realPath)
-		if err != nil {
-			if os.IsNotExist(err) {
+		isNonLocal := result.StorageType == StorageExternal && realPath == ""
+		var isDir bool
+
+		if isNonLocal {
+			info, err := result.Backend.Stat(bgCtx, result.RelPath)
+			if err != nil {
 				return RespondError(c, ErrNotFound(fmt.Sprintf("Path not found: %s", path)))
 			}
-			return RespondError(c, ErrOperationFailed("access path", err))
+			isDir = info.IsDirectory
+		} else {
+			info, err := os.Stat(realPath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					return RespondError(c, ErrNotFound(fmt.Sprintf("Path not found: %s", path)))
+				}
+				return RespondError(c, ErrOperationFailed("access path", err))
+			}
+			isDir = info.IsDir()
 		}
 
 		validPaths = append(validPaths, pathInfo{
 			realPath:    realPath,
-			displayPath: displayPath,
-			isDir:       info.IsDir(),
+			displayPath: result.DisplayPath,
+			isDir:       isDir,
+			result:      result,
+			isNonLocal:  isNonLocal,
 		})
 	}
 
@@ -85,43 +103,45 @@ func (h *Handler) DownloadAsZip(c echo.Context) error {
 
 	// Add files to ZIP
 	for _, pi := range validPaths {
-		if pi.isDir {
-			// Walk directory and add all files
+		if pi.isNonLocal {
+			itemBaseName := filepath.Base(pi.displayPath)
+			if pi.isDir {
+				if err := addBackendDirToZip(bgCtx, zipWriter, pi.result.Backend, pi.result.RelPath, itemBaseName); err != nil {
+					LogError("Failed to add backend directory to ZIP", err, "path", pi.displayPath)
+				}
+			} else {
+				if err := addBackendFileToZip(bgCtx, zipWriter, pi.result.Backend, pi.result.RelPath, itemBaseName); err != nil {
+					LogError("Failed to add backend file to ZIP", err, "path", pi.displayPath)
+				}
+			}
+		} else if pi.isDir {
 			basePath := filepath.Dir(pi.realPath)
 			err := filepath.Walk(pi.realPath, func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
 
-				// Create relative path for ZIP
 				relPath, err := filepath.Rel(basePath, path)
 				if err != nil {
 					return err
 				}
 
-				// Skip the root directory itself
 				if relPath == "." {
 					return nil
 				}
 
 				if info.IsDir() {
-					// Add directory entry
 					_, err := zipWriter.Create(relPath + "/")
 					return err
 				}
 
-				// Add file
-				if err := zipAddFile(zipWriter, path, relPath); err != nil {
-					return err
-				}
-				return nil
+				return zipAddFile(zipWriter, path, relPath)
 			})
 			if err != nil {
 				LogError("Failed to add directory to ZIP", err, "path", pi.displayPath)
 				continue
 			}
 		} else {
-			// Add single file
 			fileName := filepath.Base(pi.realPath)
 			if err := zipAddFile(zipWriter, pi.realPath, fileName); err != nil {
 				LogError("Failed to add file to ZIP", err, "path", pi.displayPath)
@@ -189,32 +209,57 @@ func (h *Handler) PreviewZip(c echo.Context) error {
 	}
 
 	claims := GetClaims(c)
+	bgCtx := context.Background()
 
-	realPath, _, _, err := h.resolvePath("/"+requestPath, claims)
+	result, realPath, err := h.resolveStorageForOperation("/"+requestPath, claims)
 	if err != nil {
 		return RespondError(c, ErrInvalidPath(err.Error()))
 	}
 
-	// Check if file exists and is a ZIP
-	info, err := os.Stat(realPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return RespondError(c, ErrNotFound("File"))
-		}
-		return RespondError(c, ErrOperationFailed("access file", err))
-	}
+	isNonLocal := result.StorageType == StorageExternal && realPath == ""
 
-	if info.IsDir() {
-		return RespondError(c, ErrBadRequest("Path is a directory, not a ZIP file"))
-	}
-
-	ext := strings.ToLower(filepath.Ext(realPath))
+	ext := strings.ToLower(filepath.Ext(requestPath))
 	if ext != ".zip" {
 		return RespondError(c, ErrBadRequest("File is not a ZIP archive"))
 	}
 
+	// For non-local: download to temp first
+	var localZipPath string
+	var cleanupZip bool
+	if isNonLocal {
+		info, err := result.Backend.Stat(bgCtx, result.RelPath)
+		if err != nil {
+			return RespondError(c, ErrNotFound("File"))
+		}
+		if info.IsDirectory {
+			return RespondError(c, ErrBadRequest("Path is a directory, not a ZIP file"))
+		}
+		tmpDir := filepath.Join(h.dataRoot, ".tmp")
+		_ = os.MkdirAll(tmpDir, 0755)
+		localZipPath = filepath.Join(tmpDir, fmt.Sprintf("preview_%d.zip", time.Now().UnixNano()))
+		cleanupZip = true
+		if err := downloadFileToLocal(bgCtx, result.Backend, result.RelPath, localZipPath); err != nil {
+			return RespondError(c, ErrOperationFailed("download zip from external storage", err))
+		}
+	} else {
+		localZipPath = realPath
+		info, err := os.Stat(localZipPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return RespondError(c, ErrNotFound("File"))
+			}
+			return RespondError(c, ErrOperationFailed("access file", err))
+		}
+		if info.IsDir() {
+			return RespondError(c, ErrBadRequest("Path is a directory, not a ZIP file"))
+		}
+	}
+	if cleanupZip {
+		defer os.Remove(localZipPath)
+	}
+
 	// Open ZIP file
-	reader, err := zip.OpenReader(realPath)
+	reader, err := zip.OpenReader(localZipPath)
 	if err != nil {
 		return RespondError(c, ErrOperationFailed("open ZIP file", err))
 	}
@@ -240,7 +285,7 @@ func (h *Handler) PreviewZip(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, ZipPreviewResponse{
-		FileName:   filepath.Base(realPath),
+		FileName:   filepath.Base(requestPath),
 		TotalFiles: len(files),
 		TotalSize:  totalSize,
 		Files:      files,
@@ -255,22 +300,35 @@ func (h *Handler) DownloadFolderAsZip(c echo.Context) error {
 	}
 
 	claims := GetClaims(c)
+	bgCtx := context.Background()
 
-	realPath, _, displayPath, err := h.resolvePath("/"+requestPath, claims)
+	result, realPath, err := h.resolveStorageForOperation("/"+requestPath, claims)
 	if err != nil {
 		return RespondError(c, ErrInvalidPath(err.Error()))
 	}
 
-	info, err := os.Stat(realPath)
-	if err != nil {
-		if os.IsNotExist(err) {
+	displayPath := result.DisplayPath
+	isNonLocal := result.StorageType == StorageExternal && realPath == ""
+
+	if isNonLocal {
+		info, err := result.Backend.Stat(bgCtx, result.RelPath)
+		if err != nil {
 			return RespondError(c, ErrNotFound("Folder"))
 		}
-		return RespondError(c, ErrOperationFailed("access folder", err))
-	}
-
-	if !info.IsDir() {
-		return RespondError(c, ErrBadRequest("Path is not a folder"))
+		if !info.IsDirectory {
+			return RespondError(c, ErrBadRequest("Path is not a folder"))
+		}
+	} else {
+		info, err := os.Stat(realPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return RespondError(c, ErrNotFound("Folder"))
+			}
+			return RespondError(c, ErrOperationFailed("access folder", err))
+		}
+		if !info.IsDir() {
+			return RespondError(c, ErrBadRequest("Path is not a folder"))
+		}
 	}
 
 	// Generate ZIP filename
@@ -285,7 +343,37 @@ func (h *Handler) DownloadFolderAsZip(c echo.Context) error {
 	zipWriter := zip.NewWriter(c.Response())
 	defer zipWriter.Close()
 
-	// Walk directory and add all files
+	if isNonLocal {
+		// Use backend Walk to stream from external storage
+		folderName := filepath.Base(displayPath)
+		return result.Backend.Walk(bgCtx, result.RelPath, func(path string, info *StorageFileInfo, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+
+			relFromRoot, err := filepath.Rel(result.RelPath, path)
+			if err != nil {
+				return err
+			}
+
+			zipPath := filepath.Join(folderName, relFromRoot)
+			zipPath = filepath.ToSlash(zipPath)
+
+			// Skip the root directory itself
+			if relFromRoot == "." {
+				return nil
+			}
+
+			if info.IsDirectory {
+				_, err := zipWriter.Create(zipPath + "/")
+				return err
+			}
+
+			return addBackendFileToZip(bgCtx, zipWriter, result.Backend, path, zipPath)
+		})
+	}
+
+	// Local: walk directory and add all files
 	basePath := filepath.Dir(realPath)
 	baseName := filepath.Base(realPath)
 
@@ -294,24 +382,20 @@ func (h *Handler) DownloadFolderAsZip(c echo.Context) error {
 			return err
 		}
 
-		// Create relative path for ZIP (include the folder name)
 		relPath, err := filepath.Rel(basePath, path)
 		if err != nil {
 			return err
 		}
 
-		// Skip if it's the base directory entry point
 		if relPath == baseName && fileInfo.IsDir() {
 			return nil
 		}
 
 		if fileInfo.IsDir() {
-			// Add directory entry
 			_, err := zipWriter.Create(relPath + "/")
 			return err
 		}
 
-		// Add file
 		return zipAddFile(zipWriter, path, relPath)
 	})
 }

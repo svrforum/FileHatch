@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"os"
@@ -52,16 +54,24 @@ func (h *Handler) CreateFile(c echo.Context) error {
 		targetPath = "/shared"
 	}
 
-	realPath, storageType, _, err := h.resolvePath(targetPath, claims)
+	result, realPath, err := h.resolveStorageForOperation(targetPath, claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 		})
 	}
+	storageType := result.StorageType
 
 	if storageType == "root" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Cannot create file in root",
+		})
+	}
+
+	// Check readonly
+	if err := checkReadonly(result); err != nil {
+		return c.JSON(http.StatusForbidden, map[string]string{
+			"error": err.Error(),
 		})
 	}
 
@@ -72,48 +82,75 @@ func (h *Handler) CreateFile(c echo.Context) error {
 		})
 	}
 
-	// Ensure target directory exists with appropriate permissions
-	if storageType == StorageShared {
-		if err := MkdirAllShared(realPath); err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to create target directory",
-			})
-		}
-	} else {
-		if err := os.MkdirAll(realPath, 0755); err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to create target directory",
-			})
-		}
-	}
-
-	// Build full file path
-	filePath := filepath.Join(realPath, req.Filename)
-
-	// Check if file already exists
-	if _, err := os.Stat(filePath); err == nil {
-		return c.JSON(http.StatusConflict, map[string]string{
-			"error": "File already exists",
-		})
-	}
-
 	// Get template content based on file type
 	content := getTemplateContent(req.FileType)
 
-	// Create the file with appropriate permissions
-	filePerm := os.FileMode(0644)
-	if storageType == StorageShared {
-		filePerm = SharedFilePerm
-	}
-	if err := os.WriteFile(filePath, content, filePerm); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create file",
-		})
-	}
+	// Non-local backend (S3, etc.)
+	if storageType == StorageExternal && realPath == "" {
+		ctx := context.Background()
+		fileRelPath := filepath.Join(result.RelPath, req.Filename)
 
-	// Set group ownership for shared folders
-	if storageType == StorageShared {
-		_ = SetSharedPermissions(filePath, false)
+		// Check if file already exists
+		exists, err := result.Backend.Exists(ctx, fileRelPath)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to check file existence",
+			})
+		}
+		if exists {
+			return c.JSON(http.StatusConflict, map[string]string{
+				"error": "File already exists",
+			})
+		}
+
+		// Write file via backend
+		if err := result.Backend.WriteFile(ctx, fileRelPath, bytes.NewReader(content), int64(len(content))); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to create file",
+			})
+		}
+	} else {
+		// Local backend path
+		// Ensure target directory exists with appropriate permissions
+		if storageType == StorageShared {
+			if err := MkdirAllShared(realPath); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{
+					"error": "Failed to create target directory",
+				})
+			}
+		} else {
+			if err := os.MkdirAll(realPath, 0755); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{
+					"error": "Failed to create target directory",
+				})
+			}
+		}
+
+		// Build full file path
+		filePath := filepath.Join(realPath, req.Filename)
+
+		// Check if file already exists
+		if _, err := os.Stat(filePath); err == nil {
+			return c.JSON(http.StatusConflict, map[string]string{
+				"error": "File already exists",
+			})
+		}
+
+		// Create the file with appropriate permissions
+		filePerm := os.FileMode(0644)
+		if storageType == StorageShared {
+			filePerm = SharedFilePerm
+		}
+		if err := os.WriteFile(filePath, content, filePerm); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to create file",
+			})
+		}
+
+		// Set group ownership for shared folders
+		if storageType == StorageShared {
+			_ = SetSharedPermissions(filePath, false)
+		}
 	}
 
 	// Log audit event
@@ -187,16 +224,24 @@ func (h *Handler) SimpleUpload(c echo.Context) error {
 	}
 
 	// Resolve path
-	realPath, storageType, _, err := h.resolvePath(targetPath, claims)
+	result, realPath, err := h.resolveStorageForOperation(targetPath, claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 		})
 	}
+	storageType := result.StorageType
 
 	if storageType == "root" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Cannot upload to root",
+		})
+	}
+
+	// Check readonly
+	if err := checkReadonly(result); err != nil {
+		return c.JSON(http.StatusForbidden, map[string]string{
+			"error": err.Error(),
 		})
 	}
 
@@ -205,21 +250,6 @@ func (h *Handler) SimpleUpload(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
 			"error": "Authentication required",
 		})
-	}
-
-	// Ensure target directory exists with appropriate permissions
-	if storageType == StorageShared {
-		if err := MkdirAllShared(realPath); err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to create target directory",
-			})
-		}
-	} else {
-		if err := os.MkdirAll(realPath, 0755); err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to create target directory",
-			})
-		}
 	}
 
 	// Open the uploaded file
@@ -231,40 +261,69 @@ func (h *Handler) SimpleUpload(c echo.Context) error {
 	}
 	defer src.Close()
 
-	// Create the destination file
-	destPath := filepath.Join(realPath, file.Filename)
+	// Non-local backend (S3, etc.)
+	if storageType == StorageExternal && realPath == "" {
+		ctx := context.Background()
+		fileRelPath := filepath.Join(result.RelPath, file.Filename)
 
-	// Mark this as a web upload to prevent SMB audit logging
-	tracker := GetWebUploadTracker()
-	tracker.MarkUploading(destPath)
+		// Write file via backend directly from uploaded stream
+		if err := result.Backend.WriteFile(ctx, fileRelPath, src, file.Size); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to save file",
+			})
+		}
+	} else {
+		// Local backend path
+		// Ensure target directory exists with appropriate permissions
+		if storageType == StorageShared {
+			if err := MkdirAllShared(realPath); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{
+					"error": "Failed to create target directory",
+				})
+			}
+		} else {
+			if err := os.MkdirAll(realPath, 0755); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{
+					"error": "Failed to create target directory",
+				})
+			}
+		}
 
-	dst, err := os.Create(destPath)
-	if err != nil {
-		tracker.UnmarkUploading(destPath)
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create destination file",
-		})
+		// Create the destination file
+		destPath := filepath.Join(realPath, file.Filename)
+
+		// Mark this as a web upload to prevent SMB audit logging
+		tracker := GetWebUploadTracker()
+		tracker.MarkUploading(destPath)
+
+		dst, err := os.Create(destPath)
+		if err != nil {
+			tracker.UnmarkUploading(destPath)
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to create destination file",
+			})
+		}
+		defer dst.Close()
+
+		// Copy the file
+		if _, err = io.Copy(dst, src); err != nil {
+			tracker.UnmarkUploading(destPath)
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to save file",
+			})
+		}
+
+		// Set permissions for shared folders
+		if storageType == StorageShared {
+			_ = SetSharedPermissions(destPath, false)
+		}
+
+		// Keep the mark for 10 seconds then remove it
+		go func() {
+			time.Sleep(10 * time.Second)
+			tracker.UnmarkUploading(destPath)
+		}()
 	}
-	defer dst.Close()
-
-	// Copy the file
-	if _, err = io.Copy(dst, src); err != nil {
-		tracker.UnmarkUploading(destPath)
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to save file",
-		})
-	}
-
-	// Set permissions for shared folders
-	if storageType == StorageShared {
-		_ = SetSharedPermissions(destPath, false)
-	}
-
-	// Keep the mark for 10 seconds then remove it
-	go func() {
-		time.Sleep(10 * time.Second)
-		tracker.UnmarkUploading(destPath)
-	}()
 
 	// Log audit event for file upload
 	h.auditHandler.LogEventFromContext(c, EventFileUpload, targetPath+"/"+file.Filename, map[string]interface{}{

@@ -10,11 +10,26 @@
     "test:auth": "playwright test auth/",
     "test:files": "playwright test files/",
     "test:sharing": "playwright test sharing/",
-    "test:admin": "playwright test admin/",
-    "report": "playwright show-report"
+    "test:trash": "playwright test trash/",
+    "test:profile": "playwright test profile/",
+    "test:notifications": "playwright test notifications/",
+    "test:activity": "playwright test activity/",
+    "test:admin": "playwright test admin/ --project=admin",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:critical": "playwright test --grep @critical",
+    "test:regression": "playwright test --grep @regression",
+    "test:chromium": "playwright test --project=chromium",
+    "test:firefox": "playwright test --project=firefox",
+    "test:webkit": "playwright test --project=webkit",
+    "test:mobile": "playwright test --project='Mobile Chrome' --project='Mobile Safari'",
+    "test:ci": "playwright test --project=chromium --reporter=github,html",
+    "test:ci:full": "playwright test --reporter=github,html",
+    "report": "playwright show-report",
+    "report:open": "playwright show-report --host 0.0.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "typescript": "^5.9.3"
   }
 }

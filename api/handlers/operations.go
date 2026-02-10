@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -65,13 +66,20 @@ func (h *Handler) RenameItem(c echo.Context) error {
 	}
 
 	// Resolve path
-	realPath, storageType, displayPath, err := h.resolvePath("/"+requestPath, claims)
+	result, realPath, err := h.resolveStorageForOperation("/"+requestPath, claims)
 	if err != nil {
 		return RespondError(c, ErrBadRequest(err.Error()))
 	}
+	storageType := result.StorageType
+	displayPath := result.DisplayPath
 
 	if storageType == "root" || displayPath == "/home" || displayPath == "/shared" {
 		return RespondError(c, ErrBadRequest("Cannot rename root folders"))
+	}
+
+	// Check readonly
+	if err := checkReadonly(result); err != nil {
+		return RespondError(c, ErrForbidden(err.Error()))
 	}
 
 	// Check permissions for home folder
@@ -79,38 +87,70 @@ func (h *Handler) RenameItem(c echo.Context) error {
 		return RespondError(c, ErrUnauthorized("Authentication required"))
 	}
 
-	// Check if source exists
-	if _, err := os.Stat(realPath); err != nil {
-		if os.IsNotExist(err) {
+	newDisplayPath := filepath.Join(filepath.Dir(displayPath), req.NewName)
+	var isDir bool
+
+	// Non-local backend (S3, etc.)
+	if storageType == StorageExternal && realPath == "" {
+		ctx := context.Background()
+
+		// Check if source exists
+		info, err := result.Backend.Stat(ctx, result.RelPath)
+		if err != nil {
 			return RespondError(c, ErrNotFound("Item not found"))
 		}
-		return RespondError(c, ErrInternal("Failed to access item"))
+		isDir = info.IsDirectory
+
+		// Build new relative path
+		newRelPath := filepath.Join(filepath.Dir(result.RelPath), req.NewName)
+
+		// Check if destination already exists
+		exists, err := result.Backend.Exists(ctx, newRelPath)
+		if err != nil {
+			return RespondError(c, ErrInternal("Failed to check destination"))
+		}
+		if exists {
+			return RespondError(c, ErrAlreadyExists("An item with that name already exists"))
+		}
+
+		// Rename via backend
+		if err := result.Backend.Rename(ctx, result.RelPath, newRelPath); err != nil {
+			return RespondError(c, ErrOperationFailed("rename item", err))
+		}
+	} else {
+		// Local backend path
+		// Check if source exists
+		if _, err := os.Stat(realPath); err != nil {
+			if os.IsNotExist(err) {
+				return RespondError(c, ErrNotFound("Item not found"))
+			}
+			return RespondError(c, ErrInternal("Failed to access item"))
+		}
+
+		// Build new path
+		parentDir := filepath.Dir(realPath)
+		newRealPath := filepath.Join(parentDir, req.NewName)
+
+		// Check if destination already exists
+		if _, err := os.Stat(newRealPath); err == nil {
+			return RespondError(c, ErrAlreadyExists("An item with that name already exists"))
+		}
+
+		// Rename
+		if err := os.Rename(realPath, newRealPath); err != nil {
+			return RespondError(c, ErrOperationFailed("rename item", err))
+		}
+
+		// Get file info for isDir check
+		fileInfo, _ := os.Stat(newRealPath)
+		isDir = fileInfo != nil && fileInfo.IsDir()
 	}
-
-	// Build new path
-	parentDir := filepath.Dir(realPath)
-	newRealPath := filepath.Join(parentDir, req.NewName)
-
-	// Check if destination already exists
-	if _, err := os.Stat(newRealPath); err == nil {
-		return RespondError(c, ErrAlreadyExists("An item with that name already exists"))
-	}
-
-	// Rename
-	if err := os.Rename(realPath, newRealPath); err != nil {
-		return RespondError(c, ErrOperationFailed("rename item", err))
-	}
-
-	newDisplayPath := filepath.Join(filepath.Dir(displayPath), req.NewName)
 
 	// Log audit event
 	var userID *string
 	if claims != nil {
 		userID = &claims.UserID
 	}
-	// Get file info for isDir check
-	fileInfo, _ := os.Stat(newRealPath)
-	isDir := fileInfo != nil && fileInfo.IsDir()
 	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileRename, displayPath, map[string]interface{}{
 		"newName": req.NewName,
 		"newPath": newDisplayPath,
@@ -173,23 +213,37 @@ func (h *Handler) MoveItem(c echo.Context) error {
 	}
 
 	// Resolve source path
-	srcRealPath, srcStorageType, srcDisplayPath, err := h.resolvePath("/"+requestPath, claims)
+	srcResult, srcRealPath, err := h.resolveStorageForOperation("/"+requestPath, claims)
 	if err != nil {
 		return RespondError(c, ErrBadRequest(err.Error()))
 	}
+	srcStorageType := srcResult.StorageType
+	srcDisplayPath := srcResult.DisplayPath
 
 	if srcStorageType == "root" || srcDisplayPath == "/home" || srcDisplayPath == "/shared" {
 		return RespondError(c, ErrBadRequest("Cannot move root folders"))
 	}
 
+	// Check source readonly
+	if err := checkReadonly(srcResult); err != nil {
+		return RespondError(c, ErrForbidden(err.Error()))
+	}
+
 	// Resolve destination path
-	destRealPath, destStorageType, destDisplayPath, err := h.resolvePath(req.Destination, claims)
+	destResult, destRealPath, err := h.resolveStorageForOperation(req.Destination, claims)
 	if err != nil {
 		return RespondError(c, ErrBadRequest(err.Error()))
 	}
+	destStorageType := destResult.StorageType
+	destDisplayPath := destResult.DisplayPath
 
 	if destStorageType == "root" {
 		return RespondError(c, ErrBadRequest("Cannot move to root"))
+	}
+
+	// Check destination readonly
+	if err := checkReadonly(destResult); err != nil {
+		return RespondError(c, ErrForbidden(err.Error()))
 	}
 
 	// Check permissions
@@ -197,42 +251,120 @@ func (h *Handler) MoveItem(c echo.Context) error {
 		return RespondError(c, ErrUnauthorized("Authentication required"))
 	}
 
-	// Check if source exists
-	srcInfo, err := os.Stat(srcRealPath)
-	if err != nil {
-		if os.IsNotExist(err) {
+	ctx := context.Background()
+	srcIsNonLocal := srcStorageType == StorageExternal && srcRealPath == ""
+	destIsNonLocal := destStorageType == StorageExternal && destRealPath == ""
+
+	var srcName string
+	var srcIsDir bool
+
+	// Check source exists
+	if srcIsNonLocal {
+		info, err := srcResult.Backend.Stat(ctx, srcResult.RelPath)
+		if err != nil {
 			return RespondError(c, ErrNotFound("Source not found"))
 		}
-		return RespondError(c, ErrInternal("Failed to access source"))
-	}
-
-	// Check if destination is a directory
-	destInfo, err := os.Stat(destRealPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return RespondError(c, ErrNotFound("Destination not found"))
+		srcName = info.FileName
+		srcIsDir = info.IsDirectory
+	} else {
+		srcInfo, err := os.Stat(srcRealPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return RespondError(c, ErrNotFound("Source not found"))
+			}
+			return RespondError(c, ErrInternal("Failed to access source"))
 		}
-		return RespondError(c, ErrInternal("Failed to access destination"))
+		srcName = srcInfo.Name()
+		srcIsDir = srcInfo.IsDir()
 	}
 
-	if !destInfo.IsDir() {
-		return RespondError(c, ErrBadRequest("Destination must be a directory"))
+	// Check destination is a directory
+	if destIsNonLocal {
+		if destResult.RelPath != "" {
+			destInfo, err := destResult.Backend.Stat(ctx, destResult.RelPath)
+			if err != nil {
+				return RespondError(c, ErrNotFound("Destination not found"))
+			}
+			if !destInfo.IsDirectory {
+				return RespondError(c, ErrBadRequest("Destination must be a directory"))
+			}
+		}
+	} else {
+		destInfo, err := os.Stat(destRealPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return RespondError(c, ErrNotFound("Destination not found"))
+			}
+			return RespondError(c, ErrInternal("Failed to access destination"))
+		}
+		if !destInfo.IsDir() {
+			return RespondError(c, ErrBadRequest("Destination must be a directory"))
+		}
 	}
 
-	// Build final destination path
-	finalDestPath := filepath.Join(destRealPath, srcInfo.Name())
+	var newDisplayPath string
 
-	// Check if destination already exists
-	if _, err := os.Stat(finalDestPath); err == nil {
-		return RespondError(c, ErrAlreadyExists("An item with that name already exists at destination"))
+	// Same non-local backend (same MountID) → backend.Rename
+	if srcIsNonLocal && destIsNonLocal && srcResult.MountID == destResult.MountID {
+		newRelPath := filepath.Join(destResult.RelPath, srcName)
+
+		// Check if destination already exists
+		exists, err := srcResult.Backend.Exists(ctx, newRelPath)
+		if err != nil {
+			return RespondError(c, ErrInternal("Failed to check destination"))
+		}
+		if exists {
+			return RespondError(c, ErrAlreadyExists("An item with that name already exists at destination"))
+		}
+
+		if err := srcResult.Backend.Rename(ctx, srcResult.RelPath, newRelPath); err != nil {
+			return RespondError(c, ErrOperationFailed("move item", err))
+		}
+		newDisplayPath = filepath.Join(destDisplayPath, srcName)
+	} else if srcIsNonLocal || destIsNonLocal {
+		// Cross-backend move: stream copy + delete source
+		destItemRelPath := filepath.Join(destResult.RelPath, srcName)
+		if srcIsDir {
+			if err := crossBackendCopyDir(ctx, srcResult.Backend, srcResult.RelPath, destResult.Backend, destItemRelPath); err != nil {
+				return RespondError(c, ErrOperationFailed("move item", err))
+			}
+		} else {
+			if err := crossBackendCopyFile(ctx, srcResult.Backend, srcResult.RelPath, destResult.Backend, destItemRelPath); err != nil {
+				return RespondError(c, ErrOperationFailed("move item", err))
+			}
+		}
+		// Delete source
+		if srcIsNonLocal {
+			if err := srcResult.Backend.DeleteAll(ctx, srcResult.RelPath); err != nil {
+				return RespondError(c, ErrOperationFailed("delete source after move", err))
+			}
+		} else {
+			if srcIsDir {
+				if err := os.RemoveAll(srcRealPath); err != nil {
+					return RespondError(c, ErrOperationFailed("delete source after move", err))
+				}
+			} else {
+				if err := os.Remove(srcRealPath); err != nil {
+					return RespondError(c, ErrOperationFailed("delete source after move", err))
+				}
+			}
+		}
+		newDisplayPath = filepath.Join(destDisplayPath, srcName)
+	} else {
+		// Both local
+		finalDestPath := filepath.Join(destRealPath, srcName)
+
+		// Check if destination already exists
+		if _, err := os.Stat(finalDestPath); err == nil {
+			return RespondError(c, ErrAlreadyExists("An item with that name already exists at destination"))
+		}
+
+		// Move (rename, with cross-device fallback)
+		if err := moveOrCopy(srcRealPath, finalDestPath); err != nil {
+			return RespondError(c, ErrOperationFailed("move item", err))
+		}
+		newDisplayPath = filepath.Join(destDisplayPath, srcName)
 	}
-
-	// Move (rename)
-	if err := os.Rename(srcRealPath, finalDestPath); err != nil {
-		return RespondError(c, ErrOperationFailed("move item", err))
-	}
-
-	newDisplayPath := filepath.Join(destDisplayPath, srcInfo.Name())
 
 	// Log audit event
 	var userID *string
@@ -241,10 +373,8 @@ func (h *Handler) MoveItem(c echo.Context) error {
 	}
 	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileMove, srcDisplayPath, map[string]interface{}{
 		"destination": newDisplayPath,
-		"isDir":       srcInfo.IsDir(),
+		"isDir":       srcIsDir,
 	})
-
-	// Note: Move operation doesn't change total storage size, no update needed
 
 	return RespondSuccess(c, map[string]interface{}{
 		"oldPath": srcDisplayPath,
@@ -299,23 +429,32 @@ func (h *Handler) CopyItem(c echo.Context) error {
 	}
 
 	// Resolve source path
-	srcRealPath, srcStorageType, srcDisplayPath, err := h.resolvePath("/"+requestPath, claims)
+	srcResult, srcRealPath, err := h.resolveStorageForOperation("/"+requestPath, claims)
 	if err != nil {
 		return RespondError(c, ErrBadRequest(err.Error()))
 	}
+	srcStorageType := srcResult.StorageType
+	srcDisplayPath := srcResult.DisplayPath
 
 	if srcStorageType == "root" {
 		return RespondError(c, ErrBadRequest("Cannot copy root"))
 	}
 
 	// Resolve destination path
-	destRealPath, destStorageType, destDisplayPath, err := h.resolvePath(req.Destination, claims)
+	destResult, destRealPath, err := h.resolveStorageForOperation(req.Destination, claims)
 	if err != nil {
 		return RespondError(c, ErrBadRequest(err.Error()))
 	}
+	destStorageType := destResult.StorageType
+	destDisplayPath := destResult.DisplayPath
 
 	if destStorageType == "root" {
 		return RespondError(c, ErrBadRequest("Cannot copy to root"))
+	}
+
+	// Check destination readonly
+	if err := checkReadonly(destResult); err != nil {
+		return RespondError(c, ErrForbidden(err.Error()))
 	}
 
 	// Check permissions
@@ -323,60 +462,98 @@ func (h *Handler) CopyItem(c echo.Context) error {
 		return RespondError(c, ErrUnauthorized("Authentication required"))
 	}
 
-	// Check if source exists
-	srcInfo, err := os.Stat(srcRealPath)
-	if err != nil {
-		if os.IsNotExist(err) {
+	ctx := context.Background()
+	srcIsNonLocal := srcStorageType == StorageExternal && srcRealPath == ""
+	destIsNonLocal := destStorageType == StorageExternal && destRealPath == ""
+
+	var srcName string
+	var srcIsDir bool
+
+	// Check source exists
+	if srcIsNonLocal {
+		info, err := srcResult.Backend.Stat(ctx, srcResult.RelPath)
+		if err != nil {
 			return RespondError(c, ErrNotFound("Source not found"))
 		}
-		return RespondError(c, ErrInternal("Failed to access source"))
-	}
-
-	// Check if destination is a directory
-	destInfo, err := os.Stat(destRealPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return RespondError(c, ErrNotFound("Destination not found"))
-		}
-		return RespondError(c, ErrInternal("Failed to access destination"))
-	}
-
-	if !destInfo.IsDir() {
-		return RespondError(c, ErrBadRequest("Destination must be a directory"))
-	}
-
-	// Build final destination path
-	finalDestPath := filepath.Join(destRealPath, srcInfo.Name())
-
-	// Check if destination already exists - if so, create a copy with a number
-	baseName := srcInfo.Name()
-	ext := filepath.Ext(baseName)
-	nameWithoutExt := strings.TrimSuffix(baseName, ext)
-	counter := 1
-	for {
-		if _, err := os.Stat(finalDestPath); os.IsNotExist(err) {
-			break
-		}
-		if srcInfo.IsDir() {
-			finalDestPath = filepath.Join(destRealPath, fmt.Sprintf("%s (%d)", baseName, counter))
-		} else {
-			finalDestPath = filepath.Join(destRealPath, fmt.Sprintf("%s (%d)%s", nameWithoutExt, counter, ext))
-		}
-		counter++
-	}
-
-	// Perform copy
-	if srcInfo.IsDir() {
-		err = copyDir(srcRealPath, finalDestPath)
+		srcName = info.FileName
+		srcIsDir = info.IsDirectory
 	} else {
-		err = copyFile(srcRealPath, finalDestPath)
+		srcInfo, err := os.Stat(srcRealPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return RespondError(c, ErrNotFound("Source not found"))
+			}
+			return RespondError(c, ErrInternal("Failed to access source"))
+		}
+		srcName = srcInfo.Name()
+		srcIsDir = srcInfo.IsDir()
 	}
 
-	if err != nil {
-		return RespondError(c, ErrOperationFailed("copy item", err))
+	// Check destination is a directory
+	if destIsNonLocal {
+		if destResult.RelPath != "" {
+			destInfo, err := destResult.Backend.Stat(ctx, destResult.RelPath)
+			if err != nil {
+				return RespondError(c, ErrNotFound("Destination not found"))
+			}
+			if !destInfo.IsDirectory {
+				return RespondError(c, ErrBadRequest("Destination must be a directory"))
+			}
+		}
+	} else {
+		destInfo, err := os.Stat(destRealPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return RespondError(c, ErrNotFound("Destination not found"))
+			}
+			return RespondError(c, ErrInternal("Failed to access destination"))
+		}
+		if !destInfo.IsDir() {
+			return RespondError(c, ErrBadRequest("Destination must be a directory"))
+		}
 	}
 
-	newDisplayPath := filepath.Join(destDisplayPath, filepath.Base(finalDestPath))
+	var newDisplayPath string
+
+	if srcIsNonLocal || destIsNonLocal {
+		// Cross-backend or non-local copy
+		destItemRelPath := filepath.Join(destResult.RelPath, srcName)
+		if srcIsDir {
+			if err := crossBackendCopyDir(ctx, srcResult.Backend, srcResult.RelPath, destResult.Backend, destItemRelPath); err != nil {
+				return RespondError(c, ErrOperationFailed("copy item", err))
+			}
+		} else {
+			if err := crossBackendCopyFile(ctx, srcResult.Backend, srcResult.RelPath, destResult.Backend, destItemRelPath); err != nil {
+				return RespondError(c, ErrOperationFailed("copy item", err))
+			}
+		}
+		newDisplayPath = filepath.Join(destDisplayPath, srcName)
+	} else {
+		// Both local
+		srcInfo, _ := os.Stat(srcRealPath)
+		finalDestPath := GenerateUniquePath(destRealPath, srcName, srcIsDir, false)
+
+		// Perform copy
+		if srcInfo.IsDir() {
+			err = copyDir(srcRealPath, finalDestPath)
+		} else {
+			err = copyFile(srcRealPath, finalDestPath)
+		}
+
+		if err != nil {
+			return RespondError(c, ErrOperationFailed("copy item", err))
+		}
+
+		newDisplayPath = filepath.Join(destDisplayPath, filepath.Base(finalDestPath))
+
+		// Update storage tracking: add copied file size to user's storage
+		if claims != nil && destStorageType == StorageHome {
+			copiedSize, _ := GetFileSize(finalDestPath)
+			if copiedSize > 0 {
+				_ = h.UpdateUserStorage(claims.UserID, copiedSize)
+			}
+		}
+	}
 
 	// Log audit event
 	var userID *string
@@ -385,16 +562,8 @@ func (h *Handler) CopyItem(c echo.Context) error {
 	}
 	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileCopy, srcDisplayPath, map[string]interface{}{
 		"destination": newDisplayPath,
-		"isDir":       srcInfo.IsDir(),
+		"isDir":       srcIsDir,
 	})
-
-	// Update storage tracking: add copied file size to user's storage
-	if claims != nil && destStorageType == StorageHome {
-		copiedSize, _ := GetFileSize(finalDestPath)
-		if copiedSize > 0 {
-			_ = h.UpdateUserStorage(claims.UserID, copiedSize)
-		}
-	}
 
 	return RespondSuccess(c, map[string]interface{}{
 		"oldPath": srcDisplayPath,
@@ -463,6 +632,47 @@ func copyDir(src, dst string) error {
 	return nil
 }
 
+// crossBackendCopyFile copies a single file between any two StorageBackend instances.
+// Works for all backend combinations (local↔local, local↔S3, S3↔S3, etc.)
+func crossBackendCopyFile(ctx context.Context, srcBackend StorageBackend, srcRelPath string, destBackend StorageBackend, destRelPath string) error {
+	reader, info, err := srcBackend.ReadFile(ctx, srcRelPath)
+	if err != nil {
+		return fmt.Errorf("failed to read source: %w", err)
+	}
+	defer reader.Close()
+	return destBackend.WriteFile(ctx, destRelPath, reader, info.FileSize)
+}
+
+// crossBackendCopyDir recursively copies a directory between any two StorageBackend instances.
+func crossBackendCopyDir(ctx context.Context, srcBackend StorageBackend, srcRelPath string, destBackend StorageBackend, destRelPath string) error {
+	// Create destination directory
+	if err := destBackend.Mkdir(ctx, destRelPath); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// List source directory
+	entries, err := srcBackend.ReadDir(ctx, srcRelPath)
+	if err != nil {
+		return fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		srcChild := filepath.Join(srcRelPath, entry.EntryName)
+		destChild := filepath.Join(destRelPath, entry.EntryName)
+
+		if entry.IsDir {
+			if err := crossBackendCopyDir(ctx, srcBackend, srcChild, destBackend, destChild); err != nil {
+				return err
+			}
+		} else {
+			if err := crossBackendCopyFile(ctx, srcBackend, srcChild, destBackend, destChild); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // CopyProgress represents the progress of a copy operation
 type CopyProgress struct {
 	Status      string `json:"status"` // "started", "progress", "completed", "error"
@@ -513,9 +723,22 @@ func (h *Handler) CopyItemStream(c echo.Context) error {
 		return RespondError(c, ErrInternal(err.Error()))
 	}
 
+	// Check destination readonly
+	if err := checkReadonly(paths.DestResult); err != nil {
+		return RespondError(c, ErrForbidden(err.Error()))
+	}
+
+	srcIsNonLocal := paths.SrcStorageType == StorageExternal && paths.SrcRealPath == ""
+	destIsNonLocal := paths.DestStorageType == StorageExternal && paths.DestRealPath == ""
+
 	// Set up SSE and calculate stats
 	sendProgress := SetupSSE(c)
-	stats := CalculateTotalSize(paths.SrcRealPath, paths.SrcInfo)
+	var stats FileStats
+	if srcIsNonLocal {
+		stats = CalculateTotalSizeBackend(context.Background(), paths.SrcResult.Backend, paths.SrcResult.RelPath, paths.SrcIsDir)
+	} else {
+		stats = CalculateTotalSize(paths.SrcRealPath, paths.SrcInfo)
+	}
 
 	// Send started event
 	sendProgress(CopyProgress{
@@ -524,15 +747,52 @@ func (h *Handler) CopyItemStream(c echo.Context) error {
 		TotalFiles: stats.TotalFiles,
 	})
 
-	// Create copy context and perform copy
-	ctx := NewCopyContext(stats, sendProgress)
-	copyErr := ctx.CopyWithProgress(paths.SrcRealPath, paths.FinalDestPath, paths.SrcInfo.IsDir())
+	var newDisplayPath string
 
-	newDisplayPath := filepath.Join(paths.DestDisplayPath, filepath.Base(paths.FinalDestPath))
+	if srcIsNonLocal || destIsNonLocal {
+		// Cross-backend or non-local copy
+		bgCtx := context.Background()
+		destItemRelPath := filepath.Join(paths.DestResult.RelPath, paths.SrcName)
 
-	if copyErr != nil {
-		ctx.SendError(copyErr)
-		return nil
+		sendProgress(CopyProgress{
+			Status:      "progress",
+			TotalBytes:  stats.TotalBytes,
+			CopiedBytes: 0,
+			CurrentFile: "Copying across storage backends...",
+		})
+
+		var copyErr error
+		if paths.SrcIsDir {
+			copyErr = crossBackendCopyDir(bgCtx, paths.SrcResult.Backend, paths.SrcResult.RelPath, paths.DestResult.Backend, destItemRelPath)
+		} else {
+			copyErr = crossBackendCopyFile(bgCtx, paths.SrcResult.Backend, paths.SrcResult.RelPath, paths.DestResult.Backend, destItemRelPath)
+		}
+
+		if copyErr != nil {
+			sendProgress(CopyProgress{
+				Status: "error",
+				Error:  copyErr.Error(),
+			})
+			return nil
+		}
+
+		newDisplayPath = filepath.Join(paths.DestDisplayPath, paths.SrcName)
+	} else {
+		// Both local - use existing progress-tracked copy
+		ctx := NewCopyContext(stats, sendProgress)
+		copyErr := ctx.CopyWithProgress(paths.SrcRealPath, paths.FinalDestPath, paths.SrcIsDir)
+
+		newDisplayPath = filepath.Join(paths.DestDisplayPath, filepath.Base(paths.FinalDestPath))
+
+		if copyErr != nil {
+			ctx.SendError(copyErr)
+			return nil
+		}
+
+		// Update storage tracking
+		if paths.Claims != nil && paths.DestStorageType == StorageHome {
+			_ = h.UpdateUserStorage(paths.Claims.UserID, ctx.CopiedBytes)
+		}
 	}
 
 	// Log audit event
@@ -542,15 +802,17 @@ func (h *Handler) CopyItemStream(c echo.Context) error {
 	}
 	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileCopy, paths.SrcDisplayPath, map[string]interface{}{
 		"destination": newDisplayPath,
-		"isDir":       paths.SrcInfo.IsDir(),
+		"isDir":       paths.SrcIsDir,
 	})
 
-	// Update storage tracking
-	if paths.Claims != nil && paths.DestStorageType == StorageHome {
-		_ = h.UpdateUserStorage(paths.Claims.UserID, ctx.CopiedBytes)
-	}
-
-	ctx.SendCompleted(newDisplayPath)
+	sendProgress(CopyProgress{
+		Status:      "completed",
+		TotalBytes:  stats.TotalBytes,
+		CopiedBytes: stats.TotalBytes,
+		TotalFiles:  stats.TotalFiles,
+		CopiedFiles: stats.TotalFiles,
+		NewPath:     newDisplayPath,
+	})
 	return nil
 }
 
@@ -591,14 +853,32 @@ func (h *Handler) MoveItemStream(c echo.Context) error {
 		return RespondError(c, ErrInternal(err.Error()))
 	}
 
-	// Prevent moving a directory into itself
-	if strings.HasPrefix(paths.FinalDestPath, paths.SrcRealPath+string(os.PathSeparator)) {
-		return RespondError(c, ErrBadRequest("Cannot move directory into itself"))
+	// Check readonly on both source and destination
+	if err := checkReadonly(paths.SrcResult); err != nil {
+		return RespondError(c, ErrForbidden(err.Error()))
+	}
+	if err := checkReadonly(paths.DestResult); err != nil {
+		return RespondError(c, ErrForbidden(err.Error()))
+	}
+
+	srcIsNonLocal := paths.SrcStorageType == StorageExternal && paths.SrcRealPath == ""
+	destIsNonLocal := paths.DestStorageType == StorageExternal && paths.DestRealPath == ""
+
+	// Prevent moving a directory into itself (local only)
+	if !srcIsNonLocal && !destIsNonLocal && paths.FinalDestPath != "" && paths.SrcRealPath != "" {
+		if strings.HasPrefix(paths.FinalDestPath, paths.SrcRealPath+string(os.PathSeparator)) {
+			return RespondError(c, ErrBadRequest("Cannot move directory into itself"))
+		}
 	}
 
 	// Set up SSE and calculate stats
 	sendProgress := SetupSSE(c)
-	stats := CalculateTotalSize(paths.SrcRealPath, paths.SrcInfo)
+	var stats FileStats
+	if srcIsNonLocal {
+		stats = CalculateTotalSizeBackend(context.Background(), paths.SrcResult.Backend, paths.SrcResult.RelPath, paths.SrcIsDir)
+	} else {
+		stats = CalculateTotalSize(paths.SrcRealPath, paths.SrcInfo)
+	}
 
 	sendProgress(CopyProgress{
 		Status:     "started",
@@ -607,33 +887,88 @@ func (h *Handler) MoveItemStream(c echo.Context) error {
 	})
 
 	startTime := time.Now()
-	newDisplayPath := filepath.Join(paths.DestDisplayPath, filepath.Base(paths.FinalDestPath))
+	var newDisplayPath string
 
-	// Try simple rename first (instant for same filesystem)
-	err = os.Rename(paths.SrcRealPath, paths.FinalDestPath)
+	if srcIsNonLocal && destIsNonLocal && paths.SrcResult.MountID == paths.DestResult.MountID {
+		// Same non-local backend: use backend rename
+		newRelPath := filepath.Join(paths.DestResult.RelPath, paths.SrcName)
+		bgCtx := context.Background()
+		if err := paths.SrcResult.Backend.Rename(bgCtx, paths.SrcResult.RelPath, newRelPath); err != nil {
+			sendProgress(CopyProgress{
+				Status: "error",
+				Error:  err.Error(),
+			})
+			return nil
+		}
+		newDisplayPath = filepath.Join(paths.DestDisplayPath, paths.SrcName)
+	} else if srcIsNonLocal || destIsNonLocal {
+		// Cross-backend move: copy + delete
+		bgCtx := context.Background()
+		destItemRelPath := filepath.Join(paths.DestResult.RelPath, paths.SrcName)
 
-	if err != nil {
-		// Cross-device move: copy then delete
 		sendProgress(CopyProgress{
 			Status:      "progress",
 			TotalBytes:  stats.TotalBytes,
 			CopiedBytes: 0,
-			CurrentFile: "Cross-device move in progress...",
+			CurrentFile: "Cross-storage move in progress...",
 		})
 
-		ctx := NewCopyContext(stats, sendProgress)
-		copyErr := ctx.CopyWithProgress(paths.SrcRealPath, paths.FinalDestPath, paths.SrcInfo.IsDir())
+		var copyErr error
+		if paths.SrcIsDir {
+			copyErr = crossBackendCopyDir(bgCtx, paths.SrcResult.Backend, paths.SrcResult.RelPath, paths.DestResult.Backend, destItemRelPath)
+		} else {
+			copyErr = crossBackendCopyFile(bgCtx, paths.SrcResult.Backend, paths.SrcResult.RelPath, paths.DestResult.Backend, destItemRelPath)
+		}
 
 		if copyErr != nil {
-			ctx.SendError(copyErr)
+			sendProgress(CopyProgress{
+				Status: "error",
+				Error:  copyErr.Error(),
+			})
 			return nil
 		}
 
-		// Delete source after successful copy
-		if paths.SrcInfo.IsDir() {
-			os.RemoveAll(paths.SrcRealPath)
+		// Delete source
+		if srcIsNonLocal {
+			_ = paths.SrcResult.Backend.DeleteAll(bgCtx, paths.SrcResult.RelPath)
 		} else {
-			os.Remove(paths.SrcRealPath)
+			if paths.SrcIsDir {
+				os.RemoveAll(paths.SrcRealPath)
+			} else {
+				os.Remove(paths.SrcRealPath)
+			}
+		}
+		newDisplayPath = filepath.Join(paths.DestDisplayPath, paths.SrcName)
+	} else {
+		// Both local
+		newDisplayPath = filepath.Join(paths.DestDisplayPath, filepath.Base(paths.FinalDestPath))
+
+		// Try simple rename first (instant for same filesystem)
+		err = os.Rename(paths.SrcRealPath, paths.FinalDestPath)
+
+		if err != nil {
+			// Cross-device move: copy then delete
+			sendProgress(CopyProgress{
+				Status:      "progress",
+				TotalBytes:  stats.TotalBytes,
+				CopiedBytes: 0,
+				CurrentFile: "Cross-device move in progress...",
+			})
+
+			ctx := NewCopyContext(stats, sendProgress)
+			copyErr := ctx.CopyWithProgress(paths.SrcRealPath, paths.FinalDestPath, paths.SrcIsDir)
+
+			if copyErr != nil {
+				ctx.SendError(copyErr)
+				return nil
+			}
+
+			// Delete source after successful copy
+			if paths.SrcIsDir {
+				os.RemoveAll(paths.SrcRealPath)
+			} else {
+				os.Remove(paths.SrcRealPath)
+			}
 		}
 	}
 

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,11 +18,15 @@ type OperationPaths struct {
 	SrcRealPath     string
 	SrcStorageType  string
 	SrcDisplayPath  string
+	SrcResult       *ResolveResult
 	DestRealPath    string
 	DestStorageType string
 	DestDisplayPath string
-	SrcInfo         os.FileInfo
-	FinalDestPath   string
+	DestResult      *ResolveResult
+	SrcInfo         os.FileInfo // nil for non-local backends
+	SrcName         string      // source item name (works for all backends)
+	SrcIsDir        bool        // whether source is directory (works for all backends)
+	FinalDestPath   string      // local filesystem dest path (empty for non-local dest)
 	Claims          *JWTClaims
 }
 
@@ -33,63 +38,101 @@ func (h *Handler) ResolveOperationPaths(c echo.Context, requestPath, destination
 	}
 
 	// Resolve source path
-	srcRealPath, srcStorageType, srcDisplayPath, err := h.resolvePath("/"+requestPath, claims)
+	srcResult, srcRealPath, err := h.resolveStorageForOperation("/"+requestPath, claims)
 	if err != nil {
 		return nil, ErrBadRequest(err.Error())
 	}
 
-	if srcStorageType == "root" {
+	if srcResult.StorageType == "root" {
 		return nil, ErrBadRequest("Cannot operate on root")
 	}
 
 	// Resolve destination path
-	destRealPath, destStorageType, destDisplayPath, err := h.resolvePath(destination, claims)
+	destResult, destRealPath, err := h.resolveStorageForOperation(destination, claims)
 	if err != nil {
 		return nil, ErrBadRequest(err.Error())
 	}
 
-	if destStorageType == "root" {
+	if destResult.StorageType == "root" {
 		return nil, ErrBadRequest("Cannot operate to root")
 	}
 
 	// Check permissions
-	if (srcStorageType == StorageHome || destStorageType == StorageHome) && claims == nil {
+	if (srcResult.StorageType == StorageHome || destResult.StorageType == StorageHome) && claims == nil {
 		return nil, ErrUnauthorized("Authentication required")
 	}
 
+	srcIsNonLocal := srcResult.StorageType == StorageExternal && srcRealPath == ""
+	destIsNonLocal := destResult.StorageType == StorageExternal && destRealPath == ""
+
+	var srcInfo os.FileInfo
+	var srcName string
+	var srcIsDir bool
+
 	// Check if source exists
-	srcInfo, err := os.Stat(srcRealPath)
-	if err != nil {
-		if os.IsNotExist(err) {
+	if srcIsNonLocal {
+		ctx := context.Background()
+		info, err := srcResult.Backend.Stat(ctx, srcResult.RelPath)
+		if err != nil {
 			return nil, ErrNotFound("Source")
 		}
-		return nil, ErrInternal("Failed to access source")
+		srcName = info.FileName
+		srcIsDir = info.IsDirectory
+	} else {
+		srcInfo, err = os.Stat(srcRealPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, ErrNotFound("Source")
+			}
+			return nil, ErrInternal("Failed to access source")
+		}
+		srcName = srcInfo.Name()
+		srcIsDir = srcInfo.IsDir()
 	}
 
 	// Check if destination is a directory
-	destInfo, err := os.Stat(destRealPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, ErrNotFound("Destination")
+	if destIsNonLocal {
+		if destResult.RelPath != "" {
+			ctx := context.Background()
+			destInfo, err := destResult.Backend.Stat(ctx, destResult.RelPath)
+			if err != nil {
+				return nil, ErrNotFound("Destination")
+			}
+			if !destInfo.IsDirectory {
+				return nil, ErrBadRequest("Destination must be a directory")
+			}
 		}
-		return nil, ErrInternal("Failed to access destination")
+	} else {
+		destInfo, err := os.Stat(destRealPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, ErrNotFound("Destination")
+			}
+			return nil, ErrInternal("Failed to access destination")
+		}
+		if !destInfo.IsDir() {
+			return nil, ErrBadRequest("Destination must be a directory")
+		}
 	}
 
-	if !destInfo.IsDir() {
-		return nil, ErrBadRequest("Destination must be a directory")
+	// Build final destination path with duplicate handling (only for local destinations)
+	var finalDestPath string
+	if !destIsNonLocal {
+		finalDestPath = GenerateUniquePath(destRealPath, srcName, srcIsDir, allowSameFilename)
 	}
-
-	// Build final destination path with duplicate handling
-	finalDestPath := GenerateUniquePath(destRealPath, srcInfo.Name(), srcInfo.IsDir(), allowSameFilename)
 
 	return &OperationPaths{
 		SrcRealPath:     srcRealPath,
-		SrcStorageType:  srcStorageType,
-		SrcDisplayPath:  srcDisplayPath,
+		SrcStorageType:  srcResult.StorageType,
+		SrcDisplayPath:  srcResult.DisplayPath,
+		SrcResult:       srcResult,
 		DestRealPath:    destRealPath,
-		DestStorageType: destStorageType,
-		DestDisplayPath: destDisplayPath,
+		DestStorageType: destResult.StorageType,
+		DestDisplayPath: destResult.DisplayPath,
+		DestResult:      destResult,
 		SrcInfo:         srcInfo,
+		SrcName:         srcName,
+		SrcIsDir:        srcIsDir,
 		FinalDestPath:   finalDestPath,
 		Claims:          claims,
 	}, nil
@@ -163,6 +206,29 @@ func CalculateTotalSize(path string, info os.FileInfo) FileStats {
 	} else {
 		stats.TotalBytes = info.Size()
 		stats.TotalFiles = 1
+	}
+
+	return stats
+}
+
+// CalculateTotalSizeBackend calculates total bytes and file count using a StorageBackend
+func CalculateTotalSizeBackend(ctx context.Context, backend StorageBackend, relPath string, isDir bool) FileStats {
+	stats := FileStats{}
+
+	if isDir {
+		_ = backend.Walk(ctx, relPath, func(_ string, info *StorageFileInfo, _ error) error {
+			if info != nil && !info.IsDirectory {
+				stats.TotalBytes += info.FileSize
+				stats.TotalFiles++
+			}
+			return nil
+		})
+	} else {
+		info, err := backend.Stat(ctx, relPath)
+		if err == nil {
+			stats.TotalBytes = info.FileSize
+			stats.TotalFiles = 1
+		}
 	}
 
 	return stats

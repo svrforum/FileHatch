@@ -25,6 +25,7 @@ const AdminSettings = lazy(() => import('./components/AdminSettings'))
 const AdminSSOSettings = lazy(() => import('./components/AdminSSOSettings'))
 const AdminLogs = lazy(() => import('./components/AdminLogs'))
 const AdminSharedFolders = lazy(() => import('./components/AdminSharedFolders'))
+const AdminExternalStorages = lazy(() => import('./components/AdminExternalStorages'))
 const AdminSystemInfo = lazy(() => import('./components/AdminSystemInfo'))
 const MyActivity = lazy(() => import('./components/MyActivity'))
 const NotificationCenter = lazy(() => import('./components/NotificationCenter'))
@@ -51,6 +52,31 @@ interface SharedDriveWrapperProps {
 function SharedDriveWrapper({ onNavigate, onUploadClick, onNewFolderClick, highlightedFilePath, onClearHighlight }: SharedDriveWrapperProps) {
   const { folderName, '*': subPath } = useParams()
   const currentPath = subPath ? `/shared/${folderName}/${subPath}` : `/shared/${folderName}`
+
+  return (
+    <FileList
+      currentPath={currentPath}
+      onNavigate={onNavigate}
+      onUploadClick={onUploadClick}
+      onNewFolderClick={onNewFolderClick}
+      highlightedFilePath={highlightedFilePath}
+      onClearHighlight={onClearHighlight}
+    />
+  )
+}
+
+// Wrapper component for external storage routes
+interface ExternalStorageWrapperProps {
+  onNavigate: (path: string) => void
+  onUploadClick: () => void
+  onNewFolderClick: () => void
+  highlightedFilePath: string | null
+  onClearHighlight: () => void
+}
+
+function ExternalStorageWrapper({ onNavigate, onUploadClick, onNewFolderClick, highlightedFilePath, onClearHighlight }: ExternalStorageWrapperProps) {
+  const { mountPath, '*': subPath } = useParams()
+  const currentPath = subPath ? `/external/${mountPath}/${subPath}` : `/external/${mountPath}`
 
   return (
     <FileList
@@ -119,6 +145,7 @@ function App() {
   // Get admin view from URL
   const getAdminView = (): AdminView => {
     if (location.pathname === '/fhadmin/shared-folders') return 'shared-folders'
+    if (location.pathname === '/fhadmin/external-storages') return 'external-storages'
     if (location.pathname === '/fhadmin/settings') return 'settings'
     if (location.pathname === '/fhadmin/sso') return 'sso'
     if (location.pathname === '/fhadmin/logs') return 'logs'
@@ -206,6 +233,13 @@ function App() {
         setCurrentPath(newPath)
       }
     }
+    // Handle external storage routes: /external/{mountPath}/... stays as /external/{mountPath}/...
+    else if (pathname.startsWith('/external/')) {
+      const newPath = decodeURIComponent(pathname)
+      if (currentPath !== newPath) {
+        setCurrentPath(newPath)
+      }
+    }
     // Handle files routes: /files/xxx -> /home/xxx
     else if (pathname.startsWith('/files/')) {
       const pathAfterPrefix = decodeURIComponent(pathname.substring('/files/'.length))
@@ -267,6 +301,9 @@ function App() {
       // Shared drive paths: /shared/{folderName}/... -> /shared-drive/{folderName}/...
       const sharedPath = path.substring('/shared/'.length)
       navigate(`/shared-drive/${sharedPath}`)
+    } else if (path.startsWith('/external/')) {
+      // External storage paths: /external/{mountPath}/... -> /external/{mountPath}/...
+      navigate(path)
     } else if (path.startsWith('/home/')) {
       // Home paths: /home/xxx -> /files/xxx
       const subPath = path.substring('/home/'.length)
@@ -286,6 +323,9 @@ function App() {
       // Shared drive folder - navigate to /shared-drive/:folderName/*
       const sharedPath = parentPath.substring('/shared/'.length)
       navigate(`/shared-drive/${sharedPath}`)
+    } else if (parentPath.startsWith('/external/')) {
+      // External storage paths
+      navigate(parentPath)
     } else if (parentPath.startsWith('/home/')) {
       // Home paths: /home/xxx -> /files/xxx
       const subPath = parentPath.substring('/home/'.length)
@@ -406,6 +446,24 @@ function App() {
                   onClearHighlight={() => setHighlightedFilePath(null)}
                 />
               } />
+              <Route path="/external/:mountPath/*" element={
+                <ExternalStorageWrapper
+                  onNavigate={handleNavigate}
+                  onUploadClick={() => setUploadModalOpen(true)}
+                  onNewFolderClick={() => setFolderModalOpen(true)}
+                  highlightedFilePath={highlightedFilePath}
+                  onClearHighlight={() => setHighlightedFilePath(null)}
+                />
+              } />
+              <Route path="/external/:mountPath" element={
+                <ExternalStorageWrapper
+                  onNavigate={handleNavigate}
+                  onUploadClick={() => setUploadModalOpen(true)}
+                  onNewFolderClick={() => setFolderModalOpen(true)}
+                  highlightedFilePath={highlightedFilePath}
+                  onClearHighlight={() => setHighlightedFilePath(null)}
+                />
+              } />
               <Route path="/trash" element={
                 <Trash onNavigate={handleNavigate} />
               } />
@@ -427,6 +485,11 @@ function App() {
               <Route path="/fhadmin/shared-folders" element={
                 <Suspense fallback={<AdminSkeleton />}>
                   <AdminSharedFolders />
+                </Suspense>
+              } />
+              <Route path="/fhadmin/external-storages" element={
+                <Suspense fallback={<AdminSkeleton />}>
+                  <AdminExternalStorages />
                 </Suspense>
               } />
               <Route path="/fhadmin/settings" element={

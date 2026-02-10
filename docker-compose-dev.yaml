@@ -39,6 +39,7 @@ services:
       - ${DATA_PATH:-./data}:/data
       - ${CONFIG_PATH:-./config}:/etc/filehatch
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /tmp/filehatch-test-mount:/mnt/test-storage
     depends_on:
       db:
         condition: service_healthy

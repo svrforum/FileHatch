@@ -16,17 +16,20 @@ import (
 
 // Handler is the main handler struct for file operations
 type Handler struct {
-	db           *sql.DB
-	dataRoot     string
-	auditHandler *AuditHandler
+	db            *sql.DB
+	dataRoot      string
+	auditHandler  *AuditHandler
+	storageRouter *StorageRouter
 }
 
 // NewHandler creates a new Handler instance
 func NewHandler(db *sql.DB) *Handler {
+	dataRoot := "/data"
 	return &Handler{
-		db:           db,
-		dataRoot:     "/data",
-		auditHandler: NewAuditHandler(db, "/data"),
+		db:            db,
+		dataRoot:      dataRoot,
+		auditHandler:  NewAuditHandler(db, dataRoot),
+		storageRouter: NewStorageRouter(dataRoot, db),
 	}
 }
 
@@ -208,6 +211,33 @@ func (h *Handler) resolvePath(virtualPath string, claims *JWTClaims) (realPath s
 		storageType = StorageSharedWithMe
 		displayPath = "/shared-with-me"
 		return realPath, storageType, displayPath, nil
+	case "external":
+		if claims == nil {
+			return "", "", "", fmt.Errorf("authentication required for external storage")
+		}
+		if len(pathParts) < 2 || pathParts[1] == "" {
+			return "", "", "", fmt.Errorf("external storage mount path required")
+		}
+		mountPath := pathParts[1]
+		extraPath := ""
+		if len(pathParts) > 2 {
+			extraPath = filepath.Join(pathParts[2:]...)
+		}
+		// Resolve via StorageRouter which handles DB lookup and access control
+		result, resolveErr := h.storageRouter.resolveExternal(mountPath, extraPath, claims)
+		if resolveErr != nil {
+			return "", "", "", resolveErr
+		}
+		// For local backends, return real path
+		if result.Backend != nil && result.Backend.IsLocal() {
+			rp, rpErr := result.Backend.GetRealPath(extraPath)
+			if rpErr != nil {
+				return "", "", "", rpErr
+			}
+			return rp, StorageExternal, result.DisplayPath, nil
+		}
+		// For non-local (S3) backends, no real path
+		return "", StorageExternal, result.DisplayPath, nil
 	default:
 		return "", "", "", fmt.Errorf("invalid storage type: %s", root)
 	}
@@ -218,6 +248,43 @@ func (h *Handler) resolvePath(virtualPath string, claims *JWTClaims) (realPath s
 	}
 
 	return realPath, storageType, displayPath, nil
+}
+
+// resolveStorageForOperation resolves a virtual path for file operations.
+// Returns the ResolveResult (with Backend for non-local) and realPath (for local backends).
+// For non-local backends, realPath will be empty and the caller should use result.Backend methods.
+func (h *Handler) resolveStorageForOperation(virtualPath string, claims *JWTClaims) (*ResolveResult, string, error) {
+	result, err := h.storageRouter.Resolve(virtualPath, claims)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if result.Backend == nil {
+		return result, "", nil
+	}
+
+	if result.Backend.IsLocal() {
+		rp, err := result.Backend.GetRealPath(result.RelPath)
+		if err != nil {
+			return nil, "", err
+		}
+		return result, rp, nil
+	}
+
+	return result, "", nil
+}
+
+// checkReadonly returns an error if the storage is read-only
+func checkReadonly(result *ResolveResult) error {
+	if result.IsReadonly {
+		return fmt.Errorf("storage is read-only")
+	}
+	return nil
+}
+
+// GetStorageRouter returns the storage router (used by other handlers like WebDAV)
+func (h *Handler) GetStorageRouter() *StorageRouter {
+	return h.storageRouter
 }
 
 // EnsureUserHomeDir creates the home directory for a user
@@ -345,6 +412,17 @@ func (h *Handler) ListFiles(c echo.Context) error {
 					ModTime: time.Now(),
 				},
 			}, roots...)
+
+			// Add external storages accessible by this user
+			externalStorages := h.storageRouter.GetUserExternalStorages(claims.UserID)
+			for _, es := range externalStorages {
+				roots = append(roots, FileInfo{
+					Name:    es.Name,
+					Path:    "/external/" + es.MountPath,
+					IsDir:   true,
+					ModTime: time.Now(),
+				})
+			}
 		}
 
 		return c.JSON(http.StatusOK, ListFilesResponse{
@@ -380,6 +458,12 @@ func (h *Handler) ListFiles(c echo.Context) error {
 				"error": "No permission to access this shared drive",
 			})
 		}
+	}
+
+	// Handle external storage with non-local backend (S3)
+	// For local-mount external storages, realPath is set and we fall through to normal os.Stat/ReadDir
+	if storageType == StorageExternal && realPath == "" {
+		return h.listExternalStorageFiles(c, requestPath, claims, displayPath, sortBy, sortOrder, usePagination, page, pageSize)
 	}
 
 	// Check if directory exists
@@ -465,6 +549,96 @@ func (h *Handler) ListFiles(c echo.Context) error {
 			end = total
 		}
 
+		response.Files = files[start:end]
+		response.Page = page
+		response.PageSize = pageSize
+		response.TotalPages = totalPages
+	} else {
+		response.Files = files
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
+// listExternalStorageFiles lists files from a non-local external storage backend (e.g., S3)
+func (h *Handler) listExternalStorageFiles(c echo.Context, requestPath string, claims *JWTClaims, displayPath, sortBy, sortOrder string, usePagination bool, page, pageSize int) error {
+	// Re-resolve via StorageRouter to get the backend
+	result, err := h.storageRouter.Resolve(requestPath, claims)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": err.Error(),
+		})
+	}
+
+	if result.Backend == nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "No backend available for this external storage",
+		})
+	}
+
+	ctx := c.Request().Context()
+	entries, err := result.Backend.List(ctx, result.RelPath)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to list external storage: " + err.Error(),
+		})
+	}
+
+	files := make([]FileInfo, 0, len(entries))
+	var totalSize int64
+
+	for _, entry := range entries {
+		if IsHiddenFile(entry.EntryName) {
+			continue
+		}
+
+		ext := ""
+		mimeType := ""
+		var size int64
+		var modTime time.Time
+
+		if entry.Info != nil {
+			size = entry.Info.FileSize
+			modTime = entry.Info.FileModTime
+		}
+
+		if !entry.IsDir {
+			ext = strings.ToLower(strings.TrimPrefix(filepath.Ext(entry.EntryName), "."))
+			mimeType = getMimeType(ext)
+			totalSize += size
+		}
+
+		files = append(files, FileInfo{
+			Name:      entry.EntryName,
+			Path:      filepath.Join(displayPath, entry.EntryName),
+			Size:      size,
+			IsDir:     entry.IsDir,
+			ModTime:   modTime,
+			Extension: ext,
+			MimeType:  mimeType,
+		})
+	}
+
+	sortFiles(files, sortBy, sortOrder)
+
+	total := len(files)
+	response := ListFilesResponse{
+		Path:        displayPath,
+		StorageType: StorageExternal,
+		Total:       total,
+		TotalSize:   totalSize,
+	}
+
+	if usePagination {
+		totalPages := (total + pageSize - 1) / pageSize
+		start := (page - 1) * pageSize
+		end := start + pageSize
+		if start > total {
+			start = total
+		}
+		if end > total {
+			end = total
+		}
 		response.Files = files[start:end]
 		response.Page = page
 		response.PageSize = pageSize

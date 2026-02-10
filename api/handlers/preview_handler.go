@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
@@ -28,36 +30,67 @@ func (h *Handler) GetPreview(c echo.Context) error {
 	}
 
 	// Resolve path
-	realPath, _, displayPath, err := h.resolvePath("/"+requestPath, claims)
+	result, realPath, err := h.resolveStorageForOperation("/"+requestPath, claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 		})
 	}
 
-	info, err := os.Stat(realPath)
-	if err != nil {
-		if os.IsNotExist(err) {
+	displayPath := result.DisplayPath
+	isNonLocal := result.StorageType == StorageExternal && realPath == ""
+
+	var fileName string
+	var fileSize int64
+	var fileModTime time.Time
+
+	if isNonLocal {
+		bgCtx := context.Background()
+		info, err := result.Backend.Stat(bgCtx, result.RelPath)
+		if err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{
 				"error": "File not found",
 			})
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to access file",
-		})
+		if info.IsDirectory {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "Path is a directory",
+			})
+		}
+		fileName = info.FileName
+		fileSize = info.FileSize
+		fileModTime = info.FileModTime
+	} else {
+		info, err := os.Stat(realPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return c.JSON(http.StatusNotFound, map[string]string{
+					"error": "File not found",
+				})
+			}
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to access file",
+			})
+		}
+		if info.IsDir() {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "Path is a directory",
+			})
+		}
+		fileName = info.Name()
+		fileSize = info.Size()
+		fileModTime = info.ModTime()
 	}
 
-	if info.IsDir() {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Path is a directory",
-		})
-	}
-
-	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(info.Name()), "."))
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(fileName), "."))
 	mimeType := getMimeType(ext)
 
 	// Generate ETag for cache validation
-	etag := GenerateETag(realPath, info.ModTime(), info.Size())
+	etagKey := realPath
+	if isNonLocal {
+		etagKey = fmt.Sprintf("ext:%s:%s", result.MountID, result.RelPath)
+	}
+	etag := GenerateETag(etagKey, fileModTime, fileSize)
 
 	// Check If-None-Match header for cache validation
 	if !CheckETag(c.Request(), etag) {
@@ -67,43 +100,78 @@ func (h *Handler) GetPreview(c echo.Context) error {
 	// For images, return the file with caching headers
 	if strings.HasPrefix(mimeType, "image/") {
 		SetCacheHeaders(c.Response().Writer, etag, 86400) // 24 hour cache
-		c.Response().Header().Set("Last-Modified", info.ModTime().UTC().Format(http.TimeFormat))
-		return c.File(realPath)
-	}
-
-	// For text files, return content with caching
-	if strings.HasPrefix(mimeType, "text/") || ext == "json" || ext == "md" {
-		// Use preview cache for text content
-		cache := GetPreviewCache()
-		var content string
-		var truncated bool
-
-		if cache != nil {
-			content, truncated, err = cache.CachedTextPreview(realPath, info, DefaultTextPreviewOptions())
+		c.Response().Header().Set("Last-Modified", fileModTime.UTC().Format(http.TimeFormat))
+		if isNonLocal {
+			bgCtx := context.Background()
+			reader, info, err := result.Backend.ReadFile(bgCtx, result.RelPath)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{
 					"error": "Failed to read file",
 				})
 			}
-		} else {
-			// Fallback to direct read if cache not available
-			file, err := os.Open(realPath)
+			defer reader.Close()
+			c.Response().Header().Set("Content-Type", mimeType)
+			c.Response().Header().Set("Content-Length", fmt.Sprintf("%d", info.FileSize))
+			c.Response().WriteHeader(http.StatusOK)
+			_, _ = io.Copy(c.Response(), reader)
+			return nil
+		}
+		return c.File(realPath)
+	}
+
+	// For text files, return content with caching
+	if strings.HasPrefix(mimeType, "text/") || ext == "json" || ext == "md" {
+		var content string
+		var truncated bool
+
+		if isNonLocal {
+			bgCtx := context.Background()
+			reader, _, err := result.Backend.ReadFile(bgCtx, result.RelPath)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{
-					"error": "Failed to open file",
+					"error": "Failed to read file",
 				})
 			}
-			defer file.Close()
-
+			defer reader.Close()
 			buf := make([]byte, 100*1024)
-			n, err := file.Read(buf)
-			if err != nil && err != io.EOF {
+			n, readErr := reader.Read(buf)
+			if readErr != nil && readErr != io.EOF {
 				return c.JSON(http.StatusInternalServerError, map[string]string{
 					"error": "Failed to read file",
 				})
 			}
 			content = string(buf[:n])
 			truncated = n == 100*1024
+		} else {
+			// Use preview cache for text content
+			cache := GetPreviewCache()
+			info, _ := os.Stat(realPath)
+			if cache != nil && info != nil {
+				content, truncated, err = cache.CachedTextPreview(realPath, info, DefaultTextPreviewOptions())
+				if err != nil {
+					return c.JSON(http.StatusInternalServerError, map[string]string{
+						"error": "Failed to read file",
+					})
+				}
+			} else {
+				file, err := os.Open(realPath)
+				if err != nil {
+					return c.JSON(http.StatusInternalServerError, map[string]string{
+						"error": "Failed to open file",
+					})
+				}
+				defer file.Close()
+
+				buf := make([]byte, 100*1024)
+				n, readErr := file.Read(buf)
+				if readErr != nil && readErr != io.EOF {
+					return c.JSON(http.StatusInternalServerError, map[string]string{
+						"error": "Failed to read file",
+					})
+				}
+				content = string(buf[:n])
+				truncated = n == 100*1024
+			}
 		}
 
 		// Set cache headers for JSON response
@@ -123,7 +191,7 @@ func (h *Handler) GetPreview(c echo.Context) error {
 			"type":     strings.Split(mimeType, "/")[0],
 			"mimeType": mimeType,
 			"url":      fmt.Sprintf("/api/files/%s", strings.TrimPrefix(displayPath, "/")),
-			"size":     info.Size(),
+			"size":     fileSize,
 		})
 	}
 
@@ -134,7 +202,7 @@ func (h *Handler) GetPreview(c echo.Context) error {
 			"type":     "pdf",
 			"mimeType": mimeType,
 			"url":      fmt.Sprintf("/api/files/%s", strings.TrimPrefix(displayPath, "/")),
-			"size":     info.Size(),
+			"size":     fileSize,
 		})
 	}
 
@@ -143,7 +211,7 @@ func (h *Handler) GetPreview(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"type":     "unsupported",
 		"mimeType": mimeType,
-		"size":     info.Size(),
+		"size":     fileSize,
 	})
 }
 
@@ -168,20 +236,63 @@ func (h *Handler) GetSubtitle(c echo.Context) error {
 		claims = user
 	}
 
-	// Resolve path to get the video file directory
-	realPath, _, _, err := h.resolvePath("/"+decodedPath, claims)
+	// Resolve path
+	result, realPath, err := h.resolveStorageForOperation("/"+decodedPath, claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 		})
 	}
 
-	// Get base name without extension
-	dir := filepath.Dir(realPath)
-	baseName := strings.TrimSuffix(filepath.Base(realPath), filepath.Ext(realPath))
-
-	// Look for subtitle files (.srt, .smi, .vtt)
+	isNonLocal := result.StorageType == StorageExternal && realPath == ""
+	baseName := strings.TrimSuffix(filepath.Base(decodedPath), filepath.Ext(decodedPath))
 	subtitleExts := []string{".srt", ".smi", ".sami", ".vtt"}
+
+	if isNonLocal {
+		bgCtx := context.Background()
+		dir := filepath.Dir(result.RelPath)
+
+		// Search for subtitle in backend
+		for _, ext := range subtitleExts {
+			subRelPath := filepath.Join(dir, baseName+ext)
+			exists, _ := result.Backend.Exists(bgCtx, subRelPath)
+			if !exists {
+				subRelPath = filepath.Join(dir, baseName+strings.ToUpper(ext))
+				exists, _ = result.Backend.Exists(bgCtx, subRelPath)
+			}
+			if exists {
+				reader, _, err := result.Backend.ReadFile(bgCtx, subRelPath)
+				if err != nil {
+					continue
+				}
+				content, err := io.ReadAll(reader)
+				reader.Close()
+				if err != nil {
+					continue
+				}
+
+				var vttContent string
+				switch strings.ToLower(ext) {
+				case ".vtt":
+					vttContent = string(content)
+				case ".srt":
+					vttContent = convertSRTtoVTT(string(content))
+				case ".smi", ".sami":
+					vttContent = convertSMItoVTT(string(content))
+				default:
+					vttContent = string(content)
+				}
+				c.Response().Header().Set("Content-Type", "text/vtt; charset=utf-8")
+				return c.String(http.StatusOK, vttContent)
+			}
+		}
+		return c.JSON(http.StatusNotFound, map[string]string{
+			"error": "No subtitle found",
+		})
+	}
+
+	// Local path
+	dir := filepath.Dir(realPath)
 	var subtitlePath string
 	var subtitleExt string
 
@@ -192,7 +303,6 @@ func (h *Handler) GetSubtitle(c echo.Context) error {
 			subtitleExt = ext
 			break
 		}
-		// Also check uppercase extensions
 		path = filepath.Join(dir, baseName+strings.ToUpper(ext))
 		if _, err := os.Stat(path); err == nil {
 			subtitlePath = path
@@ -207,7 +317,6 @@ func (h *Handler) GetSubtitle(c echo.Context) error {
 		})
 	}
 
-	// Read subtitle file
 	content, err := os.ReadFile(subtitlePath)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -215,7 +324,6 @@ func (h *Handler) GetSubtitle(c echo.Context) error {
 		})
 	}
 
-	// Convert to WebVTT if needed
 	var vttContent string
 	switch subtitleExt {
 	case ".vtt":
