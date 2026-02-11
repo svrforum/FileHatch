@@ -52,6 +52,7 @@ interface TransferState {
   executeTransfer: (id: string) => Promise<void>
   removeItem: (id: string) => void
   clearCompleted: () => void
+  retryTransfer: (id: string) => void
   openPanel: () => void
   closePanel: () => void
   toggleMinimize: () => void
@@ -250,6 +251,35 @@ export const useTransferStore = create<TransferState>((set, get) => ({
         }, 2000)
       }
     }
+  },
+
+  retryTransfer: (id) => {
+    const { items } = get()
+    const item = items.find(i => i.id === id)
+    if (!item || item.status !== 'error') return
+
+    set(state => ({
+      items: state.items.map(i =>
+        i.id === id && i.status === 'error'
+          ? {
+              ...i,
+              status: 'pending' as TransferStatus,
+              error: undefined,
+              progress: 0,
+              copiedBytes: 0,
+              copiedFiles: 0,
+              startedAt: undefined,
+              totalBytes: undefined,
+              currentFile: undefined,
+              totalFiles: undefined,
+              bytesPerSec: undefined,
+              outputPath: undefined,
+              outputSize: undefined,
+            }
+          : i
+      ),
+    }))
+    get().executeTransfer(id)
   },
 
   removeItem: (id) => {

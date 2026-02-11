@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useModalKeyboard } from '../hooks/useModalKeyboard'
 import { fetchFiles } from '../api/files'
 import { useSharedFolders } from '../hooks/useSharedFolders'
+import { useExternalStorages } from '../hooks/useExternalStorages'
 import './FolderSelectModal.css'
 
 interface FolderSelectModalProps {
@@ -20,7 +21,7 @@ interface FolderNode {
   isExpanded: boolean
   isLoading: boolean
   children: FolderNode[]
-  type: 'home' | 'shared'
+  type: 'home' | 'shared' | 'external'
 }
 
 export default function FolderSelectModal({
@@ -37,10 +38,15 @@ export default function FolderSelectModal({
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set())
   const [homeExpanded, setHomeExpanded] = useState(true)
   const [sharedExpanded, setSharedExpanded] = useState(false)
+  const [externalExpanded, setExternalExpanded] = useState(false)
 
   // Use shared folders hook with caching
   const { sharedFolders: sharedFoldersData } = useSharedFolders()
   const [sharedFolderNodes, setSharedFolderNodes] = useState<FolderNode[]>([])
+
+  // Use external storages hook
+  const { externalStorages } = useExternalStorages()
+  const [externalFolderNodes, setExternalFolderNodes] = useState<FolderNode[]>([])
 
   // 홈 폴더 로드
   const loadHomeFolders = useCallback(async (path: string) => {
@@ -89,6 +95,19 @@ export default function FolderSelectModal({
     })))
   }, [sharedFoldersData])
 
+  // Initialize external storage nodes from hook data (exclude readonly)
+  useEffect(() => {
+    const writableStorages = externalStorages.filter(s => !s.isReadonly && s.status === 'active')
+    setExternalFolderNodes(writableStorages.map(s => ({
+      path: `/external/${s.mountPath}`,
+      name: s.name,
+      isExpanded: false,
+      isLoading: false,
+      children: [],
+      type: 'external' as const,
+    })))
+  }, [externalStorages])
+
   // 공유 폴더 하위 로드
   const loadSharedSubfolders = useCallback(async (path: string) => {
     if (loadingPaths.has(path)) return
@@ -108,6 +127,36 @@ export default function FolderSelectModal({
         }))
 
       setSharedFolderNodes(prev => updateChildren(prev, path, folders))
+    } catch (error) {
+      console.error('Failed to load folders:', error)
+    } finally {
+      setLoadingPaths(prev => {
+        const next = new Set(prev)
+        next.delete(path)
+        return next
+      })
+    }
+  }, [loadingPaths])
+
+  // 외부 스토리지 하위 로드
+  const loadExternalSubfolders = useCallback(async (path: string) => {
+    if (loadingPaths.has(path)) return
+
+    setLoadingPaths(prev => new Set(prev).add(path))
+    try {
+      const response = await fetchFiles(path)
+      const folders = response.files
+        .filter(f => f.isDir)
+        .map(f => ({
+          path: f.path,
+          name: f.name,
+          isExpanded: false,
+          isLoading: false,
+          children: [],
+          type: 'external' as const,
+        }))
+
+      setExternalFolderNodes(prev => updateChildren(prev, path, folders))
     } catch (error) {
       console.error('Failed to load folders:', error)
     } finally {
@@ -154,7 +203,7 @@ export default function FolderSelectModal({
   }, [isOpen])
 
   // 폴더 확장/축소
-  const toggleExpand = useCallback((path: string, type: 'home' | 'shared') => {
+  const toggleExpand = useCallback((path: string, type: 'home' | 'shared' | 'external') => {
     setExpandedPaths(prev => {
       const next = new Set(prev)
       if (next.has(path)) {
@@ -164,13 +213,15 @@ export default function FolderSelectModal({
         // 하위 폴더 로드
         if (type === 'home') {
           loadHomeFolders(path)
-        } else {
+        } else if (type === 'shared') {
           loadSharedSubfolders(path)
+        } else {
+          loadExternalSubfolders(path)
         }
       }
       return next
     })
-  }, [loadHomeFolders, loadSharedSubfolders])
+  }, [loadHomeFolders, loadSharedSubfolders, loadExternalSubfolders])
 
   // 경로가 제외 대상인지 확인
   const isExcluded = (path: string) => {
@@ -311,6 +362,38 @@ export default function FolderSelectModal({
               </div>
             )}
           </div>
+
+          {/* 외부 스토리지 섹션 */}
+          {externalFolderNodes.length > 0 && (
+            <div className="tree-section">
+              <div
+                className="section-header"
+                onClick={() => setExternalExpanded(!externalExpanded)}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  style={{ transform: externalExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+                >
+                  <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <rect x="2" y="2" width="20" height="8" rx="2" stroke="currentColor" strokeWidth="2"/>
+                  <rect x="2" y="14" width="20" height="8" rx="2" stroke="currentColor" strokeWidth="2"/>
+                  <circle cx="6" cy="6" r="1" fill="currentColor"/>
+                  <circle cx="6" cy="18" r="1" fill="currentColor"/>
+                </svg>
+                <span>외부 스토리지</span>
+              </div>
+              {externalExpanded && (
+                <div className="section-content">
+                  {externalFolderNodes.map(node => renderFolderNode(node, 1))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="modal-footer">

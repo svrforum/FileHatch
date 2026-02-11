@@ -39,6 +39,7 @@ services:
       - ${DATA_PATH:-./data}:/data
       - ${CONFIG_PATH:-./config}:/etc/filehatch
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # 외부 스토리지 테스트용 마운트 (필요 시 활성화)
       - /tmp/filehatch-test-mount:/mnt/test-storage
     depends_on:
       db:

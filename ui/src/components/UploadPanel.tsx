@@ -17,7 +17,7 @@ function formatSpeed(bytesPerSecond: number): string {
 
 function UploadPanel() {
   const { items, downloads, isPanelOpen: uploadPanelOpen, closePanel: closeUploadPanel, removeUpload, clearCompleted, clearCompletedDownloads, removeDownload, startUpload, pauseUpload } = useUploadStore()
-  const { items: transferItems, isPanelOpen: transferPanelOpen, closePanel: closeTransferPanel, removeItem: removeTransfer, clearCompleted: clearCompletedTransfers } = useTransferStore()
+  const { items: transferItems, isPanelOpen: transferPanelOpen, closePanel: closeTransferPanel, removeItem: removeTransfer, clearCompleted: clearCompletedTransfers, retryTransfer } = useTransferStore()
 
   // Panel is open if either upload or transfer panel is open
   const isPanelOpen = uploadPanelOpen || transferPanelOpen
@@ -426,6 +426,14 @@ function UploadPanel() {
               )}
             </div>
             <div className="item-actions">
+              {item.status === 'error' && (
+                <button className="item-btn retry" onClick={() => retryTransfer(item.id)} title="다시 시도">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M1 4V10H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M3.51 15C4.15839 16.8404 5.38734 18.4202 7.01166 19.5014C8.63598 20.5826 10.5677 21.1066 12.5157 20.9945C14.4637 20.8824 16.3226 20.1402 17.8121 18.8798C19.3017 17.6193 20.3413 15.9090 20.7742 14.0064C21.2072 12.1037 21.0101 10.1139 20.2126 8.33122C19.4152 6.54852 18.0605 5.06985 16.3528 4.12C14.6451 3.17016 12.6769 2.80079 10.7386 3.06684C8.80028 3.33289 7.00147 4.22006 5.64 5.59999L1 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              )}
               {item.status === 'transferring' && item.cancel && (
                 <button className="item-btn" onClick={item.cancel} title="취소">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none">

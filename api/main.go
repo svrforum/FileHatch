@@ -249,7 +249,7 @@ func main() {
 	shareExpirationChecker.StartBackgroundCheck(1*time.Hour, shutdownCtx)
 
 	// Create Share handler
-	shareHandler := handlers.NewShareHandler(db, dataRoot, auditHandler, notificationService)
+	shareHandler := handlers.NewShareHandler(db, dataRoot, auditHandler, notificationService, h.GetStorageRouter())
 
 	// Create Upload Share handler
 	uploadShareHandler, err := handlers.NewUploadShareHandler(db, dataRoot, auditHandler, notificationService)

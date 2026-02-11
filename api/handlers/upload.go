@@ -405,7 +405,10 @@ func (h *UploadHandler) handleCompletedUploads() {
 			}
 
 			var userID string
-			_ = h.db.QueryRow("SELECT id FROM users WHERE username = $1", username).Scan(&userID)
+			if err := h.db.QueryRow("SELECT id FROM users WHERE username = $1", username).Scan(&userID); err != nil {
+				fmt.Printf("Failed to get user ID for %s: %v\n", username, err)
+				continue
+			}
 			claims := &JWTClaims{Username: username, UserID: userID}
 			extResult, err := h.storageRouter.Resolve("/external/"+mountPath+"/"+extRelPath, claims)
 			if err != nil {
@@ -426,15 +429,30 @@ func (h *UploadHandler) handleCompletedUploads() {
 			if err := extResult.Backend.WriteFile(ctx, fileRelPath, srcFile, event.Upload.Size); err != nil {
 				srcFile.Close()
 				fmt.Printf("Failed to write to external storage: %v\n", err)
+				os.Remove(srcPath)
+				os.Remove(srcPath + ".info")
 				continue
 			}
 			srcFile.Close()
 
 			// Clean up temp files
-			os.Remove(srcPath)
-			os.Remove(srcPath + ".info")
+			if err := os.Remove(srcPath); err != nil && !os.IsNotExist(err) {
+				fmt.Printf("Failed to clean up temp file %s: %v\n", srcPath, err)
+			}
+			if err := os.Remove(srcPath + ".info"); err != nil && !os.IsNotExist(err) {
+				fmt.Printf("Failed to clean up info file %s.info: %v\n", srcPath, err)
+			}
 
 			fmt.Printf("Upload completed (external): %s -> %s/%s (overwrite: %v)\n", filename, mountPath, extRelPath, overwrite)
+
+			// Broadcast file change event for UI refresh
+			BroadcastFileChange(FileChangeEvent{
+				Type:      "create",
+				Path:      "/external/" + mountPath + "/" + filepath.Join(extRelPath, filename),
+				Name:      filename,
+				IsDir:     false,
+				Timestamp: time.Now().Unix(),
+			})
 		} else {
 			// Local storage upload (home, shared, local-mount external)
 			finalPath := filepath.Join(realDestPath, filename)

@@ -365,6 +365,15 @@
   color: var(--color-error);
 }
 
+.item-btn.retry {
+  color: var(--color-primary);
+}
+
+.item-btn.retry:hover {
+  background: rgba(49, 130, 246, 0.1);
+  color: var(--color-primary);
+}
+
 /* Transfer (move/copy) specific styles */
 .upload-panel-item.transfer {
   border-left: 4px solid #F59E0B;

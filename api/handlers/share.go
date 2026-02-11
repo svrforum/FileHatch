@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"bytes"
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -20,14 +22,16 @@ type ShareHandler struct {
 	dataRoot            string
 	auditHandler        *AuditHandler
 	notificationService *NotificationService
+	storageRouter       *StorageRouter
 }
 
-func NewShareHandler(db *sql.DB, dataRoot string, auditHandler *AuditHandler, notificationService *NotificationService) *ShareHandler {
+func NewShareHandler(db *sql.DB, dataRoot string, auditHandler *AuditHandler, notificationService *NotificationService, storageRouter *StorageRouter) *ShareHandler {
 	return &ShareHandler{
 		db:                  db,
 		dataRoot:            dataRoot,
 		auditHandler:        auditHandler,
 		notificationService: notificationService,
+		storageRouter:       storageRouter,
 	}
 }
 
@@ -104,6 +108,23 @@ func (h *ShareHandler) resolvePath(virtualPath string, username string) (realPat
 	case "shared":
 		realPath = filepath.Join(h.dataRoot, "shared", subPath)
 		storedPath = filepath.Join("shared", subPath)
+	case "external":
+		if len(parts) < 2 {
+			return "", "", fmt.Errorf("external storage mount path required")
+		}
+		mountPath := parts[1]
+		extRelPath := ""
+		if len(parts) > 2 {
+			extRelPath = filepath.Join(parts[2:]...)
+		}
+		// Store as "external/{mountPath}/{relPath}" in DB
+		storedPath = "external/" + mountPath
+		if extRelPath != "" {
+			storedPath = storedPath + "/" + extRelPath
+		}
+		// realPath is not used for non-local backends; for local-mount we resolve later
+		realPath = ""
+		return realPath, storedPath, nil
 	default:
 		return "", "", fmt.Errorf("invalid storage type: %s", root)
 	}
@@ -156,18 +177,34 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 		return RespondError(c, ErrBadRequest(err.Error()))
 	}
 
-	fileInfo, err := os.Stat(fullPath)
-	if os.IsNotExist(err) {
-		return RespondError(c, ErrNotFound("Path not found"))
+	var isDir bool
+	if isExternalSharePath(storedPath) {
+		// External storage: use StorageBackend.Stat()
+		backend, relPath, _, resolveErr := h.resolveExternalShareBackend(storedPath)
+		if resolveErr != nil {
+			return RespondError(c, ErrBadRequest(resolveErr.Error()))
+		}
+		ctx := context.Background()
+		info, statErr := backend.Stat(ctx, relPath)
+		if statErr != nil {
+			return RespondError(c, ErrNotFound("Path not found"))
+		}
+		isDir = info.IsDirectory
+	} else {
+		fileInfo, statErr := os.Stat(fullPath)
+		if os.IsNotExist(statErr) {
+			return RespondError(c, ErrNotFound("Path not found"))
+		}
+		isDir = fileInfo.IsDir()
 	}
 
 	// Upload shares can only be created for folders
-	if shareType == "upload" && !fileInfo.IsDir() {
+	if shareType == "upload" && !isDir {
 		return RespondError(c, ErrBadRequest("Upload shares can only be created for folders"))
 	}
 
 	// Edit shares can only be created for single files (not folders)
-	if shareType == "edit" && fileInfo.IsDir() {
+	if shareType == "edit" && isDir {
 		return RespondError(c, ErrBadRequest("Edit shares can only be created for files, not folders"))
 	}
 
@@ -235,7 +272,7 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 		"maxAccess":      req.MaxAccess,
 		"requireLogin":   req.RequireLogin,
 		"editable":       editable,
-		"isDir":          fileInfo.IsDir(),
+		"isDir":          isDir,
 	})
 
 	return RespondCreated(c, map[string]interface{}{
@@ -299,28 +336,55 @@ func (h *ShareHandler) ListShares(c echo.Context) error {
 		}
 
 		// Get file metadata - share.Path is stored path like "users/admin/file.txt"
-		realPath := filepath.Join(h.dataRoot, share.Path)
-		if info, err := os.Stat(realPath); err == nil {
-			share.Size = info.Size()
-			share.IsDir = info.IsDir()
-			share.Name = info.Name()
+		if isExternalSharePath(share.Path) {
+			// External storage: use backend to stat
+			backend, relPath, _, resolveErr := h.resolveExternalShareBackend(share.Path)
+			if resolveErr == nil {
+				ctx := context.Background()
+				if info, statErr := backend.Stat(ctx, relPath); statErr == nil {
+					share.Size = info.FileSize
+					share.IsDir = info.IsDirectory
+					share.Name = info.FileName
+				} else {
+					pathParts := strings.Split(share.Path, "/")
+					if len(pathParts) > 0 {
+						share.Name = pathParts[len(pathParts)-1]
+					}
+				}
+			} else {
+				pathParts := strings.Split(share.Path, "/")
+				if len(pathParts) > 0 {
+					share.Name = pathParts[len(pathParts)-1]
+				}
+			}
 		} else {
-			// File doesn't exist anymore, extract name from path
-			pathParts := strings.Split(share.Path, "/")
-			if len(pathParts) > 0 {
-				share.Name = pathParts[len(pathParts)-1]
+			realPath := filepath.Join(h.dataRoot, share.Path)
+			if info, err := os.Stat(realPath); err == nil {
+				share.Size = info.Size()
+				share.IsDir = info.IsDir()
+				share.Name = info.Name()
+			} else {
+				// File doesn't exist anymore, extract name from path
+				pathParts := strings.Split(share.Path, "/")
+				if len(pathParts) > 0 {
+					share.Name = pathParts[len(pathParts)-1]
+				}
 			}
 		}
 
 		// Convert stored path to display path
 		// "users/admin/file.txt" -> "/home/file.txt"
 		// "shared/file.txt" -> "/shared/file.txt"
+		// "external/mount/..." -> "/external/mount/..."
 		pathParts := strings.Split(share.Path, "/")
 		if len(pathParts) >= 2 && pathParts[0] == "users" {
 			// users/{username}/... -> /home/...
 			share.DisplayPath = "/home/" + strings.Join(pathParts[2:], "/")
 		} else if len(pathParts) >= 1 && pathParts[0] == "shared" {
 			// shared/... -> /shared/...
+			share.DisplayPath = "/" + share.Path
+		} else if len(pathParts) >= 1 && pathParts[0] == "external" {
+			// external/... -> /external/...
 			share.DisplayPath = "/" + share.Path
 		} else {
 			share.DisplayPath = "/" + share.Path
@@ -462,18 +526,44 @@ func (h *ShareHandler) AccessShare(c echo.Context) error {
 	_, _ = h.db.Exec("UPDATE shares SET access_count = access_count + 1 WHERE id = $1", share.ID)
 
 	// Get file info
-	fullPath := filepath.Join(h.dataRoot, share.Path)
-	info, err := os.Stat(fullPath)
-	if err != nil {
-		return RespondError(c, ErrNotFound("File not found"))
+	var fileName string
+	var fileIsDir bool
+	var fileSize int64
+
+	if isExternalSharePath(share.Path) {
+		backend, relPath, _, resolveErr := h.resolveExternalShareBackend(share.Path)
+		if resolveErr != nil {
+			return RespondError(c, ErrNotFound("File not found"))
+		}
+		ctx := context.Background()
+		info, statErr := backend.Stat(ctx, relPath)
+		if statErr != nil {
+			return RespondError(c, ErrNotFound("File not found"))
+		}
+		fileName = info.FileName
+		fileIsDir = info.IsDirectory
+		fileSize = info.FileSize
+	} else {
+		fullPath := filepath.Join(h.dataRoot, share.Path)
+		info, statErr := os.Stat(fullPath)
+		if statErr != nil {
+			return RespondError(c, ErrNotFound("File not found"))
+		}
+		fileName = info.Name()
+		fileIsDir = info.IsDir()
+		fileSize = info.Size()
+	}
+
+	if fileName == "" {
+		fileName = filepath.Base(share.Path)
 	}
 
 	return RespondSuccess(c, map[string]interface{}{
 		"token":     share.Token,
 		"path":      share.Path,
-		"name":      filepath.Base(share.Path),
-		"isDir":     info.IsDir(),
-		"size":      info.Size(),
+		"name":      fileName,
+		"isDir":     fileIsDir,
+		"size":      fileSize,
 		"expiresAt": share.ExpiresAt,
 		"shareType": share.ShareType,
 		"editable":  share.Editable,
@@ -535,6 +625,79 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 		}
 	}
 
+	// Log audit and send notification helper
+	logDownloadEvent := func(filename string, size int64) {
+		var userID *string
+		var accessorUsername string
+		if claims, ok := c.Get("user").(*JWTClaims); ok && claims != nil {
+			userID = &claims.UserID
+			accessorUsername = claims.Username
+		}
+		_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventShareAccess, path, map[string]interface{}{
+			"action":   "download",
+			"token":    token,
+			"filename": filename,
+			"size":     size,
+		})
+
+		if h.notificationService != nil {
+			title := "공유 링크가 접속되었습니다"
+			var message string
+			if accessorUsername != "" {
+				message = accessorUsername + "님이 '" + filename + "' 파일을 다운로드했습니다"
+			} else {
+				message = "누군가가 '" + filename + "' 파일을 다운로드했습니다 (IP: " + c.RealIP() + ")"
+			}
+			_, _ = h.notificationService.Create(
+				createdBy,
+				NotifShareLinkAccessed,
+				title,
+				message,
+				"/shared-by-me",
+				userID,
+				map[string]interface{}{
+					"token":    token,
+					"filename": filename,
+					"size":     size,
+					"clientIP": c.RealIP(),
+				},
+			)
+		}
+	}
+
+	if isExternalSharePath(path) {
+		backend, relPath, _, resolveErr := h.resolveExternalShareBackend(path)
+		if resolveErr != nil {
+			return RespondError(c, ErrNotFound("File not found"))
+		}
+		ctx := context.Background()
+		info, statErr := backend.Stat(ctx, relPath)
+		if statErr != nil {
+			return RespondError(c, ErrNotFound("File not found"))
+		}
+		if info.IsDirectory {
+			return RespondError(c, ErrBadRequest("Cannot download a directory"))
+		}
+
+		logDownloadEvent(info.FileName, info.FileSize)
+
+		// Try local path first (local-mount external)
+		if realPath, err := backend.GetRealPath(relPath); err == nil {
+			setContentDisposition(c, info.FileName)
+			return c.File(realPath)
+		}
+
+		// Non-local (S3): stream via ReadFile
+		reader, _, readErr := backend.ReadFile(ctx, relPath)
+		if readErr != nil {
+			return RespondError(c, ErrInternal("Failed to read file"))
+		}
+		defer reader.Close()
+
+		setContentDisposition(c, info.FileName)
+		return c.Stream(http.StatusOK, "application/octet-stream", reader)
+	}
+
 	fullPath := filepath.Join(h.dataRoot, path)
 	info, err := os.Stat(fullPath)
 	if err != nil {
@@ -545,45 +708,7 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 		return RespondError(c, ErrBadRequest("Cannot download a directory"))
 	}
 
-	// Log audit event for shared link download
-	var userID *string
-	var accessorUsername string
-	if claims, ok := c.Get("user").(*JWTClaims); ok && claims != nil {
-		userID = &claims.UserID
-		accessorUsername = claims.Username
-	}
-	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventShareAccess, path, map[string]interface{}{
-		"action":   "download",
-		"token":    token,
-		"filename": info.Name(),
-		"size":     info.Size(),
-	})
-
-	// Send notification to the share owner
-	if h.notificationService != nil {
-		title := "공유 링크가 접속되었습니다"
-		var message string
-		if accessorUsername != "" {
-			message = accessorUsername + "님이 '" + info.Name() + "' 파일을 다운로드했습니다"
-		} else {
-			message = "누군가가 '" + info.Name() + "' 파일을 다운로드했습니다 (IP: " + c.RealIP() + ")"
-		}
-		link := "/shared-by-me"
-		_, _ = h.notificationService.Create(
-			createdBy,
-			NotifShareLinkAccessed,
-			title,
-			message,
-			link,
-			userID,
-			map[string]interface{}{
-				"token":    token,
-				"filename": info.Name(),
-				"size":     info.Size(),
-				"clientIP": c.RealIP(),
-			},
-		)
-	}
+	logDownloadEvent(info.Name(), info.Size())
 
 	setContentDisposition(c, info.Name())
 	return c.File(fullPath)
@@ -651,25 +776,45 @@ func (h *ShareHandler) GetShareOnlyOfficeConfig(c echo.Context) error {
 	}
 
 	// Get file info
-	fullPath := filepath.Join(h.dataRoot, share.Path)
-	info, err := os.Stat(fullPath)
-	if err != nil {
-		return RespondError(c, ErrNotFound("File not found"))
-	}
-
-	if info.IsDir() {
-		return RespondError(c, ErrBadRequest("Cannot edit directories"))
+	var fileName string
+	var modTime time.Time
+	if isExternalSharePath(share.Path) {
+		backend, relPath, _, resolveErr := h.resolveExternalShareBackend(share.Path)
+		if resolveErr != nil {
+			return RespondError(c, ErrNotFound("File not found"))
+		}
+		ctx := context.Background()
+		extInfo, statErr := backend.Stat(ctx, relPath)
+		if statErr != nil {
+			return RespondError(c, ErrNotFound("File not found"))
+		}
+		if extInfo.IsDirectory {
+			return RespondError(c, ErrBadRequest("Cannot edit directories"))
+		}
+		fileName = extInfo.FileName
+		modTime = extInfo.FileModTime
+	} else {
+		fullPath := filepath.Join(h.dataRoot, share.Path)
+		info, statErr := os.Stat(fullPath)
+		if statErr != nil {
+			return RespondError(c, ErrNotFound("File not found"))
+		}
+		if info.IsDir() {
+			return RespondError(c, ErrBadRequest("Cannot edit directories"))
+		}
+		fileName = info.Name()
+		modTime = info.ModTime()
 	}
 
 	// Check if file type is supported by OnlyOffice
-	ext := strings.ToLower(filepath.Ext(info.Name()))
+	ext := strings.ToLower(filepath.Ext(fileName))
 	documentType := getShareOnlyOfficeDocumentType(ext)
 	if documentType == "" {
 		return RespondError(c, ErrBadRequest("Unsupported file type for OnlyOffice"))
 	}
 
 	// Generate unique key for this document (share token + path + modtime)
-	documentKey := fmt.Sprintf("share_%s_%d", shareToken, info.ModTime().Unix())
+	documentKey := fmt.Sprintf("share_%s_%d", shareToken, modTime.Unix())
 
 	// Build URLs
 	internalBaseURL := "http://api:8080"
@@ -697,7 +842,7 @@ func (h *ShareHandler) GetShareOnlyOfficeConfig(c echo.Context) error {
 		"document": map[string]interface{}{
 			"fileType": strings.TrimPrefix(ext, "."),
 			"key":      documentKey,
-			"title":    info.Name(),
+			"title":    fileName,
 			"url":      fileURL,
 		},
 		"editorConfig": map[string]interface{}{
@@ -764,6 +909,26 @@ func (h *ShareHandler) GetShareFile(c echo.Context) error {
 		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash.String), []byte(password)); err != nil {
 			return RespondError(c, ErrUnauthorized("Invalid password"))
 		}
+	}
+
+	if isExternalSharePath(share.Path) {
+		backend, relPath, _, resolveErr := h.resolveExternalShareBackend(share.Path)
+		if resolveErr != nil {
+			return RespondError(c, ErrNotFound("File not found"))
+		}
+		// Try local path first (local-mount external)
+		if realPath, pathErr := backend.GetRealPath(relPath); pathErr == nil {
+			return c.File(realPath)
+		}
+		// Non-local (S3): stream via ReadFile
+		ctx := context.Background()
+		reader, extInfo, readErr := backend.ReadFile(ctx, relPath)
+		if readErr != nil {
+			return RespondError(c, ErrInternal("Failed to read file"))
+		}
+		defer reader.Close()
+		setContentDisposition(c, extInfo.FileName)
+		return c.Stream(http.StatusOK, "application/octet-stream", reader)
 	}
 
 	fullPath := filepath.Join(h.dataRoot, share.Path)
@@ -846,9 +1011,20 @@ func (h *ShareHandler) ShareOnlyOfficeCallback(c echo.Context) error {
 		}
 
 		// Write to file
-		fullPath := filepath.Join(h.dataRoot, share.Path)
-		if err := writeShareFile(fullPath, content, 0644); err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]int{"error": 1})
+		if isExternalSharePath(share.Path) {
+			backend, relPath, _, resolveErr := h.resolveExternalShareBackend(share.Path)
+			if resolveErr != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]int{"error": 1})
+			}
+			ctx := context.Background()
+			if writeErr := backend.WriteFile(ctx, relPath, bytes.NewReader(content), int64(len(content))); writeErr != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]int{"error": 1})
+			}
+		} else {
+			fullPath := filepath.Join(h.dataRoot, share.Path)
+			if err := writeShareFile(fullPath, content, 0644); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]int{"error": 1})
+			}
 		}
 
 		// Log audit event
@@ -919,6 +1095,56 @@ func writeShareFile(path string, content []byte, perm os.FileMode) error {
 		return err
 	}
 	return os.Rename(tmpPath, path)
+}
+
+// isExternalSharePath checks if a stored path is an external storage path
+func isExternalSharePath(storedPath string) bool {
+	return strings.HasPrefix(storedPath, "external/")
+}
+
+// resolveExternalShareBackend resolves an external storage backend from a stored share path
+// This does NOT require JWT claims - it uses direct DB lookup for anonymous share access
+func (h *ShareHandler) resolveExternalShareBackend(storedPath string) (StorageBackend, string, string, error) {
+	if h.storageRouter == nil {
+		return nil, "", "", fmt.Errorf("external storage not available")
+	}
+
+	// Parse "external/{mountPath}/{relPath...}"
+	parts := strings.SplitN(strings.TrimPrefix(storedPath, "external/"), "/", 2)
+	if len(parts) == 0 || parts[0] == "" {
+		return nil, "", "", fmt.Errorf("invalid external share path")
+	}
+	mountPath := parts[0]
+	relPath := ""
+	if len(parts) > 1 {
+		relPath = parts[1]
+	}
+
+	// Look up external storage directly (no user permission check for share access)
+	var storageID, backendType, configEncrypted, status string
+	err := h.db.QueryRow(`
+		SELECT id, backend_type, config_encrypted, status
+		FROM external_storages
+		WHERE mount_path = $1
+	`, mountPath).Scan(&storageID, &backendType, &configEncrypted, &status)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, "", "", fmt.Errorf("external storage not found: %s", mountPath)
+		}
+		return nil, "", "", fmt.Errorf("failed to look up external storage: %w", err)
+	}
+
+	if status != "active" {
+		return nil, "", "", fmt.Errorf("external storage '%s' is currently unavailable", mountPath)
+	}
+
+	// Use storageRouter's backend cache
+	backend, err := h.storageRouter.getOrCreateExternalBackend(storageID, backendType, configEncrypted)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("failed to initialize external backend: %w", err)
+	}
+
+	return backend, relPath, mountPath, nil
 }
 
 // generateShareToken generates a unique share token using crypto-secure random
@@ -1002,30 +1228,13 @@ func (h *ShareHandler) ListShareContents(c echo.Context) error {
 		}
 	}
 
-	// Build full path
-	fullPath := filepath.Join(h.dataRoot, share.Path)
+	// Validate subpath
+	cleanSubpath := ""
 	if subpath != "" {
-		// Validate subpath to prevent path traversal
-		cleanSubpath := filepath.Clean(subpath)
+		cleanSubpath = filepath.Clean(subpath)
 		if strings.Contains(cleanSubpath, "..") {
 			return RespondError(c, ErrBadRequest("Invalid subpath"))
 		}
-		fullPath = filepath.Join(fullPath, cleanSubpath)
-	}
-
-	// Check if path exists and is a directory
-	info, err := os.Stat(fullPath)
-	if err != nil {
-		return RespondError(c, ErrNotFound("Folder not found"))
-	}
-	if !info.IsDir() {
-		return RespondError(c, ErrBadRequest("Path is not a folder"))
-	}
-
-	// Read directory contents
-	entries, err := os.ReadDir(fullPath)
-	if err != nil {
-		return RespondError(c, ErrInternal("Failed to read directory"))
 	}
 
 	type FileItem struct {
@@ -1036,39 +1245,106 @@ func (h *ShareHandler) ListShareContents(c echo.Context) error {
 		ModTime time.Time `json:"modTime"`
 	}
 
-	files := make([]FileItem, 0, len(entries))
+	var files []FileItem
 	var totalSize int64
 
-	for _, entry := range entries {
-		// Skip hidden files
-		if strings.HasPrefix(entry.Name(), ".") {
-			continue
+	if isExternalSharePath(share.Path) {
+		backend, relPath, _, resolveErr := h.resolveExternalShareBackend(share.Path)
+		if resolveErr != nil {
+			return RespondError(c, ErrNotFound("Folder not found"))
 		}
 
-		entryInfo, err := entry.Info()
-		if err != nil {
-			continue
+		listPath := relPath
+		if cleanSubpath != "" {
+			listPath = filepath.Join(relPath, cleanSubpath)
 		}
 
-		// Calculate relative path from share root
-		relativePath := entry.Name()
-		if subpath != "" {
-			relativePath = filepath.Join(subpath, entry.Name())
+		ctx := context.Background()
+		// Verify it's a directory
+		dirInfo, statErr := backend.Stat(ctx, listPath)
+		if statErr != nil {
+			return RespondError(c, ErrNotFound("Folder not found"))
+		}
+		if !dirInfo.IsDirectory {
+			return RespondError(c, ErrBadRequest("Path is not a folder"))
 		}
 
-		item := FileItem{
-			Name:    entry.Name(),
-			Path:    relativePath,
-			IsDir:   entry.IsDir(),
-			Size:    entryInfo.Size(),
-			ModTime: entryInfo.ModTime(),
+		entries, listErr := backend.List(ctx, listPath)
+		if listErr != nil {
+			return RespondError(c, ErrInternal("Failed to read directory"))
 		}
 
-		if !entry.IsDir() {
-			totalSize += entryInfo.Size()
+		files = make([]FileItem, 0, len(entries))
+		for _, entry := range entries {
+			if strings.HasPrefix(entry.EntryName, ".") {
+				continue
+			}
+			relativePath := entry.EntryName
+			if subpath != "" {
+				relativePath = filepath.Join(subpath, entry.EntryName)
+			}
+			var entrySize int64
+			var entryModTime time.Time
+			if entry.Info != nil {
+				entrySize = entry.Info.FileSize
+				entryModTime = entry.Info.FileModTime
+			}
+			item := FileItem{
+				Name:    entry.EntryName,
+				Path:    relativePath,
+				IsDir:   entry.IsDir,
+				Size:    entrySize,
+				ModTime: entryModTime,
+			}
+			if !entry.IsDir {
+				totalSize += entrySize
+			}
+			files = append(files, item)
+		}
+	} else {
+		fullPath := filepath.Join(h.dataRoot, share.Path)
+		if cleanSubpath != "" {
+			fullPath = filepath.Join(fullPath, cleanSubpath)
 		}
 
-		files = append(files, item)
+		info, statErr := os.Stat(fullPath)
+		if statErr != nil {
+			return RespondError(c, ErrNotFound("Folder not found"))
+		}
+		if !info.IsDir() {
+			return RespondError(c, ErrBadRequest("Path is not a folder"))
+		}
+
+		entries, readErr := os.ReadDir(fullPath)
+		if readErr != nil {
+			return RespondError(c, ErrInternal("Failed to read directory"))
+		}
+
+		files = make([]FileItem, 0, len(entries))
+		for _, entry := range entries {
+			if strings.HasPrefix(entry.Name(), ".") {
+				continue
+			}
+			entryInfo, infoErr := entry.Info()
+			if infoErr != nil {
+				continue
+			}
+			relativePath := entry.Name()
+			if subpath != "" {
+				relativePath = filepath.Join(subpath, entry.Name())
+			}
+			item := FileItem{
+				Name:    entry.Name(),
+				Path:    relativePath,
+				IsDir:   entry.IsDir(),
+				Size:    entryInfo.Size(),
+				ModTime: entryInfo.ModTime(),
+			}
+			if !entry.IsDir() {
+				totalSize += entryInfo.Size()
+			}
+			files = append(files, item)
+		}
 	}
 
 	// Sort: folders first, then by name
@@ -1164,6 +1440,81 @@ func (h *ShareHandler) DownloadShareFile(c echo.Context) error {
 		return RespondError(c, ErrBadRequest("Invalid file path"))
 	}
 
+	// Helper to log audit and send notification
+	logFileDownload := func(filename string, filesize int64) {
+		var userID *string
+		var accessorUsername string
+		if claims, ok := c.Get("user").(*JWTClaims); ok && claims != nil {
+			userID = &claims.UserID
+			accessorUsername = claims.Username
+		}
+		_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventShareAccess, share.Path, map[string]interface{}{
+			"action":   "download_file",
+			"token":    token,
+			"filename": filename,
+			"filepath": filePath,
+			"size":     filesize,
+		})
+		if h.notificationService != nil {
+			title := "공유 폴더에서 파일이 다운로드되었습니다"
+			var message string
+			if accessorUsername != "" {
+				message = accessorUsername + "님이 '" + filename + "' 파일을 다운로드했습니다"
+			} else {
+				message = "누군가가 '" + filename + "' 파일을 다운로드했습니다 (IP: " + c.RealIP() + ")"
+			}
+			_, _ = h.notificationService.Create(
+				share.CreatedBy,
+				NotifShareLinkAccessed,
+				title,
+				message,
+				"/shared-by-me",
+				userID,
+				map[string]interface{}{
+					"token":    token,
+					"filename": filename,
+					"filepath": filePath,
+					"size":     filesize,
+					"clientIP": c.RealIP(),
+				},
+			)
+		}
+	}
+
+	if isExternalSharePath(share.Path) {
+		backend, relPath, _, resolveErr := h.resolveExternalShareBackend(share.Path)
+		if resolveErr != nil {
+			return RespondError(c, ErrNotFound("File not found"))
+		}
+		fileRelPath := filepath.Join(relPath, cleanPath)
+		ctx := context.Background()
+		info, statErr := backend.Stat(ctx, fileRelPath)
+		if statErr != nil {
+			return RespondError(c, ErrNotFound("File not found"))
+		}
+		if info.IsDirectory {
+			return RespondError(c, ErrBadRequest("Cannot download a directory"))
+		}
+
+		logFileDownload(info.FileName, info.FileSize)
+
+		// Try local path first
+		if realFilePath, err := backend.GetRealPath(fileRelPath); err == nil {
+			setContentDisposition(c, info.FileName)
+			return c.File(realFilePath)
+		}
+
+		// Non-local (S3): stream
+		reader, _, readErr := backend.ReadFile(ctx, fileRelPath)
+		if readErr != nil {
+			return RespondError(c, ErrInternal("Failed to read file"))
+		}
+		defer reader.Close()
+
+		setContentDisposition(c, info.FileName)
+		return c.Stream(http.StatusOK, "application/octet-stream", reader)
+	}
+
 	// Build full path
 	fullPath := filepath.Join(h.dataRoot, share.Path, cleanPath)
 
@@ -1182,46 +1533,7 @@ func (h *ShareHandler) DownloadShareFile(c echo.Context) error {
 		return RespondError(c, ErrBadRequest("Cannot download a directory"))
 	}
 
-	// Log audit event
-	var userID *string
-	var accessorUsername string
-	if claims, ok := c.Get("user").(*JWTClaims); ok && claims != nil {
-		userID = &claims.UserID
-		accessorUsername = claims.Username
-	}
-	_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventShareAccess, share.Path, map[string]interface{}{
-		"action":   "download_file",
-		"token":    token,
-		"filename": info.Name(),
-		"filepath": filePath,
-		"size":     info.Size(),
-	})
-
-	// Send notification to share owner
-	if h.notificationService != nil {
-		title := "공유 폴더에서 파일이 다운로드되었습니다"
-		var message string
-		if accessorUsername != "" {
-			message = accessorUsername + "님이 '" + info.Name() + "' 파일을 다운로드했습니다"
-		} else {
-			message = "누군가가 '" + info.Name() + "' 파일을 다운로드했습니다 (IP: " + c.RealIP() + ")"
-		}
-		_, _ = h.notificationService.Create(
-			share.CreatedBy,
-			NotifShareLinkAccessed,
-			title,
-			message,
-			"/shared-by-me",
-			userID,
-			map[string]interface{}{
-				"token":    token,
-				"filename": info.Name(),
-				"filepath": filePath,
-				"size":     info.Size(),
-				"clientIP": c.RealIP(),
-			},
-		)
-	}
+	logFileDownload(info.Name(), info.Size())
 
 	setContentDisposition(c, info.Name())
 	return c.File(fullPath)
