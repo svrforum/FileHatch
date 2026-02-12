@@ -212,6 +212,35 @@ CREATE TABLE IF NOT EXISTS file_locks (
     reason VARCHAR(255)
 );
 
+-- 14. External Storages (S3/NFS/SMB)
+CREATE TABLE IF NOT EXISTS external_storages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    mount_path VARCHAR(255) NOT NULL UNIQUE,
+    backend_type VARCHAR(50) NOT NULL,
+    config_encrypted TEXT NOT NULL,
+    status VARCHAR(20) DEFAULT 'active',
+    status_message TEXT,
+    last_checked_at TIMESTAMPTZ,
+    storage_used BIGINT DEFAULT 0,
+    storage_quota BIGINT DEFAULT 0,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    is_readonly BOOLEAN DEFAULT FALSE
+);
+
+-- 15. External Storage Access
+CREATE TABLE IF NOT EXISTS external_storage_access (
+    id BIGSERIAL PRIMARY KEY,
+    external_storage_id UUID NOT NULL REFERENCES external_storages(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    permission_level INT NOT NULL DEFAULT 1,
+    granted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(external_storage_id, user_id)
+);
+
 -- =============================================================================
 -- Indexes
 -- =============================================================================
@@ -240,20 +269,26 @@ CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at
 CREATE INDEX IF NOT EXISTS idx_sso_providers_enabled ON sso_providers(is_enabled);
 CREATE INDEX IF NOT EXISTS idx_sso_providers_type ON sso_providers(provider_type);
 
--- Migration 003: Storage tracking
+-- External storage indexes
+CREATE INDEX IF NOT EXISTS idx_external_storages_mount_path ON external_storages(mount_path);
+CREATE INDEX IF NOT EXISTS idx_external_storages_status ON external_storages(status);
+CREATE INDEX IF NOT EXISTS idx_external_storage_access_user ON external_storage_access(user_id);
+CREATE INDEX IF NOT EXISTS idx_external_storage_access_storage ON external_storage_access(external_storage_id);
+
+-- Storage tracking
 CREATE INDEX IF NOT EXISTS idx_users_storage ON users(storage_used);
 
--- Migration 004: Starred files and locks
+-- Starred files and locks
 CREATE INDEX IF NOT EXISTS idx_starred_files_user ON starred_files(user_id);
 CREATE INDEX IF NOT EXISTS idx_starred_files_path ON starred_files(file_path);
 CREATE INDEX IF NOT EXISTS idx_file_locks_path ON file_locks(file_path);
 CREATE INDEX IF NOT EXISTS idx_file_locks_user ON file_locks(locked_by);
 CREATE INDEX IF NOT EXISTS idx_file_locks_expires ON file_locks(expires_at) WHERE expires_at IS NOT NULL;
 
--- Migration 005: Login lockout
+-- Login lockout
 CREATE INDEX IF NOT EXISTS idx_users_locked_until ON users(locked_until) WHERE locked_until IS NOT NULL;
 
--- Migration 006: Performance indexes
+-- Performance indexes
 CREATE INDEX IF NOT EXISTS idx_sfm_user_folder ON shared_folder_members(user_id, shared_folder_id);
 CREATE INDEX IF NOT EXISTS idx_shared_folders_name_active ON shared_folders(name, is_active) WHERE is_active = TRUE;
 CREATE INDEX IF NOT EXISTS idx_file_shares_recipient_path ON file_shares(shared_with_id, item_path);
@@ -263,10 +298,10 @@ CREATE INDEX IF NOT EXISTS idx_audit_security_events ON audit_logs(event_type, t
 CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, created_at DESC) WHERE is_read = FALSE;
 CREATE INDEX IF NOT EXISTS idx_users_active ON users(username, is_active) WHERE is_active = TRUE;
 
--- Migration 007: Shared folder storage
+-- Shared folder storage
 CREATE INDEX IF NOT EXISTS idx_shared_folders_quota ON shared_folders(storage_quota, storage_used) WHERE is_active = TRUE AND storage_quota > 0;
 
--- Migration 008: File shares composite index for shared-with-me queries
+-- File shares composite index for shared-with-me queries
 CREATE INDEX IF NOT EXISTS idx_file_shares_shared_with_folder ON file_shares(shared_with_id, is_folder, created_at DESC);
 
 -- =============================================================================
@@ -296,7 +331,7 @@ INSERT INTO system_settings (key, value, description) VALUES
     ('sso_only_mode', 'false', 'SSO 전용 모드 (로컬 로그인 비활성화)'),
     ('sso_auto_register', 'true', 'SSO 최초 로그인 시 자동 사용자 생성'),
     ('sso_allowed_domains', '', 'SSO 허용 이메일 도메인 (쉼표로 구분, 비어있으면 모두 허용)'),
-    -- Migration 005: Brute force protection settings
+    -- Brute force protection settings
     ('bruteforce_max_attempts', '5', '사용자별 로그인 최대 시도 횟수'),
     ('bruteforce_window_minutes', '5', '시도 횟수 추적 시간 (분)'),
     ('bruteforce_lock_minutes', '15', '계정 잠금 시간 (분)'),
@@ -311,12 +346,8 @@ ON CONFLICT (key) DO NOTHING;
 INSERT INTO schema_migrations (version, name) VALUES
     ('20240101000001', '001_initial_schema'),
     ('20240101000002', '002_default_data'),
-    ('20240108000001', '003_storage_tracking'),
-    ('20240109000001', '004_starred_and_locks'),
-    ('20240110000001', '005_login_lockout'),
-    ('20240111000001', '006_performance_indexes'),
-    ('20240112000001', '007_shared_folder_storage'),
-    ('20240113000001', '008_initial_setup')
+    ('20240101000003', '003_external_storages'),
+    ('20240101000004', '004_fix_external_storage_fk')
 ON CONFLICT (version) DO NOTHING;
 
 -- =============================================================================
@@ -335,3 +366,5 @@ COMMENT ON TABLE notifications IS 'In-app notification alerts for users';
 COMMENT ON TABLE sso_providers IS 'OAuth2/OIDC SSO provider configurations';
 COMMENT ON TABLE starred_files IS 'User favorite files and folders';
 COMMENT ON TABLE file_locks IS 'File locking for concurrent edit prevention';
+COMMENT ON TABLE external_storages IS 'External storage connections (S3, NFS, SMB)';
+COMMENT ON TABLE external_storage_access IS 'User access permissions for external storages';

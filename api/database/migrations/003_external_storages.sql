@@ -33,3 +33,7 @@ CREATE TABLE IF NOT EXISTS external_storage_access (
 
 CREATE INDEX IF NOT EXISTS idx_external_storage_access_user ON external_storage_access(user_id);
 CREATE INDEX IF NOT EXISTS idx_external_storage_access_storage ON external_storage_access(external_storage_id);
+
+-- Record this migration
+INSERT INTO schema_migrations (version, name) VALUES ('20240101000003', '003_external_storages')
+ON CONFLICT (version) DO NOTHING;
