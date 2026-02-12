@@ -58,6 +58,11 @@ type TrashItem struct {
 	MountID      string    `json:"mountId,omitempty"`     // external storage ID
 }
 
+// BatchTrashRequest represents a request to batch operate on trash items
+type BatchTrashRequest struct {
+	IDs []string `json:"ids"`
+}
+
 // getTrashPath returns the trash directory path for a user
 func (h *Handler) getTrashPath(username string) string {
 	return filepath.Join(h.dataRoot, "trash", username)
@@ -685,6 +690,239 @@ func (h *Handler) DeleteFromTrash(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
+	})
+}
+
+// BatchRestoreFromTrash restores multiple items from trash at once
+func (h *Handler) BatchRestoreFromTrash(c echo.Context) error {
+	var req BatchTrashRequest
+	if err := c.Bind(&req); err != nil {
+		return RespondError(c, ErrBadRequest("Invalid request body"))
+	}
+	if len(req.IDs) == 0 {
+		return RespondError(c, ErrMissingParameter("ids"))
+	}
+
+	claims, ok := c.Get("user").(*JWTClaims)
+	if !ok || claims == nil {
+		return RespondError(c, ErrUnauthorized(""))
+	}
+
+	meta, err := h.loadTrashMeta(claims.Username)
+	if err != nil {
+		return RespondError(c, ErrOperationFailed("load trash", err))
+	}
+
+	var restored []string
+	var failed []string
+	var errMsgs []string
+	var totalRestoredSize int64
+	var totalRestoredExternalSize int64
+
+	for _, trashID := range req.IDs {
+		item, exists := meta[trashID]
+		if !exists {
+			failed = append(failed, trashID)
+			errMsgs = append(errMsgs, fmt.Sprintf("%s: not found", trashID))
+			continue
+		}
+
+		trashItemPath := filepath.Join(h.getTrashPath(claims.Username), trashID)
+		restorePath := item.OriginalPath
+
+		// Check if this is an SMB-deleted file
+		isSMBFile := strings.HasPrefix(trashID, "smb_")
+		if isSMBFile {
+			relPath := strings.TrimPrefix(item.OriginalPath, "/home/")
+			trashItemPath = filepath.Join(h.getTrashPath(claims.Username), ".smb", relPath)
+		}
+
+		// Handle external non-local storage restore
+		if item.StorageType == StorageExternal && item.MountID != "" {
+			restoreResult, restoreRealPath, resolveErr := h.resolveStorageForOperation(item.OriginalPath, claims)
+			if resolveErr != nil {
+				failed = append(failed, trashID)
+				errMsgs = append(errMsgs, fmt.Sprintf("%s: %s", trashID, resolveErr.Error()))
+				continue
+			}
+			if restoreResult.IsReadonly {
+				failed = append(failed, trashID)
+				errMsgs = append(errMsgs, fmt.Sprintf("%s: read-only storage", trashID))
+				continue
+			}
+
+			if restoreResult.Backend != nil && !restoreResult.Backend.IsLocal() {
+				ctx := context.Background()
+				var uploadErr error
+				if item.IsDir {
+					uploadErr = uploadDirToBackend(ctx, trashItemPath, restoreResult.Backend, restoreResult.RelPath)
+				} else {
+					uploadErr = uploadFileToBackend(ctx, trashItemPath, restoreResult.Backend, restoreResult.RelPath)
+				}
+				if uploadErr != nil {
+					failed = append(failed, trashID)
+					errMsgs = append(errMsgs, fmt.Sprintf("%s: %s", trashID, uploadErr.Error()))
+					continue
+				}
+				os.RemoveAll(trashItemPath)
+				delete(meta, trashID)
+				restored = append(restored, trashID)
+				_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", restorePath, map[string]interface{}{
+					"trashId": trashID,
+				})
+				continue
+			}
+
+			// Local-mount external
+			localRealPath := restoreRealPath
+			if _, existErr := os.Stat(localRealPath); existErr == nil {
+				ext := filepath.Ext(localRealPath)
+				base := strings.TrimSuffix(localRealPath, ext)
+				localRealPath = fmt.Sprintf("%s_restored_%d%s", base, time.Now().Unix(), ext)
+			}
+			parentDir := filepath.Dir(localRealPath)
+			if mkErr := os.MkdirAll(parentDir, 0755); mkErr != nil {
+				failed = append(failed, trashID)
+				errMsgs = append(errMsgs, fmt.Sprintf("%s: %s", trashID, mkErr.Error()))
+				continue
+			}
+			if mvErr := moveOrCopy(trashItemPath, localRealPath); mvErr != nil {
+				failed = append(failed, trashID)
+				errMsgs = append(errMsgs, fmt.Sprintf("%s: %s", trashID, mvErr.Error()))
+				continue
+			}
+			delete(meta, trashID)
+			restored = append(restored, trashID)
+			_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", restorePath, map[string]interface{}{
+				"trashId": trashID,
+			})
+			continue
+		}
+
+		// Local restore (home, shared)
+		realPath, _, _, resolveErr := h.resolvePath(item.OriginalPath, claims)
+		if resolveErr != nil {
+			failed = append(failed, trashID)
+			errMsgs = append(errMsgs, fmt.Sprintf("%s: %s", trashID, resolveErr.Error()))
+			continue
+		}
+
+		// Check if destination already exists
+		if _, statErr := os.Stat(realPath); statErr == nil {
+			ext := filepath.Ext(realPath)
+			base := strings.TrimSuffix(realPath, ext)
+			realPath = fmt.Sprintf("%s_restored_%d%s", base, time.Now().Unix(), ext)
+		}
+
+		parentDir := filepath.Dir(realPath)
+		if mkErr := os.MkdirAll(parentDir, 0755); mkErr != nil {
+			failed = append(failed, trashID)
+			errMsgs = append(errMsgs, fmt.Sprintf("%s: %s", trashID, mkErr.Error()))
+			continue
+		}
+
+		if mvErr := moveOrCopy(trashItemPath, realPath); mvErr != nil {
+			failed = append(failed, trashID)
+			errMsgs = append(errMsgs, fmt.Sprintf("%s: %s", trashID, mvErr.Error()))
+			continue
+		}
+
+		if isSMBFile {
+			h.cleanupEmptySMBDirs(claims.Username, trashItemPath)
+		}
+
+		delete(meta, trashID)
+		restored = append(restored, trashID)
+
+		_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", restorePath, map[string]interface{}{
+			"trashId": trashID,
+		})
+
+		if item.StorageType != StorageExternal {
+			totalRestoredSize += item.Size
+		} else {
+			totalRestoredExternalSize += item.Size
+		}
+	}
+
+	// Save metadata once
+	if len(restored) > 0 {
+		_ = h.saveTrashMeta(claims.Username, meta)
+	}
+
+	// Update storage tracking once for all non-external items
+	if totalRestoredSize > 0 {
+		if err := h.UpdateStorageForMove(claims.UserID, totalRestoredSize, false); err != nil {
+			fmt.Printf("[Storage] Failed to update storage for %s: %v\n", claims.Username, err)
+		}
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success":  len(failed) == 0,
+		"restored": restored,
+		"failed":   failed,
+		"errors":   errMsgs,
+	})
+}
+
+// BatchDeleteFromTrash permanently deletes multiple items from trash at once
+func (h *Handler) BatchDeleteFromTrash(c echo.Context) error {
+	var req BatchTrashRequest
+	if err := c.Bind(&req); err != nil {
+		return RespondError(c, ErrBadRequest("Invalid request body"))
+	}
+	if len(req.IDs) == 0 {
+		return RespondError(c, ErrMissingParameter("ids"))
+	}
+
+	claims, ok := c.Get("user").(*JWTClaims)
+	if !ok || claims == nil {
+		return RespondError(c, ErrUnauthorized(""))
+	}
+
+	meta, err := h.loadTrashMeta(claims.Username)
+	if err != nil {
+		return RespondError(c, ErrOperationFailed("load trash", err))
+	}
+
+	var deleted []string
+	var failed []string
+	var totalDeletedSize int64
+
+	for _, trashID := range req.IDs {
+		item, exists := meta[trashID]
+		if !exists {
+			failed = append(failed, trashID)
+			continue
+		}
+
+		trashItemPath := filepath.Join(h.getTrashPath(claims.Username), trashID)
+		if err := os.RemoveAll(trashItemPath); err != nil {
+			failed = append(failed, trashID)
+			continue
+		}
+
+		delete(meta, trashID)
+		deleted = append(deleted, trashID)
+		totalDeletedSize += item.Size
+	}
+
+	// Save metadata once
+	if len(deleted) > 0 {
+		_ = h.saveTrashMeta(claims.Username, meta)
+	}
+
+	// Update storage tracking once
+	if totalDeletedSize > 0 {
+		if err := h.UpdateUserTrashStorage(claims.UserID, -totalDeletedSize); err != nil {
+			fmt.Printf("[Storage] Failed to update storage for %s: %v\n", claims.Username, err)
+		}
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": len(failed) == 0,
+		"deleted": deleted,
+		"failed":  failed,
 	})
 }
 

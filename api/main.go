@@ -358,7 +358,9 @@ func main() {
 	api.GET("/download/folder/*", h.DownloadFolderAsZip, authHandler.OptionalJWTMiddleware)
 	api.GET("/zip/preview/*", h.PreviewZip, authHandler.OptionalJWTMiddleware)
 
-	// Trash API routes
+	// Trash API routes (batch routes must be before wildcard routes)
+	api.POST("/trash/restore/batch", h.BatchRestoreFromTrash, authHandler.OptionalJWTMiddleware)
+	api.POST("/trash/batch-delete", h.BatchDeleteFromTrash, authHandler.OptionalJWTMiddleware)
 	api.POST("/trash/*", h.MoveToTrash, authHandler.OptionalJWTMiddleware)
 	api.GET("/trash", h.ListTrash, authHandler.OptionalJWTMiddleware)
 	api.GET("/trash/stats", h.GetTrashStats, authHandler.OptionalJWTMiddleware)
