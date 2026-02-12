@@ -177,7 +177,7 @@ const FileRow = React.forwardRef<HTMLDivElement, FileRowProps>(({
         ) : (
           getFileIcon(file)
         )}
-        <span className="file-name">{file.name}</span>
+        <span className="file-name" title={file.name}>{file.name}</span>
         {/* Lock indicator */}
         {isLocked && (
           <span

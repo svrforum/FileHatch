@@ -217,7 +217,7 @@
   align-items: center;
 }
 
-.file-name {
+.upload-modal .file-name {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--text-primary);
@@ -561,7 +561,7 @@
     max-height: 250px;
   }
 
-  .file-name {
+  .upload-modal .file-name {
     max-width: 180px;
   }
 
