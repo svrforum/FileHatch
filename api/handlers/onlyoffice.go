@@ -187,7 +187,11 @@ func (h *Handler) GetOnlyOfficeConfig(c echo.Context) error {
 		})
 	}
 
-	virtualPath := "/" + requestPath
+	decodedPath, decErr := url.PathUnescape(requestPath)
+	if decErr != nil {
+		decodedPath = requestPath
+	}
+	virtualPath := "/" + decodedPath
 	isSharedFile := false
 	canEdit := true // By default, owner can edit
 

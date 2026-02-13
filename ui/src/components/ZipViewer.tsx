@@ -226,7 +226,7 @@ export default function ZipViewer({ filePath, fileName, onClose, onExtract }: Zi
             <button
               className="extract-btn"
               onClick={handleExtract}
-              disabled={extracting || loading}
+              disabled={extracting || loading || zipData?.isEncrypted}
             >
               {extracting ? (
                 <>
@@ -256,6 +256,12 @@ export default function ZipViewer({ filePath, fileName, onClose, onExtract }: Zi
             <span>{zipData.totalFiles}개 항목</span>
             <span className="separator">|</span>
             <span>총 {formatFileSize(zipData.totalSize)}</span>
+            {zipData.isEncrypted && (
+              <>
+                <span className="separator">|</span>
+                <span style={{ color: 'var(--color-warning)', fontWeight: 500 }}>암호가 걸린 압축파일입니다</span>
+              </>
+            )}
           </div>
         )}
 

@@ -199,6 +199,7 @@ type ZipPreviewResponse struct {
 	TotalFiles  int            `json:"totalFiles"`
 	TotalSize   int64          `json:"totalSize"`
 	Files       []ZipFileEntry `json:"files"`
+	IsEncrypted bool           `json:"isEncrypted"`
 }
 
 // PreviewZip returns the list of files inside a ZIP archive
@@ -285,10 +286,11 @@ func (h *Handler) PreviewZip(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, ZipPreviewResponse{
-		FileName:   filepath.Base(requestPath),
-		TotalFiles: len(files),
-		TotalSize:  totalSize,
-		Files:      files,
+		FileName:    filepath.Base(requestPath),
+		TotalFiles:  len(files),
+		TotalSize:   totalSize,
+		Files:       files,
+		IsEncrypted: isZipEncrypted(reader.File),
 	})
 }
 

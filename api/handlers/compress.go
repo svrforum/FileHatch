@@ -526,6 +526,14 @@ func (h *Handler) ExtractZip(c echo.Context) error {
 	}
 	defer reader.Close()
 
+	// Check for encrypted ZIP files
+	if isZipEncrypted(reader.File) {
+		if !cleanupExtractDir {
+			os.RemoveAll(extractDir)
+		}
+		return RespondError(c, ErrBadRequest("암호가 걸린 압축파일은 해제할 수 없습니다"))
+	}
+
 	// Extract files
 	var extractedCount int
 	for _, file := range reader.File {
@@ -598,6 +606,24 @@ func (h *Handler) extractZipFile(file *zip.File, destPath string) error {
 
 	_, err = io.Copy(destFile, rc)
 	return err
+}
+
+// isZipEncrypted checks if any file in the ZIP archive is encrypted
+func isZipEncrypted(files []*zip.File) bool {
+	for _, f := range files {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+		// Bit 0 of Flags = traditional PKWARE encryption
+		if f.Flags&0x1 != 0 {
+			return true
+		}
+		// Method 99 = WinZip AES encryption
+		if f.Method == 99 {
+			return true
+		}
+	}
+	return false
 }
 
 // CompressionProgress represents the progress of a compression operation

@@ -37,6 +37,8 @@
 }
 
 .onlyoffice-title {
+  flex: 1;
+  min-width: 0;
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
@@ -46,6 +48,7 @@
 }
 
 .onlyoffice-close-btn {
+  flex-shrink: 0;
   width: 36px;
   height: 36px;
   display: flex;

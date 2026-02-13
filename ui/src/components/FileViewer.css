@@ -43,16 +43,26 @@
 }
 
 .file-viewer-title {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
   color: var(--text-primary);
   font-weight: 500;
   font-size: 14px;
+  overflow: hidden;
 }
 
 .file-viewer-title svg {
+  flex-shrink: 0;
   color: var(--text-secondary);
+}
+
+.file-viewer-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-viewer-actions {
@@ -107,6 +117,7 @@
 }
 
 .close-btn {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;

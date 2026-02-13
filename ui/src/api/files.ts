@@ -371,14 +371,16 @@ export function moveItemStream(
 export function copyItemStream(
   path: string,
   destination: string,
-  onProgress: (progress: TransferProgress) => void
+  onProgress: (progress: TransferProgress) => void,
+  retry?: boolean
 ): { cancel: () => void; promise: Promise<string> } {
   const cleanPath = path.startsWith('/') ? path.slice(1) : path
   const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
   const encodedDest = encodeURIComponent(destination)
 
   const token = _getAuthToken()
-  const url = `${API_BASE}/files/copy-stream/${encodedPath}?destination=${encodedDest}${token ? `&token=${token}` : ''}`
+  const retryParam = retry ? '&retry=true' : ''
+  const url = `${API_BASE}/files/copy-stream/${encodedPath}?destination=${encodedDest}${token ? `&token=${token}` : ''}${retryParam}`
 
   let eventSource: EventSource | null = null
   let rejectFn: ((reason: Error) => void) | null = null
@@ -489,6 +491,16 @@ export interface TrashListResponse {
 // Move file or folder to trash
 export async function moveToTrash(path: string): Promise<{ success: boolean; trashId: string }> {
   return api.post<{ success: boolean; trashId: string }>(`/trash/${apiUrl.encodePath(path)}`)
+}
+
+// Batch move files/folders to trash
+export interface BatchMoveToTrashResult {
+  success: string[]
+  failed: { path: string; error: string }[]
+}
+
+export async function batchMoveToTrash(paths: string[]): Promise<BatchMoveToTrashResult> {
+  return api.post<BatchMoveToTrashResult>('/trash/batch', { paths })
 }
 
 // List trash items
@@ -849,6 +861,7 @@ export interface ZipPreviewResponse {
   totalFiles: number
   totalSize: number
   files: ZipFileEntry[]
+  isEncrypted?: boolean
 }
 
 // Preview ZIP file contents
