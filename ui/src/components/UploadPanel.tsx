@@ -15,6 +15,23 @@ function formatSpeed(bytesPerSecond: number): string {
   }
 }
 
+// Convert virtual path to URL path for navigation
+function virtualPathToUrl(virtualPath: string): string {
+  if (virtualPath.startsWith('/shared/')) {
+    return `/shared-drive/${virtualPath.substring('/shared/'.length)}`
+  }
+  if (virtualPath.startsWith('/external/')) {
+    return virtualPath
+  }
+  if (virtualPath.startsWith('/home/')) {
+    return `/files/${virtualPath.substring('/home/'.length)}`
+  }
+  if (virtualPath === '/home') {
+    return '/files'
+  }
+  return '/files'
+}
+
 function UploadPanel() {
   const { items, downloads, isPanelOpen: uploadPanelOpen, closePanel: closeUploadPanel, removeUpload, clearCompleted, clearCompletedDownloads, removeDownload, startUpload, pauseUpload } = useUploadStore()
   const { items: transferItems, isPanelOpen: transferPanelOpen, closePanel: closeTransferPanel, removeItem: removeTransfer, clearCompleted: clearCompletedTransfers, retryTransfer } = useTransferStore()
@@ -48,12 +65,14 @@ function UploadPanel() {
 
     let transferring = 0, tPending = 0, tCompleted = 0, tError = 0
     let compressing = 0, cPending = 0, cCompleted = 0, cError = 0
+    let deleting = 0, dPending = 0, dCompleted = 0, dError = 0
     for (const t of transferItems) {
       const isCompress = t.type === 'compress'
-      if (t.status === 'transferring') { if (isCompress) compressing++; else transferring++ }
-      else if (t.status === 'pending') { if (isCompress) cPending++; else tPending++ }
-      else if (t.status === 'completed') { if (isCompress) cCompleted++; else tCompleted++ }
-      else if (t.status === 'error') { if (isCompress) cError++; else tError++ }
+      const isDelete = t.type === 'delete'
+      if (t.status === 'transferring') { if (isCompress) compressing++; else if (isDelete) deleting++; else transferring++ }
+      else if (t.status === 'pending') { if (isCompress) cPending++; else if (isDelete) dPending++; else tPending++ }
+      else if (t.status === 'completed') { if (isCompress) cCompleted++; else if (isDelete) dCompleted++; else tCompleted++ }
+      else if (t.status === 'error') { if (isCompress) cError++; else if (isDelete) dError++; else tError++ }
     }
 
     return {
@@ -61,9 +80,10 @@ function UploadPanel() {
       downloadingCount: downloading, downloadCompletedCount: dlCompleted, downloadErrorCount: dlError,
       transferringCount: transferring, transferPendingCount: tPending, transferCompletedCount: tCompleted, transferErrorCount: tError,
       compressingCount: compressing, compressPendingCount: cPending, compressCompletedCount: cCompleted, compressErrorCount: cError,
-      totalActiveCount: uploading + pending + downloading + transferring + tPending + compressing + cPending,
-      totalCompletedCount: completed + dlCompleted + tCompleted + cCompleted,
-      totalErrorCount: error + dlError + tError + cError,
+      deletingCount: deleting, deletePendingCount: dPending, deleteCompletedCount: dCompleted, deleteErrorCount: dError,
+      totalActiveCount: uploading + pending + downloading + transferring + tPending + compressing + cPending + deleting + dPending,
+      totalCompletedCount: completed + dlCompleted + tCompleted + cCompleted + dCompleted,
+      totalErrorCount: error + dlError + tError + cError + dError,
       hasItems: items.length > 0 || downloads.length > 0 || transferItems.length > 0,
     }
   }, [items, downloads, transferItems])
@@ -73,6 +93,7 @@ function UploadPanel() {
     downloadingCount,
     transferringCount, transferPendingCount,
     compressingCount, compressPendingCount,
+    deletingCount, deletePendingCount,
     totalActiveCount, totalCompletedCount, totalErrorCount, hasItems,
   } = counts
 
@@ -153,13 +174,21 @@ function UploadPanel() {
           </svg>
         )
       case 'transferring':
-        return <div className={`spinner-small ${item.type === 'compress' ? 'compress' : 'transfer'}`} />
+        return <div className={`spinner-small ${item.type === 'compress' ? 'compress' : item.type === 'delete' ? 'delete' : 'transfer'}`} />
       default:
         return null
     }
   }
 
-  const getTransferTypeIcon = (type: 'move' | 'copy' | 'compress') => {
+  const getTransferTypeIcon = (type: 'move' | 'copy' | 'compress' | 'delete') => {
+    if (type === 'delete') {
+      return (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M3 6H5H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      )
+    }
     if (type === 'move') {
       return (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -214,7 +243,7 @@ function UploadPanel() {
   }
 
   return (
-    <div className="upload-panel-overlay" onClick={closePanel}>
+    <div className="upload-panel-overlay" onClick={totalActiveCount > 0 ? undefined : closePanel}>
       <div className="upload-panel" onClick={(e) => e.stopPropagation()}>
         <div className="upload-panel-header">
         <h3>전송 현황</h3>
@@ -224,7 +253,12 @@ function UploadPanel() {
               완료 항목 삭제
             </button>
           )}
-          <button className="panel-close-btn" onClick={closePanel}>
+          <button
+            className="panel-close-btn"
+            onClick={closePanel}
+            disabled={totalActiveCount > 0}
+            title={totalActiveCount > 0 ? '진행 중인 전송이 있습니다' : '닫기'}
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
@@ -237,7 +271,8 @@ function UploadPanel() {
         {downloadingCount > 0 && <span className="stat downloading">다운로드 중 {downloadingCount}</span>}
         {transferringCount > 0 && <span className="stat transferring">이동/복사 중 {transferringCount}</span>}
         {compressingCount > 0 && <span className="stat compressing">압축 중 {compressingCount}</span>}
-        {(pendingCount > 0 || transferPendingCount > 0 || compressPendingCount > 0) && <span className="stat pending">대기 {pendingCount + transferPendingCount + compressPendingCount}</span>}
+        {deletingCount > 0 && <span className="stat deleting">삭제 중 {deletingCount}</span>}
+        {(pendingCount > 0 || transferPendingCount > 0 || compressPendingCount > 0 || deletePendingCount > 0) && <span className="stat pending">대기 {pendingCount + transferPendingCount + compressPendingCount + deletePendingCount}</span>}
         {totalCompletedCount > 0 && <span className="stat completed">완료 {totalCompletedCount}</span>}
         {totalErrorCount > 0 && <span className="stat error">오류 {totalErrorCount}</span>}
         {!hasItems && <span className="stat empty">전송 중인 파일이 없습니다</span>}
@@ -426,6 +461,17 @@ function UploadPanel() {
               )}
             </div>
             <div className="item-actions">
+              {item.status === 'completed' && item.type !== 'compress' && (
+                <button
+                  className="item-btn goto"
+                  onClick={() => { closePanel(); window.location.href = virtualPathToUrl(item.destination) }}
+                  title="폴더로 이동"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V9C21 7.89543 20.1046 7 19 7H13L11 5H5C3.89543 5 3 5.89543 3 7Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              )}
               {item.status === 'error' && (
                 <button className="item-btn retry" onClick={() => retryTransfer(item.id)} title="다시 시도">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -441,11 +487,13 @@ function UploadPanel() {
                   </svg>
                 </button>
               )}
-              <button className="item-btn remove" onClick={() => removeTransfer(item.id)} title="삭제">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              </button>
+              {item.status !== 'transferring' && (
+                <button className="item-btn remove" onClick={() => removeTransfer(item.id)} title="삭제">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
         ))}

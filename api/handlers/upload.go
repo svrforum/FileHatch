@@ -88,13 +88,11 @@ func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPR
 	uploadSize := hook.Upload.Size
 
 	// Debug logging
-	fmt.Printf("[TUS-PreUpload] Received metadata: path=%s, filename=%s, username=%s, size=%d\n",
-		destPath, filename, username, uploadSize)
-	fmt.Printf("[TUS-PreUpload] All metadata: %+v\n", hook.Upload.MetaData)
+	LogInfo("[TUS-PreUpload] Received metadata", "path", destPath, "filename", filename, "username", username, "size", uploadSize)
 
 	// Validate required metadata
 	if filename == "" {
-		fmt.Printf("[TUS-PreUpload] REJECTED: filename is empty\n")
+		LogWarn("[TUS-PreUpload] REJECTED: filename is empty")
 		resp.StatusCode = 400
 		resp.Body = `{"error":"Filename is required"}`
 		return resp, changes, tusd.ErrUploadRejectedByServer
@@ -106,7 +104,7 @@ func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPR
 
 	// Prevent uploads directly to /shared/ root (must upload inside a shared folder)
 	if destPath == "/shared" || destPath == "/shared/" {
-		fmt.Printf("[TUS-PreUpload] REJECTED: cannot upload to shared root\n")
+		LogWarn("[TUS-PreUpload] REJECTED: cannot upload to shared root")
 		resp.StatusCode = 403
 		resp.Body = `{"error":"공유 드라이브 루트에는 파일을 업로드할 수 없습니다"}`
 		return resp, changes, tusd.ErrUploadRejectedByServer
@@ -115,7 +113,7 @@ func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPR
 	// Validate path security
 	_, err := h.resolveVirtualPath(destPath, username)
 	if err != nil {
-		fmt.Printf("[TUS-PreUpload] REJECTED: path validation failed: %s\n", err.Error())
+		LogWarn("[TUS-PreUpload] REJECTED: path validation failed", "error", err.Error())
 		resp.StatusCode = 400
 		resp.Body = fmt.Sprintf(`{"error":"Invalid upload path: %s"}`, err.Error())
 		return resp, changes, tusd.ErrUploadRejectedByServer
@@ -125,7 +123,7 @@ func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPR
 	if username != "" && uploadSize > 0 {
 		quotaOk, remaining, err := h.checkUserQuota(username, uploadSize)
 		if err != nil {
-			fmt.Printf("Quota check error for user %s: %v\n", username, err)
+			LogError("Quota check error", err, "user", username)
 			// Allow upload on quota check error (fail-open for now)
 		} else if !quotaOk {
 			resp.StatusCode = 413
@@ -152,8 +150,7 @@ func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPR
 	}
 
 	// Log successful pre-upload validation
-	fmt.Printf("Pre-upload validation passed: user=%s, path=%s, filename=%s, size=%d\n",
-		username, destPath, filename, uploadSize)
+	LogInfo("[TUS-PreUpload] Validation passed", "user", username, "path", destPath, "filename", filename, "size", uploadSize)
 
 	return resp, changes, nil
 }
@@ -380,7 +377,8 @@ func (h *UploadHandler) handleCompletedUploads() {
 		// Resolve virtual path to real path
 		realDestPath, err := h.resolveVirtualPath(destPath, username)
 		if err != nil {
-			fmt.Printf("Failed to resolve virtual path %s: %v\n", destPath, err)
+			LogError("[Upload] Failed to resolve virtual path", err, "path", destPath)
+			BroadcastUploadError(username, filename, "경로를 확인할 수 없습니다: "+err.Error())
 			continue
 		}
 
@@ -392,7 +390,8 @@ func (h *UploadHandler) handleCompletedUploads() {
 			// Non-local external storage upload
 			parts := strings.SplitN(realDestPath, ":", 3)
 			if len(parts) < 3 {
-				fmt.Printf("Invalid external storage marker: %s\n", realDestPath)
+				LogError("[Upload] Invalid external storage marker", nil, "marker", realDestPath)
+				BroadcastUploadError(username, filename, "잘못된 외부 스토리지 경로입니다")
 				continue
 			}
 			mountPath := parts[1]
@@ -400,26 +399,35 @@ func (h *UploadHandler) handleCompletedUploads() {
 
 			// Resolve the external backend
 			if h.storageRouter == nil {
-				fmt.Printf("Storage router not available for external upload\n")
+				LogError("[Upload] Storage router not available for external upload", nil)
+				BroadcastUploadError(username, filename, "외부 스토리지가 구성되지 않았습니다")
 				continue
 			}
 
 			var userID string
 			if err := h.db.QueryRow("SELECT id FROM users WHERE username = $1", username).Scan(&userID); err != nil {
-				fmt.Printf("Failed to get user ID for %s: %v\n", username, err)
+				LogError("[Upload] Failed to get user ID", err, "username", username)
+				BroadcastUploadError(username, filename, "사용자 정보를 찾을 수 없습니다")
 				continue
 			}
 			claims := &JWTClaims{Username: username, UserID: userID}
-			extResult, err := h.storageRouter.Resolve("/external/"+mountPath+"/"+extRelPath, claims)
+			// Build resolve path: ensure proper path even when extRelPath is empty
+			resolvePath := "/external/" + mountPath
+			if extRelPath != "" {
+				resolvePath = resolvePath + "/" + extRelPath
+			}
+			extResult, err := h.storageRouter.Resolve(resolvePath, claims)
 			if err != nil {
-				fmt.Printf("Failed to resolve external storage: %v\n", err)
+				LogError("[Upload] Failed to resolve external storage", err, "path", resolvePath)
+				BroadcastUploadError(username, filename, "외부 스토리지를 확인할 수 없습니다: "+err.Error())
 				continue
 			}
 
 			// Open the uploaded temp file
 			srcFile, err := os.Open(srcPath)
 			if err != nil {
-				fmt.Printf("Failed to open uploaded file: %v\n", err)
+				LogError("[Upload] Failed to open uploaded file", err, "path", srcPath)
+				BroadcastUploadError(username, filename, "업로드된 임시 파일을 열 수 없습니다")
 				continue
 			}
 
@@ -428,7 +436,8 @@ func (h *UploadHandler) handleCompletedUploads() {
 			ctx := context.Background()
 			if err := extResult.Backend.WriteFile(ctx, fileRelPath, srcFile, event.Upload.Size); err != nil {
 				srcFile.Close()
-				fmt.Printf("Failed to write to external storage: %v\n", err)
+				LogError("[Upload] Failed to write to external storage", err, "filename", filename, "mount", mountPath)
+				BroadcastUploadError(username, filename, "외부 스토리지 쓰기 실패: "+err.Error())
 				os.Remove(srcPath)
 				os.Remove(srcPath + ".info")
 				continue
@@ -437,13 +446,13 @@ func (h *UploadHandler) handleCompletedUploads() {
 
 			// Clean up temp files
 			if err := os.Remove(srcPath); err != nil && !os.IsNotExist(err) {
-				fmt.Printf("Failed to clean up temp file %s: %v\n", srcPath, err)
+				LogWarn("[Upload] Failed to clean up temp file", "path", srcPath, "error", err.Error())
 			}
 			if err := os.Remove(srcPath + ".info"); err != nil && !os.IsNotExist(err) {
-				fmt.Printf("Failed to clean up info file %s.info: %v\n", srcPath, err)
+				LogWarn("[Upload] Failed to clean up info file", "path", srcPath+".info", "error", err.Error())
 			}
 
-			fmt.Printf("Upload completed (external): %s -> %s/%s (overwrite: %v)\n", filename, mountPath, extRelPath, overwrite)
+			LogInfo("[Upload] Completed (external)", "filename", filename, "mount", mountPath, "relPath", extRelPath, "overwrite", overwrite)
 
 			// Broadcast file change event for UI refresh
 			BroadcastFileChange(FileChangeEvent{
@@ -461,12 +470,14 @@ func (h *UploadHandler) handleCompletedUploads() {
 			destDir := filepath.Dir(finalPath)
 			if strings.HasPrefix(destPath, "/shared/") {
 				if err := MkdirAllShared(destDir); err != nil {
-					fmt.Printf("Failed to create directory: %v\n", err)
+					LogError("[Upload] Failed to create directory", err, "dir", destDir)
+					BroadcastUploadError(username, filename, "디렉토리 생성 실패: "+err.Error())
 					continue
 				}
 			} else {
 				if err := os.MkdirAll(destDir, 0755); err != nil {
-					fmt.Printf("Failed to create directory: %v\n", err)
+					LogError("[Upload] Failed to create directory", err, "dir", destDir)
+					BroadcastUploadError(username, filename, "디렉토리 생성 실패: "+err.Error())
 					continue
 				}
 			}
@@ -484,7 +495,8 @@ func (h *UploadHandler) handleCompletedUploads() {
 
 			// Move file (will overwrite if exists)
 			if err := os.Rename(srcPath, finalPath); err != nil {
-				fmt.Printf("Failed to move file: %v\n", err)
+				LogError("[Upload] Failed to move file", err, "src", srcPath, "dst", finalPath)
+				BroadcastUploadError(username, filename, "파일 이동 실패: "+err.Error())
 				tracker.UnmarkUploading(finalPath)
 				continue
 			}
@@ -498,7 +510,7 @@ func (h *UploadHandler) handleCompletedUploads() {
 			infoPath := srcPath + ".info"
 			os.Remove(infoPath)
 
-			fmt.Printf("Upload completed: %s -> %s (overwrite: %v)\n", filename, finalPath, overwrite)
+			LogInfo("[Upload] Completed", "filename", filename, "dest", finalPath, "overwrite", overwrite)
 
 			// Update storage tracking for the user (home folder uploads)
 			if username != "" && h.auditHandler != nil && h.auditHandler.db != nil && !strings.HasPrefix(destPath, "/shared/") && !strings.HasPrefix(destPath, "/external/") {
@@ -511,7 +523,7 @@ func (h *UploadHandler) handleCompletedUploads() {
 					WHERE username = $2
 				`, fileSize, username)
 				if err != nil {
-					fmt.Printf("[Storage] Failed to update storage for %s: %v\n", username, err)
+					LogError("[Storage] Failed to update storage", err, "user", username)
 				}
 			}
 
@@ -527,7 +539,7 @@ func (h *UploadHandler) handleCompletedUploads() {
 						WHERE name = $2 AND is_active = TRUE
 					`, fileSize, folderName)
 					if err != nil {
-						fmt.Printf("[Storage] Failed to update shared folder storage for %s: %v\n", folderName, err)
+						LogError("[Storage] Failed to update shared folder storage", err, "folder", folderName)
 					}
 				}
 			}

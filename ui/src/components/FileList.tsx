@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchFiles, downloadFileDirect, getFolderStats, renameItem, copyItem, moveToTrash, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, extractZip, downloadAsZip } from '../api/files'
+import { fetchFiles, downloadFileDirect, getFolderStats, renameItem, copyItem, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, extractZip, downloadAsZip } from '../api/files'
 import { useSharedFolders } from '../hooks/useSharedFolders'
 import { useExternalStorages, isExternalStorageReadonly } from '../hooks/useExternalStorages'
 import { getSharedWithMe, getSharedByMe, getMyShareLinks, SharedWithMeItem, SharedByMeItem, LinkShare, deleteFileShare, deleteShareLink } from '../api/fileShares'
@@ -156,6 +156,16 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       triggerNotificationRefresh()
     }, [showInfo, triggerNotificationRefresh]),
   })
+
+  // Listen for upload error events from WebSocket
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { filename, error } = (e as CustomEvent).detail
+      showError(`업로드 실패: ${filename} - ${error}`)
+    }
+    window.addEventListener('upload-error', handler)
+    return () => window.removeEventListener('upload-error', handler)
+  }, [showError])
 
   // Regular file list query
   const { data, isLoading, error } = useQuery({
@@ -618,50 +628,45 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     closeContextMenu()
   }, [closeContextMenu])
 
+  const addDeletion = useTransferStore((state) => state.addDeletion)
+
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return
 
-    try {
-      await moveToTrash(deleteTarget.path)
+    // Close dialog immediately and delegate to transfer store
+    const targetPath = deleteTarget.path
+    const targetName = deleteTarget.name
+    setDeleteTarget(null)
+    setSelectedFile(null)
+
+    addDeletion([targetPath], [targetName])
+
+    // Invalidate queries after a short delay to allow the API call to start
+    setTimeout(() => {
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
       queryClient.invalidateQueries({ queryKey: ['trash'] })
       queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
-      setSelectedFile(null)
-      showSuccess(`"${deleteTarget.name}"이(가) 휴지통으로 이동되었습니다`)
-    } catch (err) {
-      showError(err instanceof Error ? err.message : '휴지통으로 이동에 실패했습니다')
-    }
-    setDeleteTarget(null)
-  }, [deleteTarget, currentPath, queryClient])
+    }, 500)
+  }, [deleteTarget, currentPath, queryClient, addDeletion])
 
   const handleMultiDeleteConfirm = useCallback(async () => {
     if (!deleteTargets || deleteTargets.length === 0) return
 
-    let successCount = 0
-    let errorCount = 0
-
-    for (const path of deleteTargets) {
-      try {
-        await moveToTrash(path)
-        successCount++
-      } catch {
-        errorCount++
-      }
-    }
-
-    queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
-    queryClient.invalidateQueries({ queryKey: ['trash'] })
-    queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
+    // Close dialog immediately and delegate to transfer store
+    const paths = [...deleteTargets]
+    const names = paths.map(p => p.split('/').pop() || p)
+    setDeleteTargets(null)
     setSelectedFiles(new Set())
     setSelectedFile(null)
-    setDeleteTargets(null)
 
-    if (errorCount === 0) {
-      showSuccess(`${successCount}개 항목이 휴지통으로 이동되었습니다`)
-    } else {
-      showError(`${successCount}개 이동 성공, ${errorCount}개 실패`)
-    }
-  }, [deleteTargets, currentPath, queryClient])
+    addDeletion(paths, names)
+
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+      queryClient.invalidateQueries({ queryKey: ['trash'] })
+      queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
+    }, 500)
+  }, [deleteTargets, currentPath, queryClient, addDeletion])
 
   const handleDownload = useCallback((file: FileInfo) => {
     downloadFileDirect(file.path)
@@ -997,30 +1002,20 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     if (selectedFiles.size === 0) return
 
     const filesToDelete = displayFiles.filter(f => selectedFiles.has(f.path)) || []
-    let successCount = 0
-    let errorCount = 0
+    const paths = filesToDelete.map(f => f.path)
+    const names = filesToDelete.map(f => f.name)
 
-    for (const file of filesToDelete) {
-      try {
-        await moveToTrash(file.path)
-        successCount++
-      } catch {
-        errorCount++
-      }
-    }
-
-    queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
-    queryClient.invalidateQueries({ queryKey: ['trash'] })
-    queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
     setSelectedFiles(new Set())
     setSelectedFile(null)
 
-    if (errorCount === 0) {
-      showSuccess(`${successCount}개 항목이 휴지통으로 이동되었습니다`)
-    } else {
-      showError(`${successCount}개 이동 성공, ${errorCount}개 실패`)
-    }
-  }, [selectedFiles, data, currentPath, queryClient])
+    addDeletion(paths, names)
+
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+      queryClient.invalidateQueries({ queryKey: ['trash'] })
+      queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
+    }, 500)
+  }, [selectedFiles, displayFiles, currentPath, queryClient, addDeletion])
 
   // Check if we can go back (not at root level of home/shared or at shared drive root)
   const canGoBack = useCallback(() => {

@@ -1,8 +1,8 @@
-// 파일 이동/복사/압축 전송 상태 관리 스토어
+// 파일 이동/복사/압축/삭제 전송 상태 관리 스토어
 import { create } from 'zustand'
-import { moveItemStream, copyItemStream, compressFilesStream, TransferProgress, CompressionProgress } from '../api/files'
+import { moveItemStream, copyItemStream, compressFilesStream, batchMoveToTrash, TransferProgress, CompressionProgress } from '../api/files'
 
-export type TransferType = 'move' | 'copy' | 'compress'
+export type TransferType = 'move' | 'copy' | 'compress' | 'delete'
 export type TransferStatus = 'pending' | 'transferring' | 'completed' | 'error'
 
 export interface TransferItemInfo {
@@ -38,6 +38,11 @@ export interface TransferItem {
   outputName?: string
   outputPath?: string
   outputSize?: number
+  // Delete specific
+  deletePaths?: string[]
+  deleteNames?: string[]
+  // Retry specific
+  isRetry?: boolean
 }
 
 interface TransferState {
@@ -48,6 +53,7 @@ interface TransferState {
   // Actions
   addTransfer: (type: TransferType, sources: TransferItemInfo[], destination: string) => void
   addCompression: (paths: string[], outputName: string, currentPath: string) => void
+  addDeletion: (paths: string[], names: string[]) => void
   startTransfers: () => void
   executeTransfer: (id: string) => Promise<void>
   removeItem: (id: string) => void
@@ -106,6 +112,34 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     }))
 
     // Auto-start the compression
+    setTimeout(() => {
+      get().executeTransfer(newItem.id)
+    }, 100)
+  },
+
+  addDeletion: (paths, names) => {
+    const displayName = names.length === 1
+      ? names[0]
+      : `${names.length}개 항목`
+
+    const newItem: TransferItem = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: 'delete',
+      sourcePath: paths[0],
+      sourceName: displayName,
+      destination: '휴지통',
+      status: 'pending',
+      deletePaths: paths,
+      deleteNames: names,
+    }
+
+    set(state => ({
+      items: [...state.items, newItem],
+      isPanelOpen: true,
+      isPanelMinimized: false,
+    }))
+
+    // Auto-start the deletion
     setTimeout(() => {
       get().executeTransfer(newItem.id)
     }, 100)
@@ -186,7 +220,24 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     try {
       let streamOp: { cancel: () => void; promise: Promise<unknown> }
 
-      if (item.type === 'compress') {
+      if (item.type === 'delete') {
+        // Delete operation - use batch API
+        if (!item.deletePaths || item.deletePaths.length === 0) {
+          throw new Error('Missing delete paths')
+        }
+        const deletePaths = item.deletePaths
+        const deletePromise = batchMoveToTrash(deletePaths).then(result => {
+          if (result.failed && result.failed.length > 0) {
+            const failedCount = result.failed.length
+            const successCount = result.success ? result.success.length : 0
+            if (successCount === 0) {
+              throw new Error(`삭제 실패: ${result.failed[0].error}`)
+            }
+            throw new Error(`${successCount}개 성공, ${failedCount}개 실패`)
+          }
+        })
+        streamOp = { cancel: () => {}, promise: deletePromise }
+      } else if (item.type === 'compress') {
         // Compression operation
         if (!item.compressPaths || !item.outputName) {
           throw new Error('Missing compression parameters')
@@ -196,7 +247,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
         // Move/Copy operation
         streamOp = item.type === 'move'
           ? moveItemStream(item.sourcePath, item.destination, onProgress)
-          : copyItemStream(item.sourcePath, item.destination, onProgress)
+          : copyItemStream(item.sourcePath, item.destination, onProgress, item.isRetry)
       }
 
       // Store cancel function
@@ -275,6 +326,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
               bytesPerSec: undefined,
               outputPath: undefined,
               outputSize: undefined,
+              isRetry: (i.type === 'copy'),
             }
           : i
       ),

@@ -101,9 +101,14 @@
   transition: all var(--transition-fast);
 }
 
-.panel-close-btn:hover {
+.panel-close-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.2);
   color: white;
+}
+
+.panel-close-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 /* Stats bar */
@@ -135,6 +140,7 @@
 .stat.downloading::before { background: #10B981; }
 .stat.transferring::before { background: #F59E0B; }
 .stat.compressing::before { background: #9C27B0; }
+.stat.deleting::before { background: #F44336; }
 .stat.pending::before { background: var(--text-tertiary); }
 .stat.completed::before { background: var(--color-success); }
 .stat.error::before { background: var(--color-error); }
@@ -143,6 +149,7 @@
 .stat.downloading { color: #10B981; }
 .stat.transferring { color: var(--color-warning); }
 .stat.compressing { color: #9C27B0; }
+.stat.deleting { color: #F44336; }
 .stat.pending { color: var(--text-tertiary); }
 .stat.completed { color: var(--color-success); }
 .stat.error { color: var(--color-error); }
@@ -247,6 +254,7 @@
 .spinner-small.transfer { border-top-color: var(--color-warning); }
 .spinner-small.compress { border-top-color: #9C27B0; }
 .spinner-small.download { border-top-color: #10B981; }
+.spinner-small.delete { border-top-color: #F44336; }
 
 .item-details {
   flex: 1;
@@ -374,6 +382,15 @@
   color: var(--color-primary);
 }
 
+.item-btn.goto {
+  color: var(--color-success);
+}
+
+.item-btn.goto:hover {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--color-success);
+}
+
 /* Transfer (move/copy) specific styles */
 .upload-panel-item.transfer {
   border-left: 4px solid #F59E0B;
@@ -383,6 +400,7 @@
 .upload-panel-item.transfer.move { border-left-color: var(--color-warning); }
 .upload-panel-item.transfer.copy { border-left-color: var(--color-admin-purple); }
 .upload-panel-item.transfer.compress { border-left-color: #9C27B0; }
+.upload-panel-item.transfer.delete { border-left-color: #F44336; }
 .upload-panel-item.transfer.completed { border-left-color: var(--color-success); }
 .upload-panel-item.transfer.error { border-left-color: var(--color-error); }
 
@@ -405,6 +423,10 @@
 
 .upload-panel-item.compress .transfer-type-icon {
   color: #9C27B0;
+}
+
+.upload-panel-item.delete .transfer-type-icon {
+  color: #F44336;
 }
 
 .item-dest {
@@ -507,4 +529,11 @@
 
 .progress-fill.download {
   background: linear-gradient(90deg, #10B981 0%, #34D399 100%);
+}
+
+/* Touch device support: always show action buttons */
+@media (pointer: coarse) {
+  .item-actions {
+    opacity: 1;
+  }
 }

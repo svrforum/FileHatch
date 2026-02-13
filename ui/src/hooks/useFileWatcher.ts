@@ -29,7 +29,13 @@ interface NotificationEvent {
   data: NotificationEventData
 }
 
-type WebSocketMessage = FileChangeEvent | NotificationEvent
+interface UploadErrorEvent {
+  type: 'upload_error'
+  filename: string
+  error: string
+}
+
+type WebSocketMessage = FileChangeEvent | NotificationEvent | UploadErrorEvent
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 
@@ -140,6 +146,17 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
               if (onNotificationRef.current) {
                 onNotificationRef.current(message.data)
               }
+              return
+            }
+
+            // Handle upload error events
+            if (message.type === 'upload_error') {
+              const uploadError = message as UploadErrorEvent
+              console.error('[WebSocket] Upload error:', uploadError.filename, uploadError.error)
+              // Dispatch a custom event that components can listen to
+              window.dispatchEvent(new CustomEvent('upload-error', {
+                detail: { filename: uploadError.filename, error: uploadError.error }
+              }))
               return
             }
 

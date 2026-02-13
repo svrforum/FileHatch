@@ -216,6 +216,38 @@ func BroadcastNotification(userID string, notif *Notification) {
 	}
 }
 
+// UploadErrorEvent represents an upload error notification for WebSocket
+type UploadErrorEvent struct {
+	Type     string `json:"type"`     // Always "upload_error"
+	Filename string `json:"filename"` // The filename that failed
+	Error    string `json:"error"`    // Error message
+}
+
+// BroadcastUploadError sends an upload error notification to a specific user by username
+func BroadcastUploadError(username string, filename string, errMsg string) {
+	event := UploadErrorEvent{
+		Type:     "upload_error",
+		Filename: filename,
+		Error:    errMsg,
+	}
+
+	data := mustMarshal(event)
+
+	hub.mu.RLock()
+	defer hub.mu.RUnlock()
+
+	for client := range hub.clients {
+		if client.username == username {
+			select {
+			case client.send <- data:
+				log.Printf("[WebSocket] Upload error sent to user %s: %s - %s", username, filename, errMsg)
+			default:
+				log.Printf("[WebSocket] Upload error buffer full for user %s", username)
+			}
+		}
+	}
+}
+
 // HandleWebSocket handles WebSocket connections for file change notifications
 func (h *Handler) HandleWebSocket(c echo.Context) error {
 	// Get token from query parameter (WebSocket connections can't use Authorization header)

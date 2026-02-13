@@ -359,6 +359,7 @@ func main() {
 	api.GET("/zip/preview/*", h.PreviewZip, authHandler.OptionalJWTMiddleware)
 
 	// Trash API routes (batch routes must be before wildcard routes)
+	api.POST("/trash/batch", h.BatchMoveToTrash, authHandler.OptionalJWTMiddleware)
 	api.POST("/trash/restore/batch", h.BatchRestoreFromTrash, authHandler.OptionalJWTMiddleware)
 	api.POST("/trash/batch-delete", h.BatchDeleteFromTrash, authHandler.OptionalJWTMiddleware)
 	api.POST("/trash/*", h.MoveToTrash, authHandler.OptionalJWTMiddleware)

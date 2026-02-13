@@ -243,6 +243,7 @@ type CopyContext struct {
 	StartTime        time.Time
 	LastProgressTime time.Time
 	SendProgress     ProgressSender
+	RetryMode        bool // When true, skip files that already exist with same size
 }
 
 // NewCopyContext creates a new CopyContext
@@ -264,6 +265,16 @@ func (ctx *CopyContext) CopyFileWithProgress(src, dst string) error {
 	defer sourceFile.Close()
 
 	srcStat, _ := sourceFile.Stat()
+
+	// In retry mode, skip files that already exist with the same size
+	if ctx.RetryMode {
+		if dstInfo, err := os.Stat(dst); err == nil && !dstInfo.IsDir() && dstInfo.Size() == srcStat.Size() {
+			// File exists with same size, skip it
+			ctx.CopiedBytes += srcStat.Size()
+			ctx.CopiedFiles++
+			return nil
+		}
+	}
 
 	// Send progress for current file
 	ctx.SendProgress(CopyProgress{

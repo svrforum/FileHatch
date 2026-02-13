@@ -714,8 +714,11 @@ func (h *Handler) CopyItemStream(c echo.Context) error {
 		return RespondError(c, ErrMissingParameter("destination"))
 	}
 
+	retry := c.QueryParam("retry") == "true"
+
 	// Resolve and validate paths
-	paths, err := h.ResolveOperationPaths(c, requestPath, destination, false)
+	// When retry=true, use allowSameFilename=true to skip unique path generation
+	paths, err := h.ResolveOperationPaths(c, requestPath, destination, retry)
 	if err != nil {
 		if apiErr, ok := err.(*APIError); ok {
 			return RespondError(c, apiErr)
@@ -780,6 +783,7 @@ func (h *Handler) CopyItemStream(c echo.Context) error {
 	} else {
 		// Both local - use existing progress-tracked copy
 		ctx := NewCopyContext(stats, sendProgress)
+		ctx.RetryMode = retry
 		copyErr := ctx.CopyWithProgress(paths.SrcRealPath, paths.FinalDestPath, paths.SrcIsDir)
 
 		newDisplayPath = filepath.Join(paths.DestDisplayPath, filepath.Base(paths.FinalDestPath))

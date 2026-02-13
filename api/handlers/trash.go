@@ -63,6 +63,17 @@ type BatchTrashRequest struct {
 	IDs []string `json:"ids"`
 }
 
+// BatchMoveToTrashRequest represents a request to batch move items to trash
+type BatchMoveToTrashRequest struct {
+	Paths []string `json:"paths"`
+}
+
+// BatchMoveToTrashResult represents the result of a single item in batch move to trash
+type BatchMoveToTrashResult struct {
+	Path  string `json:"path"`
+	Error string `json:"error,omitempty"`
+}
+
 // getTrashPath returns the trash directory path for a user
 func (h *Handler) getTrashPath(username string) string {
 	return filepath.Join(h.dataRoot, "trash", username)
@@ -403,6 +414,171 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 		"success": true,
 		"path":    displayPath,
 		"trashId": trashID,
+	})
+}
+
+// BatchMoveToTrash moves multiple files/folders to trash in a single request
+func (h *Handler) BatchMoveToTrash(c echo.Context) error {
+	var req BatchMoveToTrashRequest
+	if err := c.Bind(&req); err != nil {
+		return RespondError(c, ErrBadRequest("Invalid request body"))
+	}
+	if len(req.Paths) == 0 {
+		return RespondError(c, ErrMissingParameter("paths"))
+	}
+
+	claims, ok := c.Get("user").(*JWTClaims)
+	if !ok || claims == nil {
+		return RespondError(c, ErrUnauthorized(""))
+	}
+
+	var success []string
+	var failed []BatchMoveToTrashResult
+
+	for _, path := range req.Paths {
+		// Resolve path
+		result, realPath, err := h.resolveStorageForOperation(path, claims)
+		if err != nil {
+			failed = append(failed, BatchMoveToTrashResult{Path: path, Error: err.Error()})
+			continue
+		}
+		storageType := result.StorageType
+		displayPath := result.DisplayPath
+
+		if storageType == "root" || displayPath == "/home" || displayPath == "/shared" {
+			failed = append(failed, BatchMoveToTrashResult{Path: path, Error: "Cannot delete root folders"})
+			continue
+		}
+
+		// Check readonly
+		if err := checkReadonly(result); err != nil {
+			failed = append(failed, BatchMoveToTrashResult{Path: path, Error: err.Error()})
+			continue
+		}
+
+		// Create trash directory
+		trashPath := h.getTrashPath(claims.Username)
+		if err := os.MkdirAll(trashPath, 0755); err != nil {
+			failed = append(failed, BatchMoveToTrashResult{Path: path, Error: "Failed to create trash directory"})
+			continue
+		}
+
+		var trashID string
+		var size int64
+		var isDir bool
+		var itemName string
+
+		// Non-local external storage
+		if storageType == StorageExternal && realPath == "" {
+			ctx := context.Background()
+			info, err := result.Backend.Stat(ctx, result.RelPath)
+			if err != nil {
+				failed = append(failed, BatchMoveToTrashResult{Path: path, Error: "Item not found"})
+				continue
+			}
+			itemName = info.FileName
+			isDir = info.IsDirectory
+			trashID = fmt.Sprintf("%d_%s", time.Now().UnixNano(), itemName)
+			trashItemPath := filepath.Join(trashPath, trashID)
+
+			if isDir {
+				if err := downloadDirToLocal(ctx, result.Backend, result.RelPath, trashItemPath); err != nil {
+					failed = append(failed, BatchMoveToTrashResult{Path: path, Error: err.Error()})
+					continue
+				}
+			} else {
+				if err := downloadFileToLocal(ctx, result.Backend, result.RelPath, trashItemPath); err != nil {
+					failed = append(failed, BatchMoveToTrashResult{Path: path, Error: err.Error()})
+					continue
+				}
+			}
+
+			if err := result.Backend.DeleteAll(ctx, result.RelPath); err != nil {
+				failed = append(failed, BatchMoveToTrashResult{Path: path, Error: err.Error()})
+				continue
+			}
+
+			if isDir {
+				size, _ = h.calculateDirSize(trashItemPath)
+			} else {
+				size = info.FileSize
+			}
+
+			meta, _ := h.loadTrashMeta(claims.Username)
+			meta[trashID] = TrashItem{
+				ID:           trashID,
+				Name:         itemName,
+				OriginalPath: displayPath,
+				Size:         size,
+				IsDir:        isDir,
+				DeletedAt:    time.Now(),
+				StorageType:  StorageExternal,
+				MountID:      result.MountID,
+			}
+			_ = h.saveTrashMeta(claims.Username, meta)
+		} else {
+			// Local storage
+			info, err := os.Stat(realPath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					failed = append(failed, BatchMoveToTrashResult{Path: path, Error: "Item not found"})
+				} else {
+					failed = append(failed, BatchMoveToTrashResult{Path: path, Error: err.Error()})
+				}
+				continue
+			}
+			itemName = info.Name()
+			isDir = info.IsDir()
+
+			trashID = fmt.Sprintf("%d_%s", time.Now().UnixNano(), itemName)
+			trashItemPath := filepath.Join(trashPath, trashID)
+
+			if err := moveOrCopy(realPath, trashItemPath); err != nil {
+				failed = append(failed, BatchMoveToTrashResult{Path: path, Error: err.Error()})
+				continue
+			}
+
+			if isDir {
+				size, _ = h.calculateDirSize(trashItemPath)
+			} else {
+				size = info.Size()
+			}
+
+			meta, _ := h.loadTrashMeta(claims.Username)
+			trashItem := TrashItem{
+				ID:           trashID,
+				Name:         itemName,
+				OriginalPath: displayPath,
+				Size:         size,
+				IsDir:        isDir,
+				DeletedAt:    time.Now(),
+				StorageType:  storageType,
+			}
+			if storageType == StorageExternal && result.MountID != "" {
+				trashItem.MountID = result.MountID
+			}
+			meta[trashID] = trashItem
+			_ = h.saveTrashMeta(claims.Username, meta)
+
+			// Update storage tracking for non-external items
+			if storageType != StorageExternal {
+				_ = h.UpdateStorageForMove(claims.UserID, size, true)
+			}
+		}
+
+		// Log audit event
+		_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventFileDelete, displayPath, map[string]interface{}{
+			"isDir":   isDir,
+			"size":    size,
+			"trashId": trashID,
+		})
+
+		success = append(success, path)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": success,
+		"failed":  failed,
 	})
 }
 
