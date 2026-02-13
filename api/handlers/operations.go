@@ -87,6 +87,17 @@ func (h *Handler) RenameItem(c echo.Context) error {
 		return RespondError(c, ErrUnauthorized("Authentication required"))
 	}
 
+	// Check file lock
+	if claims != nil {
+		// For files, check single lock; for folders, also check children
+		if lockErr := h.CheckFileLockForOperation(displayPath, claims.UserID); lockErr != nil {
+			return RespondError(c, lockErr)
+		}
+		if lockErr := h.CheckFolderLocksForOperation(displayPath, claims.UserID); lockErr != nil {
+			return RespondError(c, lockErr)
+		}
+	}
+
 	newDisplayPath := filepath.Join(filepath.Dir(displayPath), req.NewName)
 	var isDir bool
 
@@ -144,6 +155,12 @@ func (h *Handler) RenameItem(c echo.Context) error {
 		// Get file info for isDir check
 		fileInfo, _ := os.Stat(newRealPath)
 		isDir = fileInfo != nil && fileInfo.IsDir()
+	}
+
+	// Update lock paths after successful rename
+	_ = h.UpdateLockPath(displayPath, newDisplayPath)
+	if isDir {
+		_ = h.UpdateLocksUnderPath(displayPath, newDisplayPath)
 	}
 
 	// Log audit event
@@ -249,6 +266,16 @@ func (h *Handler) MoveItem(c echo.Context) error {
 	// Check permissions
 	if (srcStorageType == StorageHome || destStorageType == StorageHome) && claims == nil {
 		return RespondError(c, ErrUnauthorized("Authentication required"))
+	}
+
+	// Check file lock on source
+	if claims != nil {
+		if lockErr := h.CheckFileLockForOperation(srcDisplayPath, claims.UserID); lockErr != nil {
+			return RespondError(c, lockErr)
+		}
+		if lockErr := h.CheckFolderLocksForOperation(srcDisplayPath, claims.UserID); lockErr != nil {
+			return RespondError(c, lockErr)
+		}
 	}
 
 	ctx := context.Background()
@@ -364,6 +391,12 @@ func (h *Handler) MoveItem(c echo.Context) error {
 			return RespondError(c, ErrOperationFailed("move item", err))
 		}
 		newDisplayPath = filepath.Join(destDisplayPath, srcName)
+	}
+
+	// Update lock paths after successful move
+	_ = h.UpdateLockPath(srcDisplayPath, newDisplayPath)
+	if srcIsDir {
+		_ = h.UpdateLocksUnderPath(srcDisplayPath, newDisplayPath)
 	}
 
 	// Log audit event

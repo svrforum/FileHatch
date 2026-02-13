@@ -389,9 +389,9 @@ func (h *UploadShareHandler) handleCompletedUploads() {
 		// Check if file already exists, generate unique name
 		finalPath = h.getUniqueFilePath(finalPath)
 
-		// Move file from temp to destination
+		// Move file from temp to destination (cross-device safe)
 		srcPath := filepath.Join(h.dataRoot, ".share-uploads", event.Upload.ID)
-		if err := os.Rename(srcPath, finalPath); err != nil {
+		if err := moveOrCopy(srcPath, finalPath); err != nil {
 			fmt.Printf("Failed to move file: %v\n", err)
 			continue
 		}

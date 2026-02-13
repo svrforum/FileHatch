@@ -288,6 +288,14 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 		return RespondError(c, ErrForbidden(err.Error()))
 	}
 
+	// Check file lock
+	if lockErr := h.CheckFileLockForOperation(displayPath, claims.UserID); lockErr != nil {
+		return RespondError(c, lockErr)
+	}
+	if lockErr := h.CheckFolderLocksForOperation(displayPath, claims.UserID); lockErr != nil {
+		return RespondError(c, lockErr)
+	}
+
 	// Create trash directory
 	trashPath := h.getTrashPath(claims.Username)
 	if err := os.MkdirAll(trashPath, 0755); err != nil {
@@ -396,6 +404,12 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 		_ = h.saveTrashMeta(claims.Username, meta)
 	}
 
+	// Clean up locks after successful move to trash
+	_ = h.RemoveLockByPath(displayPath)
+	if isDir {
+		_ = h.RemoveLocksUnderPath(displayPath)
+	}
+
 	// Log audit event
 	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventFileDelete, displayPath, map[string]interface{}{
 		"isDir":   isDir,
@@ -453,6 +467,16 @@ func (h *Handler) BatchMoveToTrash(c echo.Context) error {
 		// Check readonly
 		if err := checkReadonly(result); err != nil {
 			failed = append(failed, BatchMoveToTrashResult{Path: path, Error: err.Error()})
+			continue
+		}
+
+		// Check file lock
+		if lockErr := h.CheckFileLockForOperation(displayPath, claims.UserID); lockErr != nil {
+			failed = append(failed, BatchMoveToTrashResult{Path: path, Error: lockErr.Message})
+			continue
+		}
+		if lockErr := h.CheckFolderLocksForOperation(displayPath, claims.UserID); lockErr != nil {
+			failed = append(failed, BatchMoveToTrashResult{Path: path, Error: lockErr.Message})
 			continue
 		}
 
@@ -564,6 +588,12 @@ func (h *Handler) BatchMoveToTrash(c echo.Context) error {
 			if storageType != StorageExternal {
 				_ = h.UpdateStorageForMove(claims.UserID, size, true)
 			}
+		}
+
+		// Clean up locks after successful move to trash
+		_ = h.RemoveLockByPath(displayPath)
+		if isDir {
+			_ = h.RemoveLocksUnderPath(displayPath)
 		}
 
 		// Log audit event

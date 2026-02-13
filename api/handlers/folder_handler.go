@@ -314,6 +314,13 @@ func (h *Handler) DeleteFolder(c echo.Context) error {
 		}
 	}
 
+	// Check folder locks (files inside this folder locked by other users)
+	if claims != nil {
+		if lockErr := h.CheckFolderLocksForOperation(displayPath, claims.UserID); lockErr != nil {
+			return RespondError(c, lockErr)
+		}
+	}
+
 	force := c.QueryParam("force") == "true"
 
 	// Handle non-local external storage
@@ -420,6 +427,9 @@ func (h *Handler) DeleteFolder(c echo.Context) error {
 			})
 		}
 	}
+
+	// Clean up locks under deleted folder
+	_ = h.RemoveLocksUnderPath(displayPath)
 
 	// Update storage tracking (only if force delete with non-zero size)
 	if force && folderSize > 0 {

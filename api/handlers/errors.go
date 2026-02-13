@@ -34,6 +34,9 @@ const (
 	ErrCodeFileTooLarge     ErrorCode = "FILE_TOO_LARGE"
 	ErrCodeStorageFull      ErrorCode = "STORAGE_FULL"
 
+	// Lock errors
+	ErrCodeFileLocked       ErrorCode = "FILE_LOCKED"
+
 	// Operation errors
 	ErrCodeOperationFailed  ErrorCode = "OPERATION_FAILED"
 	ErrCodeReadFailed       ErrorCode = "READ_FAILED"
@@ -86,6 +89,8 @@ func (e *APIError) HTTPStatus() int {
 		return http.StatusBadRequest
 	case ErrCodeNotFound:
 		return http.StatusNotFound
+	case ErrCodeFileLocked:
+		return 423 // HTTP 423 Locked
 	case ErrCodeAlreadyExists, ErrCodeConflict:
 		return http.StatusConflict
 	case ErrCodeQuotaExceeded, ErrCodeFileTooLarge:
@@ -194,6 +199,13 @@ func ErrInternal(message string) *APIError {
 		message = "Internal server error"
 	}
 	return NewAPIError(ErrCodeInternal, message)
+}
+
+// ErrFileLocked returns a file locked error
+func ErrFileLocked(username string) *APIError {
+	return NewAPIError(ErrCodeFileLocked,
+		fmt.Sprintf("File is locked by %s", username)).
+		WithDetails(map[string]string{"lockedBy": username})
 }
 
 // ErrMissingParameter returns a missing parameter error

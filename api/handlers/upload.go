@@ -487,14 +487,14 @@ func (h *UploadHandler) handleCompletedUploads() {
 				// Generate unique name if file exists and overwrite is not requested
 				finalPath = h.getUniqueFilePath(finalPath)
 			}
-			// If overwrite is true, the existing file will be replaced by os.Rename
+			// If overwrite is true, the existing file will be replaced by moveOrCopy
 
 			// Mark this file as a web upload before moving
 			tracker := GetWebUploadTracker()
 			tracker.MarkUploading(finalPath)
 
-			// Move file (will overwrite if exists)
-			if err := os.Rename(srcPath, finalPath); err != nil {
+			// Move file (will overwrite if exists; cross-device safe)
+			if err := moveOrCopy(srcPath, finalPath); err != nil {
 				LogError("[Upload] Failed to move file", err, "src", srcPath, "dst", finalPath)
 				BroadcastUploadError(username, filename, "파일 이동 실패: "+err.Error())
 				tracker.UnmarkUploading(finalPath)

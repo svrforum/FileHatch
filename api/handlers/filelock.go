@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -340,5 +341,80 @@ func (h *Handler) UpdateLockPath(oldPath, newPath string) error {
 	_, err := h.db.Exec(`
 		UPDATE file_locks SET file_path = $1 WHERE file_path = $2
 	`, newPath, oldPath)
+	return err
+}
+
+// UpdateLocksUnderPath updates all lock paths under a folder when it is renamed/moved
+func (h *Handler) UpdateLocksUnderPath(oldFolderPath, newFolderPath string) error {
+	// Update all locks whose file_path starts with oldFolderPath/
+	prefix := oldFolderPath + "/"
+	newPrefix := newFolderPath + "/"
+	_, err := h.db.Exec(`
+		UPDATE file_locks
+		SET file_path = $1 || substring(file_path from $2)
+		WHERE file_path LIKE $3
+	`, newPrefix, fmt.Sprintf("%d", len(prefix)+1), prefix+"%")
+	return err
+}
+
+// CheckFileLockForOperation checks if a file is locked by another user.
+// Returns nil if the operation is allowed, or an APIError if blocked.
+func (h *Handler) CheckFileLockForOperation(filePath, callerUserID string) *APIError {
+	// Clean up expired locks first
+	h.cleanupExpiredLocks()
+
+	var lockedBy, username string
+	err := h.db.QueryRow(`
+		SELECT fl.locked_by, u.username
+		FROM file_locks fl
+		JOIN users u ON fl.locked_by = u.id
+		WHERE fl.file_path = $1
+	`, filePath).Scan(&lockedBy, &username)
+
+	if err == sql.ErrNoRows {
+		return nil // No lock, operation allowed
+	}
+	if err != nil {
+		return nil // DB error, don't block operation
+	}
+
+	// Same user owns the lock → allow
+	if lockedBy == callerUserID {
+		return nil
+	}
+
+	// Different user → block
+	return ErrFileLocked(username)
+}
+
+// CheckFolderLocksForOperation checks if any file under a folder is locked by another user.
+// Returns nil if the operation is allowed, or an APIError if blocked.
+func (h *Handler) CheckFolderLocksForOperation(folderPath, callerUserID string) *APIError {
+	h.cleanupExpiredLocks()
+
+	prefix := folderPath + "/"
+	var lockedBy, username, filePath string
+	err := h.db.QueryRow(`
+		SELECT fl.locked_by, u.username, fl.file_path
+		FROM file_locks fl
+		JOIN users u ON fl.locked_by = u.id
+		WHERE fl.file_path LIKE $1 AND fl.locked_by != $2
+		LIMIT 1
+	`, prefix+"%", callerUserID).Scan(&lockedBy, &username, &filePath)
+
+	if err == sql.ErrNoRows {
+		return nil // No locks by other users
+	}
+	if err != nil {
+		return nil // DB error, don't block operation
+	}
+
+	return ErrFileLocked(username)
+}
+
+// RemoveLocksUnderPath removes all locks under a folder path (after folder deletion/trash)
+func (h *Handler) RemoveLocksUnderPath(folderPath string) error {
+	prefix := folderPath + "/"
+	_, err := h.db.Exec(`DELETE FROM file_locks WHERE file_path LIKE $1`, prefix+"%")
 	return err
 }

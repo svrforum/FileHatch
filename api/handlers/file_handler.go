@@ -233,6 +233,13 @@ func (h *Handler) DeleteFile(c echo.Context) error {
 		}
 	}
 
+	// Check file lock (only for authenticated users on local storage)
+	if claims != nil {
+		if lockErr := h.CheckFileLockForOperation(displayPath, claims.UserID); lockErr != nil {
+			return RespondError(c, lockErr)
+		}
+	}
+
 	// Handle non-local external storage
 	if storageType == StorageExternal && realPath == "" {
 		if result.Backend == nil {
@@ -252,6 +259,9 @@ func (h *Handler) DeleteFile(c echo.Context) error {
 		if err := result.Backend.Delete(ctx, result.RelPath); err != nil {
 			return RespondError(c, ErrOperationFailed("delete file", err))
 		}
+
+		// Clean up lock after successful deletion
+		_ = h.RemoveLockByPath(displayPath)
 
 		return c.JSON(http.StatusOK, map[string]any{
 			"success": true,
@@ -277,6 +287,9 @@ func (h *Handler) DeleteFile(c echo.Context) error {
 	if err := os.Remove(realPath); err != nil {
 		return RespondError(c, ErrOperationFailed("delete file", err))
 	}
+
+	// Clean up lock after successful deletion
+	_ = h.RemoveLockByPath(displayPath)
 
 	// Update storage tracking
 	if storageType == StorageShared {
@@ -345,6 +358,14 @@ func (h *Handler) SaveFileContent(c echo.Context) error {
 		}
 		if !h.CanWriteSharedDrive(claims.UserID, virtualPath) {
 			return RespondError(c, ErrForbidden("No permission to edit files in this folder"))
+		}
+	}
+
+	// Check file lock
+	if claims != nil {
+		displayPath := result.DisplayPath
+		if lockErr := h.CheckFileLockForOperation(displayPath, claims.UserID); lockErr != nil {
+			return RespondError(c, lockErr)
 		}
 	}
 
