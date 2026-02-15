@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect, Suspense, lazy } from 'react'
+import { useState, useCallback, useEffect, useRef, Suspense, lazy } from 'react'
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from './stores/authStore'
 import { useUploadStore } from './stores/uploadStore'
+import { usePreferencesStore } from './stores/preferencesStore'
 import Header from './components/Header'
 import Sidebar, { AdminView } from './components/Sidebar'
 import FileList from './components/FileList'
@@ -158,6 +159,20 @@ function App() {
   useEffect(() => {
     refreshProfile()
   }, [refreshProfile])
+
+  // Redirect to custom landing page on initial load (one-time only)
+  const defaultLanding = usePreferencesStore(s => s.preferences.defaultLanding)
+  const hasRedirected = useRef(false)
+  useEffect(() => {
+    if (hasRedirected.current) return
+    if (token && defaultLanding && (location.pathname === '/' || location.pathname === '/files')) {
+      const validPrefixes = ['/files', '/shared-with-me', '/shared-by-me', '/link-shares', '/shared-drive', '/trash']
+      if (validPrefixes.some(p => defaultLanding === p || defaultLanding.startsWith(p + '/'))) {
+        hasRedirected.current = true
+        navigate(defaultLanding, { replace: true })
+      }
+    }
+  }, [token, defaultLanding, location.pathname, navigate])
 
   // Automatic token refresh - refresh token 5 minutes before expiration
   useEffect(() => {

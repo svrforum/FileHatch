@@ -1,25 +1,34 @@
 .user-profile-modal {
-  width: 480px;
+  width: 520px;
   max-width: 90vw;
+}
+
+.user-profile-modal .modal-header {
+  padding: 14px 20px;
+}
+
+.user-profile-modal .modal-header h2 {
+  font-size: 16px;
 }
 
 .profile-tabs {
   display: flex;
   border-bottom: 1px solid var(--border-light);
-  padding: 0 20px;
+  padding: 0 16px;
 }
 
 .profile-tabs button {
   background: none;
   border: none;
-  padding: 12px 16px;
-  font-size: 14px;
+  padding: 10px 12px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
 }
 
 .profile-tabs button:hover {
@@ -661,5 +670,174 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+/* Sidebar settings tab */
+.sidebar-settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sidebar-settings-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px 0;
+}
+
+.sidebar-settings-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin: 0 0 12px 0;
+}
+
+.sidebar-section-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-section-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  cursor: grab;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.sidebar-section-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.sidebar-section-item.dragging {
+  opacity: 0.5;
+  background: var(--color-primary-light);
+}
+
+.sidebar-section-item.hidden-section {
+  opacity: 0.5;
+}
+
+.sidebar-section-drag {
+  color: var(--text-tertiary);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.sidebar-section-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.sidebar-section-label {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.sidebar-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.sidebar-reorder-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-xs);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-reorder-btn:hover:not(:disabled) {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.sidebar-reorder-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Toggle switch */
+.sidebar-visibility-toggle {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.sidebar-visibility-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.sidebar-toggle-slider {
+  width: 32px;
+  height: 18px;
+  background: var(--bg-tertiary);
+  border-radius: 9px;
+  position: relative;
+  transition: background 0.15s ease;
+}
+
+.sidebar-toggle-slider::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.sidebar-visibility-toggle input:checked + .sidebar-toggle-slider {
+  background: var(--color-primary);
+}
+
+.sidebar-visibility-toggle input:checked + .sidebar-toggle-slider::after {
+  transform: translateX(14px);
+}
+
+/* Landing select */
+.sidebar-landing-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  outline: none;
+  margin-top: 8px;
+  transition: border-color 0.15s ease;
+}
+
+.sidebar-landing-select:focus {
+  border-color: var(--color-primary);
+}
+
+.sidebar-settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-light);
 }
 

@@ -131,6 +131,7 @@
   transition: all var(--duration-fast, 0.15s) var(--ease-out-expo, ease);
 }
 
+
 .nav-item svg {
   width: 20px;
   height: 20px;

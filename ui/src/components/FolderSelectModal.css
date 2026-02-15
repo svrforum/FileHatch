@@ -180,11 +180,10 @@
 /* 모달 하단 */
 .folder-select-modal .modal-footer {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   padding: var(--spacing-md) var(--spacing-lg);
   border-top: 1px solid var(--border-light);
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
 }
 
 .selected-path {
@@ -216,8 +215,102 @@
 
 .modal-actions {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--spacing-sm);
   flex-shrink: 0;
+}
+
+.modal-actions-right {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+/* 새 폴더 */
+.new-folder-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-medium);
+  transition: all var(--transition-fast);
+}
+
+.new-folder-btn:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+}
+
+.new-folder-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.new-folder-input-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.new-folder-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.new-folder-input:focus {
+  border-color: var(--color-primary);
+}
+
+.new-folder-confirm-btn {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  color: white;
+  background: var(--color-primary);
+  transition: all var(--transition-fast);
+}
+
+.new-folder-confirm-btn:hover:not(:disabled) {
+  background: #1d6ce0;
+}
+
+.new-folder-confirm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.new-folder-cancel-btn {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  transition: all var(--transition-fast);
+}
+
+.new-folder-cancel-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.new-folder-error {
+  width: 100%;
+  font-size: 12px;
+  color: var(--color-error);
+  margin-top: 2px;
 }
 
 .cancel-btn {

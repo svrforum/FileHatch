@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useUploadStore, UploadItem, DownloadItem } from '../stores/uploadStore'
 import { useTransferStore, TransferItem } from '../stores/transferStore'
 import { formatFileSize } from '../api/files'
@@ -17,6 +17,9 @@ function formatSpeed(bytesPerSecond: number): string {
 
 // Convert virtual path to URL path for navigation
 function virtualPathToUrl(virtualPath: string): string {
+  if (virtualPath === '/trash') {
+    return '/trash'
+  }
   if (virtualPath.startsWith('/shared/')) {
     return `/shared-drive/${virtualPath.substring('/shared/'.length)}`
   }
@@ -44,8 +47,6 @@ function UploadPanel() {
     closeUploadPanel()
     closeTransferPanel()
   }
-  const autoCloseTimerRef = useRef<number | null>(null)
-
   // Memoize all counts in a single pass to avoid 13+ separate .filter() calls per render
   const counts = useMemo(() => {
     let uploading = 0, completed = 0, pending = 0, error = 0
@@ -97,30 +98,15 @@ function UploadPanel() {
     totalActiveCount, totalCompletedCount, totalErrorCount, hasItems,
   } = counts
 
-  // Auto-close panel when all uploads complete (with no errors)
+  // Warn user before page unload if there are active transfers
   useEffect(() => {
-    if (!isPanelOpen) return
-
-    // Clear any existing timer
-    if (autoCloseTimerRef.current) {
-      window.clearTimeout(autoCloseTimerRef.current)
-      autoCloseTimerRef.current = null
+    if (totalActiveCount === 0) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
     }
-
-    // Check if all items are completed (no uploading, no pending)
-    if (hasItems && totalActiveCount === 0 && totalErrorCount === 0 && totalCompletedCount > 0) {
-      // Auto-close after 2 seconds
-      autoCloseTimerRef.current = window.setTimeout(() => {
-        closePanel()
-      }, 2000)
-    }
-
-    return () => {
-      if (autoCloseTimerRef.current) {
-        window.clearTimeout(autoCloseTimerRef.current)
-      }
-    }
-  }, [items, downloads, transferItems, totalActiveCount, totalCompletedCount, totalErrorCount, hasItems, isPanelOpen, closePanel])
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [totalActiveCount])
 
   if (!isPanelOpen) return null
 
@@ -243,7 +229,7 @@ function UploadPanel() {
   }
 
   return (
-    <div className="upload-panel-overlay" onClick={totalActiveCount > 0 ? undefined : closePanel}>
+    <div className="upload-panel-overlay" onClick={closePanel}>
       <div className="upload-panel" onClick={(e) => e.stopPropagation()}>
         <div className="upload-panel-header">
         <h3>전송 현황</h3>
@@ -256,8 +242,7 @@ function UploadPanel() {
           <button
             className="panel-close-btn"
             onClick={closePanel}
-            disabled={totalActiveCount > 0}
-            title={totalActiveCount > 0 ? '진행 중인 전송이 있습니다' : '닫기'}
+            title="닫기"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>

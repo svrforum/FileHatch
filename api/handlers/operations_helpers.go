@@ -15,23 +15,24 @@ import (
 
 // OperationPaths holds resolved source and destination paths for file operations
 type OperationPaths struct {
-	SrcRealPath     string
-	SrcStorageType  string
-	SrcDisplayPath  string
-	SrcResult       *ResolveResult
-	DestRealPath    string
-	DestStorageType string
-	DestDisplayPath string
-	DestResult      *ResolveResult
-	SrcInfo         os.FileInfo // nil for non-local backends
-	SrcName         string      // source item name (works for all backends)
-	SrcIsDir        bool        // whether source is directory (works for all backends)
-	FinalDestPath   string      // local filesystem dest path (empty for non-local dest)
-	Claims          *JWTClaims
+	SrcRealPath       string
+	SrcStorageType    string
+	SrcDisplayPath    string
+	SrcResult         *ResolveResult
+	DestRealPath      string
+	DestStorageType   string
+	DestDisplayPath   string
+	DestResult        *ResolveResult
+	SrcInfo           os.FileInfo // nil for non-local backends
+	SrcName           string      // source item name (works for all backends)
+	SrcIsDir          bool        // whether source is directory (works for all backends)
+	FinalDestPath     string      // local filesystem dest path (empty for non-local dest)
+	Claims            *JWTClaims
+	OverwriteExisting bool // true if overwrite was requested and target exists
 }
 
 // ResolveOperationPaths resolves and validates source and destination paths for copy/move operations
-func (h *Handler) ResolveOperationPaths(c echo.Context, requestPath, destination string, allowSameFilename bool) (*OperationPaths, error) {
+func (h *Handler) ResolveOperationPaths(c echo.Context, requestPath, destination string, allowSameFilename bool, overwrite bool) (*OperationPaths, error) {
 	var claims *JWTClaims
 	if user, ok := c.Get("user").(*JWTClaims); ok {
 		claims = user
@@ -117,24 +118,41 @@ func (h *Handler) ResolveOperationPaths(c echo.Context, requestPath, destination
 
 	// Build final destination path with duplicate handling (only for local destinations)
 	var finalDestPath string
+	overwriteExisting := false
 	if !destIsNonLocal {
-		finalDestPath = GenerateUniquePath(destRealPath, srcName, srcIsDir, allowSameFilename)
+		if overwrite {
+			// Overwrite mode: use direct path, check if existing file is present
+			finalDestPath = filepath.Join(destRealPath, srcName)
+			if _, err := os.Stat(finalDestPath); err == nil {
+				overwriteDisplayPath := filepath.Join(destination, srcName)
+				// Check file lock before overwriting
+				if claims != nil {
+					if lockErr := h.CheckFileLockForOperation(overwriteDisplayPath, claims.UserID); lockErr != nil {
+						return nil, lockErr
+					}
+				}
+				overwriteExisting = true
+			}
+		} else {
+			finalDestPath = GenerateUniquePath(destRealPath, srcName, srcIsDir, allowSameFilename)
+		}
 	}
 
 	return &OperationPaths{
-		SrcRealPath:     srcRealPath,
-		SrcStorageType:  srcResult.StorageType,
-		SrcDisplayPath:  srcResult.DisplayPath,
-		SrcResult:       srcResult,
-		DestRealPath:    destRealPath,
-		DestStorageType: destResult.StorageType,
-		DestDisplayPath: destResult.DisplayPath,
-		DestResult:      destResult,
-		SrcInfo:         srcInfo,
-		SrcName:         srcName,
-		SrcIsDir:        srcIsDir,
-		FinalDestPath:   finalDestPath,
-		Claims:          claims,
+		SrcRealPath:       srcRealPath,
+		SrcStorageType:    srcResult.StorageType,
+		SrcDisplayPath:    srcResult.DisplayPath,
+		SrcResult:         srcResult,
+		DestRealPath:      destRealPath,
+		DestStorageType:   destResult.StorageType,
+		DestDisplayPath:   destResult.DisplayPath,
+		DestResult:        destResult,
+		SrcInfo:           srcInfo,
+		SrcName:           srcName,
+		SrcIsDir:          srcIsDir,
+		FinalDestPath:     finalDestPath,
+		Claims:            claims,
+		OverwriteExisting: overwriteExisting,
 	}, nil
 }
 
@@ -167,6 +185,30 @@ func GenerateUniquePath(destDir, baseName string, isDir, allowSameFilename bool)
 	return finalPath
 }
 
+// SafeOverwrite safely replaces an existing file/directory at destPath using rename-to-temp.
+// It renames the existing target to a temp name, executes the operation, and restores on failure.
+// Returns a cleanup function that must be called after successful operation to remove the backup.
+func SafeOverwrite(destPath string, isDir bool, operation func() error) error {
+	backupPath := destPath + ".filehatch-overwrite-backup"
+	if err := os.Rename(destPath, backupPath); err != nil {
+		return fmt.Errorf("failed to prepare overwrite: %w", err)
+	}
+
+	if err := operation(); err != nil {
+		// Restore the original on failure
+		_ = os.Rename(backupPath, destPath)
+		return err
+	}
+
+	// Operation succeeded, remove the backup
+	if isDir {
+		_ = os.RemoveAll(backupPath)
+	} else {
+		_ = os.Remove(backupPath)
+	}
+	return nil
+}
+
 // ProgressSender is a function type for sending progress updates
 type ProgressSender func(CopyProgress)
 
@@ -179,7 +221,12 @@ func SetupSSE(c echo.Context) ProgressSender {
 	c.Response().WriteHeader(200)
 
 	return func(progress CopyProgress) {
-		data, _ := json.Marshal(progress)
+		data, err := json.Marshal(progress)
+		if err != nil {
+			fmt.Fprintf(c.Response(), "data: {\"status\":\"error\",\"error\":\"Failed to serialize progress\"}\n\n")
+			c.Response().Flush()
+			return
+		}
 		fmt.Fprintf(c.Response(), "data: %s\n\n", data)
 		c.Response().Flush()
 	}

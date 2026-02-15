@@ -748,10 +748,11 @@ func (h *Handler) CopyItemStream(c echo.Context) error {
 	}
 
 	retry := c.QueryParam("retry") == "true"
+	overwrite := c.QueryParam("overwrite") == "true"
 
 	// Resolve and validate paths
 	// When retry=true, use allowSameFilename=true to skip unique path generation
-	paths, err := h.ResolveOperationPaths(c, requestPath, destination, retry)
+	paths, err := h.ResolveOperationPaths(c, requestPath, destination, retry, overwrite)
 	if err != nil {
 		if apiErr, ok := err.(*APIError); ok {
 			return RespondError(c, apiErr)
@@ -817,7 +818,17 @@ func (h *Handler) CopyItemStream(c echo.Context) error {
 		// Both local - use existing progress-tracked copy
 		ctx := NewCopyContext(stats, sendProgress)
 		ctx.RetryMode = retry
-		copyErr := ctx.CopyWithProgress(paths.SrcRealPath, paths.FinalDestPath, paths.SrcIsDir)
+
+		doCopy := func() error {
+			return ctx.CopyWithProgress(paths.SrcRealPath, paths.FinalDestPath, paths.SrcIsDir)
+		}
+
+		var copyErr error
+		if paths.OverwriteExisting {
+			copyErr = SafeOverwrite(paths.FinalDestPath, paths.SrcIsDir, doCopy)
+		} else {
+			copyErr = doCopy()
+		}
 
 		newDisplayPath = filepath.Join(paths.DestDisplayPath, filepath.Base(paths.FinalDestPath))
 
@@ -881,8 +892,10 @@ func (h *Handler) MoveItemStream(c echo.Context) error {
 		return RespondError(c, ErrMissingParameter("destination"))
 	}
 
+	overwrite := c.QueryParam("overwrite") == "true"
+
 	// Resolve and validate paths (allowSameFilename=false to generate unique names)
-	paths, err := h.ResolveOperationPaths(c, requestPath, destination, false)
+	paths, err := h.ResolveOperationPaths(c, requestPath, destination, false, overwrite)
 	if err != nil {
 		if apiErr, ok := err.(*APIError); ok {
 			return RespondError(c, apiErr)
@@ -980,10 +993,12 @@ func (h *Handler) MoveItemStream(c echo.Context) error {
 		// Both local
 		newDisplayPath = filepath.Join(paths.DestDisplayPath, filepath.Base(paths.FinalDestPath))
 
-		// Try simple rename first (instant for same filesystem)
-		err = os.Rename(paths.SrcRealPath, paths.FinalDestPath)
+		doMove := func() error {
+			// Try simple rename first (instant for same filesystem)
+			if renameErr := os.Rename(paths.SrcRealPath, paths.FinalDestPath); renameErr == nil {
+				return nil
+			}
 
-		if err != nil {
 			// Cross-device move: copy then delete
 			sendProgress(CopyProgress{
 				Status:      "progress",
@@ -993,19 +1008,32 @@ func (h *Handler) MoveItemStream(c echo.Context) error {
 			})
 
 			ctx := NewCopyContext(stats, sendProgress)
-			copyErr := ctx.CopyWithProgress(paths.SrcRealPath, paths.FinalDestPath, paths.SrcIsDir)
-
-			if copyErr != nil {
-				ctx.SendError(copyErr)
-				return nil
+			if copyErr := ctx.CopyWithProgress(paths.SrcRealPath, paths.FinalDestPath, paths.SrcIsDir); copyErr != nil {
+				return copyErr
 			}
 
 			// Delete source after successful copy
 			if paths.SrcIsDir {
-				os.RemoveAll(paths.SrcRealPath)
+				_ = os.RemoveAll(paths.SrcRealPath)
 			} else {
-				os.Remove(paths.SrcRealPath)
+				_ = os.Remove(paths.SrcRealPath)
 			}
+			return nil
+		}
+
+		var moveErr error
+		if paths.OverwriteExisting {
+			moveErr = SafeOverwrite(paths.FinalDestPath, paths.SrcIsDir, doMove)
+		} else {
+			moveErr = doMove()
+		}
+
+		if moveErr != nil {
+			sendProgress(CopyProgress{
+				Status: "error",
+				Error:  moveErr.Error(),
+			})
+			return nil
 		}
 	}
 

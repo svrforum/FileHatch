@@ -248,6 +248,9 @@ func main() {
 	shareExpirationChecker := handlers.NewShareExpirationChecker(db, notificationService)
 	shareExpirationChecker.StartBackgroundCheck(1*time.Hour, shutdownCtx)
 
+	// Create User Preferences handler
+	userPrefsHandler := handlers.NewUserPreferencesHandler(db)
+
 	// Create Share handler
 	shareHandler := handlers.NewShareHandler(db, dataRoot, auditHandler, notificationService, h.GetStorageRouter())
 
@@ -402,6 +405,10 @@ func main() {
 
 	// Recent files API (protected)
 	authApi.GET("/files/recent", auditHandler.GetRecentFiles)
+
+	// User preferences (protected)
+	authApi.GET("/user/preferences", userPrefsHandler.GetPreferences)
+	authApi.PUT("/user/preferences", userPrefsHandler.UpdatePreferences)
 
 	// Notifications API (protected)
 	authApi.GET("/notifications", notificationHandler.List)

@@ -1,7 +1,7 @@
 // 폴더 선택 모달 - 파일 이동/복사 시 대상 폴더 선택
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useModalKeyboard } from '../hooks/useModalKeyboard'
-import { fetchFiles } from '../api/files'
+import { fetchFiles, createFolder } from '../api/files'
 import { useSharedFolders } from '../hooks/useSharedFolders'
 import { useExternalStorages } from '../hooks/useExternalStorages'
 import './FolderSelectModal.css'
@@ -39,6 +39,10 @@ export default function FolderSelectModal({
   const [homeExpanded, setHomeExpanded] = useState(true)
   const [sharedExpanded, setSharedExpanded] = useState(false)
   const [externalExpanded, setExternalExpanded] = useState(false)
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [createFolderError, setCreateFolderError] = useState('')
+  const newFolderInputRef = useRef<HTMLInputElement>(null)
 
   // Use shared folders hook with caching
   const { sharedFolders: sharedFoldersData } = useSharedFolders()
@@ -222,6 +226,41 @@ export default function FolderSelectModal({
       return next
     })
   }, [loadHomeFolders, loadSharedSubfolders, loadExternalSubfolders])
+
+  // 새 폴더 생성
+  const handleCreateFolder = useCallback(async () => {
+    if (!newFolderName.trim() || !selectedPath) return
+
+    setCreateFolderError('')
+    try {
+      await createFolder(selectedPath, newFolderName.trim())
+      const newPath = `${selectedPath}/${newFolderName.trim()}`
+
+      // Reload the parent folder to show the new folder
+      if (selectedPath.startsWith('/shared/')) {
+        await loadSharedSubfolders(selectedPath)
+      } else if (selectedPath.startsWith('/external/')) {
+        await loadExternalSubfolders(selectedPath)
+      } else {
+        await loadHomeFolders(selectedPath)
+      }
+
+      // Expand the parent and select the new folder
+      setExpandedPaths(prev => new Set(prev).add(selectedPath))
+      setSelectedPath(newPath)
+      setIsCreatingFolder(false)
+      setNewFolderName('')
+    } catch (error) {
+      setCreateFolderError(error instanceof Error ? error.message : '폴더 생성 실패')
+    }
+  }, [newFolderName, selectedPath, loadHomeFolders, loadSharedSubfolders, loadExternalSubfolders])
+
+  // Focus new folder input when shown
+  useEffect(() => {
+    if (isCreatingFolder && newFolderInputRef.current) {
+      newFolderInputRef.current.focus()
+    }
+  }, [isCreatingFolder])
 
   // 경로가 제외 대상인지 확인
   const isExcluded = (path: string) => {
@@ -407,16 +446,51 @@ export default function FolderSelectModal({
               <span className="placeholder">폴더를 선택하세요</span>
             )}
           </div>
+          {isCreatingFolder && (
+            <div className="new-folder-input-row">
+              <input
+                ref={newFolderInputRef}
+                type="text"
+                className="new-folder-input"
+                placeholder="새 폴더 이름"
+                value={newFolderName}
+                onChange={e => { setNewFolderName(e.target.value); setCreateFolderError('') }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleCreateFolder()
+                  if (e.key === 'Escape') { setIsCreatingFolder(false); setNewFolderName(''); setCreateFolderError('') }
+                }}
+              />
+              <button className="new-folder-confirm-btn" onClick={handleCreateFolder} disabled={!newFolderName.trim()}>
+                생성
+              </button>
+              <button className="new-folder-cancel-btn" onClick={() => { setIsCreatingFolder(false); setNewFolderName(''); setCreateFolderError('') }}>
+                취소
+              </button>
+              {createFolderError && <span className="new-folder-error">{createFolderError}</span>}
+            </div>
+          )}
           <div className="modal-actions">
-            <button className="cancel-btn" onClick={onClose}>취소</button>
             <button
-              ref={confirmButtonRef}
-              className="confirm-btn"
-              disabled={!selectedPath}
-              onClick={() => selectedPath && onSelect(selectedPath)}
+              className="new-folder-btn"
+              onClick={() => { setIsCreatingFolder(true); setCreateFolderError('') }}
+              disabled={!selectedPath || isCreatingFolder}
             >
-              {actionLabel}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              새 폴더
             </button>
+            <div className="modal-actions-right">
+              <button className="cancel-btn" onClick={onClose}>취소</button>
+              <button
+                ref={confirmButtonRef}
+                className="confirm-btn"
+                disabled={!selectedPath}
+                onClick={() => selectedPath && onSelect(selectedPath)}
+              >
+                {actionLabel}
+              </button>
+            </div>
           </div>
         </div>
       </div>

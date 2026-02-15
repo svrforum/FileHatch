@@ -1,8 +1,6 @@
 // 파일 클립보드 훅 (복사/잘라내기/붙여넣기)
 import { useState, useCallback } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { FileInfo, copyItem, moveItem } from '../api/files'
-import { HistoryAction } from '../components/filelist/types'
+import { FileInfo } from '../api/files'
 
 type ToastType = 'success' | 'error' | 'info'
 
@@ -11,13 +9,20 @@ interface ClipboardState {
   mode: 'copy' | 'cut'
 }
 
+interface TransferItemInfo {
+  path: string
+  name: string
+  size?: number
+  isDirectory?: boolean
+}
+
 interface UseClipboardProps {
   displayFiles: FileInfo[]
   selectedFiles: Set<string>
   selectedFile: FileInfo | null
   currentPath: string
-  addToHistory: (action: HistoryAction) => void
   addToast: (message: string, type: ToastType) => void
+  onTransfer: (type: 'move' | 'copy', sources: TransferItemInfo[], destination: string) => void
 }
 
 export function useClipboard({
@@ -25,10 +30,9 @@ export function useClipboard({
   selectedFiles,
   selectedFile,
   currentPath,
-  addToHistory,
   addToast,
+  onTransfer,
 }: UseClipboardProps) {
-  const queryClient = useQueryClient()
   const [clipboard, setClipboard] = useState<ClipboardState | null>(null)
 
   const handleCopy = useCallback(() => {
@@ -54,53 +58,20 @@ export function useClipboard({
   const handlePaste = useCallback(async () => {
     if (!clipboard || clipboard.files.length === 0) return
 
-    let successCount = 0
-    let errorCount = 0
-    const successfulSourcePaths: string[] = []
-    const successfulDestPaths: string[] = []
+    const transferType = clipboard.mode === 'copy' ? 'copy' : 'move'
+    const sources = clipboard.files.map(file => ({
+      path: file.path,
+      name: file.name,
+      size: file.size,
+      isDirectory: file.isDir,
+    }))
 
-    for (const file of clipboard.files) {
-      try {
-        if (clipboard.mode === 'copy') {
-          await copyItem(file.path, currentPath)
-        } else {
-          await moveItem(file.path, currentPath)
-        }
-        successCount++
-        successfulSourcePaths.push(file.path)
-        const fileName = file.path.split('/').pop() || file.name
-        successfulDestPaths.push(`${currentPath}/${fileName}`)
-      } catch {
-        errorCount++
-      }
-    }
-
-    if (successfulSourcePaths.length > 0) {
-      addToHistory({
-        type: clipboard.mode === 'copy' ? 'copy' : 'move',
-        sourcePaths: successfulSourcePaths,
-        destPaths: successfulDestPaths,
-        destination: currentPath
-      })
-    }
-
-    queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+    onTransfer(transferType, sources, currentPath)
 
     if (clipboard.mode === 'cut') {
-      const sourceFolders = new Set(clipboard.files.map(f => f.path.split('/').slice(0, -1).join('/')))
-      sourceFolders.forEach(path => {
-        queryClient.invalidateQueries({ queryKey: ['files', path] })
-      })
       setClipboard(null)
     }
-
-    const action = clipboard.mode === 'copy' ? '복사' : '이동'
-    if (errorCount === 0) {
-      addToast(`${successCount}개 항목이 ${action}되었습니다`, 'success')
-    } else {
-      addToast(`${successCount}개 ${action} 성공, ${errorCount}개 실패`, 'error')
-    }
-  }, [clipboard, currentPath, queryClient, addToHistory, addToast])
+  }, [clipboard, currentPath, onTransfer])
 
   const isFileCut = useCallback((filePath: string) => {
     return !!(clipboard?.mode === 'cut' && clipboard.files.some(f => f.path === filePath))

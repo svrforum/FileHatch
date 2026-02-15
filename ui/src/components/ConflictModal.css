@@ -1,0 +1,127 @@
+/* 파일 충돌 해결 모달 스타일 */
+
+.conflict-modal {
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: var(--shadow-xl);
+  padding: var(--spacing-lg);
+}
+
+.conflict-modal-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.conflict-modal-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.conflict-modal-body {
+  margin-bottom: var(--spacing-lg);
+}
+
+.conflict-filename {
+  font-size: 14px;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
+  word-break: break-all;
+}
+
+.conflict-count {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.conflict-modal-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.conflict-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--border-medium);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.conflict-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.conflict-btn.overwrite {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.conflict-btn.overwrite:hover {
+  background: var(--color-primary-hover, #1d6ce0);
+}
+
+.conflict-apply-all {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-md);
+  cursor: pointer;
+}
+
+.conflict-apply-all input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+}
+
+.conflict-cancel {
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-light);
+  transition: all var(--transition-fast);
+}
+
+.conflict-cancel:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .conflict-modal {
+    width: 100%;
+    max-width: 100%;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding-bottom: calc(var(--spacing-lg) + env(safe-area-inset-bottom));
+  }
+
+  .conflict-modal-actions {
+    flex-direction: column;
+  }
+}

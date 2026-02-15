@@ -319,14 +319,16 @@ export interface TransferProgress {
 export function moveItemStream(
   path: string,
   destination: string,
-  onProgress: (progress: TransferProgress) => void
+  onProgress: (progress: TransferProgress) => void,
+  overwrite?: boolean
 ): { cancel: () => void; promise: Promise<string> } {
   const cleanPath = path.startsWith('/') ? path.slice(1) : path
   const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
   const encodedDest = encodeURIComponent(destination)
 
   const token = _getAuthToken()
-  const url = `${API_BASE}/files/move-stream/${encodedPath}?destination=${encodedDest}${token ? `&token=${token}` : ''}`
+  const overwriteParam = overwrite ? '&overwrite=true' : ''
+  const url = `${API_BASE}/files/move-stream/${encodedPath}?destination=${encodedDest}${token ? `&token=${token}` : ''}${overwriteParam}`
 
   let eventSource: EventSource | null = null
   let rejectFn: ((reason: Error) => void) | null = null
@@ -372,7 +374,8 @@ export function copyItemStream(
   path: string,
   destination: string,
   onProgress: (progress: TransferProgress) => void,
-  retry?: boolean
+  retry?: boolean,
+  overwrite?: boolean
 ): { cancel: () => void; promise: Promise<string> } {
   const cleanPath = path.startsWith('/') ? path.slice(1) : path
   const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
@@ -380,7 +383,8 @@ export function copyItemStream(
 
   const token = _getAuthToken()
   const retryParam = retry ? '&retry=true' : ''
-  const url = `${API_BASE}/files/copy-stream/${encodedPath}?destination=${encodedDest}${token ? `&token=${token}` : ''}${retryParam}`
+  const overwriteParam = overwrite ? '&overwrite=true' : ''
+  const url = `${API_BASE}/files/copy-stream/${encodedPath}?destination=${encodedDest}${token ? `&token=${token}` : ''}${retryParam}${overwriteParam}`
 
   let eventSource: EventSource | null = null
   let rejectFn: ((reason: Error) => void) | null = null

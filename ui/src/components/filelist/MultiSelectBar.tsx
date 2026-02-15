@@ -7,6 +7,7 @@ interface MultiSelectBarProps {
   onDelete: () => void
   onClear: () => void
   isReadonly?: boolean
+  isSelectionMode?: boolean
 }
 
 function MultiSelectBar({
@@ -16,8 +17,10 @@ function MultiSelectBar({
   onDelete,
   onClear,
   isReadonly = false,
+  isSelectionMode = false,
 }: MultiSelectBarProps) {
-  if (selectedCount <= 1) return null
+  if (!isSelectionMode && selectedCount <= 1) return null
+  if (isSelectionMode && selectedCount === 0) return null
 
   return (
     <div

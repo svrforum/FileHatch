@@ -2168,3 +2168,23 @@
     min-width: calc(50% - var(--spacing-sm));
   }
 }
+
+/* Selection mode checkbox */
+.selection-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.selection-checkbox svg {
+  transition: transform 0.15s ease;
+}
+
+.selection-checkbox.checked svg {
+  transform: scale(1.1);
+}

@@ -59,6 +59,10 @@ interface ContextMenuProps {
   isLockedByMe?: (path: string) => boolean
   onLockFile?: (file: FileInfo) => void
   onUnlockFile?: (file: FileInfo) => void
+  // Mobile features
+  onShowProperties?: (file: FileInfo) => void
+  onEnterSelectionMode?: (file: FileInfo) => void
+  isMobile?: boolean
 }
 
 function ContextMenu({
@@ -106,6 +110,9 @@ function ContextMenu({
   isLockedByMe,
   onLockFile,
   onUnlockFile,
+  onShowProperties,
+  onEnterSelectionMode,
+  isMobile = false,
 }: ContextMenuProps) {
   const submenuParentRef = useRef<HTMLDivElement>(null)
   const submenuRef = useRef<HTMLDivElement>(null)
@@ -555,6 +562,37 @@ function ContextMenu({
                 </svg>
                 {contextMenu.selectedPaths.length > 1 ? `${contextMenu.selectedPaths.length}개 삭제` : '삭제'}
               </button>
+            </>
+          )}
+          {/* Mobile-only: Properties and Select mode */}
+          {isMobile && contextMenu.selectedPaths.length <= 1 && (
+            <>
+              <div className="context-menu-divider" />
+              {onEnterSelectionMode && (
+                <button className="context-menu-item" onClick={() => {
+                  onEnterSelectionMode(contextMenu.file)
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M6 6.5L7 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/>
+                    <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                  선택
+                </button>
+              )}
+              {onShowProperties && (
+                <button className="context-menu-item" onClick={() => {
+                  onShowProperties(contextMenu.file)
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M12 16V12M12 8H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  속성
+                </button>
+              )}
             </>
           )}
         </>

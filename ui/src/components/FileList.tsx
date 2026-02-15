@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchFiles, downloadFileDirect, getFolderStats, renameItem, copyItem, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, extractZip, downloadAsZip } from '../api/files'
+import { fetchFiles, downloadFileDirect, getFolderStats, renameItem, copyItem, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, extractZip, downloadAsZip, checkFileExists } from '../api/files'
 import { useSharedFolders } from '../hooks/useSharedFolders'
 import { useExternalStorages, isExternalStorageReadonly } from '../hooks/useExternalStorages'
 import { getSharedWithMe, getSharedByMe, getMyShareLinks, SharedWithMeItem, SharedByMeItem, LinkShare, deleteFileShare, deleteShareLink } from '../api/fileShares'
@@ -28,6 +28,7 @@ import OnlyOfficeEditor from './OnlyOfficeEditor'
 import ShareModal from './ShareModal'
 import LinkShareModal from './LinkShareModal'
 import FolderSelectModal from './FolderSelectModal'
+import ConflictModal, { ConflictInfo, ConflictResolution } from './ConflictModal'
 import {
   SortField, SortOrder, ViewMode, ContextMenuType,
   MultiSelectBar, ContextMenu, FileInfoPanel,
@@ -64,6 +65,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     return () => window.removeEventListener('resize', handleResize)
   }, [])
   const [focusedIndex, setFocusedIndex] = useState<number>(-1)
+  const [isSelectionMode, setIsSelectionMode] = useState(false)
   const [contextMenu, setContextMenu] = useState<ContextMenuType>(null)
   const [deleteTarget, setDeleteTarget] = useState<FileInfo | null>(null)
   const [deleteTargets, setDeleteTargets] = useState<string[] | null>(null)
@@ -108,6 +110,10 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [showMoveModal, setShowMoveModal] = useState(false)
   const [showCopyModal, setShowCopyModal] = useState(false)
   const [pathsToTransfer, setPathsToTransfer] = useState<string[]>([])
+  const [conflictInfos, setConflictInfos] = useState<ConflictInfo[]>([])
+  const [pendingTransferType, setPendingTransferType] = useState<'move' | 'copy'>('copy')
+  const [pendingDestination, setPendingDestination] = useState('')
+  const [pendingTransferInfos, setPendingTransferInfos] = useState<{path: string; name: string; size?: number; isDirectory?: boolean}[]>([])
   const fileRowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   // Toast hook - toasts are rendered globally by ToastContainer in main.tsx
@@ -269,8 +275,10 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     selectedFiles,
     selectedFile,
     currentPath,
-    addToHistory,
     addToast,
+    onTransfer: (type, sources, destination) => {
+      checkConflictsAndTransfer(type, destination, sources)
+    },
   })
 
   // Marquee selection hook
@@ -704,36 +712,108 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     setShowCopyModal(true)
   }, [closeContextMenu])
 
-  // Execute move
-  const handleMoveConfirm = useCallback((destination: string) => {
-    if (pathsToTransfer.length === 0) return
-    setShowMoveModal(false)
-    // Convert paths to TransferItemInfo
-    const transferInfos = pathsToTransfer.map(path => {
-      const file = displayFiles.find(f => f.path === path)
-      return {
-        path,
-        name: file?.name || path.split('/').pop() || path,
-        size: file?.size,
-        isDirectory: file?.isDir,
-      }
-    })
-    transferStore.addTransfer('move', transferInfos, destination)
+  // Check conflicts and start transfer
+  const checkConflictsAndTransfer = useCallback(async (
+    type: 'move' | 'copy',
+    destination: string,
+    transferInfos: {path: string; name: string; size?: number; isDirectory?: boolean}[]
+  ) => {
+    // Check for conflicts in parallel
+    let conflicts: ConflictInfo[] = []
+    try {
+      const results = await Promise.all(
+        transferInfos.map(async (info) => {
+          const result = await checkFileExists(destination, info.name)
+          return { info, exists: result.exists }
+        })
+      )
+      conflicts = results
+        .filter(r => r.exists)
+        .map(r => ({
+          sourcePath: r.info.path,
+          sourceName: r.info.name,
+          destinationPath: destination,
+        }))
+    } catch {
+      addToast('충돌 확인 중 오류가 발생했습니다', 'error')
+      return
+    }
+
+    if (conflicts.length > 0) {
+      setConflictInfos(conflicts)
+      setPendingTransferType(type)
+      setPendingDestination(destination)
+      setPendingTransferInfos(transferInfos)
+      return
+    }
+
+    // No conflicts, proceed directly
+    transferStore.addTransfer(type, transferInfos, destination)
     transferStore.startTransfers()
-    // Invalidate queries after a short delay to allow transfers to complete
+    const action = type === 'copy' ? '복사' : '이동'
+    addToast(`${transferInfos.length}개 항목 ${action} 시작`, 'info')
+    addToHistory({
+      type,
+      sourcePaths: transferInfos.map(i => i.path),
+      destination,
+    })
     setTimeout(() => {
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
       queryClient.invalidateQueries({ queryKey: ['files', destination] })
     }, 500)
     setSelectedFiles(new Set())
     setSelectedFile(null)
-  }, [pathsToTransfer, displayFiles, transferStore, queryClient, currentPath, setSelectedFiles, setSelectedFile])
+  }, [transferStore, queryClient, currentPath, setSelectedFiles, setSelectedFile, addToast, addToHistory])
 
-  // Execute copy to destination
-  const handleCopyToConfirm = useCallback((destination: string) => {
+  // Handle conflict resolution
+  const handleConflictResolve = useCallback((resolution: ConflictResolution, _applyToAll: boolean) => {
+    const conflictPaths = new Set(conflictInfos.map(c => c.sourcePath))
+    let transferredInfos: typeof pendingTransferInfos = []
+
+    if (resolution === 'skip') {
+      // Skip conflicting files, transfer the rest
+      const nonConflicting = pendingTransferInfos.filter(i => !conflictPaths.has(i.path))
+      if (nonConflicting.length > 0) {
+        transferStore.addTransfer(pendingTransferType, nonConflicting, pendingDestination)
+        transferStore.startTransfers()
+        transferredInfos = nonConflicting
+      }
+    } else if (resolution === 'overwrite') {
+      // Overwrite: transfer all with overwrite flag
+      transferStore.addTransfer(pendingTransferType, pendingTransferInfos, pendingDestination, true)
+      transferStore.startTransfers()
+      transferredInfos = pendingTransferInfos
+    } else {
+      // Rename: transfer without overwrite (backend auto-renames)
+      transferStore.addTransfer(pendingTransferType, pendingTransferInfos, pendingDestination)
+      transferStore.startTransfers()
+      transferredInfos = pendingTransferInfos
+    }
+
+    if (transferredInfos.length > 0) {
+      const action = pendingTransferType === 'copy' ? '복사' : '이동'
+      addToast(`${transferredInfos.length}개 항목 ${action} 시작`, 'info')
+      addToHistory({
+        type: pendingTransferType,
+        sourcePaths: transferredInfos.map(i => i.path),
+        destination: pendingDestination,
+      })
+    }
+
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+      queryClient.invalidateQueries({ queryKey: ['files', pendingDestination] })
+    }, 500)
+    setSelectedFiles(new Set())
+    setSelectedFile(null)
+    setConflictInfos([])
+    setPendingTransferInfos([])
+  }, [conflictInfos, pendingTransferInfos, pendingTransferType, pendingDestination, transferStore, queryClient, currentPath, setSelectedFiles, setSelectedFile, addToast, addToHistory])
+
+  // Execute move
+  const handleMoveConfirm = useCallback((destination: string) => {
     if (pathsToTransfer.length === 0) return
-    setShowCopyModal(false)
-    // Convert paths to TransferItemInfo
+    setShowMoveModal(false)
     const transferInfos = pathsToTransfer.map(path => {
       const file = displayFiles.find(f => f.path === path)
       return {
@@ -743,15 +823,24 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         isDirectory: file?.isDir,
       }
     })
-    transferStore.addTransfer('copy', transferInfos, destination)
-    transferStore.startTransfers()
-    // Invalidate queries after a short delay to allow transfers to complete
-    setTimeout(() => {
-      queryClient.invalidateQueries({ queryKey: ['files', destination] })
-    }, 500)
-    setSelectedFiles(new Set())
-    setSelectedFile(null)
-  }, [pathsToTransfer, displayFiles, transferStore, queryClient, setSelectedFiles, setSelectedFile])
+    checkConflictsAndTransfer('move', destination, transferInfos)
+  }, [pathsToTransfer, displayFiles, checkConflictsAndTransfer])
+
+  // Execute copy to destination
+  const handleCopyToConfirm = useCallback((destination: string) => {
+    if (pathsToTransfer.length === 0) return
+    setShowCopyModal(false)
+    const transferInfos = pathsToTransfer.map(path => {
+      const file = displayFiles.find(f => f.path === path)
+      return {
+        path,
+        name: file?.name || path.split('/').pop() || path,
+        size: file?.size,
+        isDirectory: file?.isDir,
+      }
+    })
+    checkConflictsAndTransfer('copy', destination, transferInfos)
+  }, [pathsToTransfer, displayFiles, checkConflictsAndTransfer])
 
   // Actually execute compression with streaming progress
   const handleCompressConfirm = useCallback(() => {
@@ -961,12 +1050,38 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   }, [queryClient])
 
   const handleSelectFile = useCallback((file: FileInfo, e: React.MouseEvent) => {
-    // On mobile, tap on folder navigates directly (no info panel blocking the view)
-    if (isMobile && file.isDir) {
-      onNavigate(file.path)
+    // Mobile behavior
+    if (isMobile) {
+      // In selection mode, toggle checkbox
+      if (isSelectionMode) {
+        setSelectedFiles(prev => {
+          const newSet = new Set(prev)
+          if (newSet.has(file.path)) {
+            newSet.delete(file.path)
+          } else {
+            newSet.add(file.path)
+          }
+          // Exit selection mode if nothing selected
+          if (newSet.size === 0) {
+            setIsSelectionMode(false)
+          }
+          return newSet
+        })
+        return
+      }
+      // Tap on folder navigates directly
+      if (file.isDir) {
+        onNavigate(file.path)
+        return
+      }
+      // Tap on file shows context menu (bottom sheet)
+      setSelectedFiles(new Set([file.path]))
+      setSelectedFile(file)
+      setContextMenu({ type: 'file', x: 0, y: 0, file, selectedPaths: [file.path] })
       return
     }
 
+    // Desktop behavior
     if (e.ctrlKey || e.metaKey) {
       setSelectedFiles(prev => {
         const newSet = new Set(prev)
@@ -996,7 +1111,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       setSelectedFiles(new Set([file.path]))
     }
     setSelectedFile(file)
-  }, [selectedFile, selectedFiles, data, isMobile, onNavigate])
+  }, [selectedFile, selectedFiles, displayFiles, isMobile, isSelectionMode, onNavigate])
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedFiles.size === 0) return
@@ -1321,6 +1436,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
             formatDate={formatRelativeDate}
             getFullDateTime={formatFullDateTime}
             setFocusedIndex={setFocusedIndex}
+            isSelectionMode={isSelectionMode}
             fileRowRefs={fileRowRefs}
           />
         </div>
@@ -1457,6 +1573,16 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         isLockedByMe={isLockedByMe}
         onLockFile={handleLockFile}
         onUnlockFile={handleUnlockFile}
+        isMobile={isMobile}
+        onShowProperties={isMobile ? (file: FileInfo) => {
+          closeContextMenu()
+          setSelectedFile(file)
+        } : undefined}
+        onEnterSelectionMode={isMobile ? (file: FileInfo) => {
+          closeContextMenu()
+          setIsSelectionMode(true)
+          setSelectedFiles(new Set([file.path]))
+        } : undefined}
       />
 
       {/* Multi-select action bar */}
@@ -1475,8 +1601,9 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
           }
         }}
         onDelete={handleBulkDelete}
-        onClear={() => setSelectedFiles(new Set())}
+        onClear={() => { setSelectedFiles(new Set()); setIsSelectionMode(false) }}
         isReadonly={isExternalReadonly}
+        isSelectionMode={isSelectionMode}
       />
 
       <ConfirmModal
@@ -1650,6 +1777,14 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         onSelect={handleCopyToConfirm}
         title="복사할 위치 선택"
         actionLabel="복사"
+      />
+
+      {/* Conflict resolution modal */}
+      <ConflictModal
+        isOpen={conflictInfos.length > 0}
+        conflicts={conflictInfos}
+        onResolve={handleConflictResolve}
+        onCancel={() => setConflictInfos([])}
       />
 
       {/* Mobile FAB */}

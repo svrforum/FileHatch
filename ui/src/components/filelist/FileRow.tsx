@@ -96,6 +96,7 @@ export interface FileRowProps {
   formatDate: (date: string) => string
   getFullDateTime?: (date: string) => string
   setFocusedIndex: (index: number) => void
+  isSelectionMode?: boolean
 }
 
 const FileRow = React.forwardRef<HTMLDivElement, FileRowProps>(({
@@ -128,6 +129,7 @@ const FileRow = React.forwardRef<HTMLDivElement, FileRowProps>(({
   formatDate,
   getFullDateTime,
   setFocusedIndex,
+  isSelectionMode,
 }, ref) => {
   const sharedFile = file as SharedFileInfo
 
@@ -166,6 +168,20 @@ const FileRow = React.forwardRef<HTMLDivElement, FileRowProps>(({
       onDrop={file.isDir && onFolderDrop ? (e) => onFolderDrop(e, file) : undefined}
     >
       <div className="col-name">
+        {isSelectionMode && (
+          <span className={`selection-checkbox ${isSelected ? 'checked' : ''}`} onClick={(e) => { e.stopPropagation(); onSelect(file, e) }}>
+            {isSelected ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="3" width="18" height="18" rx="4" fill="var(--color-primary)" stroke="var(--color-primary)" strokeWidth="2"/>
+                <path d="M7 12L10 15L17 8" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="3" width="18" height="18" rx="4" stroke="var(--text-tertiary)" strokeWidth="2"/>
+              </svg>
+            )}
+          </span>
+        )}
         {hasThumbnail && !thumbnailError && blobUrl ? (
           <div className="row-thumbnail-wrapper">
             <img

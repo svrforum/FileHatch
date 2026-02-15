@@ -192,7 +192,8 @@ const (
 	EventFileDelete   = "file.delete"
 	EventFileRename   = "file.rename"
 	EventFileCopy     = "file.copy"
-	EventFileMove     = "file.move"
+	EventFileMove      = "file.move"
+	EventFileOverwrite = "file.overwrite"
 	EventFolderCreate = "folder.create"
 	EventFolderDelete = "folder.delete"
 

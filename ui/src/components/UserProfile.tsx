@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { updateProfile, setSMBPassword, get2FAStatus, setup2FA, enable2FA, disable2FA, regenerateBackupCodes, TwoFASetupResponse } from '../api/auth'
+import { usePreferencesStore, DEFAULT_SIDEBAR_ORDER } from '../stores/preferencesStore'
 import { useTheme } from '../contexts/ThemeContext'
 import './AuthModal.css'
 import './UserProfile.css'
@@ -13,7 +14,7 @@ interface UserProfileProps {
 function UserProfile({ isOpen, onClose }: UserProfileProps) {
   const { user, token, refreshProfile, logout } = useAuthStore()
   const { theme, setTheme } = useTheme()
-  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'app-password' | '2fa'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'app-password' | '2fa' | 'sidebar'>('profile')
 
   // Profile state
   const [email, setEmail] = useState(user?.email || '')
@@ -37,6 +38,13 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
   const [showBackupCodes, setShowBackupCodes] = useState(false)
   const [twoFAStep, setTwoFAStep] = useState<'status' | 'setup' | 'verify' | 'disable'>('status')
 
+  // Sidebar settings state
+  const { preferences, updatePreferences, resetPreferences } = usePreferencesStore()
+  const [sidebarOrder, setSidebarOrder] = useState<string[]>(DEFAULT_SIDEBAR_ORDER)
+  const [sidebarHidden, setSidebarHidden] = useState<Set<string>>(new Set())
+  const [defaultLanding, setDefaultLanding] = useState('')
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+
   // UI state
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -48,6 +56,15 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
       fetchTwoFAStatus()
     }
   }, [activeTab, token])
+
+  // Load sidebar settings when tab is active
+  useEffect(() => {
+    if (activeTab === 'sidebar') {
+      setSidebarOrder(preferences.sidebarOrder.length > 0 ? [...preferences.sidebarOrder] : [...DEFAULT_SIDEBAR_ORDER])
+      setSidebarHidden(new Set(preferences.sidebarHidden || []))
+      setDefaultLanding(preferences.defaultLanding || '')
+    }
+  }, [activeTab, preferences])
 
   // Handle ESC key to close modal
   useEffect(() => {
@@ -219,6 +236,98 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
     setMessage({ type: 'success', text: '백업 코드가 클립보드에 복사되었습니다.' })
   }
 
+  // Sidebar settings handlers
+  const sidebarSectionLabels: Record<string, string> = {
+    'files': '내 파일', 'recent': '내 작업', 'shared-drives': '공유 드라이브',
+    'external-storages': '외부 스토리지', 'sharing': '공유', 'trash': '휴지통',
+  }
+
+  const sidebarSectionIcons: Record<string, string> = {
+    'files': 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z',
+    'recent': 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+    'shared-drives': 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2',
+    'external-storages': 'M4 7h16M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M8 12h.01M12 12h.01',
+    'sharing': 'M8.59 13.51l6.83 3.98m-.01-10.98l-6.82 3.98M21 5a3 3 0 11-6 0 3 3 0 016 0zM9 12a3 3 0 11-6 0 3 3 0 016 0zm12 7a3 3 0 11-6 0 3 3 0 016 0z',
+    'trash': 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16',
+  }
+
+  const handleDragStart = (index: number) => {
+    setDragIndex(index)
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    if (dragIndex === null || dragIndex === index) return
+    setSidebarOrder(prev => {
+      const newOrder = [...prev]
+      const [moved] = newOrder.splice(dragIndex, 1)
+      newOrder.splice(index, 0, moved)
+      return newOrder
+    })
+    setDragIndex(index)
+  }
+
+  const handleDragEnd = () => {
+    setDragIndex(null)
+  }
+
+  const toggleSidebarVisibility = (section: string) => {
+    setSidebarHidden(prev => {
+      const next = new Set(prev)
+      if (next.has(section)) next.delete(section)
+      else next.add(section)
+      return next
+    })
+  }
+
+  const moveSidebarUp = (index: number) => {
+    if (index <= 0) return
+    setSidebarOrder(prev => {
+      const newOrder = [...prev]
+      ;[newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]]
+      return newOrder
+    })
+  }
+
+  const moveSidebarDown = (index: number) => {
+    setSidebarOrder(prev => {
+      if (index >= prev.length - 1) return prev
+      const newOrder = [...prev]
+      ;[newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
+      return newOrder
+    })
+  }
+
+  const handleSaveSidebar = async () => {
+    setLoading(true)
+    setMessage(null)
+    try {
+      await updatePreferences({
+        sidebarOrder: sidebarOrder,
+        sidebarHidden: Array.from(sidebarHidden),
+        defaultLanding,
+      })
+      setMessage({ type: 'success', text: '사이드바 설정이 저장되었습니다.' })
+    } catch {
+      setMessage({ type: 'error', text: '사이드바 설정 저장에 실패했습니다.' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResetSidebar = async () => {
+    setLoading(true)
+    setMessage(null)
+    try {
+      await resetPreferences()
+      setMessage({ type: 'success', text: '사이드바 설정이 초기화되었습니다.' })
+    } catch {
+      setMessage({ type: 'error', text: '초기화에 실패했습니다.' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal user-profile-modal" onClick={(e) => e.stopPropagation()}>
@@ -255,6 +364,12 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
             onClick={() => { setActiveTab('2fa'); setMessage(null); setShowBackupCodes(false); }}
           >
             2FA 보안
+          </button>
+          <button
+            className={activeTab === 'sidebar' ? 'active' : ''}
+            onClick={() => { setActiveTab('sidebar'); setMessage(null); }}
+          >
+            사이드바
           </button>
         </div>
 
@@ -683,6 +798,82 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
                   </div>
                 </form>
               )}
+            </div>
+          )}
+
+          {activeTab === 'sidebar' && (
+            <div className="sidebar-settings-content">
+              <div className="sidebar-settings-section">
+                <h4>섹션 순서 및 표시</h4>
+                <p className="sidebar-settings-hint">드래그하여 순서를 변경하고, 토글로 표시/숨김을 설정하세요.</p>
+                <div className="sidebar-section-list">
+                  {sidebarOrder.map((section, index) => (
+                    <div
+                      key={section}
+                      className={`sidebar-section-item ${dragIndex === index ? 'dragging' : ''} ${sidebarHidden.has(section) ? 'hidden-section' : ''}`}
+                      draggable
+                      onDragStart={() => handleDragStart(index)}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <div className="sidebar-section-drag">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                          <path d="M8 6H10M8 10H10M8 14H10M8 18H10M14 6H16M14 10H16M14 14H16M14 18H16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                        </svg>
+                      </div>
+                      <svg className="sidebar-section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <path d={sidebarSectionIcons[section] || ''} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      <span className="sidebar-section-label">{sidebarSectionLabels[section] || section}</span>
+                      <div className="sidebar-section-actions">
+                        <button className="sidebar-reorder-btn" onClick={() => moveSidebarUp(index)} disabled={index === 0} title="위로">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                            <path d="M18 15L12 9L6 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </button>
+                        <button className="sidebar-reorder-btn" onClick={() => moveSidebarDown(index)} disabled={index === sidebarOrder.length - 1} title="아래로">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                            <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </button>
+                        <label className="sidebar-visibility-toggle">
+                          <input
+                            type="checkbox"
+                            checked={!sidebarHidden.has(section)}
+                            onChange={() => toggleSidebarVisibility(section)}
+                          />
+                          <span className="sidebar-toggle-slider" />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="sidebar-settings-section">
+                <h4>기본 시작 페이지</h4>
+                <select
+                  className="sidebar-landing-select"
+                  value={defaultLanding}
+                  onChange={e => setDefaultLanding(e.target.value)}
+                >
+                  <option value="">내 파일 (기본)</option>
+                  <option value="/files">내 파일</option>
+                  <option value="/recent">내 작업</option>
+                  <option value="/shared-drive">공유 드라이브</option>
+                  <option value="/shared-with-me">나에게 공유된 파일</option>
+                  <option value="/trash">휴지통</option>
+                </select>
+              </div>
+
+              <div className="sidebar-settings-actions">
+                <button type="button" className="secondary-btn" onClick={handleResetSidebar} disabled={loading}>
+                  초기화
+                </button>
+                <button type="button" className="primary-btn" onClick={handleSaveSidebar} disabled={loading}>
+                  {loading ? '저장 중...' : '저장'}
+                </button>
+              </div>
             </div>
           )}
 

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useUploadStore } from '../stores/uploadStore'
 import { useTransferStore } from '../stores/transferStore'
 import { useAuthStore } from '../stores/authStore'
+import { usePreferencesStore } from '../stores/preferencesStore'
 import { getStorageUsage, formatFileSize } from '../api/files'
 import { PERMISSION_READ_WRITE } from '../api/sharedFolders'
 import { useSharedFolders } from '../hooks/useSharedFolders'
@@ -153,9 +154,25 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
   const queryClient = useQueryClient()
   const { sharedFolders } = useSharedFolders()
   const { externalStorages } = useExternalStorages()
-  const [sharedDrivesExpanded, setSharedDrivesExpanded] = useState(true)
-  const [sharingExpanded, setSharingExpanded] = useState(true)
-  const [externalStoragesExpanded, setExternalStoragesExpanded] = useState(true)
+  const { preferences, fetchPreferences } = usePreferencesStore()
+  const [sharedDrivesExpanded, setSharedDrivesExpanded] = useState(() => localStorage.getItem('sidebar-shared-drives') !== 'false')
+  const [sharingExpanded, setSharingExpanded] = useState(() => localStorage.getItem('sidebar-sharing') !== 'false')
+  const [externalStoragesExpanded, setExternalStoragesExpanded] = useState(() => localStorage.getItem('sidebar-external-storages') !== 'false')
+
+  const toggleSharedDrives = () => {
+    setSharedDrivesExpanded(prev => { localStorage.setItem('sidebar-shared-drives', String(!prev)); return !prev })
+  }
+  const toggleSharing = () => {
+    setSharingExpanded(prev => { localStorage.setItem('sidebar-sharing', String(!prev)); return !prev })
+  }
+  const toggleExternalStorages = () => {
+    setExternalStoragesExpanded(prev => { localStorage.setItem('sidebar-external-storages', String(!prev)); return !prev })
+  }
+
+  // Fetch user preferences on mount
+  useEffect(() => {
+    if (token) fetchPreferences()
+  }, [token, fetchPreferences])
 
   // Safe arrays to prevent undefined errors
   const safeItems = items || []
@@ -256,176 +273,193 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
           </div>
 
           <nav className="nav-menu">
-            {user && (
-              <Link
-                to="/files"
-                className={`nav-item ${(location.pathname === '/files' || location.pathname === '/') && isActive('/home') ? 'active' : ''}`}
-                onClick={() => handleNavigation('/home')}
-              >
-                {icons.folder}
-                <span>내 파일</span>
-              </Link>
-            )}
+            {user && (preferences.sidebarOrder.length > 0 ? preferences.sidebarOrder : ['files', 'recent', 'shared-drives', 'external-storages', 'sharing', 'trash']).map(section => {
+              if (preferences.sidebarHidden.includes(section)) return null
 
-            {/* My Activity Link */}
-            {user && (
-              <Link
-                to="/my-activity"
-                className={`nav-item ${location.pathname === '/my-activity' ? 'active' : ''}`}
-                onClick={() => onMobileClose?.()}
-              >
-                {icons.recent}
-                <span>내 작업</span>
-              </Link>
-            )}
+              switch (section) {
+                case 'files':
+                  return (
+                    <Link
+                      key="files"
+                      to="/files"
+                      className={`nav-item ${(location.pathname === '/files' || location.pathname === '/') && isActive('/home') ? 'active' : ''}`}
+                      onClick={() => handleNavigation('/home')}
+                    >
+                      {icons.folder}
+                      <span>내 파일</span>
+                    </Link>
+                  )
 
-            {/* Shared Drives Section */}
-            {user && sharedFolders.length > 0 && (
-              <div className="shared-section">
-                <button
-                  className="shared-header"
-                  onClick={() => setSharedDrivesExpanded(!sharedDrivesExpanded)}
-                  aria-expanded={sharedDrivesExpanded}
-                  aria-label="공유 드라이브 섹션"
-                >
-                  {icons.sharedDrive}
-                  <span>공유 드라이브</span>
-                  <svg
-                    className={`chevron ${sharedDrivesExpanded ? 'expanded' : ''}`}
-                    aria-hidden="true"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </button>
-                {sharedDrivesExpanded && (
-                  <div className="shared-list">
-                    {sharedFolders.map(folder => (
-                      <Link
-                        key={folder.id}
-                        to={`/shared-drive/${encodeURIComponent(folder.name)}`}
-                        className={`nav-item shared-drive-item ${location.pathname.startsWith(`/shared-drive/${encodeURIComponent(folder.name)}`) ? 'active' : ''}`}
-                        onClick={() => onMobileClose?.()}
+                case 'recent':
+                  return (
+                    <Link
+                      key="recent"
+                      to="/my-activity"
+                      className={`nav-item ${location.pathname === '/my-activity' ? 'active' : ''}`}
+                      onClick={() => onMobileClose?.()}
+                    >
+                      {icons.recent}
+                      <span>내 작업</span>
+                    </Link>
+                  )
+
+                case 'shared-drives':
+                  if (sharedFolders.length === 0) return null
+                  return (
+                    <div key="shared-drives" className="shared-section">
+                      <button
+                        className="shared-header"
+                        onClick={toggleSharedDrives}
+                        aria-expanded={sharedDrivesExpanded}
+                        aria-label="공유 드라이브 섹션"
                       >
-                        <span className="drive-name">{folder.name}</span>
-                        <span className={`permission-badge ${folder.permissionLevel === PERMISSION_READ_WRITE ? 'rw' : 'r'}`}>
-                          {folder.permissionLevel === PERMISSION_READ_WRITE ? 'RW' : 'R'}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+                        {icons.sharedDrive}
+                        <span>공유 드라이브</span>
+                        <svg
+                          className={`chevron ${sharedDrivesExpanded ? 'expanded' : ''}`}
+                          aria-hidden="true"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                        >
+                          <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                      {sharedDrivesExpanded && (
+                        <div className="shared-list">
+                          {sharedFolders.map(folder => (
+                            <Link
+                              key={folder.id}
+                              to={`/shared-drive/${encodeURIComponent(folder.name)}`}
+                              className={`nav-item shared-drive-item ${location.pathname.startsWith(`/shared-drive/${encodeURIComponent(folder.name)}`) ? 'active' : ''}`}
+                              onClick={() => onMobileClose?.()}
+                            >
+                              <span className="drive-name">{folder.name}</span>
+                              <span className={`permission-badge ${folder.permissionLevel === PERMISSION_READ_WRITE ? 'rw' : 'r'}`}>
+                                {folder.permissionLevel === PERMISSION_READ_WRITE ? 'RW' : 'R'}
+                              </span>
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
 
-            {/* External Storages Section */}
-            {user && externalStorages.length > 0 && (
-              <div className="shared-section">
-                <button
-                  className="shared-header"
-                  onClick={() => setExternalStoragesExpanded(!externalStoragesExpanded)}
-                  aria-expanded={externalStoragesExpanded}
-                  aria-label="외부 스토리지 섹션"
-                >
-                  {icons.externalStorage}
-                  <span>외부 스토리지</span>
-                  <svg
-                    className={`chevron ${externalStoragesExpanded ? 'expanded' : ''}`}
-                    aria-hidden="true"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </button>
-                {externalStoragesExpanded && (
-                  <div className="shared-list">
-                    {externalStorages.map(storage => (
-                      <Link
-                        key={storage.id}
-                        to={`/external/${encodeURIComponent(storage.mountPath)}`}
-                        className={`nav-item shared-drive-item ${location.pathname.startsWith(`/external/${encodeURIComponent(storage.mountPath)}`) ? 'active' : ''}`}
-                        onClick={() => onMobileClose?.()}
+                case 'external-storages':
+                  if (externalStorages.length === 0) return null
+                  return (
+                    <div key="external-storages" className="shared-section">
+                      <button
+                        className="shared-header"
+                        onClick={toggleExternalStorages}
+                        aria-expanded={externalStoragesExpanded}
+                        aria-label="외부 스토리지 섹션"
                       >
-                        <span className="drive-name">{storage.name}</span>
-                        <span className={`permission-badge ${storage.isReadonly ? 'r' : 'rw'}`}>
-                          {storage.isReadonly ? 'R' : 'RW'}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+                        {icons.externalStorage}
+                        <span>외부 스토리지</span>
+                        <svg
+                          className={`chevron ${externalStoragesExpanded ? 'expanded' : ''}`}
+                          aria-hidden="true"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                        >
+                          <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                      {externalStoragesExpanded && (
+                        <div className="shared-list">
+                          {externalStorages.map(storage => (
+                            <Link
+                              key={storage.id}
+                              to={`/external/${encodeURIComponent(storage.mountPath)}`}
+                              className={`nav-item shared-drive-item ${location.pathname.startsWith(`/external/${encodeURIComponent(storage.mountPath)}`) ? 'active' : ''}`}
+                              onClick={() => onMobileClose?.()}
+                            >
+                              <span className="drive-name">{storage.name}</span>
+                              <span className={`permission-badge ${storage.isReadonly ? 'r' : 'rw'}`}>
+                                {storage.isReadonly ? 'R' : 'RW'}
+                              </span>
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
 
-            {/* Sharing Section */}
-            {user && (
-              <div className="shared-section">
-                <button
-                  className="shared-header"
-                  onClick={() => setSharingExpanded(!sharingExpanded)}
-                  aria-expanded={sharingExpanded}
-                  aria-label="공유 섹션"
-                >
-                  {icons.shared}
-                  <span>공유</span>
-                  <svg
-                    className={`chevron ${sharingExpanded ? 'expanded' : ''}`}
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    aria-hidden="true"
-                  >
-                    <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </button>
-                {sharingExpanded && (
-                  <div className="shared-list">
-                    <Link
-                      to="/shared-with-me"
-                      className={`nav-item shared-drive-item ${location.pathname === '/shared-with-me' ? 'active' : ''}`}
-                      onClick={() => onMobileClose?.()}
-                    >
-                      {icons.sharedWithMe}
-                      <span>나에게 공유된 파일</span>
-                    </Link>
-                    <Link
-                      to="/shared-by-me"
-                      className={`nav-item shared-drive-item ${location.pathname === '/shared-by-me' ? 'active' : ''}`}
-                      onClick={() => onMobileClose?.()}
-                    >
-                      {icons.sharedByMe}
-                      <span>다른사용자에 공유된 파일</span>
-                    </Link>
-                    <Link
-                      to="/link-shares"
-                      className={`nav-item shared-drive-item ${location.pathname === '/link-shares' ? 'active' : ''}`}
-                      onClick={() => onMobileClose?.()}
-                    >
-                      {icons.linkShare}
-                      <span>링크로 공유된 파일</span>
-                    </Link>
-                  </div>
-                )}
-              </div>
-            )}
+                case 'sharing':
+                  return (
+                    <div key="sharing" className="shared-section">
+                      <button
+                        className="shared-header"
+                        onClick={toggleSharing}
+                        aria-expanded={sharingExpanded}
+                        aria-label="공유 섹션"
+                      >
+                        {icons.shared}
+                        <span>공유</span>
+                        <svg
+                          className={`chevron ${sharingExpanded ? 'expanded' : ''}`}
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                      {sharingExpanded && (
+                        <div className="shared-list">
+                          <Link
+                            to="/shared-with-me"
+                            className={`nav-item shared-drive-item ${location.pathname === '/shared-with-me' ? 'active' : ''}`}
+                            onClick={() => onMobileClose?.()}
+                          >
+                            {icons.sharedWithMe}
+                            <span>나에게 공유된 파일</span>
+                          </Link>
+                          <Link
+                            to="/shared-by-me"
+                            className={`nav-item shared-drive-item ${location.pathname === '/shared-by-me' ? 'active' : ''}`}
+                            onClick={() => onMobileClose?.()}
+                          >
+                            {icons.sharedByMe}
+                            <span>다른사용자에 공유된 파일</span>
+                          </Link>
+                          <Link
+                            to="/link-shares"
+                            className={`nav-item shared-drive-item ${location.pathname === '/link-shares' ? 'active' : ''}`}
+                            onClick={() => onMobileClose?.()}
+                          >
+                            {icons.linkShare}
+                            <span>링크로 공유된 파일</span>
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  )
 
-            {user && (
-              <Link
-                to="/trash"
-                className={`nav-item ${isTrashView ? 'active' : ''}`}
-                onClick={() => onMobileClose?.()}
-              >
-                {icons.trash}
-                <span>휴지통</span>
-              </Link>
-            )}
+                case 'trash':
+                  return (
+                    <Link
+                      key="trash"
+                      to="/trash"
+                      className={`nav-item ${isTrashView ? 'active' : ''}`}
+                      onClick={() => onMobileClose?.()}
+                    >
+                      {icons.trash}
+                      <span>휴지통</span>
+                    </Link>
+                  )
+
+                default:
+                  return null
+              }
+            })}
+
           </nav>
         </>
       ) : (

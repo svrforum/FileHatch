@@ -1,6 +1,7 @@
 // 파일 이동/복사/압축/삭제 전송 상태 관리 스토어
 import { create } from 'zustand'
-import { moveItemStream, copyItemStream, compressFilesStream, batchMoveToTrash, TransferProgress, CompressionProgress } from '../api/files'
+import { persist } from 'zustand/middleware'
+import { moveItemStream, copyItemStream, compressFilesStream, moveToTrash, TransferProgress, CompressionProgress } from '../api/files'
 
 export type TransferType = 'move' | 'copy' | 'compress' | 'delete'
 export type TransferStatus = 'pending' | 'transferring' | 'completed' | 'error'
@@ -43,6 +44,8 @@ export interface TransferItem {
   deleteNames?: string[]
   // Retry specific
   isRetry?: boolean
+  // Overwrite mode
+  overwrite?: boolean
 }
 
 interface TransferState {
@@ -51,7 +54,7 @@ interface TransferState {
   isPanelMinimized: boolean
 
   // Actions
-  addTransfer: (type: TransferType, sources: TransferItemInfo[], destination: string) => void
+  addTransfer: (type: TransferType, sources: TransferItemInfo[], destination: string, overwrite?: boolean) => void
   addCompression: (paths: string[], outputName: string, currentPath: string) => void
   addDeletion: (paths: string[], names: string[]) => void
   startTransfers: () => void
@@ -64,12 +67,12 @@ interface TransferState {
   toggleMinimize: () => void
 }
 
-export const useTransferStore = create<TransferState>((set, get) => ({
+export const useTransferStore = create<TransferState>()(persist((set, get) => ({
   items: [],
   isPanelOpen: false,
   isPanelMinimized: false,
 
-  addTransfer: (type, sources, destination) => {
+  addTransfer: (type, sources, destination, overwrite) => {
     const newItems: TransferItem[] = sources.map(source => ({
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
@@ -79,12 +82,12 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       status: 'pending',
       fileSize: source.size,
       isDirectory: source.isDirectory,
+      overwrite,
     }))
 
     set(state => ({
       items: [...state.items, ...newItems],
       isPanelOpen: true,
-      isPanelMinimized: false,
     }))
   },
 
@@ -108,7 +111,6 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     set(state => ({
       items: [...state.items, newItem],
       isPanelOpen: true,
-      isPanelMinimized: false,
     }))
 
     // Auto-start the compression
@@ -127,7 +129,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       type: 'delete',
       sourcePath: paths[0],
       sourceName: displayName,
-      destination: '휴지통',
+      destination: '/trash',
       status: 'pending',
       deletePaths: paths,
       deleteNames: names,
@@ -136,7 +138,6 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     set(state => ({
       items: [...state.items, newItem],
       isPanelOpen: true,
-      isPanelMinimized: false,
     }))
 
     // Auto-start the deletion
@@ -221,22 +222,61 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       let streamOp: { cancel: () => void; promise: Promise<unknown> }
 
       if (item.type === 'delete') {
-        // Delete operation - use batch API
+        // Delete operation - individual items with progress tracking
         if (!item.deletePaths || item.deletePaths.length === 0) {
           throw new Error('Missing delete paths')
         }
         const deletePaths = item.deletePaths
-        const deletePromise = batchMoveToTrash(deletePaths).then(result => {
-          if (result.failed && result.failed.length > 0) {
-            const failedCount = result.failed.length
-            const successCount = result.success ? result.success.length : 0
-            if (successCount === 0) {
-              throw new Error(`삭제 실패: ${result.failed[0].error}`)
+        const total = deletePaths.length
+        const abortController = new AbortController()
+        const signal = abortController.signal
+
+        // Set initial totalFiles
+        set(state => ({
+          items: state.items.map(i =>
+            i.id === id ? { ...i, totalFiles: total, copiedFiles: 0, progress: 0 } : i
+          ),
+        }))
+
+        const deletePromise = (async () => {
+          const failures: { path: string; error: string }[] = []
+          let consecutiveFailures = 0
+          for (let i = 0; i < total; i++) {
+            if (signal.aborted) {
+              throw new Error('사용자에 의해 취소됨')
             }
-            throw new Error(`${successCount}개 성공, ${failedCount}개 실패`)
+            try {
+              await moveToTrash(deletePaths[i])
+              consecutiveFailures = 0
+            } catch (err) {
+              failures.push({ path: deletePaths[i], error: err instanceof Error ? err.message : '삭제 실패' })
+              consecutiveFailures++
+              if (consecutiveFailures >= 3) {
+                throw new Error(`연속 ${consecutiveFailures}회 실패로 중단 (${failures.length}/${total}개 실패)`)
+              }
+            }
+            // Update progress
+            set(state => ({
+              items: state.items.map(it =>
+                it.id === id ? {
+                  ...it,
+                  copiedFiles: i + 1,
+                  totalFiles: total,
+                  progress: Math.round(((i + 1) / total) * 100),
+                } : it
+              ),
+            }))
           }
-        })
-        streamOp = { cancel: () => {}, promise: deletePromise }
+          if (failures.length > 0) {
+            const successCount = total - failures.length
+            if (successCount === 0) {
+              throw new Error(`삭제 실패: ${failures[0].error}`)
+            }
+            throw new Error(`${successCount}개 성공, ${failures.length}개 실패`)
+          }
+        })()
+
+        streamOp = { cancel: () => abortController.abort(), promise: deletePromise }
       } else if (item.type === 'compress') {
         // Compression operation
         if (!item.compressPaths || !item.outputName) {
@@ -246,8 +286,8 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       } else {
         // Move/Copy operation
         streamOp = item.type === 'move'
-          ? moveItemStream(item.sourcePath, item.destination, onProgress)
-          : copyItemStream(item.sourcePath, item.destination, onProgress, item.isRetry)
+          ? moveItemStream(item.sourcePath, item.destination, onProgress, item.overwrite)
+          : copyItemStream(item.sourcePath, item.destination, onProgress, item.isRetry, item.overwrite)
       }
 
       // Store cancel function
@@ -286,21 +326,11 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       }))
     }
 
-    // 모든 항목이 완료되었는지 확인
+    // 에러 발생 시 패널 자동 열기
     const { items: updatedItems } = get()
-    const allDone = updatedItems.every(i => i.status === 'completed' || i.status === 'error')
-    if (allDone) {
-      // 2초 후 패널 자동 닫기 (에러가 없는 경우에만)
-      const hasError = updatedItems.some(i => i.status === 'error')
-      if (!hasError) {
-        setTimeout(() => {
-          const { items: currentItems } = get()
-          const stillAllDone = currentItems.every(i => i.status === 'completed' || i.status === 'error')
-          if (stillAllDone) {
-            set({ isPanelOpen: false })
-          }
-        }, 2000)
-      }
+    const currentItem = updatedItems.find(i => i.id === id)
+    if (currentItem?.status === 'error') {
+      set({ isPanelOpen: true, isPanelMinimized: false })
     }
   },
 
@@ -357,5 +387,14 @@ export const useTransferStore = create<TransferState>((set, get) => ({
   toggleMinimize: () => {
     set(state => ({ isPanelMinimized: !state.isPanelMinimized }))
   },
+}), {
+  name: 'transfer-storage',
+  partialize: (state) => ({
+    // Only persist completed/error items (active transfers can't be restored)
+    items: state.items
+      .filter(i => i.status === 'completed' || i.status === 'error')
+      .slice(-50)
+      .map(({ cancel, ...rest }) => rest),
+  }),
 }))
 

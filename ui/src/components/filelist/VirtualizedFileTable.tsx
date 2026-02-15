@@ -51,6 +51,8 @@ export interface VirtualizedFileTableProps {
   formatDate: (date: string) => string
   getFullDateTime: (date: string) => string
   setFocusedIndex: (index: number) => void
+  // Mobile selection mode
+  isSelectionMode?: boolean
   // Ref for file rows
   fileRowRefs: React.MutableRefObject<Map<string, HTMLDivElement>>
 }
@@ -84,6 +86,7 @@ export default function VirtualizedFileTable({
   formatDate,
   getFullDateTime,
   setFocusedIndex,
+  isSelectionMode,
   fileRowRefs,
 }: VirtualizedFileTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -172,6 +175,7 @@ export default function VirtualizedFileTable({
           formatDate={formatDate}
           getFullDateTime={getFullDateTime}
           setFocusedIndex={setFocusedIndex}
+          isSelectionMode={isSelectionMode}
         />
       </div>
     )
@@ -180,7 +184,7 @@ export default function VirtualizedFileTable({
     isSharedWithMeView, isSharedByMeView, isLinkSharesView, starredFiles, lockedFiles,
     onSelect, onDoubleClick, onContextMenu, onDragStart, onDragEnd,
     onFolderDragOver, onFolderDragLeave, onFolderDrop, onUnshare, onCopyLink,
-    onDeleteLink, onToggleStar, getFileIcon, formatDate, getFullDateTime, setFocusedIndex, fileRowRefs,
+    onDeleteLink, onToggleStar, getFileIcon, formatDate, getFullDateTime, setFocusedIndex, isSelectionMode, fileRowRefs,
   ])
 
   // 가상화 비활성화 시 일반 렌더링
