@@ -527,6 +527,11 @@ export async function emptyTrash(): Promise<{ success: boolean; deletedCount: nu
   return api.delete<{ success: boolean; deletedCount: number }>('/trash')
 }
 
+// Get trash stats
+export async function getTrashStats(): Promise<{ itemCount: number; totalSize: number }> {
+  return api.get<{ itemCount: number; totalSize: number }>('/trash/stats')
+}
+
 // Batch restore from trash
 export async function batchRestoreFromTrash(ids: string[]): Promise<{ success: boolean; restored: string[]; failed: string[]; errors: string[] }> {
   return api.post<{ success: boolean; restored: string[]; failed: string[]; errors: string[] }>('/trash/restore/batch', { ids })

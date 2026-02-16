@@ -1149,6 +1149,10 @@ func (h *Handler) EmptyTrash(c echo.Context) error {
 		return RespondError(c, ErrUnauthorized(""))
 	}
 
+	// Count items before deletion
+	meta, _ := h.loadTrashMeta(claims.Username)
+	deletedCount := len(meta)
+
 	trashPath := h.getTrashPath(claims.Username)
 
 	// Remove all contents
@@ -1165,7 +1169,8 @@ func (h *Handler) EmptyTrash(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
+		"success":      true,
+		"deletedCount": deletedCount,
 	})
 }
 

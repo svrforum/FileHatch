@@ -653,6 +653,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     setTimeout(() => {
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
       queryClient.invalidateQueries({ queryKey: ['trash'] })
+      queryClient.invalidateQueries({ queryKey: ['trash-stats'] })
       queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
     }, 500)
   }, [deleteTarget, currentPath, queryClient, addDeletion])
@@ -672,6 +673,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     setTimeout(() => {
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
       queryClient.invalidateQueries({ queryKey: ['trash'] })
+      queryClient.invalidateQueries({ queryKey: ['trash-stats'] })
       queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
     }, 500)
   }, [deleteTargets, currentPath, queryClient, addDeletion])
@@ -1128,6 +1130,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     setTimeout(() => {
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
       queryClient.invalidateQueries({ queryKey: ['trash'] })
+      queryClient.invalidateQueries({ queryKey: ['trash-stats'] })
       queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
     }, 500)
   }, [selectedFiles, displayFiles, currentPath, queryClient, addDeletion])

@@ -5,7 +5,7 @@ import { useUploadStore } from '../stores/uploadStore'
 import { useTransferStore } from '../stores/transferStore'
 import { useAuthStore } from '../stores/authStore'
 import { usePreferencesStore } from '../stores/preferencesStore'
-import { getStorageUsage, formatFileSize } from '../api/files'
+import { getStorageUsage, formatFileSize, getTrashStats } from '../api/files'
 import { PERMISSION_READ_WRITE } from '../api/sharedFolders'
 import { useSharedFolders } from '../hooks/useSharedFolders'
 import { useExternalStorages } from '../hooks/useExternalStorages'
@@ -193,6 +193,12 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
     queryKey: ['version'],
     queryFn: () => api.get<VersionInfo>('/version', { noAuth: true }),
     staleTime: Infinity, // Version doesn't change during runtime
+  })
+
+  const { data: trashStats } = useQuery({
+    queryKey: ['trash-stats'],
+    queryFn: getTrashStats,
+    refetchInterval: 30000,
   })
 
   // Default values when loading
@@ -450,7 +456,10 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                       className={`nav-item ${isTrashView ? 'active' : ''}`}
                       onClick={() => onMobileClose?.()}
                     >
-                      {icons.trash}
+                      <span className="nav-icon-wrapper">
+                        {icons.trash}
+                        {(trashStats?.itemCount ?? 0) > 0 && <span className="trash-dot" />}
+                      </span>
                       <span>휴지통</span>
                     </Link>
                   )

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import { getRecentFiles, RecentFile, downloadFile, FileInfo, getFolderStats, FolderStats, getFileMetadata, FileMetadata, updateFileMetadata, getStarredFiles, StarredFile } from '../api/files'
 import { getFileIcon } from '../utils/fileIcons'
 import { FileRow, FileCard, VirtualizedFileTable, FileInfoPanel, VIRTUALIZATION_THRESHOLD } from './filelist'
@@ -463,7 +464,7 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
   const formatFullDateTime = (date: string) => new Date(date).toLocaleString('ko-KR')
 
   return (
-    <div className="my-activity panel-open">
+    <div className="my-activity">
       <div className="my-activity-header">
         <h1>{activeTab === 'starred' ? '즐겨찾기' : '최근 항목'}</h1>
         <p className="my-activity-subtitle">
@@ -743,34 +744,47 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
         </div>
       )}
 
-      {/* File Details Panel - Always visible */}
-      <FileInfoPanel
-        selectedFile={selectedFile}
-        thumbnailUrl={thumbnailUrl}
-        folderStats={folderStats}
-        loadingStats={loadingStats}
-        fileMetadata={fileMetadata}
-        loadingMetadata={loadingMetadata}
-        editingDescription={editingDescription}
-        descriptionInput={descriptionInput}
-        tagInput={tagInput}
-        tagSuggestions={tagSuggestions}
-        isSpecialShareView={false}
-        onClose={() => setSelectedFile(null)}
-        onView={handleView}
-        onDownload={(file) => downloadFile(file.path)}
-        onShare={() => {}}
-        onLinkShare={() => {}}
-        onDelete={() => {}}
-        onDescriptionChange={setDescriptionInput}
-        onDescriptionSave={handleSaveDescription}
-        onDescriptionEdit={setEditingDescription}
-        onDescriptionInputChange={setDescriptionInput}
-        onTagInputChange={setTagInput}
-        onAddTag={handleAddTag}
-        onRemoveTag={handleRemoveTag}
-        getFileIcon={(file) => getFileIcon(file, 'large')}
-      />
+      {/* Mobile overlay for details panel */}
+      {selectedFile && createPortal(
+        <div
+          className="mobile-panel-overlay"
+          onClick={() => setSelectedFile(null)}
+          aria-hidden="true"
+        />,
+        document.body
+      )}
+
+      {/* File Details Panel - Rendered via Portal to details-sidebar-root in App.tsx */}
+      {document.getElementById('details-sidebar-root') && createPortal(
+        <FileInfoPanel
+          selectedFile={selectedFile}
+          thumbnailUrl={thumbnailUrl}
+          folderStats={folderStats}
+          loadingStats={loadingStats}
+          fileMetadata={fileMetadata}
+          loadingMetadata={loadingMetadata}
+          editingDescription={editingDescription}
+          descriptionInput={descriptionInput}
+          tagInput={tagInput}
+          tagSuggestions={tagSuggestions}
+          isSpecialShareView={false}
+          onClose={() => setSelectedFile(null)}
+          onView={handleView}
+          onDownload={(file) => downloadFile(file.path)}
+          onShare={() => {}}
+          onLinkShare={() => {}}
+          onDelete={() => {}}
+          onDescriptionChange={setDescriptionInput}
+          onDescriptionSave={handleSaveDescription}
+          onDescriptionEdit={setEditingDescription}
+          onDescriptionInputChange={setDescriptionInput}
+          onTagInputChange={setTagInput}
+          onAddTag={handleAddTag}
+          onRemoveTag={handleRemoveTag}
+          getFileIcon={(file) => getFileIcon(file, 'large')}
+        />,
+        document.getElementById('details-sidebar-root')!
+      )}
 
       {/* Text Editor */}
       {editingFile && (

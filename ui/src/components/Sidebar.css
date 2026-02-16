@@ -153,6 +153,23 @@
   color: var(--color-primary);
 }
 
+.nav-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.trash-dot {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-error, #F44336);
+}
+
 .sidebar-footer {
   margin-top: auto;
   display: flex;

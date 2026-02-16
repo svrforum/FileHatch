@@ -49,6 +49,7 @@ export default function Trash({ onNavigate }: TrashProps) {
     mutationFn: restoreFromTrash,
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['trash'] })
+      queryClient.invalidateQueries({ queryKey: ['trash-stats'] })
       queryClient.invalidateQueries({ queryKey: ['files'] })
       queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
       showSuccess('복원되었습니다')
@@ -66,6 +67,7 @@ export default function Trash({ onNavigate }: TrashProps) {
     mutationFn: deleteFromTrash,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trash'] })
+      queryClient.invalidateQueries({ queryKey: ['trash-stats'] })
       queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
       showSuccess('영구 삭제되었습니다')
       setShowDeleteConfirm(null)
@@ -80,6 +82,7 @@ export default function Trash({ onNavigate }: TrashProps) {
     mutationFn: batchRestoreFromTrash,
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['trash'] })
+      queryClient.invalidateQueries({ queryKey: ['trash-stats'] })
       queryClient.invalidateQueries({ queryKey: ['files'] })
       queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
       const count = result.restored?.length || 0
@@ -99,6 +102,7 @@ export default function Trash({ onNavigate }: TrashProps) {
     mutationFn: batchDeleteFromTrash,
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['trash'] })
+      queryClient.invalidateQueries({ queryKey: ['trash-stats'] })
       queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
       const count = result.deleted?.length || 0
       if (result.failed?.length > 0) {
@@ -119,6 +123,7 @@ export default function Trash({ onNavigate }: TrashProps) {
     mutationFn: emptyTrash,
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['trash'] })
+      queryClient.invalidateQueries({ queryKey: ['trash-stats'] })
       queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
       showSuccess(`${result.deletedCount}개 항목이 영구 삭제되었습니다`)
       setShowEmptyConfirm(false)
