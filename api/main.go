@@ -405,6 +405,8 @@ func main() {
 
 	// Recent files API (protected)
 	authApi.GET("/files/recent", auditHandler.GetRecentFiles)
+	authApi.POST("/files/recent/hide", auditHandler.HideRecentItem)
+	authApi.DELETE("/files/recent", auditHandler.ClearRecentItems)
 
 	// User preferences (protected)
 	authApi.GET("/user/preferences", userPrefsHandler.GetPreferences)

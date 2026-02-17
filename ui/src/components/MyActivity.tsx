@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
-import { getRecentFiles, RecentFile, downloadFile, FileInfo, getFolderStats, FolderStats, getFileMetadata, FileMetadata, updateFileMetadata, getStarredFiles, StarredFile } from '../api/files'
+import { getRecentFiles, hideRecentItem, clearAllRecentItems, RecentFile, downloadFile, FileInfo, getFolderStats, FolderStats, getFileMetadata, FileMetadata, updateFileMetadata, getStarredFiles, StarredFile } from '../api/files'
 import { getFileIcon } from '../utils/fileIcons'
 import { FileRow, FileCard, VirtualizedFileTable, FileInfoPanel, VIRTUALIZATION_THRESHOLD } from './filelist'
 const FileViewer = lazy(() => import('./FileViewer'))
@@ -111,6 +111,9 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
   const [descriptionInput, setDescriptionInput] = useState('')
   const [tagInput, setTagInput] = useState('')
   const [tagSuggestions] = useState<string[]>([])
+
+  // Clear confirm dialog
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   // Thumbnail
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
@@ -402,6 +405,29 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
     setContextMenu(null)
   }, [contextMenu])
 
+  const handleHideRecent = useCallback(async () => {
+    if (contextMenu) {
+      try {
+        await hideRecentItem(contextMenu.path)
+        setActivities(prev => prev.filter(a => a.path !== contextMenu.path))
+      } catch (error) {
+        console.error('Failed to hide recent item:', error)
+      }
+    }
+    setContextMenu(null)
+  }, [contextMenu])
+
+  const handleClearAllRecent = useCallback(async () => {
+    try {
+      await clearAllRecentItems()
+      setActivities([])
+    } catch (error) {
+      console.error('Failed to clear recent items:', error)
+    } finally {
+      setShowClearConfirm(false)
+    }
+  }, [])
+
   const handleView = useCallback((file: FileInfo) => {
     if (isEditableFile(file)) {
       setEditingFile(file)
@@ -466,12 +492,28 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
   return (
     <div className="my-activity">
       <div className="my-activity-header">
-        <h1>{activeTab === 'starred' ? '즐겨찾기' : '최근 항목'}</h1>
-        <p className="my-activity-subtitle">
-          {activeTab === 'starred'
-            ? '별표 표시한 파일 및 폴더'
-            : '최근에 사용하거나 수정한 파일 및 폴더'}
-        </p>
+        <div className="my-activity-header-top">
+          <div>
+            <h1>{activeTab === 'starred' ? '즐겨찾기' : '최근 항목'}</h1>
+            <p className="my-activity-subtitle">
+              {activeTab === 'starred'
+                ? '별표 표시한 파일 및 폴더'
+                : '최근에 사용하거나 수정한 파일 및 폴더'}
+            </p>
+          </div>
+          {activeTab === 'recent' && activities.length > 0 && (
+            <button
+              className="clear-recent-btn"
+              onClick={() => setShowClearConfirm(true)}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M3 6H5H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              전체 지우기
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="my-activity-tabs">
@@ -741,6 +783,18 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
             </svg>
             경로 복사
           </button>
+
+          {/* Divider + Hide from recent */}
+          {activeTab === 'recent' && <div className="context-menu-divider" />}
+          {activeTab === 'recent' && (
+            <button className="context-menu-danger" onClick={handleHideRecent}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M3 6H5H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              최근 항목에서 제거
+            </button>
+          )}
         </div>
       )}
 
@@ -810,6 +864,23 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
             onNavigate={(file) => setViewingFile(file)}
           />
         </Suspense>
+      )}
+
+      {/* Clear all confirm dialog */}
+      {showClearConfirm && (
+        <div className="clear-confirm-overlay" onClick={() => setShowClearConfirm(false)}>
+          <div className="clear-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <p>최근 항목을 모두 지우시겠습니까?</p>
+            <div className="clear-confirm-actions">
+              <button className="btn-cancel" onClick={() => setShowClearConfirm(false)}>
+                취소
+              </button>
+              <button className="btn-danger" onClick={handleClearAllRecent}>
+                지우기
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

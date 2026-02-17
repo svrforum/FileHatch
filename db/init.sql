@@ -341,13 +341,30 @@ INSERT INTO system_settings (key, value, description) VALUES
 ON CONFLICT (key) DO NOTHING;
 
 -- =============================================================================
+-- Hidden Recent Items (Migration: 006)
+-- =============================================================================
+
+-- Hidden recent items (for "내 작업" recent items hide feature)
+CREATE TABLE IF NOT EXISTS hidden_recent_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    file_path VARCHAR(1024) NOT NULL,
+    hidden_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, file_path)
+);
+
+CREATE INDEX IF NOT EXISTS idx_hidden_recent_user ON hidden_recent_items(user_id);
+
+-- =============================================================================
 -- Record Initial Migrations
 -- =============================================================================
 INSERT INTO schema_migrations (version, name) VALUES
     ('20240101000001', '001_initial_schema'),
     ('20240101000002', '002_default_data'),
     ('20240101000003', '003_external_storages'),
-    ('20240101000004', '004_fix_external_storage_fk')
+    ('20240101000004', '004_fix_external_storage_fk'),
+    ('20240101000005', '005_user_preferences'),
+    ('20240101000006', '006_hidden_recent_items')
 ON CONFLICT (version) DO NOTHING;
 
 -- =============================================================================
@@ -368,3 +385,4 @@ COMMENT ON TABLE starred_files IS 'User favorite files and folders';
 COMMENT ON TABLE file_locks IS 'File locking for concurrent edit prevention';
 COMMENT ON TABLE external_storages IS 'External storage connections (S3, NFS, SMB)';
 COMMENT ON TABLE external_storage_access IS 'User access permissions for external storages';
+COMMENT ON TABLE hidden_recent_items IS 'Hidden items from recent activity list per user';

@@ -754,6 +754,16 @@ export async function getRecentFiles(limit: number = 10): Promise<RecentFile[]> 
   return result.data || []
 }
 
+export async function hideRecentItem(filePath: string): Promise<{ message: string }> {
+  const result = await api.post<{ data: { message: string } }>('/files/recent/hide', { file_path: filePath })
+  return result.data
+}
+
+export async function clearAllRecentItems(): Promise<{ message: string; hidden_count: number }> {
+  const result = await api.delete<{ data: { message: string; hidden_count: number } }>('/files/recent')
+  return result.data
+}
+
 // Compress files/folders into a zip archive
 export interface CompressResponse {
   success: boolean

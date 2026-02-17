@@ -672,6 +672,11 @@ func (h *AuditHandler) fetchContainerLogs(container string, tail int, level stri
 }
 
 // RecentFile represents a recently accessed file
+// HideRecentItemRequest is the request body for hiding a recent item
+type HideRecentItemRequest struct {
+	FilePath string `json:"file_path"`
+}
+
 type RecentFile struct {
 	Path       string    `json:"path"`
 	Name       string    `json:"name"`
@@ -722,10 +727,15 @@ func (h *AuditHandler) GetRecentFiles(c echo.Context) error {
 			  AND target_resource IS NOT NULL
 			  AND target_resource != ''
 		)
-		SELECT target_resource, event_type, ts
-		FROM ranked_files
-		WHERE rn = 1
-		ORDER BY ts DESC
+		SELECT rf.target_resource, rf.event_type, rf.ts
+		FROM ranked_files rf
+		LEFT JOIN hidden_recent_items hri
+			ON hri.user_id = $1::uuid
+			AND hri.file_path = rf.target_resource
+			AND hri.hidden_at >= rf.ts
+		WHERE rf.rn = 1
+		  AND hri.id IS NULL
+		ORDER BY rf.ts DESC
 		LIMIT $2
 	`, userIDStr, limit)
 	if err != nil {
@@ -781,4 +791,64 @@ func (h *AuditHandler) GetRecentFiles(c echo.Context) error {
 	}
 
 	return RespondSuccess(c, files)
+}
+
+// HideRecentItem hides a file from the recent items list
+func (h *AuditHandler) HideRecentItem(c echo.Context) error {
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
+	}
+
+	var req HideRecentItemRequest
+	if err := c.Bind(&req); err != nil {
+		return RespondError(c, ErrBadRequest("Invalid request body"))
+	}
+
+	if req.FilePath == "" {
+		return RespondError(c, ErrBadRequest("file_path is required"))
+	}
+
+	_, err = h.db.Exec(`
+		INSERT INTO hidden_recent_items (user_id, file_path)
+		VALUES ($1::uuid, $2)
+		ON CONFLICT (user_id, file_path) DO NOTHING
+	`, claims.UserID, req.FilePath)
+	if err != nil {
+		return RespondError(c, ErrInternal("Failed to hide recent item"))
+	}
+
+	return RespondSuccess(c, map[string]string{"message": "ok"})
+}
+
+// ClearRecentItems hides all current recent items for the user
+func (h *AuditHandler) ClearRecentItems(c echo.Context) error {
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
+	}
+
+	result, err := h.db.Exec(`
+		INSERT INTO hidden_recent_items (user_id, file_path)
+		SELECT $1::uuid, rf.target_resource
+		FROM (
+			SELECT DISTINCT ON (target_resource) target_resource
+			FROM audit_logs
+			WHERE actor_id = $1
+			  AND event_type IN ('file.upload', 'file.download', 'file.view', 'file.edit', 'file.copy', 'file.move', 'file.rename', 'folder.create', 'trash.restore')
+			  AND target_resource IS NOT NULL
+			  AND target_resource != ''
+		) rf
+		ON CONFLICT (user_id, file_path) DO NOTHING
+	`, claims.UserID)
+	if err != nil {
+		return RespondError(c, ErrInternal("Failed to clear recent items"))
+	}
+
+	hiddenCount, _ := result.RowsAffected()
+
+	return RespondSuccess(c, map[string]interface{}{
+		"message":      "ok",
+		"hidden_count": hiddenCount,
+	})
 }

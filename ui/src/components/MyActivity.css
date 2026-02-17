@@ -614,3 +614,119 @@
     font-size: 12px;
   }
 }
+
+/* Context menu divider and danger item */
+.activity-context-menu .context-menu-divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: var(--spacing-xs) 0;
+}
+
+.activity-context-menu .context-menu-danger {
+  color: var(--color-error, #F44336);
+}
+
+.activity-context-menu .context-menu-danger:hover {
+  background: rgba(244, 67, 54, 0.08);
+}
+
+.activity-context-menu .context-menu-danger svg {
+  color: var(--color-error, #F44336);
+}
+
+/* Header layout for clear button */
+.my-activity-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+/* Clear recent button */
+.clear-recent-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.clear-recent-btn:hover {
+  color: var(--color-error, #F44336);
+  border-color: var(--color-error, #F44336);
+  background: rgba(244, 67, 54, 0.04);
+}
+
+/* Clear confirm dialog */
+.clear-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.clear-confirm-dialog {
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg, 16px);
+  padding: 24px;
+  min-width: 320px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
+}
+
+.clear-confirm-dialog p {
+  margin: 0 0 20px;
+  font-size: 15px;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.clear-confirm-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: flex-end;
+}
+
+.clear-confirm-actions .btn-cancel {
+  padding: 8px 20px;
+  font-size: 14px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.clear-confirm-actions .btn-cancel:hover {
+  background: var(--bg-secondary);
+}
+
+.clear-confirm-actions .btn-danger {
+  padding: 8px 20px;
+  font-size: 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-error, #F44336);
+  color: white;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.clear-confirm-actions .btn-danger:hover {
+  background: #d32f2f;
+}

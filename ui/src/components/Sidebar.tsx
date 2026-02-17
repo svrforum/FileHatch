@@ -199,6 +199,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
     queryKey: ['trash-stats'],
     queryFn: getTrashStats,
     refetchInterval: 30000,
+    enabled: !!token,
   })
 
   // Default values when loading
