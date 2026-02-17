@@ -197,7 +197,7 @@ function UserManagement({ isOpen, onClose }: UserManagementProps) {
                 </div>
               </div>
               <div className="form-actions">
-                <button type="button" className="cancel-btn" onClick={() => setShowCreateForm(false)}>
+                <button type="button" className="um-cancel-btn" onClick={() => setShowCreateForm(false)}>
                   취소
                 </button>
                 <button type="submit" className="submit-btn" disabled={loading}>
@@ -247,7 +247,7 @@ function UserManagement({ isOpen, onClose }: UserManagementProps) {
                 </div>
               </div>
               <div className="form-actions">
-                <button type="button" className="cancel-btn" onClick={() => setEditingUser(null)}>
+                <button type="button" className="um-cancel-btn" onClick={() => setEditingUser(null)}>
                   취소
                 </button>
                 <button type="submit" className="submit-btn" disabled={loading}>

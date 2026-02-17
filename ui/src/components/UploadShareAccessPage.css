@@ -427,7 +427,7 @@
   font-weight: 500;
 }
 
-.cancel-btn {
+.upload-item-cancel {
   width: 24px;
   height: 24px;
   border: none;
@@ -441,11 +441,11 @@
   flex-shrink: 0;
 }
 
-.cancel-btn:hover {
+.upload-item-cancel:hover {
   background: rgba(250, 82, 82, 0.3);
 }
 
-.cancel-btn svg {
+.upload-item-cancel svg {
   width: 14px;
   height: 14px;
   color: var(--color-error);

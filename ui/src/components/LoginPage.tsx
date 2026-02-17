@@ -204,7 +204,7 @@ function LoginPage() {
 
             <button
               type="button"
-              className="cancel-btn"
+              className="login-cancel-btn"
               onClick={handleCancel2FA}
               disabled={isLoading}
             >

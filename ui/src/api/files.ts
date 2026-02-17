@@ -375,7 +375,9 @@ export function copyItemStream(
   destination: string,
   onProgress: (progress: TransferProgress) => void,
   retry?: boolean,
-  overwrite?: boolean
+  overwrite?: boolean,
+  mode?: string,
+  fileConflict?: string
 ): { cancel: () => void; promise: Promise<string> } {
   const cleanPath = path.startsWith('/') ? path.slice(1) : path
   const encodedPath = cleanPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
@@ -384,7 +386,9 @@ export function copyItemStream(
   const token = _getAuthToken()
   const retryParam = retry ? '&retry=true' : ''
   const overwriteParam = overwrite ? '&overwrite=true' : ''
-  const url = `${API_BASE}/files/copy-stream/${encodedPath}?destination=${encodedDest}${token ? `&token=${token}` : ''}${retryParam}${overwriteParam}`
+  const modeParam = mode ? `&mode=${mode}` : ''
+  const fileConflictParam = fileConflict ? `&fileConflict=${fileConflict}` : ''
+  const url = `${API_BASE}/files/copy-stream/${encodedPath}?destination=${encodedDest}${token ? `&token=${token}` : ''}${retryParam}${overwriteParam}${modeParam}${fileConflictParam}`
 
   let eventSource: EventSource | null = null
   let rejectFn: ((reason: Error) => void) | null = null

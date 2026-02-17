@@ -3,12 +3,17 @@ import * as tus from 'tus-js-client'
 import { checkFileExists, getStorageUsage, formatFileSize } from '../api/files'
 import { useToastStore, parseUploadError } from './toastStore'
 import {
-  noopUrlStorage,
+  resumableUrlStorage,
+  tusFingerprint,
+  savePendingUploads,
+  loadPendingUploads,
+  clearPendingUploads,
   getAuthInfo,
   getTargetPath,
   getCachedStorageUsage,
   invalidateStorageCache,
   calculateUploadSpeed,
+  type PendingUploadMeta,
 } from '../utils/uploadUtils'
 
 // Constants
@@ -29,6 +34,8 @@ export interface UploadItem {
   uploadSpeed?: number
   lastBytesUploaded?: number
   lastUpdateTime?: number
+  // Resume retry tracking
+  _resumeRetried?: boolean
 }
 
 export interface DownloadItem {
@@ -51,6 +58,7 @@ export interface DuplicateFile {
 interface UploadState {
   items: UploadItem[]
   downloads: DownloadItem[]
+  interruptedUploads: PendingUploadMeta[]
   isPanelOpen: boolean
   duplicateFile: DuplicateFile | null
   overwriteAll: boolean
@@ -79,6 +87,11 @@ interface UploadState {
   clearCompletedDownloads: () => void
   isDownloading: (path: string) => boolean
 
+  // Interrupted uploads (resumable)
+  loadInterruptedUploads: () => void
+  dismissInterruptedUpload: (fingerprint: string) => void
+  clearInterruptedUploads: () => void
+
   // Panel functions
   togglePanel: () => void
   openPanel: () => void
@@ -104,6 +117,7 @@ function generateId(filename: string): string {
 export const useUploadStore = create<UploadState>((set, get) => ({
   items: [],
   downloads: [],
+  interruptedUploads: [],
   isPanelOpen: false,
   duplicateFile: null,
   overwriteAll: false,
@@ -149,6 +163,24 @@ export const useUploadStore = create<UploadState>((set, get) => ({
 
     if (newItems.length === 0) return
 
+    // Clear matching interrupted uploads (user re-added the files for resume)
+    const { interruptedUploads } = get()
+    if (interruptedUploads.length > 0) {
+      const matchedFps = new Set<string>()
+      for (const item of newItems) {
+        const fp = tusFingerprint(item.file, item.path)
+        if (interruptedUploads.some(i => i.fingerprint === fp)) {
+          matchedFps.add(fp)
+        }
+      }
+      if (matchedFps.size > 0) {
+        const remaining = interruptedUploads.filter(i => !matchedFps.has(i.fingerprint))
+        set({ interruptedUploads: remaining })
+        if (remaining.length > 0) savePendingUploads(remaining)
+        else clearPendingUploads()
+      }
+    }
+
     set((state) => ({ items: [...state.items, ...newItems] }))
 
     // Auto-start uploads
@@ -161,12 +193,14 @@ export const useUploadStore = create<UploadState>((set, get) => ({
     if (!item || item.status === 'uploading') return
 
     const { token, username } = getAuthInfo()
+    const fp = tusFingerprint(item.file, item.path)
 
     const upload = new tus.Upload(item.file, {
       endpoint: `${window.location.origin}/api/upload/`,
       retryDelays: [0, 1000, 3000, 5000],
       removeFingerprintOnSuccess: true,
-      urlStorage: noopUrlStorage,
+      fingerprint: () => Promise.resolve(fp),
+      urlStorage: resumableUrlStorage,
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       metadata: {
         filename: item.file.name,
@@ -176,6 +210,22 @@ export const useUploadStore = create<UploadState>((set, get) => ({
         overwrite: overwrite ? 'true' : 'false',
       },
       onError: (error) => {
+        const currentItem = get().items.find(i => i.id === id)
+
+        // If this was a resume attempt (upload.url was set from stored URL)
+        // and we haven't retried yet, clear stored URL and retry fresh
+        if (!currentItem?._resumeRetried && upload.url) {
+          resumableUrlStorage.removeUpload('fh-tus-' + fp)
+          set(state => ({
+            items: state.items.map(i => i.id === id
+              ? { ...i, _resumeRetried: true, status: 'pending' as const, progress: 0 }
+              : i
+            )
+          }))
+          get().startUpload(id, overwrite)
+          return
+        }
+
         const errorMessage = parseUploadError(error.message)
         useToastStore.getState().showError(errorMessage)
         get().setStatus(id, 'error', errorMessage)
@@ -438,6 +488,31 @@ export const useUploadStore = create<UploadState>((set, get) => ({
     return get().downloads.some((d) => d.path === path && d.status === 'downloading')
   },
 
+  // Interrupted uploads (resumable)
+  loadInterruptedUploads: () => {
+    const interrupted = loadPendingUploads()
+    if (interrupted.length > 0) {
+      set({ interruptedUploads: interrupted })
+      useToastStore.getState().showInfo(
+        `${interrupted.length}개의 중단된 업로드가 있습니다. 파일을 다시 추가하면 이어받기합니다.`
+      )
+    }
+  },
+
+  dismissInterruptedUpload: (fingerprint) => {
+    set(state => ({
+      interruptedUploads: state.interruptedUploads.filter(i => i.fingerprint !== fingerprint)
+    }))
+    const remaining = get().interruptedUploads
+    if (remaining.length > 0) savePendingUploads(remaining)
+    else clearPendingUploads()
+  },
+
+  clearInterruptedUploads: () => {
+    set({ interruptedUploads: [] })
+    clearPendingUploads()
+  },
+
   // Panel functions
   togglePanel: () => set((state) => ({ isPanelOpen: !state.isPanelOpen })),
   openPanel: () => set({ isPanelOpen: true }),
@@ -449,3 +524,26 @@ export const useUploadStore = create<UploadState>((set, get) => ({
   getCompletedCount: () => get().items.filter((i) => i.status === 'completed').length,
   hasActiveUploads: () => get().items.some((i) => i.status === 'uploading' || i.status === 'pending'),
 }))
+
+// Save pending upload metadata when page is about to unload (for resume on next visit)
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    const state = useUploadStore.getState()
+    const activeUploads = state.items.filter(
+      i => i.status === 'uploading' || i.status === 'pending' || i.status === 'paused'
+    )
+    if (activeUploads.length > 0) {
+      const metas: PendingUploadMeta[] = activeUploads.map(item => ({
+        filename: item.file.name,
+        path: item.path,
+        size: item.file.size,
+        progress: item.progress,
+        fingerprint: tusFingerprint(item.file, item.path),
+        savedAt: Date.now(),
+      }))
+      savePendingUploads(metas)
+    } else {
+      clearPendingUploads()
+    }
+  })
+}

@@ -414,6 +414,60 @@ func (ctx *CopyContext) CopyDirWithProgress(src, dst string) error {
 	return nil
 }
 
+// CopyDirWithMerge recursively copies a directory with merge support.
+// If dst already exists, it merges contents instead of failing.
+// fileConflict controls behavior when a file already exists at dst: "overwrite", "skip", or "rename".
+func (ctx *CopyContext) CopyDirWithMerge(src, dst, fileConflict string) error {
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		// Destination doesn't exist, regular copy
+		return ctx.CopyDirWithProgress(src, dst)
+	}
+
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			// Recurse: merge subdirectories
+			if err := ctx.CopyDirWithMerge(srcPath, dstPath, fileConflict); err != nil {
+				return err
+			}
+		} else {
+			if _, err := os.Stat(dstPath); err == nil {
+				// File exists at destination
+				switch fileConflict {
+				case "overwrite":
+					if err := SafeOverwrite(dstPath, false, func() error {
+						return ctx.CopyFileWithProgress(srcPath, dstPath)
+					}); err != nil {
+						return err
+					}
+				case "skip":
+					ctx.CopiedFiles++
+					continue
+				default: // "rename"
+					unique := GenerateUniquePath(dst, entry.Name(), false, false)
+					if err := ctx.CopyFileWithProgress(srcPath, unique); err != nil {
+						return err
+					}
+				}
+			} else {
+				// No conflict, just copy
+				if err := ctx.CopyFileWithProgress(srcPath, dstPath); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // CopyWithProgress copies a file or directory with progress tracking
 func (ctx *CopyContext) CopyWithProgress(src, dst string, isDir bool) error {
 	if isDir {

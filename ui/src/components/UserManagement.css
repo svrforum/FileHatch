@@ -125,7 +125,7 @@
   margin-top: 16px;
 }
 
-.cancel-btn {
+.um-cancel-btn {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-light);
   color: var(--text-secondary);
@@ -136,7 +136,7 @@
   transition: background 0.15s;
 }
 
-.cancel-btn:hover {
+.um-cancel-btn:hover {
   background: var(--bg-hover);
 }
 

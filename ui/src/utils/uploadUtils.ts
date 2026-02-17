@@ -1,13 +1,97 @@
 import * as tus from 'tus-js-client'
 
-// No-op URL storage to prevent TUS from caching upload URLs in localStorage
-// This prevents stale resume attempts that can cause "file already exists" errors
-export const noopUrlStorage: tus.UrlStorage = {
-  findAllUploads: async () => [],
-  findUploadsByFingerprint: async () => [],
-  removeUpload: async () => {},
-  addUpload: async () => '',
+const TUS_STORAGE_PREFIX = 'fh-tus-'
+const TUS_META_KEY = 'fh-tus-pending-uploads'
+const STALE_THRESHOLD = 24 * 60 * 60 * 1000 // 24시간
+
+// localStorage 기반 tus URL 저장소 (이어받기 지원)
+export const resumableUrlStorage: tus.UrlStorage = {
+  findAllUploads: async () => {
+    const results: tus.PreviousUpload[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key || !key.startsWith(TUS_STORAGE_PREFIX)) continue
+      try {
+        const entry = JSON.parse(localStorage.getItem(key) || '')
+        // 24시간 지난 항목 정리
+        if (entry.createdAt && Date.now() - entry.createdAt > STALE_THRESHOLD) {
+          localStorage.removeItem(key)
+          continue
+        }
+        results.push(entry)
+      } catch {
+        localStorage.removeItem(key!)
+      }
+    }
+    return results
+  },
+
+  findUploadsByFingerprint: async (fingerprint: string) => {
+    const key = TUS_STORAGE_PREFIX + fingerprint
+    try {
+      const entry = localStorage.getItem(key)
+      if (!entry) return []
+      const data = JSON.parse(entry)
+      // 24시간 지난 항목 무시
+      if (data.createdAt && Date.now() - data.createdAt > STALE_THRESHOLD) {
+        localStorage.removeItem(key)
+        return []
+      }
+      return [data]
+    } catch {
+      localStorage.removeItem(key)
+      return []
+    }
+  },
+
+  removeUpload: async (urlStorageKey: string) => {
+    localStorage.removeItem(urlStorageKey)
+  },
+
+  addUpload: async (fingerprint: string, upload: tus.PreviousUpload) => {
+    const key = TUS_STORAGE_PREFIX + fingerprint
+    localStorage.setItem(key, JSON.stringify({ ...upload, urlStorageKey: key, createdAt: Date.now() }))
+    return key
+  },
 }
+
+// tus fingerprint 생성 (파일명 + 크기 + 경로 포함)
+export function tusFingerprint(file: File, path: string): string {
+  return `${file.name}-${file.size}-${file.lastModified}-${path}`
+}
+
+// 중단된 업로드 메타 정보 저장/로드
+export interface PendingUploadMeta {
+  filename: string
+  path: string
+  size: number
+  progress: number
+  fingerprint: string
+  savedAt: number
+}
+
+export function savePendingUploads(uploads: PendingUploadMeta[]): void {
+  localStorage.setItem(TUS_META_KEY, JSON.stringify(uploads))
+}
+
+export function loadPendingUploads(): PendingUploadMeta[] {
+  try {
+    const data = localStorage.getItem(TUS_META_KEY)
+    if (!data) return []
+    const items: PendingUploadMeta[] = JSON.parse(data)
+    // 24시간 지난 항목 필터
+    return items.filter(i => Date.now() - i.savedAt < STALE_THRESHOLD)
+  } catch {
+    return []
+  }
+}
+
+export function clearPendingUploads(): void {
+  localStorage.removeItem(TUS_META_KEY)
+}
+
+// 이전 noopUrlStorage 호환 (다른 곳에서 import하는 경우 대비)
+export const noopUrlStorage = resumableUrlStorage
 
 // Get authentication info from localStorage
 export function getAuthInfo(): { token: string | null; username: string | null } {
@@ -55,12 +139,14 @@ export interface TusUploadConfig {
 
 export function createTusUpload(config: TusUploadConfig): tus.Upload {
   const { token, username } = getAuthInfo()
+  const fp = tusFingerprint(config.file, config.path)
 
   return new tus.Upload(config.file, {
     endpoint: `${window.location.origin}/api/upload/`,
     retryDelays: [0, 1000, 3000, 5000],
     removeFingerprintOnSuccess: true,
-    urlStorage: noopUrlStorage,
+    fingerprint: () => Promise.resolve(fp),
+    urlStorage: resumableUrlStorage,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     metadata: {
       filename: config.file.name,

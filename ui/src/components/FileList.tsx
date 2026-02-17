@@ -173,6 +173,11 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     return () => window.removeEventListener('upload-error', handler)
   }, [showError])
 
+  // Load active server-side transfer jobs on mount
+  useEffect(() => {
+    transferStore.loadServerJobs()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Regular file list query
   const { data, isLoading, error } = useQuery({
     queryKey: ['files', currentPath, sortBy, sortOrder],
@@ -735,6 +740,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
           sourcePath: r.info.path,
           sourceName: r.info.name,
           destinationPath: destination,
+          isFolder: r.info.isDirectory,
         }))
     } catch {
       addToast('충돌 확인 중 오류가 발생했습니다', 'error')
@@ -749,9 +755,10 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       return
     }
 
-    // No conflicts, proceed directly
-    transferStore.addTransfer(type, transferInfos, destination)
-    transferStore.startTransfers()
+    // No conflicts, proceed via server-side transfer queue
+    for (const info of transferInfos) {
+      transferStore.addServerTransfer(type, info.path, info.name, destination)
+    }
     const action = type === 'copy' ? '복사' : '이동'
     addToast(`${transferInfos.length}개 항목 ${action} 시작`, 'info')
     addToHistory({
@@ -776,19 +783,28 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       // Skip conflicting files, transfer the rest
       const nonConflicting = pendingTransferInfos.filter(i => !conflictPaths.has(i.path))
       if (nonConflicting.length > 0) {
-        transferStore.addTransfer(pendingTransferType, nonConflicting, pendingDestination)
-        transferStore.startTransfers()
+        for (const info of nonConflicting) {
+          transferStore.addServerTransfer(pendingTransferType, info.path, info.name, pendingDestination)
+        }
         transferredInfos = nonConflicting
       }
+    } else if (resolution === 'merge') {
+      // Merge: for folders, merge contents; for files within merged folders, auto-rename
+      for (const info of pendingTransferInfos) {
+        transferStore.addServerTransfer(pendingTransferType, info.path, info.name, pendingDestination, false, 'merge', 'rename')
+      }
+      transferredInfos = pendingTransferInfos
     } else if (resolution === 'overwrite') {
       // Overwrite: transfer all with overwrite flag
-      transferStore.addTransfer(pendingTransferType, pendingTransferInfos, pendingDestination, true)
-      transferStore.startTransfers()
+      for (const info of pendingTransferInfos) {
+        transferStore.addServerTransfer(pendingTransferType, info.path, info.name, pendingDestination, true)
+      }
       transferredInfos = pendingTransferInfos
     } else {
       // Rename: transfer without overwrite (backend auto-renames)
-      transferStore.addTransfer(pendingTransferType, pendingTransferInfos, pendingDestination)
-      transferStore.startTransfers()
+      for (const info of pendingTransferInfos) {
+        transferStore.addServerTransfer(pendingTransferType, info.path, info.name, pendingDestination)
+      }
       transferredInfos = pendingTransferInfos
     }
 
@@ -1078,7 +1094,6 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       }
       // Tap on file shows context menu (bottom sheet)
       setSelectedFiles(new Set([file.path]))
-      setSelectedFile(file)
       setContextMenu({ type: 'file', x: 0, y: 0, file, selectedPaths: [file.path] })
       return
     }

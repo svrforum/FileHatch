@@ -42,6 +42,7 @@
 
 .conflict-modal-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
 }
@@ -52,7 +53,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 500;
@@ -60,10 +61,22 @@
   border: 1px solid var(--border-medium);
   background: var(--bg-secondary);
   color: var(--text-primary);
+  white-space: nowrap;
+  min-height: 36px;
 }
 
 .conflict-btn:hover {
   background: var(--bg-tertiary);
+}
+
+.conflict-btn.merge {
+  background: #10B981;
+  border-color: #10B981;
+  color: white;
+}
+
+.conflict-btn.merge:hover {
+  background: #059669;
 }
 
 .conflict-btn.overwrite {
@@ -97,10 +110,12 @@
   padding: 8px;
   border-radius: var(--radius-sm);
   font-size: 13px;
+  font-weight: 500;
   color: var(--text-secondary);
   background: transparent;
   border: 1px solid var(--border-light);
   transition: all var(--transition-fast);
+  height: 36px;
 }
 
 .conflict-cancel:hover {

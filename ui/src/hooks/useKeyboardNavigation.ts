@@ -57,6 +57,8 @@ export function useKeyboardNavigation({
   // Type-ahead search state
   const searchBuffer = useRef('')
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  // Shift+Arrow multi-select anchor
+  const selectionAnchorRef = useRef<number>(-1)
 
   // Type-ahead search handler
   useEffect(() => {
@@ -138,6 +140,51 @@ export function useKeyboardNavigation({
       }
 
       const files = displayFiles || []
+
+      // Handle Ctrl/Meta modifier shortcuts first — these must work even in empty folders
+      if (e.metaKey || e.ctrlKey) {
+        switch (e.key) {
+          case 'a':
+            if (files.length > 0) {
+              e.preventDefault()
+              setSelectedFiles(new Set(files.map(f => f.path)))
+            }
+            return
+          case 'c':
+            e.preventDefault()
+            onCopy()
+            return
+          case 'x':
+            e.preventDefault()
+            onCut()
+            return
+          case 'v':
+            e.preventDefault()
+            onPaste()
+            return
+          case 'z':
+            e.preventDefault()
+            onUndo()
+            return
+          case 'y':
+            e.preventDefault()
+            onRedo()
+            return
+        }
+      }
+
+      // Escape works even in empty folders
+      if (e.key === 'Escape') {
+        if (!modalsOpen) {
+          setSelectedFile(null)
+          setSelectedFiles(new Set())
+          setFocusedIndex(-1)
+          selectionAnchorRef.current = -1
+        }
+        return
+      }
+
+      // Remaining navigation keys require files
       if (files.length === 0) return
 
       const getGridColumns = () => {
@@ -157,9 +204,20 @@ export function useKeyboardNavigation({
         return columns || 1
       }
 
-      const navigateTo = (newIndex: number) => {
-        if (newIndex >= 0 && newIndex < files.length) {
-          setFocusedIndex(newIndex)
+      const navigateTo = (newIndex: number, shiftKey: boolean = false) => {
+        if (newIndex < 0 || newIndex >= files.length) return
+        setFocusedIndex(newIndex)
+        if (shiftKey) {
+          const anchor = selectionAnchorRef.current >= 0
+            ? selectionAnchorRef.current : focusedIndex
+          if (selectionAnchorRef.current < 0) selectionAnchorRef.current = focusedIndex
+          const start = Math.min(anchor, newIndex)
+          const end = Math.max(anchor, newIndex)
+          const newSet = new Set<string>()
+          for (let i = start; i <= end; i++) newSet.add(files[i].path)
+          setSelectedFiles(newSet)
+        } else {
+          selectionAnchorRef.current = newIndex
           setSelectedFile(files[newIndex])
           setSelectedFiles(new Set([files[newIndex].path]))
         }
@@ -170,34 +228,33 @@ export function useKeyboardNavigation({
           e.preventDefault()
           if (viewMode === 'grid') {
             const cols = getGridColumns()
-            navigateTo(Math.min(focusedIndex + cols, files.length - 1))
+            navigateTo(Math.min(focusedIndex + cols, files.length - 1), e.shiftKey)
           } else {
-            navigateTo(Math.min(focusedIndex + 1, files.length - 1))
+            navigateTo(Math.min(focusedIndex + 1, files.length - 1), e.shiftKey)
           }
           break
         case 'ArrowUp':
           e.preventDefault()
           if (viewMode === 'grid') {
             const cols = getGridColumns()
-            navigateTo(Math.max(focusedIndex - cols, 0))
+            navigateTo(Math.max(focusedIndex - cols, 0), e.shiftKey)
           } else {
-            navigateTo(Math.max(focusedIndex - 1, 0))
+            navigateTo(Math.max(focusedIndex - 1, 0), e.shiftKey)
           }
           break
         case 'ArrowLeft':
           if (viewMode === 'grid') {
             e.preventDefault()
-            navigateTo(Math.max(focusedIndex - 1, 0))
+            navigateTo(Math.max(focusedIndex - 1, 0), e.shiftKey)
           }
           break
         case 'ArrowRight':
           if (viewMode === 'grid') {
             e.preventDefault()
-            navigateTo(Math.min(focusedIndex + 1, files.length - 1))
+            navigateTo(Math.min(focusedIndex + 1, files.length - 1), e.shiftKey)
           }
           break
         case 'Enter':
-          // Don't handle Enter when a modal is open (modal handles its own Enter)
           if (modalsOpen) return
           e.preventDefault()
           if (focusedIndex >= 0 && focusedIndex < files.length) {
@@ -205,7 +262,6 @@ export function useKeyboardNavigation({
           }
           break
         case 'Delete':
-          // Don't handle Delete when a modal is open
           if (modalsOpen) return
           e.preventDefault()
           if (selectedFiles.size > 0) {
@@ -220,7 +276,6 @@ export function useKeyboardNavigation({
           }
           break
         case 'Backspace':
-          // Cmd/Ctrl+Backspace: Delete files
           if (e.metaKey || e.ctrlKey) {
             e.preventDefault()
             if (selectedFiles.size > 0) {
@@ -234,58 +289,14 @@ export function useKeyboardNavigation({
               onDelete(selectedFile)
             }
           } else if (canGoBack) {
-            // Plain Backspace: Go to parent folder
             e.preventDefault()
             onGoBack()
-          }
-          break
-        case 'Escape':
-          if (!modalsOpen) {
-            setSelectedFile(null)
-            setSelectedFiles(new Set())
-            setFocusedIndex(-1)
-          }
-          break
-        case 'a':
-          if (e.metaKey || e.ctrlKey) {
-            e.preventDefault()
-            setSelectedFiles(new Set(files.map(f => f.path)))
-          }
-          break
-        case 'c':
-          if (e.metaKey || e.ctrlKey) {
-            e.preventDefault()
-            onCopy()
-          }
-          break
-        case 'x':
-          if (e.metaKey || e.ctrlKey) {
-            e.preventDefault()
-            onCut()
-          }
-          break
-        case 'v':
-          if (e.metaKey || e.ctrlKey) {
-            e.preventDefault()
-            onPaste()
           }
           break
         case 'F2':
           e.preventDefault()
           if (selectedFile) {
             onRename(selectedFile)
-          }
-          break
-        case 'z':
-          if (e.metaKey || e.ctrlKey) {
-            e.preventDefault()
-            onUndo()
-          }
-          break
-        case 'y':
-          if (e.metaKey || e.ctrlKey) {
-            e.preventDefault()
-            onRedo()
           }
           break
       }

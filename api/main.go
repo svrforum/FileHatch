@@ -356,6 +356,12 @@ func main() {
 	api.GET("/files/compress-stream", h.CompressFilesStream, authHandler.OptionalJWTMiddleware)
 	api.POST("/files/extract", h.ExtractZip, authHandler.OptionalJWTMiddleware)
 
+	// Transfer jobs API (server-side transfer queue)
+	authApi.GET("/transfers", h.ListTransferJobs)
+	authApi.GET("/transfers/:id", h.GetTransferJob)
+	authApi.POST("/transfers", h.CreateTransferJob)
+	authApi.DELETE("/transfers/:id", h.CancelTransferJob)
+
 	// ZIP Download API routes
 	api.POST("/download/zip", h.DownloadAsZip, authHandler.OptionalJWTMiddleware)
 	api.GET("/download/folder/*", h.DownloadFolderAsZip, authHandler.OptionalJWTMiddleware)
@@ -595,12 +601,15 @@ func main() {
 				handlers.GetTusIPTracker().StoreIP(uploadID, clientIP)
 				log.Printf("[TUS] Stored IP %s for upload %s", clientIP, uploadID)
 
-				// Fix Location header for reverse proxy (EXTERNAL_URL or X-Forwarded-Proto)
+				// Fix Location header: scheme/host for proxy + path must include /api/upload/
 				fixedLocation := fixLocationHeader(location, req)
-				if fixedLocation != location {
-					res.Header().Set("Location", fixedLocation)
-					log.Printf("[TUS] Fixed Location header: %s -> %s", location, fixedLocation)
+				parsedURL, parseErr := url.Parse(fixedLocation)
+				if parseErr == nil {
+					parsedURL.Path = "/api/upload/" + uploadID
+					fixedLocation = parsedURL.String()
 				}
+				res.Header().Set("Location", fixedLocation)
+				log.Printf("[TUS] Fixed Location header: %s -> %s", location, fixedLocation)
 			}
 		case http.MethodHead:
 			tusHandler.HeadFile(res, req)
@@ -649,6 +658,9 @@ func main() {
 
 	// Start trash auto-cleanup (runs every 24 hours)
 	h.StartTrashAutoCleanup(handlers.DefaultTrashCleanupConfig())
+
+	// Start transfer job cleanup (removes old completed jobs)
+	h.StartTransferJobCleanup()
 
 	// Start file watcher for real-time updates and SMB audit logging
 	fileWatcher, err := handlers.NewFileWatcher(dataRoot, db)

@@ -749,10 +749,21 @@ func (h *Handler) CopyItemStream(c echo.Context) error {
 
 	retry := c.QueryParam("retry") == "true"
 	overwrite := c.QueryParam("overwrite") == "true"
+	mode := c.QueryParam("mode") // merge, overwrite, rename, skip
+	fileConflict := c.QueryParam("fileConflict")
+	if fileConflict == "" {
+		fileConflict = "rename" // default file conflict resolution within merge
+	}
+
+	// In merge mode, we allow same filename since we handle conflicts ourselves
+	allowSameFilename := retry || mode == "merge"
+	if mode == "merge" {
+		overwrite = false // merge handles conflicts itself
+	}
 
 	// Resolve and validate paths
-	// When retry=true, use allowSameFilename=true to skip unique path generation
-	paths, err := h.ResolveOperationPaths(c, requestPath, destination, retry, overwrite)
+	// When retry=true or merge, use allowSameFilename=true to skip unique path generation
+	paths, err := h.ResolveOperationPaths(c, requestPath, destination, allowSameFilename, overwrite)
 	if err != nil {
 		if apiErr, ok := err.(*APIError); ok {
 			return RespondError(c, apiErr)
@@ -819,15 +830,22 @@ func (h *Handler) CopyItemStream(c echo.Context) error {
 		ctx := NewCopyContext(stats, sendProgress)
 		ctx.RetryMode = retry
 
-		doCopy := func() error {
-			return ctx.CopyWithProgress(paths.SrcRealPath, paths.FinalDestPath, paths.SrcIsDir)
-		}
-
 		var copyErr error
-		if paths.OverwriteExisting {
-			copyErr = SafeOverwrite(paths.FinalDestPath, paths.SrcIsDir, doCopy)
+		if mode == "merge" && paths.SrcIsDir {
+			// Merge mode: merge folder contents, handle file conflicts per fileConflict param
+			mergeDst := filepath.Join(paths.DestRealPath, paths.SrcName)
+			copyErr = ctx.CopyDirWithMerge(paths.SrcRealPath, mergeDst, fileConflict)
+			paths.FinalDestPath = mergeDst
 		} else {
-			copyErr = doCopy()
+			doCopy := func() error {
+				return ctx.CopyWithProgress(paths.SrcRealPath, paths.FinalDestPath, paths.SrcIsDir)
+			}
+
+			if paths.OverwriteExisting {
+				copyErr = SafeOverwrite(paths.FinalDestPath, paths.SrcIsDir, doCopy)
+			} else {
+				copyErr = doCopy()
+			}
 		}
 
 		newDisplayPath = filepath.Join(paths.DestDisplayPath, filepath.Base(paths.FinalDestPath))

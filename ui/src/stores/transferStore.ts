@@ -2,6 +2,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { moveItemStream, copyItemStream, compressFilesStream, moveToTrash, TransferProgress, CompressionProgress } from '../api/files'
+import { createTransferJob, cancelTransferJob, listTransferJobs, TransferProgressEvent } from '../api/transfers'
 
 export type TransferType = 'move' | 'copy' | 'compress' | 'delete'
 export type TransferStatus = 'pending' | 'transferring' | 'completed' | 'error'
@@ -46,6 +47,12 @@ export interface TransferItem {
   isRetry?: boolean
   // Overwrite mode
   overwrite?: boolean
+  // Merge mode (folder copy)
+  mergeMode?: string        // 'merge'
+  fileConflict?: string     // 'overwrite' | 'skip' | 'rename'
+  // Server-side job
+  serverJobId?: string      // Server-side job UUID (if managed by server)
+  isServerSide?: boolean    // Whether this is a server-side job
 }
 
 interface TransferState {
@@ -54,7 +61,7 @@ interface TransferState {
   isPanelMinimized: boolean
 
   // Actions
-  addTransfer: (type: TransferType, sources: TransferItemInfo[], destination: string, overwrite?: boolean) => void
+  addTransfer: (type: TransferType, sources: TransferItemInfo[], destination: string, overwrite?: boolean, mergeMode?: string, fileConflict?: string) => void
   addCompression: (paths: string[], outputName: string, currentPath: string) => void
   addDeletion: (paths: string[], names: string[]) => void
   startTransfers: () => void
@@ -62,6 +69,10 @@ interface TransferState {
   removeItem: (id: string) => void
   clearCompleted: () => void
   retryTransfer: (id: string) => void
+  addServerTransfer: (type: 'copy' | 'move', sourcePath: string, sourceName: string, destination: string, overwrite?: boolean, mergeMode?: string, fileConflict?: string) => Promise<string | null>
+  handleTransferProgress: (event: TransferProgressEvent) => void
+  loadServerJobs: () => Promise<void>
+  cancelServerJob: (id: string) => Promise<void>
   openPanel: () => void
   closePanel: () => void
   toggleMinimize: () => void
@@ -72,7 +83,7 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
   isPanelOpen: false,
   isPanelMinimized: false,
 
-  addTransfer: (type, sources, destination, overwrite) => {
+  addTransfer: (type, sources, destination, overwrite, mergeMode, fileConflict) => {
     const newItems: TransferItem[] = sources.map(source => ({
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
@@ -83,6 +94,8 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
       fileSize: source.size,
       isDirectory: source.isDirectory,
       overwrite,
+      mergeMode,
+      fileConflict,
     }))
 
     set(state => ({
@@ -287,7 +300,7 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
         // Move/Copy operation
         streamOp = item.type === 'move'
           ? moveItemStream(item.sourcePath, item.destination, onProgress, item.overwrite)
-          : copyItemStream(item.sourcePath, item.destination, onProgress, item.isRetry, item.overwrite)
+          : copyItemStream(item.sourcePath, item.destination, onProgress, item.isRetry, item.overwrite, item.mergeMode, item.fileConflict)
       }
 
       // Store cancel function
@@ -376,6 +389,207 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
     }))
   },
 
+  addServerTransfer: async (type, sourcePath, sourceName, destination, overwrite, mergeMode, fileConflict) => {
+    const tempId = `server-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+    // Add a temporary item immediately
+    set(state => ({
+      items: [...state.items, {
+        id: tempId,
+        type,
+        sourcePath,
+        sourceName,
+        destination,
+        status: 'transferring' as TransferStatus,
+        startedAt: Date.now(),
+        isServerSide: true,
+        progress: 0,
+      }],
+      isPanelOpen: true,
+    }))
+
+    try {
+      const result = await createTransferJob({
+        type,
+        sourcePath,
+        destinationPath: destination,
+        overwrite,
+        mode: mergeMode,
+        fileConflict,
+      })
+
+      // Update with real server job ID
+      set(state => ({
+        items: state.items.map(i =>
+          i.id === tempId ? { ...i, serverJobId: result.id } : i
+        ),
+      }))
+
+      return result.id
+    } catch (error) {
+      // Mark as error if API call failed
+      set(state => ({
+        items: state.items.map(i =>
+          i.id === tempId ? {
+            ...i,
+            status: 'error' as TransferStatus,
+            error: error instanceof Error ? error.message : '서버 전송 작업 생성 실패',
+            completedAt: Date.now(),
+          } : i
+        ),
+      }))
+      return null
+    }
+  },
+
+  handleTransferProgress: (event: TransferProgressEvent) => {
+    const { items } = get()
+    const existingItem = items.find(i => i.serverJobId === event.jobId)
+
+    if (!existingItem) {
+      // Server job from another session — add it
+      if (event.status === 'running' || event.status === 'started') {
+        set(state => ({
+          items: [...state.items, {
+            id: `server-${event.jobId}`,
+            type: 'copy' as TransferType,
+            sourcePath: '',
+            sourceName: '서버 전송 작업',
+            destination: '',
+            status: 'transferring' as TransferStatus,
+            startedAt: Date.now(),
+            isServerSide: true,
+            serverJobId: event.jobId,
+            totalBytes: event.totalBytes,
+            copiedBytes: event.copiedBytes,
+            totalFiles: event.totalFiles,
+            copiedFiles: event.copiedFiles,
+            currentFile: event.currentFile,
+            bytesPerSec: event.bytesPerSec,
+            progress: event.progress,
+          }],
+          isPanelOpen: true,
+        }))
+      }
+      return
+    }
+
+    // Update existing item
+    if (event.status === 'completed') {
+      set(state => ({
+        items: state.items.map(i =>
+          i.serverJobId === event.jobId ? {
+            ...i,
+            status: 'completed' as TransferStatus,
+            completedAt: Date.now(),
+            progress: 100,
+            cancel: undefined,
+          } : i
+        ),
+      }))
+    } else if (event.status === 'error') {
+      set(state => ({
+        items: state.items.map(i =>
+          i.serverJobId === event.jobId ? {
+            ...i,
+            status: 'error' as TransferStatus,
+            error: event.errorMessage || '전송 실패',
+            completedAt: Date.now(),
+            cancel: undefined,
+          } : i
+        ),
+      }))
+    } else if (event.status === 'cancelled') {
+      set(state => ({
+        items: state.items.map(i =>
+          i.serverJobId === event.jobId ? {
+            ...i,
+            status: 'error' as TransferStatus,
+            error: '취소됨',
+            completedAt: Date.now(),
+            cancel: undefined,
+          } : i
+        ),
+      }))
+    } else {
+      // Running / progress update
+      set(state => ({
+        items: state.items.map(i =>
+          i.serverJobId === event.jobId ? {
+            ...i,
+            status: 'transferring' as TransferStatus,
+            totalBytes: event.totalBytes || i.totalBytes,
+            copiedBytes: event.copiedBytes || i.copiedBytes,
+            totalFiles: event.totalFiles || i.totalFiles,
+            copiedFiles: event.copiedFiles || i.copiedFiles,
+            currentFile: event.currentFile || i.currentFile,
+            bytesPerSec: event.bytesPerSec || i.bytesPerSec,
+            progress: event.progress || i.progress,
+          } : i
+        ),
+      }))
+    }
+  },
+
+  loadServerJobs: async () => {
+    try {
+      const jobs = await listTransferJobs()
+      const { items } = get()
+
+      // Only add jobs that aren't already tracked
+      const newItems: TransferItem[] = []
+      for (const job of jobs) {
+        const alreadyTracked = items.some(i => i.serverJobId === job.id)
+        if (alreadyTracked) continue
+        if (job.status !== 'pending' && job.status !== 'running') continue
+
+        const progressPercent = job.totalBytes > 0
+          ? Math.round((job.copiedBytes / job.totalBytes) * 100)
+          : 0
+
+        newItems.push({
+          id: `server-${job.id}`,
+          type: job.type as TransferType,
+          sourcePath: job.sourcePath,
+          sourceName: job.sourcePath.split('/').pop() || job.sourcePath,
+          destination: job.destinationPath,
+          status: 'transferring' as TransferStatus,
+          startedAt: new Date(job.createdAt).getTime(),
+          isServerSide: true,
+          serverJobId: job.id,
+          totalBytes: job.totalBytes,
+          copiedBytes: job.copiedBytes,
+          totalFiles: job.totalFiles,
+          copiedFiles: job.copiedFiles,
+          currentFile: job.currentFile,
+          bytesPerSec: job.bytesPerSec,
+          progress: progressPercent,
+        })
+      }
+
+      if (newItems.length > 0) {
+        set(state => ({
+          items: [...state.items, ...newItems],
+          isPanelOpen: true,
+        }))
+      }
+    } catch {
+      // Silently fail — server might not support transfer jobs yet
+    }
+  },
+
+  cancelServerJob: async (id: string) => {
+    const { items } = get()
+    const item = items.find(i => i.id === id)
+    if (!item?.serverJobId) return
+
+    try {
+      await cancelTransferJob(item.serverJobId)
+    } catch {
+      // Cancel request may fail if already completed
+    }
+  },
+
   openPanel: () => {
     set({ isPanelOpen: true, isPanelMinimized: false })
   },
@@ -397,4 +611,11 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
       .map(({ cancel, ...rest }) => rest),
   }),
 }))
+
+// Listen for WebSocket transfer_progress events
+if (typeof window !== 'undefined') {
+  window.addEventListener('transfer-progress', ((event: CustomEvent<TransferProgressEvent>) => {
+    useTransferStore.getState().handleTransferProgress(event.detail)
+  }) as EventListener)
+}
 

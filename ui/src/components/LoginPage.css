@@ -244,7 +244,7 @@
   line-height: 1.5;
 }
 
-.cancel-btn {
+.login-cancel-btn {
   width: 100%;
   padding: 14px;
   background: var(--bg-secondary);
@@ -258,11 +258,11 @@
   margin-top: 12px;
 }
 
-.cancel-btn:hover:not(:disabled) {
+.login-cancel-btn:hover:not(:disabled) {
   background: var(--bg-tertiary);
 }
 
-.cancel-btn:disabled {
+.login-cancel-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

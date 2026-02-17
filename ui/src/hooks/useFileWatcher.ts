@@ -35,7 +35,22 @@ interface UploadErrorEvent {
   error: string
 }
 
-type WebSocketMessage = FileChangeEvent | NotificationEvent | UploadErrorEvent
+interface TransferProgressEvent {
+  type: 'transfer_progress'
+  jobId: string
+  status: string
+  progress: number
+  totalFiles: number
+  copiedFiles: number
+  totalBytes: number
+  copiedBytes: number
+  currentFile?: string
+  bytesPerSec: number
+  errorMessage?: string
+  newPath?: string
+}
+
+type WebSocketMessage = FileChangeEvent | NotificationEvent | UploadErrorEvent | TransferProgressEvent
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 
@@ -156,6 +171,15 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
               // Dispatch a custom event that components can listen to
               window.dispatchEvent(new CustomEvent('upload-error', {
                 detail: { filename: uploadError.filename, error: uploadError.error }
+              }))
+              return
+            }
+
+            // Handle transfer progress events
+            if (message.type === 'transfer_progress') {
+              const progress = message as TransferProgressEvent
+              window.dispatchEvent(new CustomEvent('transfer-progress', {
+                detail: progress
               }))
               return
             }

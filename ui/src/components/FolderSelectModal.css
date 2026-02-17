@@ -230,8 +230,8 @@
 .new-folder-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 8px 16px;
   border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 500;
@@ -239,6 +239,9 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-medium);
   transition: all var(--transition-fast);
+  min-width: 80px;
+  height: 36px;
+  white-space: nowrap;
 }
 
 .new-folder-btn:hover:not(:disabled) {
@@ -313,37 +316,58 @@
   margin-top: 2px;
 }
 
-.cancel-btn {
+.fsm-cancel-btn {
   padding: 8px 16px;
   border-radius: var(--radius-sm);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
   background: var(--bg-secondary);
   border: 1px solid var(--border-medium);
   transition: all var(--transition-fast);
+  min-width: 80px;
+  height: 36px;
+  white-space: nowrap;
 }
 
-.cancel-btn:hover {
+.fsm-cancel-btn:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }
 
-.confirm-btn {
+.fsm-confirm-btn {
   padding: 8px 16px;
   border-radius: var(--radius-sm);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: white;
   background: var(--color-primary);
   transition: all var(--transition-fast);
+  min-width: 80px;
+  height: 36px;
+  white-space: nowrap;
 }
 
-.confirm-btn:hover:not(:disabled) {
+.fsm-confirm-btn:hover:not(:disabled) {
   background: #1d6ce0;
 }
 
-.confirm-btn:disabled {
+.fsm-confirm-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .modal-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .modal-actions .new-folder-btn {
+    order: 3;
+    width: 100%;
+  }
+  .modal-actions-right {
+    flex: 1;
+    justify-content: flex-end;
+  }
 }

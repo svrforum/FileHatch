@@ -36,8 +36,8 @@ function virtualPathToUrl(virtualPath: string): string {
 }
 
 function UploadPanel() {
-  const { items, downloads, isPanelOpen: uploadPanelOpen, closePanel: closeUploadPanel, removeUpload, clearCompleted, clearCompletedDownloads, removeDownload, startUpload, pauseUpload } = useUploadStore()
-  const { items: transferItems, isPanelOpen: transferPanelOpen, closePanel: closeTransferPanel, removeItem: removeTransfer, clearCompleted: clearCompletedTransfers, retryTransfer } = useTransferStore()
+  const { items, downloads, interruptedUploads, isPanelOpen: uploadPanelOpen, closePanel: closeUploadPanel, removeUpload, clearCompleted, clearCompletedDownloads, removeDownload, startUpload, pauseUpload, loadInterruptedUploads, dismissInterruptedUpload, clearInterruptedUploads } = useUploadStore()
+  const { items: transferItems, isPanelOpen: transferPanelOpen, closePanel: closeTransferPanel, removeItem: removeTransfer, clearCompleted: clearCompletedTransfers, retryTransfer, cancelServerJob } = useTransferStore()
 
   // Panel is open if either upload or transfer panel is open
   const isPanelOpen = uploadPanelOpen || transferPanelOpen
@@ -85,9 +85,9 @@ function UploadPanel() {
       totalActiveCount: uploading + pending + downloading + transferring + tPending + compressing + cPending + deleting + dPending,
       totalCompletedCount: completed + dlCompleted + tCompleted + cCompleted + dCompleted,
       totalErrorCount: error + dlError + tError + cError + dError,
-      hasItems: items.length > 0 || downloads.length > 0 || transferItems.length > 0,
+      hasItems: items.length > 0 || downloads.length > 0 || transferItems.length > 0 || interruptedUploads.length > 0,
     }
-  }, [items, downloads, transferItems])
+  }, [items, downloads, transferItems, interruptedUploads])
 
   const {
     uploadingCount, pendingCount,
@@ -97,6 +97,12 @@ function UploadPanel() {
     deletingCount, deletePendingCount,
     totalActiveCount, totalCompletedCount, totalErrorCount, hasItems,
   } = counts
+
+  // Load interrupted uploads on mount
+  useEffect(() => {
+    loadInterruptedUploads()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Warn user before page unload if there are active transfers
   useEffect(() => {
@@ -226,6 +232,7 @@ function UploadPanel() {
     clearCompleted()
     clearCompletedDownloads()
     clearCompletedTransfers()
+    clearInterruptedUploads()
   }
 
   return (
@@ -341,6 +348,39 @@ function UploadPanel() {
           </div>
         ))}
 
+        {/* Interrupted uploads (resumable) */}
+        {interruptedUploads.map((item) => (
+          <div key={item.fingerprint} className="upload-panel-item paused">
+            <div className="item-info">
+              <div className="paused-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                  <path d="M12 8V12M12 16H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <div className="item-details">
+                <span className="item-name">{item.filename}</span>
+                <span className="item-size">{formatFileSize(item.size)} · {item.path}</span>
+              </div>
+            </div>
+            <div className="item-progress">
+              <div className="progress-bar-mini paused">
+                <div className="progress-fill paused" style={{ width: `${item.progress}%` }} />
+              </div>
+              <div className="progress-info">
+                <span className="progress-text paused">{item.progress}% 중단됨 · 파일을 다시 추가하면 이어받기</span>
+              </div>
+            </div>
+            <div className="item-actions">
+              <button className="item-btn remove" onClick={() => dismissInterruptedUpload(item.fingerprint)} title="삭제">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        ))}
+
         {/* Download items */}
         {downloads.map((item) => (
           <div key={item.id} className={`upload-panel-item download ${item.status}`}>
@@ -400,6 +440,7 @@ function UploadPanel() {
                 <div className="item-name-row">
                   <span className="transfer-type-icon">{getTransferTypeIcon(item.type)}</span>
                   <span className="item-name">{item.sourceName}</span>
+                  {item.isServerSide && <span className="server-badge">서버</span>}
                 </div>
                 {item.type === 'compress' ? (
                   <span className="item-dest">→ {item.outputName || '압축 파일'}</span>
@@ -426,8 +467,11 @@ function UploadPanel() {
                   {item.currentFile && (
                     <span className="current-file">{item.currentFile}</span>
                   )}
-                  {item.totalFiles && item.totalFiles > 1 && (
-                    <span className="file-count">{item.copiedFiles || 0}/{item.totalFiles}</span>
+                  {item.totalFiles && item.totalFiles > 0 && (item.totalFiles > 1 || item.type === 'delete') && (
+                    <span className="file-count">
+                      {item.copiedFiles || 0}/{item.totalFiles}
+                      {item.type === 'delete' && ' 삭제됨'}
+                    </span>
                   )}
                 </>
               )}
@@ -465,8 +509,8 @@ function UploadPanel() {
                   </svg>
                 </button>
               )}
-              {item.status === 'transferring' && item.cancel && (
-                <button className="item-btn" onClick={item.cancel} title="취소">
+              {item.status === 'transferring' && (item.cancel || item.isServerSide) && (
+                <button className="item-btn" onClick={() => item.isServerSide ? cancelServerJob(item.id) : item.cancel?.()} title="취소">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                     <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>
                   </svg>

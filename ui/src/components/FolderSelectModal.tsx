@@ -4,6 +4,7 @@ import { useModalKeyboard } from '../hooks/useModalKeyboard'
 import { fetchFiles, createFolder } from '../api/files'
 import { useSharedFolders } from '../hooks/useSharedFolders'
 import { useExternalStorages } from '../hooks/useExternalStorages'
+import { usePreferencesStore, DEFAULT_SIDEBAR_ORDER } from '../stores/preferencesStore'
 import './FolderSelectModal.css'
 
 interface FolderSelectModalProps {
@@ -47,6 +48,9 @@ export default function FolderSelectModal({
   // Use shared folders hook with caching
   const { sharedFolders: sharedFoldersData } = useSharedFolders()
   const [sharedFolderNodes, setSharedFolderNodes] = useState<FolderNode[]>([])
+
+  // Use preferences store for sidebar order
+  const { preferences } = usePreferencesStore()
 
   // Use external storages hook
   const { externalStorages } = useExternalStorages()
@@ -336,103 +340,114 @@ export default function FolderSelectModal({
         </div>
 
         <div className="folder-tree">
-          {/* 내 파일 섹션 */}
-          <div className="tree-section">
-            <div
-              className="section-header"
-              onClick={() => setHomeExpanded(!homeExpanded)}
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                style={{ transform: homeExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
-              >
-                <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path d="M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M9 22V12H15V22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <span>내 파일</span>
-            </div>
-            {homeExpanded && (
-              <div className="section-content">
-                {homeFolders.length === 0 && !loadingPaths.has('/home') ? (
-                  <div className="empty-message">폴더가 없습니다</div>
-                ) : (
-                  homeFolders.map(node => renderFolderNode(node, 1))
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* 공유 드라이브 섹션 */}
-          <div className="tree-section">
-            <div
-              className="section-header"
-              onClick={() => setSharedExpanded(!sharedExpanded)}
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                style={{ transform: sharedExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
-              >
-                <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="2"/>
-                <circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
-                <circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="2"/>
-                <path d="M8.59 13.51L15.42 17.49M15.41 6.51L8.59 10.49" stroke="currentColor" strokeWidth="2"/>
-              </svg>
-              <span>공유 드라이브</span>
-            </div>
-            {sharedExpanded && (
-              <div className="section-content">
-                {sharedFolderNodes.length === 0 ? (
-                  <div className="empty-message">공유 드라이브가 없습니다</div>
-                ) : (
-                  sharedFolderNodes.map(node => renderFolderNode(node, 1))
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* 외부 스토리지 섹션 */}
-          {externalFolderNodes.length > 0 && (
-            <div className="tree-section">
-              <div
-                className="section-header"
-                onClick={() => setExternalExpanded(!externalExpanded)}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  style={{ transform: externalExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
-                >
-                  <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <rect x="2" y="2" width="20" height="8" rx="2" stroke="currentColor" strokeWidth="2"/>
-                  <rect x="2" y="14" width="20" height="8" rx="2" stroke="currentColor" strokeWidth="2"/>
-                  <circle cx="6" cy="6" r="1" fill="currentColor"/>
-                  <circle cx="6" cy="18" r="1" fill="currentColor"/>
-                </svg>
-                <span>외부 스토리지</span>
-              </div>
-              {externalExpanded && (
-                <div className="section-content">
-                  {externalFolderNodes.map(node => renderFolderNode(node, 1))}
-                </div>
-              )}
-            </div>
-          )}
+          {(preferences.sidebarOrder.length > 0 ? preferences.sidebarOrder : DEFAULT_SIDEBAR_ORDER)
+            .filter(s => !preferences.sidebarHidden.includes(s))
+            .map(section => {
+              switch (section) {
+                case 'files':
+                  return (
+                    <div key="home" className="tree-section">
+                      <div
+                        className="section-header"
+                        onClick={() => setHomeExpanded(!homeExpanded)}
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          style={{ transform: homeExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+                        >
+                          <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                          <path d="M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M9 22V12H15V22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        <span>내 파일</span>
+                      </div>
+                      {homeExpanded && (
+                        <div className="section-content">
+                          {homeFolders.length === 0 && !loadingPaths.has('/home') ? (
+                            <div className="empty-message">폴더가 없습니다</div>
+                          ) : (
+                            homeFolders.map(node => renderFolderNode(node, 1))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                case 'shared-drives':
+                  return (
+                    <div key="shared" className="tree-section">
+                      <div
+                        className="section-header"
+                        onClick={() => setSharedExpanded(!sharedExpanded)}
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          style={{ transform: sharedExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+                        >
+                          <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                          <circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="2"/>
+                          <circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+                          <circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="2"/>
+                          <path d="M8.59 13.51L15.42 17.49M15.41 6.51L8.59 10.49" stroke="currentColor" strokeWidth="2"/>
+                        </svg>
+                        <span>공유 드라이브</span>
+                      </div>
+                      {sharedExpanded && (
+                        <div className="section-content">
+                          {sharedFolderNodes.length === 0 ? (
+                            <div className="empty-message">공유 드라이브가 없습니다</div>
+                          ) : (
+                            sharedFolderNodes.map(node => renderFolderNode(node, 1))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                case 'external-storages':
+                  if (externalFolderNodes.length === 0) return null
+                  return (
+                    <div key="ext" className="tree-section">
+                      <div
+                        className="section-header"
+                        onClick={() => setExternalExpanded(!externalExpanded)}
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          style={{ transform: externalExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+                        >
+                          <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                          <rect x="2" y="2" width="20" height="8" rx="2" stroke="currentColor" strokeWidth="2"/>
+                          <rect x="2" y="14" width="20" height="8" rx="2" stroke="currentColor" strokeWidth="2"/>
+                          <circle cx="6" cy="6" r="1" fill="currentColor"/>
+                          <circle cx="6" cy="18" r="1" fill="currentColor"/>
+                        </svg>
+                        <span>외부 스토리지</span>
+                      </div>
+                      {externalExpanded && (
+                        <div className="section-content">
+                          {externalFolderNodes.map(node => renderFolderNode(node, 1))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                default:
+                  return null
+              }
+            })}
         </div>
 
         <div className="modal-footer">
@@ -481,10 +496,10 @@ export default function FolderSelectModal({
               새 폴더
             </button>
             <div className="modal-actions-right">
-              <button className="cancel-btn" onClick={onClose}>취소</button>
+              <button className="fsm-cancel-btn" onClick={onClose}>취소</button>
               <button
                 ref={confirmButtonRef}
-                className="confirm-btn"
+                className="fsm-confirm-btn"
                 disabled={!selectedPath}
                 onClick={() => selectedPath && onSelect(selectedPath)}
               >

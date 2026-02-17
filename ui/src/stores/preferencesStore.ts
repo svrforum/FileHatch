@@ -46,9 +46,15 @@ export const usePreferencesStore = create<PreferencesState>()(persist((set, get)
         return
       }
       const data = await res.json()
+      let loadedOrder = data.sidebarOrder?.length > 0 ? data.sidebarOrder : DEFAULT_SIDEBAR_ORDER
+      // Auto-migrate: add any new sections from DEFAULT_SIDEBAR_ORDER that are missing
+      const missingItems = DEFAULT_SIDEBAR_ORDER.filter(item => !loadedOrder.includes(item))
+      if (missingItems.length > 0) {
+        loadedOrder = [...loadedOrder, ...missingItems]
+      }
       set({
         preferences: {
-          sidebarOrder: data.sidebarOrder?.length > 0 ? data.sidebarOrder : DEFAULT_SIDEBAR_ORDER,
+          sidebarOrder: loadedOrder,
           sidebarHidden: data.sidebarHidden || [],
           defaultLanding: data.defaultLanding || '',
         },
