@@ -250,6 +250,14 @@ function ContextMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
+      {/* Mobile close button */}
+      {isMobile && (
+        <button className="context-menu-close" onClick={onClose} aria-label="닫기">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
       {contextMenu.type === 'background' ? (
         isSpecialShareView ? (
           <div className="context-menu-item disabled">

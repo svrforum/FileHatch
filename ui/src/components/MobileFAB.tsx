@@ -4,9 +4,10 @@ import './MobileFAB.css';
 interface MobileFABProps {
   onUploadClick: () => void;
   onNewFolderClick: () => void;
+  hidden?: boolean;
 }
 
-export default function MobileFAB({ onUploadClick, onNewFolderClick }: MobileFABProps) {
+export default function MobileFAB({ onUploadClick, onNewFolderClick, hidden }: MobileFABProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleToggle = () => {
@@ -28,7 +29,7 @@ export default function MobileFAB({ onUploadClick, onNewFolderClick }: MobileFAB
   };
 
   return (
-    <div className={`mobile-fab-container ${isOpen ? 'open' : ''}`}>
+    <div className={`mobile-fab-container ${isOpen ? 'open' : ''} ${hidden ? 'hidden' : ''}`}>
       {isOpen && (
         <div className="mobile-fab-overlay" onClick={handleOverlayClick} />
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useCallback } from 'react'
 import { useUploadStore, UploadItem, DownloadItem } from '../stores/uploadStore'
 import { useTransferStore, TransferItem } from '../stores/transferStore'
 import { formatFileSize } from '../api/files'
@@ -43,10 +43,24 @@ function UploadPanel() {
   const isPanelOpen = uploadPanelOpen || transferPanelOpen
 
   // Close both panels
-  const closePanel = () => {
+  const closePanel = useCallback(() => {
     closeUploadPanel()
     closeTransferPanel()
-  }
+  }, [closeUploadPanel, closeTransferPanel])
+
+  // ESC key to close panel
+  useEffect(() => {
+    if (!isPanelOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        closePanel()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isPanelOpen, closePanel])
   // Memoize all counts in a single pass to avoid 13+ separate .filter() calls per render
   const counts = useMemo(() => {
     let uploading = 0, completed = 0, pending = 0, error = 0
@@ -439,11 +453,13 @@ function UploadPanel() {
               <div className="item-details">
                 <div className="item-name-row">
                   <span className="transfer-type-icon">{getTransferTypeIcon(item.type)}</span>
-                  <span className="item-name">{item.sourceName}</span>
-                  {item.isServerSide && <span className="server-badge">서버</span>}
+                  <span className="item-name">{item.sourceName || item.sourcePath?.split('/').pop() || (item.type === 'delete' ? '삭제' : item.type === 'copy' ? '복사' : item.type === 'move' ? '이동' : '전송')}</span>
+                  {item.isServerSide && <span className="server-badge" title="서버에서 처리 중 - 브라우저를 닫아도 계속됩니다">서버</span>}
                 </div>
                 {item.type === 'compress' ? (
                   <span className="item-dest">→ {item.outputName || '압축 파일'}</span>
+                ) : item.type === 'delete' ? (
+                  <span className="item-dest">→ 휴지통</span>
                 ) : (
                   <span className="item-dest">→ {item.destination}</span>
                 )}
@@ -493,8 +509,8 @@ function UploadPanel() {
               {item.status === 'completed' && item.type !== 'compress' && (
                 <button
                   className="item-btn goto"
-                  onClick={() => { closePanel(); window.location.href = virtualPathToUrl(item.destination) }}
-                  title="폴더로 이동"
+                  onClick={() => { closePanel(); window.location.href = item.type === 'delete' ? '/trash' : virtualPathToUrl(item.destination) }}
+                  title={item.type === 'delete' ? '휴지통으로 이동' : '폴더로 이동'}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                     <path d="M3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V9C21 7.89543 20.1046 7 19 7H13L11 5H5C3.89543 5 3 5.89543 3 7Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

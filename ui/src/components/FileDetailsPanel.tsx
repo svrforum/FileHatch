@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { FileInfo, FolderStats, formatFileSize, getAuthToken, getFileUrl, getFolderStats } from '../api/files'
 import { getFileIcon } from '../utils/fileIcons'
 
@@ -16,6 +16,20 @@ function FileDetailsPanel({ file, onClose, onDelete, onDownload, onView, onShare
   const [folderStats, setFolderStats] = useState<FolderStats | null>(null)
   const [loadingStats, setLoadingStats] = useState(false)
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
+
+  // ESC key to close panel
+  const handleEscKey = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
+    }
+  }, [onClose])
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleEscKey)
+    return () => document.removeEventListener('keydown', handleEscKey)
+  }, [handleEscKey])
 
   // Fetch folder stats when a folder is selected
   useEffect(() => {

@@ -1,5 +1,6 @@
 // 파일 충돌 해결 모달 - 동일 파일 존재 시 덮어쓰기/건너뛰기/이름변경/병합 선택
 import { useState } from 'react'
+import { useModalKeyboard } from '../hooks/useModalKeyboard'
 import './ConflictModal.css'
 
 export type ConflictResolution = 'overwrite' | 'skip' | 'rename' | 'merge'
@@ -25,6 +26,8 @@ export default function ConflictModal({
   onCancel,
 }: ConflictModalProps) {
   const [applyToAll, setApplyToAll] = useState(false)
+
+  useModalKeyboard({ isOpen, onCancel })
 
   if (!isOpen || conflicts.length === 0) return null
 

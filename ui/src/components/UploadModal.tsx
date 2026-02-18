@@ -5,6 +5,12 @@ import { useAuthStore } from '../stores/authStore'
 import { useUploadStore } from '../stores/uploadStore'
 import './UploadModal.css'
 
+function formatSpeed(bytesPerSecond: number): string {
+  if (bytesPerSecond < 1024) return `${bytesPerSecond.toFixed(0)} B/s`
+  if (bytesPerSecond < 1024 * 1024) return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
+  return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
+}
+
 interface UploadModalProps {
   isOpen: boolean
   onClose: () => void
@@ -266,6 +272,9 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
                       <span className="progress-text">
                         {file.status === 'duplicate' ? '중복' : file.status === 'error' ? '오류' : `${file.progress}%`}
                       </span>
+                      {file.status === 'uploading' && file.uploadSpeed && file.uploadSpeed > 0 && (
+                        <span className="speed-text">{formatSpeed(file.uploadSpeed)}</span>
+                      )}
                     </div>
                     {file.error && <p className="file-error">{file.error}</p>}
                     <button className="remove-btn" onClick={() => handleRemoveFile(file.id)}>

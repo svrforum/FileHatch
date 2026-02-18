@@ -291,6 +291,7 @@ type CopyContext struct {
 	LastProgressTime time.Time
 	SendProgress     ProgressSender
 	RetryMode        bool // When true, skip files that already exist with same size
+	Ctx              context.Context // Optional context for cancellation support
 }
 
 // NewCopyContext creates a new CopyContext
@@ -300,6 +301,17 @@ func NewCopyContext(stats FileStats, sender ProgressSender) *CopyContext {
 		TotalFiles:   stats.TotalFiles,
 		StartTime:    time.Now(),
 		SendProgress: sender,
+	}
+}
+
+// NewCopyContextWithCancel creates a new CopyContext with cancellation support
+func NewCopyContextWithCancel(stats FileStats, sender ProgressSender, ctx context.Context) *CopyContext {
+	return &CopyContext{
+		TotalBytes:   stats.TotalBytes,
+		TotalFiles:   stats.TotalFiles,
+		StartTime:    time.Now(),
+		SendProgress: sender,
+		Ctx:          ctx,
 	}
 }
 
@@ -341,6 +353,13 @@ func (ctx *CopyContext) CopyFileWithProgress(src, dst string) error {
 
 	buf := make([]byte, 1024*1024) // 1MB buffer
 	for {
+		// Check for cancellation
+		if ctx.Ctx != nil {
+			if err := ctx.Ctx.Err(); err != nil {
+				return err
+			}
+		}
+
 		n, readErr := sourceFile.Read(buf)
 		if n > 0 {
 			_, writeErr := destFile.Write(buf[:n])
@@ -397,6 +416,13 @@ func (ctx *CopyContext) CopyDirWithProgress(src, dst string) error {
 	}
 
 	for _, entry := range entries {
+		// Check for cancellation
+		if ctx.Ctx != nil {
+			if err := ctx.Ctx.Err(); err != nil {
+				return err
+			}
+		}
+
 		srcPath := filepath.Join(src, entry.Name())
 		dstPath := filepath.Join(dst, entry.Name())
 
@@ -429,6 +455,12 @@ func (ctx *CopyContext) CopyDirWithMerge(src, dst, fileConflict string) error {
 	}
 
 	for _, entry := range entries {
+		// Check for cancellation
+		if ctx.Ctx != nil {
+			if err := ctx.Ctx.Err(); err != nil {
+				return err
+			}
+		}
 		srcPath := filepath.Join(src, entry.Name())
 		dstPath := filepath.Join(dst, entry.Name())
 

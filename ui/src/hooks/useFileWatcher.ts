@@ -140,6 +140,7 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
 
         ws.onopen = () => {
           console.log('[WebSocket] Connected')
+          const wasReconnect = isConnectingRef.current && retryCountRef.current > 0
           isConnectingRef.current = false
           retryCountRef.current = 0
           retryDelayRef.current = INITIAL_RETRY_DELAY
@@ -149,6 +150,10 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
             type: 'subscribe',
             paths: watchPathsRef.current
           }))
+          // Notify components to reload server state on reconnect
+          if (wasReconnect) {
+            window.dispatchEvent(new CustomEvent('ws-reconnected'))
+          }
         }
 
         ws.onmessage = (event) => {

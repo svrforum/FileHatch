@@ -286,6 +286,13 @@ export default function FolderSelectModal({
           className={`folder-item ${isSelected ? 'selected' : ''} ${excluded ? 'excluded' : ''}`}
           style={{ paddingLeft: `${depth * 20 + 8}px` }}
           onClick={() => !excluded && setSelectedPath(node.path)}
+          onDoubleClick={(e) => {
+            e.stopPropagation()
+            if (!excluded) {
+              setSelectedPath(node.path)
+              toggleExpand(node.path, node.type)
+            }
+          }}
         >
           <button
             className="expand-btn"

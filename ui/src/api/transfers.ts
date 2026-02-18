@@ -23,12 +23,13 @@ export interface TransferJob {
 }
 
 export interface CreateTransferRequest {
-  type: 'copy' | 'move'
+  type: 'copy' | 'move' | 'delete'
   sourcePath: string
   destinationPath: string
   overwrite?: boolean
   mode?: string         // 'merge'
   fileConflict?: string // 'overwrite', 'skip', 'rename'
+  paths?: string[]      // paths for delete operation
 }
 
 export interface TransferProgressEvent {

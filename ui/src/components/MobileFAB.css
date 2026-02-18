@@ -138,9 +138,8 @@
     transform: rotate(45deg);
   }
 
-  /* Hide FAB when multi-select bar is visible */
-  .file-list-container:has(.multi-select-bar) ~ .mobile-fab-container,
-  .file-list-container:has(.file-details-panel:not(.empty)) ~ .mobile-fab-container {
+  /* Hide FAB when in selection mode or details panel is open */
+  .mobile-fab-container.hidden {
     display: none;
   }
 }

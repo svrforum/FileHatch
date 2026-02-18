@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -29,6 +31,7 @@ type TransferJob struct {
 	ErrorMessage    string     `json:"errorMessage,omitempty"`
 	Mode            string     `json:"mode,omitempty"`         // merge, overwrite, etc.
 	FileConflict    string     `json:"fileConflict,omitempty"` // for merge: overwrite, skip, rename
+	DeletePaths     []string   `json:"deletePaths,omitempty"`  // paths to delete (for type=delete)
 	CreatedAt       time.Time  `json:"createdAt"`
 	UpdatedAt       time.Time  `json:"updatedAt"`
 	CompletedAt     *time.Time `json:"completedAt,omitempty"`
@@ -36,12 +39,13 @@ type TransferJob struct {
 
 // CreateTransferRequest is the request body for creating a transfer job
 type CreateTransferRequest struct {
-	Type            string `json:"type"`            // copy, move
-	SourcePath      string `json:"sourcePath"`
-	DestinationPath string `json:"destinationPath"`
-	Overwrite       bool   `json:"overwrite,omitempty"`
-	Mode            string `json:"mode,omitempty"`         // merge
-	FileConflict    string `json:"fileConflict,omitempty"` // overwrite, skip, rename
+	Type            string   `json:"type"`            // copy, move, delete
+	SourcePath      string   `json:"sourcePath"`
+	DestinationPath string   `json:"destinationPath"`
+	Overwrite       bool     `json:"overwrite,omitempty"`
+	Mode            string   `json:"mode,omitempty"`         // merge
+	FileConflict    string   `json:"fileConflict,omitempty"` // overwrite, skip, rename
+	Paths           []string `json:"paths,omitempty"`        // paths for delete operation
 }
 
 // TransferProgressEvent is sent via WebSocket for real-time progress
@@ -94,7 +98,7 @@ func (h *Handler) ListTransferJobs(c echo.Context) error {
 		SELECT id, user_id, type, status, source_path, COALESCE(destination_path, ''),
 			total_bytes, copied_bytes, total_files, copied_files, COALESCE(current_file, ''),
 			bytes_per_sec, COALESCE(error_message, ''), COALESCE(mode, ''), COALESCE(file_conflict, ''),
-			created_at, updated_at, completed_at
+			created_at, updated_at, completed_at, delete_paths
 		FROM transfer_jobs
 		WHERE user_id = $1
 			AND (status IN ('pending', 'running') OR completed_at > NOW() - INTERVAL '1 hour')
@@ -110,16 +114,23 @@ func (h *Handler) ListTransferJobs(c echo.Context) error {
 	for rows.Next() {
 		var job TransferJob
 		var completedAt sql.NullTime
+		var deletePathsJSON sql.NullString
 		if err := rows.Scan(
 			&job.ID, &job.UserID, &job.Type, &job.Status, &job.SourcePath, &job.DestinationPath,
 			&job.TotalBytes, &job.CopiedBytes, &job.TotalFiles, &job.CopiedFiles, &job.CurrentFile,
 			&job.BytesPerSec, &job.ErrorMessage, &job.Mode, &job.FileConflict,
-			&job.CreatedAt, &job.UpdatedAt, &completedAt,
+			&job.CreatedAt, &job.UpdatedAt, &completedAt, &deletePathsJSON,
 		); err != nil {
+			log.Printf("[TransferJobs] Failed to scan row: %v", err)
 			continue
 		}
 		if completedAt.Valid {
 			job.CompletedAt = &completedAt.Time
+		}
+		if deletePathsJSON.Valid {
+			if err := json.Unmarshal([]byte(deletePathsJSON.String), &job.DeletePaths); err != nil {
+				log.Printf("[TransferJobs] Failed to unmarshal delete_paths for job %s: %v", job.ID, err)
+			}
 		}
 		jobs = append(jobs, job)
 	}
@@ -144,24 +155,30 @@ func (h *Handler) GetTransferJob(c echo.Context) error {
 
 	var job TransferJob
 	var completedAt sql.NullTime
+	var deletePathsJSON sql.NullString
 	err = h.db.QueryRow(`
 		SELECT id, user_id, type, status, source_path, COALESCE(destination_path, ''),
 			total_bytes, copied_bytes, total_files, copied_files, COALESCE(current_file, ''),
 			bytes_per_sec, COALESCE(error_message, ''), COALESCE(mode, ''), COALESCE(file_conflict, ''),
-			created_at, updated_at, completed_at
+			created_at, updated_at, completed_at, delete_paths
 		FROM transfer_jobs
 		WHERE id = $1 AND user_id = $2
 	`, jobID, claims.UserID).Scan(
 		&job.ID, &job.UserID, &job.Type, &job.Status, &job.SourcePath, &job.DestinationPath,
 		&job.TotalBytes, &job.CopiedBytes, &job.TotalFiles, &job.CopiedFiles, &job.CurrentFile,
 		&job.BytesPerSec, &job.ErrorMessage, &job.Mode, &job.FileConflict,
-		&job.CreatedAt, &job.UpdatedAt, &completedAt,
+		&job.CreatedAt, &job.UpdatedAt, &completedAt, &deletePathsJSON,
 	)
 	if err != nil {
 		return RespondError(c, ErrNotFound("Transfer job not found"))
 	}
 	if completedAt.Valid {
 		job.CompletedAt = &completedAt.Time
+	}
+	if deletePathsJSON.Valid {
+		if err := json.Unmarshal([]byte(deletePathsJSON.String), &job.DeletePaths); err != nil {
+				log.Printf("[TransferJobs] Failed to unmarshal delete_paths for job %s: %v", job.ID, err)
+			}
 	}
 
 	return RespondSuccess(c, job)
@@ -179,19 +196,47 @@ func (h *Handler) CreateTransferJob(c echo.Context) error {
 		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
 
-	if req.Type == "" || req.SourcePath == "" {
-		return RespondError(c, ErrMissingParameter("type, sourcePath"))
+	if req.Type == "" {
+		return RespondError(c, ErrMissingParameter("type"))
 	}
-	if (req.Type == "copy" || req.Type == "move") && req.DestinationPath == "" {
-		return RespondError(c, ErrMissingParameter("destinationPath"))
+	if req.Type == "delete" {
+		if len(req.Paths) == 0 {
+			return RespondError(c, ErrMissingParameter("paths"))
+		}
+		if len(req.Paths) > 10000 {
+			return RespondError(c, ErrBadRequest("Too many paths in single request"))
+		}
+		for _, p := range req.Paths {
+			if p == "" {
+				return RespondError(c, ErrBadRequest("Empty path in paths array"))
+			}
+		}
+	} else {
+		if req.SourcePath == "" {
+			return RespondError(c, ErrMissingParameter("sourcePath"))
+		}
+		if (req.Type == "copy" || req.Type == "move") && req.DestinationPath == "" {
+			return RespondError(c, ErrMissingParameter("destinationPath"))
+		}
+	}
+
+	var deletePathsJSON *string
+	if req.Type == "delete" {
+		data, _ := json.Marshal(req.Paths)
+		s := string(data)
+		deletePathsJSON = &s
+		// Use first path as source_path for display
+		if req.SourcePath == "" {
+			req.SourcePath = req.Paths[0]
+		}
 	}
 
 	var jobID string
 	err = h.db.QueryRow(`
-		INSERT INTO transfer_jobs (user_id, type, status, source_path, destination_path, mode, file_conflict)
-		VALUES ($1, $2, 'pending', $3, $4, $5, $6)
+		INSERT INTO transfer_jobs (user_id, type, status, source_path, destination_path, mode, file_conflict, delete_paths)
+		VALUES ($1, $2, 'pending', $3, $4, $5, $6, $7)
 		RETURNING id
-	`, claims.UserID, req.Type, req.SourcePath, req.DestinationPath, req.Mode, req.FileConflict).Scan(&jobID)
+	`, claims.UserID, req.Type, req.SourcePath, req.DestinationPath, req.Mode, req.FileConflict, deletePathsJSON).Scan(&jobID)
 	if err != nil {
 		return RespondError(c, ErrInternal("Failed to create transfer job"))
 	}
@@ -283,7 +328,6 @@ func (h *Handler) executeTransferJob(jobID, userID, username, clientIP string, r
 	}
 
 	// Create a progress sender that updates DB + broadcasts via WebSocket
-	startTime := time.Now()
 	lastBroadcast := time.Now()
 	progressSender := func(progress CopyProgress) {
 		// Update DB periodically (not every progress event)
@@ -332,6 +376,8 @@ func (h *Handler) executeTransferJob(jobID, userID, username, clientIP string, r
 	switch req.Type {
 	case "copy", "move":
 		newDisplayPath, jobErr = h.executeTransferCopyMove(ctx, claims, cleanSourcePath, req.DestinationPath, req.Type, overwrite, isMerge, req.FileConflict, progressSender)
+	case "delete":
+		jobErr = h.executeTransferDelete(ctx, claims, clientIP, req.Paths, progressSender)
 	default:
 		jobErr = ErrBadRequest("Unsupported transfer type for server-side job: " + req.Type)
 	}
@@ -366,13 +412,6 @@ func (h *Handler) executeTransferJob(jobID, userID, username, clientIP string, r
 	}
 
 	// Success
-	elapsed := time.Since(startTime).Seconds()
-	var finalSpeed int64
-	if elapsed > 0 {
-		finalSpeed = int64(float64(1) / elapsed) // Will be overridden below
-	}
-	_ = finalSpeed
-
 	_, _ = h.db.Exec(`
 		UPDATE transfer_jobs SET status = 'completed', updated_at = NOW(), completed_at = NOW()
 		WHERE id = $1
@@ -385,15 +424,17 @@ func (h *Handler) executeTransferJob(jobID, userID, username, clientIP string, r
 		NewPath: newDisplayPath,
 	})
 
-	// Log audit event
-	eventType := EventFileCopy
-	if req.Type == "move" {
-		eventType = EventFileMove
+	// Log audit event (delete audit is handled inside executeTransferDelete)
+	if req.Type != "delete" {
+		eventType := EventFileCopy
+		if req.Type == "move" {
+			eventType = EventFileMove
+		}
+		_ = h.auditHandler.LogEvent(&userID, clientIP, eventType, req.SourcePath, map[string]interface{}{
+			"destination": newDisplayPath,
+			"serverSide":  true,
+		})
 	}
-	_ = h.auditHandler.LogEvent(&userID, clientIP, eventType, req.SourcePath, map[string]interface{}{
-		"destination": newDisplayPath,
-		"serverSide":  true,
-	})
 }
 
 // executeTransferCopyMove performs the actual copy/move operation
@@ -475,26 +516,25 @@ func (h *Handler) executeTransferCopyMove(
 	var newDisplayPath string
 
 	if srcIsNonLocal || destIsNonLocal {
-		// Cross-backend operations
-		bgCtx := context.Background()
+		// Cross-backend operations — use the passed context for cancellation
 		destItemRelPath := filepath.Join(destResult.RelPath, srcName)
 
 		if opType == "copy" {
 			if srcIsDir {
-				err = crossBackendCopyDir(bgCtx, srcResult.Backend, srcResult.RelPath, destResult.Backend, destItemRelPath)
+				err = crossBackendCopyDir(ctx, srcResult.Backend, srcResult.RelPath, destResult.Backend, destItemRelPath)
 			} else {
-				err = crossBackendCopyFile(bgCtx, srcResult.Backend, srcResult.RelPath, destResult.Backend, destItemRelPath)
+				err = crossBackendCopyFile(ctx, srcResult.Backend, srcResult.RelPath, destResult.Backend, destItemRelPath)
 			}
 		} else {
 			// Move = copy + delete source
 			if srcIsDir {
-				err = crossBackendCopyDir(bgCtx, srcResult.Backend, srcResult.RelPath, destResult.Backend, destItemRelPath)
+				err = crossBackendCopyDir(ctx, srcResult.Backend, srcResult.RelPath, destResult.Backend, destItemRelPath)
 			} else {
-				err = crossBackendCopyFile(bgCtx, srcResult.Backend, srcResult.RelPath, destResult.Backend, destItemRelPath)
+				err = crossBackendCopyFile(ctx, srcResult.Backend, srcResult.RelPath, destResult.Backend, destItemRelPath)
 			}
 			if err == nil {
 				if srcIsNonLocal {
-					_ = srcResult.Backend.DeleteAll(bgCtx, srcResult.RelPath)
+					_ = srcResult.Backend.DeleteAll(ctx, srcResult.RelPath)
 				}
 			}
 		}
@@ -503,8 +543,8 @@ func (h *Handler) executeTransferCopyMove(
 		}
 		newDisplayPath = filepath.Join(destResult.DisplayPath, srcName)
 	} else {
-		// Both local
-		copyCtx := NewCopyContext(stats, sendProgress)
+		// Both local — use context for cancellation support
+		copyCtx := NewCopyContextWithCancel(stats, sendProgress, ctx)
 
 		if isMerge && srcIsDir {
 			mergeDst := filepath.Join(destRealPath, srcName)
@@ -558,6 +598,298 @@ func (h *Handler) executeTransferCopyMove(
 	}
 
 	return newDisplayPath, nil
+}
+
+// countFilesForDelete counts the total number of files to be deleted.
+// Folders are counted as the number of files they contain (recursively), not as 1.
+func (h *Handler) countFilesForDelete(claims *JWTClaims, paths []string) int {
+	total := 0
+	for _, p := range paths {
+		result, realPath, err := h.resolveStorageForOperation(p, claims)
+		if err != nil {
+			total++ // count as 1 if we can't resolve
+			continue
+		}
+
+		isNonLocal := result.StorageType == StorageExternal && realPath == ""
+		if isNonLocal {
+			bgCtx := context.Background()
+			info, err := result.Backend.Stat(bgCtx, result.RelPath)
+			if err != nil {
+				total++
+				continue
+			}
+			if info.IsDirectory {
+				stats := CalculateTotalSizeBackend(bgCtx, result.Backend, result.RelPath, true)
+				if stats.TotalFiles > 0 {
+					total += stats.TotalFiles
+				} else {
+					total++ // empty folder counts as 1
+				}
+			} else {
+				total++
+			}
+		} else {
+			info, err := os.Stat(realPath)
+			if err != nil {
+				total++
+				continue
+			}
+			if info.IsDir() {
+				stats := CalculateTotalSize(realPath, info)
+				if stats.TotalFiles > 0 {
+					total += stats.TotalFiles
+				} else {
+					total++ // empty folder counts as 1
+				}
+			} else {
+				total++
+			}
+		}
+	}
+	return total
+}
+
+// executeTransferDelete performs server-side batch delete (move to trash)
+func (h *Handler) executeTransferDelete(
+	ctx context.Context,
+	claims *JWTClaims,
+	clientIP string,
+	paths []string,
+	sendProgress ProgressSender,
+) error {
+	// Count total files for accurate progress
+	totalFiles := h.countFilesForDelete(claims, paths)
+	if totalFiles == 0 {
+		totalFiles = len(paths)
+	}
+
+	sendProgress(CopyProgress{
+		Status:     "started",
+		TotalFiles: totalFiles,
+	})
+
+	processedFiles := 0
+	var failures []string
+
+	for _, p := range paths {
+		// Check for cancellation
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		// Resolve path
+		result, realPath, err := h.resolveStorageForOperation(p, claims)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %s", p, err.Error()))
+			processedFiles++
+			continue
+		}
+
+		storageType := result.StorageType
+		displayPath := result.DisplayPath
+
+		if storageType == "root" || displayPath == "/home" || displayPath == "/shared" {
+			failures = append(failures, fmt.Sprintf("%s: cannot delete root folders", p))
+			processedFiles++
+			continue
+		}
+
+		// Check readonly
+		if err := checkReadonly(result); err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %s", p, err.Error()))
+			processedFiles++
+			continue
+		}
+
+		// Check file lock
+		if lockErr := h.CheckFileLockForOperation(displayPath, claims.UserID); lockErr != nil {
+			failures = append(failures, fmt.Sprintf("%s: %s", p, lockErr.Message))
+			processedFiles++
+			continue
+		}
+		if lockErr := h.CheckFolderLocksForOperation(displayPath, claims.UserID); lockErr != nil {
+			failures = append(failures, fmt.Sprintf("%s: %s", p, lockErr.Message))
+			processedFiles++
+			continue
+		}
+
+		// Create trash directory
+		trashPath := h.getTrashPath(claims.Username)
+		if err := os.MkdirAll(trashPath, 0755); err != nil {
+			failures = append(failures, fmt.Sprintf("%s: failed to create trash directory", p))
+			processedFiles++
+			continue
+		}
+
+		// Determine file count for this item (for progress)
+		var itemFileCount int
+		var itemName string
+		var isDir bool
+		var size int64
+
+		isNonLocal := storageType == StorageExternal && realPath == ""
+		if isNonLocal {
+			bgCtx := context.Background()
+			info, err := result.Backend.Stat(bgCtx, result.RelPath)
+			if err != nil {
+				failures = append(failures, fmt.Sprintf("%s: item not found", p))
+				processedFiles++
+				continue
+			}
+			itemName = info.FileName
+			isDir = info.IsDirectory
+			size = info.FileSize
+			if isDir {
+				stats := CalculateTotalSizeBackend(bgCtx, result.Backend, result.RelPath, true)
+				if stats.TotalFiles > 0 {
+					itemFileCount = stats.TotalFiles
+				} else {
+					itemFileCount = 1
+				}
+				size = stats.TotalBytes
+			} else {
+				itemFileCount = 1
+			}
+		} else {
+			info, err := os.Stat(realPath)
+			if err != nil {
+				failures = append(failures, fmt.Sprintf("%s: item not found", p))
+				processedFiles++
+				continue
+			}
+			itemName = info.Name()
+			isDir = info.IsDir()
+			size = info.Size()
+			if isDir {
+				stats := CalculateTotalSize(realPath, info)
+				if stats.TotalFiles > 0 {
+					itemFileCount = stats.TotalFiles
+				} else {
+					itemFileCount = 1
+				}
+				size = stats.TotalBytes
+			} else {
+				itemFileCount = 1
+			}
+		}
+
+		// Send progress with current file
+		sendProgress(CopyProgress{
+			Status:      "progress",
+			TotalFiles:  totalFiles,
+			CopiedFiles: processedFiles,
+			CurrentFile: itemName,
+		})
+
+		// Perform the actual move to trash
+		trashID := fmt.Sprintf("%d_%s", time.Now().UnixNano(), itemName)
+		trashItemPath := filepath.Join(trashPath, trashID)
+
+		if isNonLocal {
+			bgCtx := context.Background()
+			if isDir {
+				if err := downloadDirToLocal(bgCtx, result.Backend, result.RelPath, trashItemPath); err != nil {
+					failures = append(failures, fmt.Sprintf("%s: %s", p, err.Error()))
+					processedFiles += itemFileCount
+					continue
+				}
+			} else {
+				if err := downloadFileToLocal(bgCtx, result.Backend, result.RelPath, trashItemPath); err != nil {
+					failures = append(failures, fmt.Sprintf("%s: %s", p, err.Error()))
+					processedFiles += itemFileCount
+					continue
+				}
+			}
+			if err := result.Backend.DeleteAll(bgCtx, result.RelPath); err != nil {
+				failures = append(failures, fmt.Sprintf("%s: %s", p, err.Error()))
+				processedFiles += itemFileCount
+				continue
+			}
+			if isDir {
+				dirSize, _ := h.calculateDirSize(trashItemPath)
+				size = dirSize
+			}
+
+			meta, _ := h.loadTrashMeta(claims.Username)
+			meta[trashID] = TrashItem{
+				ID:           trashID,
+				Name:         itemName,
+				OriginalPath: displayPath,
+				Size:         size,
+				IsDir:        isDir,
+				DeletedAt:    time.Now(),
+				StorageType:  StorageExternal,
+				MountID:      result.MountID,
+			}
+			_ = h.saveTrashMeta(claims.Username, meta)
+		} else {
+			if err := moveOrCopy(realPath, trashItemPath); err != nil {
+				failures = append(failures, fmt.Sprintf("%s: %s", p, err.Error()))
+				processedFiles += itemFileCount
+				continue
+			}
+			if isDir {
+				dirSize, _ := h.calculateDirSize(trashItemPath)
+				size = dirSize
+			}
+
+			meta, _ := h.loadTrashMeta(claims.Username)
+			trashItem := TrashItem{
+				ID:           trashID,
+				Name:         itemName,
+				OriginalPath: displayPath,
+				Size:         size,
+				IsDir:        isDir,
+				DeletedAt:    time.Now(),
+				StorageType:  storageType,
+			}
+			if storageType == StorageExternal && result.MountID != "" {
+				trashItem.MountID = result.MountID
+			}
+			meta[trashID] = trashItem
+			_ = h.saveTrashMeta(claims.Username, meta)
+
+			// Update storage tracking for non-external items
+			if storageType != StorageExternal {
+				_ = h.UpdateStorageForMove(claims.UserID, size, true)
+			}
+		}
+
+		// Clean up locks
+		_ = h.RemoveLockByPath(displayPath)
+		if isDir {
+			_ = h.RemoveLocksUnderPath(displayPath)
+		}
+
+		// Log audit event for each item
+		_ = h.auditHandler.LogEvent(&claims.UserID, clientIP, EventFileDelete, displayPath, map[string]interface{}{
+			"isDir":      isDir,
+			"size":       size,
+			"trashId":    trashID,
+			"serverSide": true,
+		})
+
+		processedFiles += itemFileCount
+
+		// Send progress after each item
+		sendProgress(CopyProgress{
+			Status:      "progress",
+			TotalFiles:  totalFiles,
+			CopiedFiles: processedFiles,
+			CurrentFile: itemName,
+		})
+	}
+
+	if len(failures) > 0 {
+		successCount := len(paths) - len(failures)
+		if successCount == 0 {
+			return fmt.Errorf("all %d items failed to delete", len(failures))
+		}
+		return fmt.Errorf("%d succeeded, %d failed", successCount, len(failures))
+	}
+
+	return nil
 }
 
 // Cleanup goroutine to remove old completed jobs

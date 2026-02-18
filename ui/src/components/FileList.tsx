@@ -173,9 +173,12 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     return () => window.removeEventListener('upload-error', handler)
   }, [showError])
 
-  // Load active server-side transfer jobs on mount
+  // Load active server-side transfer jobs on mount and WebSocket reconnect
   useEffect(() => {
     transferStore.loadServerJobs()
+    const handleReconnect = () => { transferStore.loadServerJobs() }
+    window.addEventListener('ws-reconnected', handleReconnect)
+    return () => window.removeEventListener('ws-reconnected', handleReconnect)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Regular file list query
@@ -616,11 +619,15 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     } else {
       // Select only the right-clicked file
       setSelectedFiles(new Set([file.path]))
-      setSelectedFile(file)
+      // On mobile, don't open details panel - context menu only
+      // User can use "상세정보" in context menu to open details
+      if (!isMobile) {
+        setSelectedFile(file)
+      }
       pathsForMenu = [file.path]
     }
     setContextMenu({ type: 'file', x: e.clientX, y: e.clientY, file, selectedPaths: pathsForMenu })
-  }, [selectedFiles])
+  }, [selectedFiles, isMobile])
 
   const handleBackgroundContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -1805,10 +1812,11 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         onCancel={() => setConflictInfos([])}
       />
 
-      {/* Mobile FAB */}
+      {/* Mobile FAB - hide when multi-select, details panel, or context menu is open */}
       <MobileFAB
         onUploadClick={onUploadClick}
         onNewFolderClick={onNewFolderClick}
+        hidden={isSelectionMode || selectedFiles.size > 1 || !!selectedFile || !!contextMenu}
       />
     </div>
   )

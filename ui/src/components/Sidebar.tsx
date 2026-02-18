@@ -157,7 +157,11 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
   const { preferences, fetchPreferences } = usePreferencesStore()
   const [sharedDrivesExpanded, setSharedDrivesExpanded] = useState(() => localStorage.getItem('sidebar-shared-drives') !== 'false')
   const [sharingExpanded, setSharingExpanded] = useState(() => localStorage.getItem('sidebar-sharing') !== 'false')
-  const [externalStoragesExpanded, setExternalStoragesExpanded] = useState(() => localStorage.getItem('sidebar-external-storages') !== 'false')
+  const [externalStoragesExpanded, setExternalStoragesExpanded] = useState(() => {
+    const saved = localStorage.getItem('sidebar-external-storages')
+    // Default to expanded (true) when no saved preference
+    return saved === null ? true : saved !== 'false'
+  })
 
   const toggleSharedDrives = () => {
     setSharedDrivesExpanded(prev => { localStorage.setItem('sidebar-shared-drives', String(!prev)); return !prev })
@@ -227,10 +231,11 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
   const hasCompletedTransfers = completedUploads.length > 0 || completedDownloads.length > 0 || completedMoveCopy.length > 0
   const hasTransfers = safeItems.length > 0 || safeDownloads.length > 0 || safeTransferItems.length > 0
 
-  // Calculate overall upload progress
+  // Calculate overall upload progress and speed
   const uploadProgress = activeUploads.length > 0
     ? Math.round(activeUploads.reduce((sum, i) => sum + i.progress, 0) / activeUploads.length)
     : 0
+  const uploadSpeed = activeUploads.reduce((sum, i) => sum + (i.uploadSpeed || 0), 0)
 
   // Calculate overall download progress
   const downloadProgress = activeDownloads.length > 0
@@ -598,7 +603,9 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                       <div className="transfer-mini-fill" style={{ width: `${uploadProgress}%` }} />
                     </div>
                   </div>
-                  <span className="transfer-mini-percent">{uploadProgress}%</span>
+                  <span className="transfer-mini-percent">
+                    {uploadProgress}%{uploadSpeed > 0 && ` · ${uploadSpeed < 1024 ? `${uploadSpeed.toFixed(0)} B/s` : uploadSpeed < 1048576 ? `${(uploadSpeed / 1024).toFixed(1)} KB/s` : `${(uploadSpeed / 1048576).toFixed(1)} MB/s`}`}
+                  </span>
                 </div>
               )}
               {activeDownloads.length > 0 && (
@@ -623,6 +630,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                 const avgProgress = transferringItems.length > 0
                   ? Math.round(transferringItems.reduce((sum, t) => sum + (t.progress || 0), 0) / transferringItems.length)
                   : 0
+                const mcSpeed = transferringItems.reduce((sum, t) => sum + (t.bytesPerSec || 0), 0)
                 return (
                   <div className="transfer-mini-item">
                     <div className="transfer-mini-icon move-copy">
@@ -641,7 +649,7 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
                       </div>
                     </div>
                     <span className="transfer-mini-percent">
-                      {transferringItems.length > 0 ? `${avgProgress}%` : '대기'}
+                      {transferringItems.length > 0 ? `${avgProgress}%${mcSpeed > 0 ? ` · ${mcSpeed < 1024 ? `${mcSpeed.toFixed(0)} B/s` : mcSpeed < 1048576 ? `${(mcSpeed / 1024).toFixed(1)} KB/s` : `${(mcSpeed / 1048576).toFixed(1)} MB/s`}` : ''}` : '대기'}
                     </span>
                   </div>
                 )
