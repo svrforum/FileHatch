@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { updateProfile, setSMBPassword, get2FAStatus, setup2FA, enable2FA, disable2FA, regenerateBackupCodes, TwoFASetupResponse } from '../api/auth'
 import { usePreferencesStore, DEFAULT_SIDEBAR_ORDER } from '../stores/preferencesStore'
+import { useExternalStorages } from '../hooks/useExternalStorages'
 import { useTheme } from '../contexts/ThemeContext'
 import './AuthModal.css'
 import './UserProfile.css'
@@ -14,6 +15,7 @@ interface UserProfileProps {
 function UserProfile({ isOpen, onClose }: UserProfileProps) {
   const { user, token, refreshProfile, logout } = useAuthStore()
   const { theme, setTheme } = useTheme()
+  const { externalStorages } = useExternalStorages()
   const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'app-password' | '2fa' | 'sidebar'>('profile')
 
   // Profile state
@@ -859,10 +861,15 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
                 >
                   <option value="">내 파일 (기본)</option>
                   <option value="/files">내 파일</option>
-                  <option value="/recent">내 작업</option>
+                  <option value="/my-activity">내 작업</option>
                   <option value="/shared-drive">공유 드라이브</option>
                   <option value="/shared-with-me">나에게 공유된 파일</option>
                   <option value="/trash">휴지통</option>
+                  {externalStorages.map(storage => (
+                    <option key={storage.id} value={`/external/${encodeURIComponent(storage.mountPath)}`}>
+                      외부 스토리지: {storage.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 

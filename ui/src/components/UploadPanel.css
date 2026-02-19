@@ -111,6 +111,99 @@
   cursor: not-allowed;
 }
 
+/* Tab bar */
+.upload-panel-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 24px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.upload-panel-tab {
+  position: relative;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border-bottom: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.upload-panel-tab:hover {
+  color: var(--text-secondary);
+}
+
+.upload-panel-tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.upload-panel-tab .tab-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  min-width: 18px;
+  text-align: center;
+}
+
+.upload-panel-tab.active .tab-badge {
+  background: rgba(49, 130, 246, 0.1);
+  color: var(--color-primary);
+}
+
+.upload-panel-tab .tab-badge.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-error);
+}
+
+/* Batch actions bar */
+.upload-panel-batch-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 24px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.batch-btn {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 6px;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.batch-btn.retry {
+  color: var(--color-primary);
+  background: rgba(49, 130, 246, 0.08);
+}
+
+.batch-btn.retry:hover {
+  background: rgba(49, 130, 246, 0.15);
+}
+
+.batch-btn.cancel {
+  color: var(--color-error);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.batch-btn.cancel:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
 /* Stats bar */
 .upload-panel-stats {
   display: flex;

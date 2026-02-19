@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from 'react'
+import { useEffect, useMemo, useCallback, useState } from 'react'
 import { useUploadStore, UploadItem, DownloadItem } from '../stores/uploadStore'
 import { useTransferStore, TransferItem } from '../stores/transferStore'
 import { formatFileSize } from '../api/files'
@@ -35,9 +35,12 @@ function virtualPathToUrl(virtualPath: string): string {
   return '/files'
 }
 
+type PanelTab = 'all' | 'active' | 'completed' | 'error'
+
 function UploadPanel() {
-  const { items, downloads, interruptedUploads, isPanelOpen: uploadPanelOpen, closePanel: closeUploadPanel, removeUpload, clearCompleted, clearCompletedDownloads, removeDownload, startUpload, pauseUpload, loadInterruptedUploads, dismissInterruptedUpload, clearInterruptedUploads } = useUploadStore()
+  const { items, downloads, interruptedUploads, isPanelOpen: uploadPanelOpen, closePanel: closeUploadPanel, removeUpload, clearCompleted, clearCompletedDownloads, clearErrors: clearUploadErrors, removeDownload, startUpload, retryUpload, pauseUpload, loadInterruptedUploads, dismissInterruptedUpload, clearInterruptedUploads } = useUploadStore()
   const { items: transferItems, isPanelOpen: transferPanelOpen, closePanel: closeTransferPanel, removeItem: removeTransfer, clearCompleted: clearCompletedTransfers, retryTransfer, cancelServerJob } = useTransferStore()
+  const [activeTab, setActiveTab] = useState<PanelTab>('all')
 
   // Panel is open if either upload or transfer panel is open
   const isPanelOpen = uploadPanelOpen || transferPanelOpen
@@ -111,6 +114,61 @@ function UploadPanel() {
     deletingCount, deletePendingCount,
     totalActiveCount, totalCompletedCount, totalErrorCount, hasItems,
   } = counts
+
+  // Filter items based on active tab
+  const filteredItems = useMemo(() => {
+    if (activeTab === 'all') return items
+    return items.filter(i => {
+      if (activeTab === 'active') return i.status === 'uploading' || i.status === 'pending' || i.status === 'paused'
+      if (activeTab === 'completed') return i.status === 'completed'
+      if (activeTab === 'error') return i.status === 'error'
+      return true
+    })
+  }, [items, activeTab])
+
+  const filteredDownloads = useMemo(() => {
+    if (activeTab === 'all') return downloads
+    return downloads.filter(d => {
+      if (activeTab === 'active') return d.status === 'downloading'
+      if (activeTab === 'completed') return d.status === 'completed'
+      if (activeTab === 'error') return d.status === 'error'
+      return true
+    })
+  }, [downloads, activeTab])
+
+  const filteredTransfers = useMemo(() => {
+    if (activeTab === 'all') return transferItems
+    return transferItems.filter(t => {
+      if (activeTab === 'active') return t.status === 'transferring' || t.status === 'pending'
+      if (activeTab === 'completed') return t.status === 'completed'
+      if (activeTab === 'error') return t.status === 'error'
+      return true
+    })
+  }, [transferItems, activeTab])
+
+  const filteredInterrupted = useMemo(() => {
+    if (activeTab === 'error' || activeTab === 'all') return interruptedUploads
+    return []
+  }, [interruptedUploads, activeTab])
+
+  const filteredHasItems = filteredItems.length > 0 || filteredDownloads.length > 0 || filteredTransfers.length > 0 || filteredInterrupted.length > 0
+
+  // Batch retry all error items (uploads + transfers)
+  const handleBatchRetry = useCallback(() => {
+    const errorUploads = items.filter(i => i.status === 'error')
+    errorUploads.forEach(i => retryUpload(i.id))
+    const errorTransfers = transferItems.filter(t => t.status === 'error')
+    errorTransfers.forEach(t => retryTransfer(t.id))
+  }, [items, transferItems, retryUpload, retryTransfer])
+
+  // Batch remove all error items (uploads + downloads + transfers)
+  const handleBatchRemoveErrors = useCallback(() => {
+    clearUploadErrors()
+    const errorDownloads = downloads.filter(d => d.status === 'error')
+    errorDownloads.forEach(d => removeDownload(d.id))
+    const errorTransfers = transferItems.filter(t => t.status === 'error')
+    errorTransfers.forEach(t => removeTransfer(t.id))
+  }, [downloads, transferItems, clearUploadErrors, removeDownload, removeTransfer])
 
   // Load interrupted uploads on mount
   useEffect(() => {
@@ -272,28 +330,67 @@ function UploadPanel() {
         </div>
       </div>
 
-      <div className="upload-panel-stats">
-        {uploadingCount > 0 && <span className="stat uploading">업로드 중 {uploadingCount}</span>}
-        {downloadingCount > 0 && <span className="stat downloading">다운로드 중 {downloadingCount}</span>}
-        {transferringCount > 0 && <span className="stat transferring">이동/복사 중 {transferringCount}</span>}
-        {compressingCount > 0 && <span className="stat compressing">압축 중 {compressingCount}</span>}
-        {deletingCount > 0 && <span className="stat deleting">삭제 중 {deletingCount}</span>}
-        {(pendingCount > 0 || transferPendingCount > 0 || compressPendingCount > 0 || deletePendingCount > 0) && <span className="stat pending">대기 {pendingCount + transferPendingCount + compressPendingCount + deletePendingCount}</span>}
-        {totalCompletedCount > 0 && <span className="stat completed">완료 {totalCompletedCount}</span>}
-        {totalErrorCount > 0 && <span className="stat error">오류 {totalErrorCount}</span>}
-        {!hasItems && <span className="stat empty">전송 중인 파일이 없습니다</span>}
+      <div className="upload-panel-tabs">
+        <button className={`upload-panel-tab ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>
+          전체
+          {hasItems && <span className="tab-badge">{items.length + downloads.length + transferItems.length}</span>}
+        </button>
+        <button className={`upload-panel-tab ${activeTab === 'active' ? 'active' : ''}`} onClick={() => setActiveTab('active')}>
+          진행 중
+          {totalActiveCount > 0 && <span className="tab-badge">{totalActiveCount}</span>}
+        </button>
+        <button className={`upload-panel-tab ${activeTab === 'completed' ? 'active' : ''}`} onClick={() => setActiveTab('completed')}>
+          완료
+          {totalCompletedCount > 0 && <span className="tab-badge">{totalCompletedCount}</span>}
+        </button>
+        <button className={`upload-panel-tab ${activeTab === 'error' ? 'active' : ''}`} onClick={() => setActiveTab('error')}>
+          오류
+          {totalErrorCount > 0 && <span className="tab-badge error">{totalErrorCount}</span>}
+        </button>
       </div>
 
+      {activeTab === 'error' && totalErrorCount > 0 && (
+        <div className="upload-panel-batch-actions">
+          <button className="batch-btn retry" onClick={handleBatchRetry}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <path d="M1 4V10H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M3.51 15C4.15839 16.8404 5.38734 18.4202 7.01166 19.5014C8.63598 20.5826 10.5677 21.1066 12.5157 20.9945C14.4637 20.8824 16.3226 20.1402 17.8121 18.8798C19.3017 17.6193 20.3413 15.9090 20.7742 14.0064C21.2072 12.1037 21.0101 10.1139 20.2126 8.33122C19.4152 6.54852 18.0605 5.06985 16.3528 4.12C14.6451 3.17016 12.6769 2.80079 10.7386 3.06684C8.80028 3.33289 7.00147 4.22006 5.64 5.59999L1 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            일괄 재시도
+          </button>
+          <button className="batch-btn cancel" onClick={handleBatchRemoveErrors}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            일괄 삭제
+          </button>
+        </div>
+      )}
+
+      {activeTab === 'all' && (
+        <div className="upload-panel-stats">
+          {uploadingCount > 0 && <span className="stat uploading">업로드 중 {uploadingCount}</span>}
+          {downloadingCount > 0 && <span className="stat downloading">다운로드 중 {downloadingCount}</span>}
+          {transferringCount > 0 && <span className="stat transferring">이동/복사 중 {transferringCount}</span>}
+          {compressingCount > 0 && <span className="stat compressing">압축 중 {compressingCount}</span>}
+          {deletingCount > 0 && <span className="stat deleting">삭제 중 {deletingCount}</span>}
+          {(pendingCount > 0 || transferPendingCount > 0 || compressPendingCount > 0 || deletePendingCount > 0) && <span className="stat pending">대기 {pendingCount + transferPendingCount + compressPendingCount + deletePendingCount}</span>}
+          {totalCompletedCount > 0 && <span className="stat completed">완료 {totalCompletedCount}</span>}
+          {totalErrorCount > 0 && <span className="stat error">오류 {totalErrorCount}</span>}
+          {!hasItems && <span className="stat empty">전송 중인 파일이 없습니다</span>}
+        </div>
+      )}
+
       <div className="upload-panel-list">
-        {!hasItems && (
+        {!filteredHasItems && (
           <div className="upload-panel-empty">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <span>진행 중인 전송이 없습니다</span>
+            <span>{activeTab === 'all' ? '진행 중인 전송이 없습니다' : activeTab === 'active' ? '진행 중인 항목이 없습니다' : activeTab === 'completed' ? '완료된 항목이 없습니다' : '오류 항목이 없습니다'}</span>
           </div>
         )}
-        {items.map((item) => (
+        {filteredItems.map((item) => (
           <div key={item.id} className={`upload-panel-item ${item.status}`}>
             <div className="item-info">
               {getStatusIcon(item)}
@@ -353,6 +450,14 @@ function UploadPanel() {
                   </svg>
                 </button>
               )}
+              {item.status === 'error' && (
+                <button className="item-btn retry" onClick={() => retryUpload(item.id)} title="다시 시도">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M1 4V10H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M3.51 15C4.15839 16.8404 5.38734 18.4202 7.01166 19.5014C8.63598 20.5826 10.5677 21.1066 12.5157 20.9945C14.4637 20.8824 16.3226 20.1402 17.8121 18.8798C19.3017 17.6193 20.3413 15.9090 20.7742 14.0064C21.2072 12.1037 21.0101 10.1139 20.2126 8.33122C19.4152 6.54852 18.0605 5.06985 16.3528 4.12C14.6451 3.17016 12.6769 2.80079 10.7386 3.06684C8.80028 3.33289 7.00147 4.22006 5.64 5.59999L1 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              )}
               <button className="item-btn remove" onClick={() => removeUpload(item.id)} title="삭제">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                   <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -363,7 +468,7 @@ function UploadPanel() {
         ))}
 
         {/* Interrupted uploads (resumable) */}
-        {interruptedUploads.map((item) => (
+        {filteredInterrupted.map((item) => (
           <div key={item.fingerprint} className="upload-panel-item paused">
             <div className="item-info">
               <div className="paused-icon">
@@ -396,7 +501,7 @@ function UploadPanel() {
         ))}
 
         {/* Download items */}
-        {downloads.map((item) => (
+        {filteredDownloads.map((item) => (
           <div key={item.id} className={`upload-panel-item download ${item.status}`}>
             <div className="item-info">
               {getDownloadStatusIcon(item)}
@@ -446,7 +551,7 @@ function UploadPanel() {
         ))}
 
         {/* Move/Copy transfer items */}
-        {transferItems.map((item) => (
+        {filteredTransfers.map((item) => (
           <div key={item.id} className={`upload-panel-item transfer ${item.status} ${item.type}`}>
             <div className="item-info">
               {getTransferStatusIcon(item)}

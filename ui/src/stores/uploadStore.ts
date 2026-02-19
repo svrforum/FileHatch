@@ -70,10 +70,12 @@ interface UploadState {
   startNextUpload: () => void
   checkAndStartUpload: (id: string) => Promise<void>
   resolveDuplicate: (action: 'overwrite' | 'rename' | 'cancel' | 'overwrite_all') => void
+  retryUpload: (id: string) => void
   pauseUpload: (id: string) => void
   resumeUpload: (id: string) => void
   removeUpload: (id: string) => void
   clearCompleted: () => void
+  clearErrors: () => void
   updateProgress: (id: string, progress: number, uploadSpeed?: number, lastBytesUploaded?: number, lastUpdateTime?: number) => void
   setStatus: (id: string, status: UploadItem['status'], error?: string) => void
   setUpload: (id: string, upload: tus.Upload) => void
@@ -385,6 +387,18 @@ export const useUploadStore = create<UploadState>((set, get) => ({
     }
   },
 
+  retryUpload: (id) => {
+    const item = get().items.find((i) => i.id === id)
+    if (!item || item.status !== 'error') return
+    // Reset to pending and restart
+    set(state => ({
+      items: state.items.map(i =>
+        i.id === id ? { ...i, status: 'pending' as const, error: undefined, progress: 0, upload: undefined, _resumeRetried: false } : i
+      ),
+    }))
+    setTimeout(() => get().checkAndStartUpload(id), 100)
+  },
+
   pauseUpload: (id) => {
     const item = get().items.find((i) => i.id === id)
     if (item?.upload && item.status === 'uploading') {
@@ -416,6 +430,12 @@ export const useUploadStore = create<UploadState>((set, get) => ({
   clearCompleted: () => {
     set((state) => ({
       items: state.items.filter((i) => i.status !== 'completed'),
+    }))
+  },
+
+  clearErrors: () => {
+    set((state) => ({
+      items: state.items.filter((i) => i.status !== 'error'),
     }))
   },
 

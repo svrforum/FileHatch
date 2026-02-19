@@ -8,6 +8,15 @@ import { createTransferJob, cancelTransferJob, listTransferJobs, getTransferJob,
 // Used to wait for server job creation before cancelling
 const pendingJobIdMap = new Map<string, Promise<string>>()
 
+// Set of server job IDs that are currently being created via addServerTransfer/addDeletion.
+// Used to prevent handleTransferProgress from creating duplicate items during the race
+// window between job creation and API response.
+const pendingServerJobIds = new Set<string>()
+
+// Set of server job IDs for which getTransferJob is currently in-flight.
+// Prevents duplicate API calls when multiple WS events arrive for the same unknown job.
+const fetchingJobIds = new Set<string>()
+
 export type TransferType = 'move' | 'copy' | 'compress' | 'delete'
 export type TransferStatus = 'pending' | 'transferring' | 'completed' | 'error'
 
@@ -168,14 +177,21 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
       destinationPath: '',
       paths,
     }).then(result => {
-      // Update with real server job ID
-      set(state => ({
-        items: state.items.map(i =>
-          i.id === tempId ? { ...i, serverJobId: result.id } : i
-        ),
-      }))
+      // Update with real server job ID and remove duplicate created by WebSocket race
+      const serverJobId = result.id
+      pendingServerJobIds.add(serverJobId)
+      set(state => {
+        // Remove any duplicate item created by handleTransferProgress during the race window
+        const filtered = state.items.filter(i => !(i.id === `server-${serverJobId}` && i.id !== tempId))
+        return {
+          items: filtered.map(i =>
+            i.id === tempId ? { ...i, serverJobId } : i
+          ),
+        }
+      })
+      setTimeout(() => pendingServerJobIds.delete(serverJobId), 2000)
       pendingJobIdMap.delete(tempId)
-      return result.id
+      return serverJobId
     }).catch(error => {
       // Mark as error if API call failed
       set(state => ({
@@ -462,14 +478,22 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
       mode: mergeMode,
       fileConflict,
     }).then(result => {
-      // Update with real server job ID
-      set(state => ({
-        items: state.items.map(i =>
-          i.id === tempId ? { ...i, serverJobId: result.id } : i
-        ),
-      }))
+      // Update with real server job ID and remove duplicate created by WebSocket race
+      const serverJobId = result.id
+      pendingServerJobIds.add(serverJobId)
+      set(state => {
+        // Remove any duplicate item created by handleTransferProgress during the race window
+        const filtered = state.items.filter(i => !(i.id === `server-${serverJobId}` && i.id !== tempId))
+        return {
+          items: filtered.map(i =>
+            i.id === tempId ? { ...i, serverJobId } : i
+          ),
+        }
+      })
+      // Allow WebSocket events for this job after a brief delay (race window closed)
+      setTimeout(() => pendingServerJobIds.delete(serverJobId), 2000)
       pendingJobIdMap.delete(tempId)
-      return result.id
+      return serverJobId
     }).catch(error => {
       // Mark as error if API call failed
       set(state => ({
@@ -497,10 +521,18 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
     const existingItem = items.find(i => i.serverJobId === event.jobId)
 
     if (!existingItem) {
+      // Skip if this job is being created locally (prevents duplicate during race window)
+      if (pendingServerJobIds.has(event.jobId)) return
+
       // Server job from another session — fetch details and add it
       if (event.status === 'running' || event.status === 'started') {
+        // Skip if we're already fetching details for this job (prevents duplicate API calls)
+        if (fetchingJobIds.has(event.jobId)) return
+        fetchingJobIds.add(event.jobId)
+
         // Fetch job details from API to get the correct type
         getTransferJob(event.jobId).then(job => {
+          fetchingJobIds.delete(event.jobId)
           const jobType = job.type as TransferType
           const isDelete = jobType === 'delete'
           const displayName = isDelete
@@ -533,13 +565,18 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
             isPanelOpen: true,
           }))
         }).catch(() => {
+          fetchingJobIds.delete(event.jobId)
           // Fallback: add with generic info if API call fails
+          // Check again before adding to prevent duplicates
+          const alreadyAdded = get().items.some(i => i.serverJobId === event.jobId)
+          if (alreadyAdded) return
+
           set(state => ({
             items: [...state.items, {
               id: `server-${event.jobId}`,
               type: 'copy' as TransferType,
               sourcePath: '',
-              sourceName: '',
+              sourceName: '서버 전송 작업',
               destination: '',
               status: 'transferring' as TransferStatus,
               startedAt: Date.now(),
@@ -604,13 +641,13 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
           i.serverJobId === event.jobId ? {
             ...i,
             status: 'transferring' as TransferStatus,
-            totalBytes: event.totalBytes ?? i.totalBytes,
+            totalBytes: (event.totalBytes != null && event.totalBytes > 0) ? event.totalBytes : (i.totalBytes ?? event.totalBytes),
             copiedBytes: event.copiedBytes ?? i.copiedBytes,
-            totalFiles: event.totalFiles ?? i.totalFiles,
+            totalFiles: (event.totalFiles != null && event.totalFiles > 0) ? event.totalFiles : (i.totalFiles ?? event.totalFiles),
             copiedFiles: event.copiedFiles ?? i.copiedFiles,
             currentFile: event.currentFile || i.currentFile,
             bytesPerSec: event.bytesPerSec ?? i.bytesPerSec,
-            progress: event.progress ?? i.progress,
+            progress: (event.progress != null && event.progress > 0) ? event.progress : (i.progress ?? event.progress),
           } : i
         ),
       }))
@@ -624,28 +661,47 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
 
       // Only add jobs that aren't already tracked
       const newItems: TransferItem[] = []
+      let hasActiveJobs = false
       for (const job of jobs) {
         const alreadyTracked = items.some(i => i.serverJobId === job.id)
         if (alreadyTracked) continue
-        if (job.status !== 'pending' && job.status !== 'running') continue
-
-        const progressPercent = job.totalBytes > 0
-          ? Math.round((job.copiedBytes / job.totalBytes) * 100)
-          : 0
 
         const isDelete = job.type === 'delete'
         const displayName = isDelete
           ? (job.totalFiles > 1 ? `${job.totalFiles}개 항목 삭제` : (job.sourcePath.split('/').pop() || '삭제'))
           : (job.sourcePath.split('/').pop() || job.sourcePath)
 
+        // Calculate progress: use file count for delete ops, bytes otherwise
+        let progressPercent = 0
+        if (isDelete || job.totalBytes === 0) {
+          if (job.totalFiles > 0) {
+            progressPercent = Math.round((job.copiedFiles / job.totalFiles) * 100)
+          }
+        } else if (job.totalBytes > 0) {
+          progressPercent = Math.round((job.copiedBytes / job.totalBytes) * 100)
+        }
+
+        const isActive = job.status === 'pending' || job.status === 'running'
+        if (isActive) hasActiveJobs = true
+
+        // Map server status to local status
+        let localStatus: TransferStatus = 'transferring'
+        if (job.status === 'completed') {
+          localStatus = 'completed'
+          progressPercent = 100
+        } else if (job.status === 'error' || job.status === 'cancelled') {
+          localStatus = 'error'
+        }
+
         newItems.push({
           id: `server-${job.id}`,
           type: job.type as TransferType,
           sourcePath: job.sourcePath,
           sourceName: displayName,
-          destination: job.destinationPath,
-          status: 'transferring' as TransferStatus,
+          destination: isDelete ? '/trash' : job.destinationPath,
+          status: localStatus,
           startedAt: new Date(job.createdAt).getTime(),
+          completedAt: job.completedAt ? new Date(job.completedAt).getTime() : undefined,
           isServerSide: true,
           serverJobId: job.id,
           totalBytes: job.totalBytes,
@@ -655,13 +711,14 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
           currentFile: job.currentFile,
           bytesPerSec: job.bytesPerSec,
           progress: progressPercent,
+          error: job.status === 'cancelled' ? '취소됨' : job.errorMessage || undefined,
         })
       }
 
       if (newItems.length > 0) {
         set(state => ({
           items: [...state.items, ...newItems],
-          isPanelOpen: true,
+          isPanelOpen: hasActiveJobs ? true : state.isPanelOpen,
         }))
       }
     } catch {

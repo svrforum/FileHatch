@@ -210,7 +210,7 @@ export default function FolderSelectModal({
     }
   }, [isOpen])
 
-  // 폴더 확장/축소
+  // 폴더 확장/축소 토글 (화살표 버튼용)
   const toggleExpand = useCallback((path: string, type: 'home' | 'shared' | 'external') => {
     setExpandedPaths(prev => {
       const next = new Set(prev)
@@ -226,6 +226,23 @@ export default function FolderSelectModal({
         } else {
           loadExternalSubfolders(path)
         }
+      }
+      return next
+    })
+  }, [loadHomeFolders, loadSharedSubfolders, loadExternalSubfolders])
+
+  // 폴더 열기 (접지 않음 - 클릭/더블클릭용)
+  const expandNode = useCallback((path: string, type: 'home' | 'shared' | 'external') => {
+    setExpandedPaths(prev => {
+      if (prev.has(path)) return prev  // 이미 열려있으면 유지
+      const next = new Set(prev)
+      next.add(path)
+      if (type === 'home') {
+        loadHomeFolders(path)
+      } else if (type === 'shared') {
+        loadSharedSubfolders(path)
+      } else {
+        loadExternalSubfolders(path)
       }
       return next
     })
@@ -285,12 +302,17 @@ export default function FolderSelectModal({
         <div
           className={`folder-item ${isSelected ? 'selected' : ''} ${excluded ? 'excluded' : ''}`}
           style={{ paddingLeft: `${depth * 20 + 8}px` }}
-          onClick={() => !excluded && setSelectedPath(node.path)}
+          onClick={() => {
+            if (!excluded) {
+              setSelectedPath(node.path)
+              expandNode(node.path, node.type)
+            }
+          }}
           onDoubleClick={(e) => {
             e.stopPropagation()
             if (!excluded) {
               setSelectedPath(node.path)
-              toggleExpand(node.path, node.type)
+              expandNode(node.path, node.type)
             }
           }}
         >

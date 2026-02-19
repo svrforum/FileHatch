@@ -101,7 +101,7 @@ func (h *Handler) ListTransferJobs(c echo.Context) error {
 			created_at, updated_at, completed_at, delete_paths
 		FROM transfer_jobs
 		WHERE user_id = $1
-			AND (status IN ('pending', 'running') OR completed_at > NOW() - INTERVAL '1 hour')
+			AND (status IN ('pending', 'running') OR completed_at > NOW() - INTERVAL '7 days')
 		ORDER BY created_at DESC
 		LIMIT 50
 	`, claims.UserID)
@@ -329,6 +329,7 @@ func (h *Handler) executeTransferJob(jobID, userID, username, clientIP string, r
 
 	// Create a progress sender that updates DB + broadcasts via WebSocket
 	lastBroadcast := time.Now()
+	isDeleteOp := req.Type == "delete"
 	progressSender := func(progress CopyProgress) {
 		// Update DB periodically (not every progress event)
 		if time.Since(lastBroadcast) > 500*time.Millisecond || progress.Status == "completed" || progress.Status == "error" {
@@ -342,11 +343,17 @@ func (h *Handler) executeTransferJob(jobID, userID, username, clientIP string, r
 			lastBroadcast = time.Now()
 		}
 
-		// Always broadcast via WebSocket for real-time UI
+		// Calculate progress percentage: use file count for delete ops (no bytes), bytes otherwise
 		progressPercent := 0
-		if progress.TotalBytes > 0 {
+		if isDeleteOp || progress.TotalBytes == 0 {
+			if progress.TotalFiles > 0 {
+				progressPercent = int(progress.CopiedFiles * 100 / progress.TotalFiles)
+			}
+		} else if progress.TotalBytes > 0 {
 			progressPercent = int(progress.CopiedBytes * 100 / progress.TotalBytes)
 		}
+
+		// Always broadcast via WebSocket for real-time UI
 		BroadcastTransferProgress(userID, TransferProgressEvent{
 			Type:        "transfer_progress",
 			JobID:       jobID,
@@ -901,7 +908,7 @@ func (h *Handler) StartTransferJobCleanup() {
 			_, err := h.db.Exec(`
 				DELETE FROM transfer_jobs
 				WHERE status IN ('completed', 'error', 'cancelled')
-				AND completed_at < NOW() - INTERVAL '24 hours'
+				AND completed_at < NOW() - INTERVAL '14 days'
 			`)
 			if err != nil {
 				log.Printf("[TransferJobs] Cleanup error: %v", err)

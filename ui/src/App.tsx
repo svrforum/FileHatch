@@ -166,7 +166,7 @@ function App() {
   useEffect(() => {
     if (hasRedirected.current) return
     if (token && defaultLanding && (location.pathname === '/' || location.pathname === '/files')) {
-      const validPrefixes = ['/files', '/shared-with-me', '/shared-by-me', '/link-shares', '/shared-drive', '/trash']
+      const validPrefixes = ['/files', '/shared-with-me', '/shared-by-me', '/link-shares', '/shared-drive', '/trash', '/external', '/my-activity']
       if (validPrefixes.some(p => defaultLanding === p || defaultLanding.startsWith(p + '/'))) {
         hasRedirected.current = true
         navigate(defaultLanding, { replace: true })
