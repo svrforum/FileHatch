@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 )
@@ -87,10 +88,15 @@ func (h *UserPreferencesHandler) UpdatePreferences(c echo.Context) error {
 	// Validate default landing
 	validLandings := map[string]bool{
 		"": true, "/files": true, "/recent": true, "/shared-drive": true,
-		"/shared-with-me": true, "/trash": true,
+		"/shared-with-me": true, "/trash": true, "/my-activity": true,
 	}
 	if !validLandings[prefs.DefaultLanding] {
-		return RespondError(c, ErrBadRequest("Invalid default landing page"))
+		// Allow /external/{mountPath} pattern
+		if !strings.HasPrefix(prefs.DefaultLanding, "/external/") ||
+			strings.Contains(prefs.DefaultLanding[len("/external/"):], "/") ||
+			len(prefs.DefaultLanding) <= len("/external/") {
+			return RespondError(c, ErrBadRequest("Invalid default landing page"))
+		}
 	}
 
 	prefsJSON, err := json.Marshal(prefs)

@@ -360,6 +360,7 @@ func main() {
 	authApi.GET("/transfers", h.ListTransferJobs)
 	authApi.GET("/transfers/:id", h.GetTransferJob)
 	authApi.POST("/transfers", h.CreateTransferJob)
+	authApi.DELETE("/transfers", h.ClearCompletedTransferJobs)
 	authApi.DELETE("/transfers/:id", h.CancelTransferJob)
 
 	// ZIP Download API routes

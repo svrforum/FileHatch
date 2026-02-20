@@ -45,6 +45,7 @@ export interface TransferProgressEvent {
   bytesPerSec: number
   errorMessage?: string
   newPath?: string
+  failedPaths?: { path: string; error: string }[]
 }
 
 interface ApiDataResponse<T> {
@@ -68,4 +69,8 @@ export async function createTransferJob(req: CreateTransferRequest): Promise<{ i
 
 export async function cancelTransferJob(id: string): Promise<void> {
   await api.delete(`/transfers/${id}`)
+}
+
+export async function clearCompletedTransferJobs(): Promise<void> {
+  await api.delete('/transfers')
 }

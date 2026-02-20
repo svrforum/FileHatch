@@ -581,14 +581,14 @@ function UploadPanel() {
                   </div>
                   <div className="progress-info">
                     <span className="progress-text">{item.progress || 0}%</span>
-                    {item.bytesPerSec && item.bytesPerSec > 0 && (
+                    {item.type !== 'delete' && item.bytesPerSec && item.bytesPerSec > 0 && (
                       <span className={`speed-text ${item.type}`}>{formatSpeed(item.bytesPerSec)}</span>
                     )}
                   </div>
                   {item.currentFile && (
                     <span className="current-file">{item.currentFile}</span>
                   )}
-                  {item.totalFiles && item.totalFiles > 0 && (item.totalFiles > 1 || item.type === 'delete') && (
+                  {item.totalFiles != null && item.totalFiles > 0 && (
                     <span className="file-count">
                       {item.copiedFiles || 0}/{item.totalFiles}
                       {item.type === 'delete' && ' 삭제됨'}
@@ -599,15 +599,46 @@ function UploadPanel() {
               {item.status === 'pending' && (
                 <span className="transfer-status pending">대기 중</span>
               )}
-              {item.status === 'completed' && item.bytesPerSec && (
-                <span className="transfer-complete-info">
-                  {item.type === 'compress' && item.outputSize
-                    ? formatFileSize(item.outputSize)
-                    : formatFileSize(item.totalBytes || 0)} · {formatSpeed(item.bytesPerSec)}
-                </span>
+              {item.status === 'completed' && (
+                item.type === 'delete' ? (
+                  <span className="transfer-complete-info">
+                    {item.totalFiles || 0}개 항목 삭제 완료
+                  </span>
+                ) : item.bytesPerSec ? (
+                  <span className="transfer-complete-info">
+                    {item.type === 'compress' && item.outputSize
+                      ? formatFileSize(item.outputSize)
+                      : formatFileSize(item.totalBytes || 0)} · {formatSpeed(item.bytesPerSec)}
+                  </span>
+                ) : null
               )}
               {item.status === 'error' && (
-                <span className="error-text">{item.error}</span>
+                <>
+                  <span className="error-text">{item.error}</span>
+                  {item.failedPaths && item.failedPaths.length > 0 && (
+                    <div className="error-paths">
+                      {item.failedPaths.slice(0, 3).map((f, idx) => (
+                        <div key={idx} className="error-path-item">
+                          <span className="error-path-name" title={f.path}>
+                            {f.path.split('/').pop()} - {f.error}
+                          </span>
+                          <button className="item-btn error-path-goto" onClick={() => {
+                            closePanel()
+                            const parentPath = f.path.split('/').slice(0, -1).join('/') || '/home'
+                            window.location.href = virtualPathToUrl(parentPath)
+                          }} title="위치로 이동">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                              <path d="M3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V9C21 7.89543 20.1046 7 19 7H13L11 5H5C3.89543 5 3 5.89543 3 7Z" stroke="currentColor" strokeWidth="2"/>
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                      {item.failedPaths.length > 3 && (
+                        <span className="error-path-more">외 {item.failedPaths.length - 3}개</span>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
             <div className="item-actions">

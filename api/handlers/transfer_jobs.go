@@ -62,6 +62,13 @@ type TransferProgressEvent struct {
 	BytesPerSec int64  `json:"bytesPerSec"`
 	ErrorMsg    string `json:"errorMessage,omitempty"`
 	NewPath     string `json:"newPath,omitempty"`
+	FailedPaths []FailedPathInfo `json:"failedPaths,omitempty"`
+}
+
+// FailedPathInfo represents a failed path during delete operation
+type FailedPathInfo struct {
+	Path  string `json:"path"`
+	Error string `json:"error"`
 }
 
 // cancelMap stores cancel functions for running jobs
@@ -330,7 +337,9 @@ func (h *Handler) executeTransferJob(jobID, userID, username, clientIP string, r
 	// Create a progress sender that updates DB + broadcasts via WebSocket
 	lastBroadcast := time.Now()
 	isDeleteOp := req.Type == "delete"
+	var lastProgress CopyProgress
 	progressSender := func(progress CopyProgress) {
+		lastProgress = progress
 		// Update DB periodically (not every progress event)
 		if time.Since(lastBroadcast) > 500*time.Millisecond || progress.Status == "completed" || progress.Status == "error" {
 			_, _ = h.db.Exec(`
@@ -373,6 +382,7 @@ func (h *Handler) executeTransferJob(jobID, userID, username, clientIP string, r
 	// We'll use the handler's internal methods directly
 	var jobErr error
 	var newDisplayPath string
+	var deleteFailedPaths []FailedPathInfo
 
 	// We need to build a JWTClaims for the resolveStorageForOperation
 	claims := &JWTClaims{
@@ -384,7 +394,7 @@ func (h *Handler) executeTransferJob(jobID, userID, username, clientIP string, r
 	case "copy", "move":
 		newDisplayPath, jobErr = h.executeTransferCopyMove(ctx, claims, cleanSourcePath, req.DestinationPath, req.Type, overwrite, isMerge, req.FileConflict, progressSender)
 	case "delete":
-		jobErr = h.executeTransferDelete(ctx, claims, clientIP, req.Paths, progressSender)
+		deleteFailedPaths, jobErr = h.executeTransferDelete(ctx, claims, clientIP, req.Paths, progressSender)
 	default:
 		jobErr = ErrBadRequest("Unsupported transfer type for server-side job: " + req.Type)
 	}
@@ -405,30 +415,45 @@ func (h *Handler) executeTransferJob(jobID, userID, username, clientIP string, r
 		} else {
 			errMsg := jobErr.Error()
 			_, _ = h.db.Exec(`
-				UPDATE transfer_jobs SET status = 'error', error_message = $2, updated_at = NOW(), completed_at = NOW()
+				UPDATE transfer_jobs SET status = 'error', error_message = $2,
+					total_files = $3, copied_files = $4, total_bytes = $5, copied_bytes = $6,
+					updated_at = NOW(), completed_at = NOW()
 				WHERE id = $1
-			`, jobID, errMsg)
+			`, jobID, errMsg, lastProgress.TotalFiles, lastProgress.CopiedFiles, lastProgress.TotalBytes, lastProgress.CopiedBytes)
 			BroadcastTransferProgress(userID, TransferProgressEvent{
-				Type:     "transfer_progress",
-				JobID:    jobID,
-				Status:   "error",
-				ErrorMsg: errMsg,
+				Type:        "transfer_progress",
+				JobID:       jobID,
+				Status:      "error",
+				ErrorMsg:    errMsg,
+				FailedPaths: deleteFailedPaths,
 			})
 		}
 		return
 	}
 
-	// Success
+	// Success — flush final progress to DB and broadcast with complete info
 	_, _ = h.db.Exec(`
-		UPDATE transfer_jobs SET status = 'completed', updated_at = NOW(), completed_at = NOW()
+		UPDATE transfer_jobs SET status = 'completed',
+			total_bytes = $2, copied_bytes = $3, total_files = $4, copied_files = $5,
+			bytes_per_sec = $6, updated_at = NOW(), completed_at = NOW()
 		WHERE id = $1
-	`, jobID)
+	`, jobID, lastProgress.TotalBytes, lastProgress.CopiedBytes, lastProgress.TotalFiles, lastProgress.CopiedFiles, lastProgress.BytesPerSec)
 
+	finalProgress := 100
+	if lastProgress.TotalFiles == 0 && lastProgress.TotalBytes == 0 {
+		finalProgress = 0
+	}
 	BroadcastTransferProgress(userID, TransferProgressEvent{
-		Type:    "transfer_progress",
-		JobID:   jobID,
-		Status:  "completed",
-		NewPath: newDisplayPath,
+		Type:        "transfer_progress",
+		JobID:       jobID,
+		Status:      "completed",
+		Progress:    finalProgress,
+		TotalFiles:  lastProgress.TotalFiles,
+		CopiedFiles: lastProgress.TotalFiles,
+		TotalBytes:  lastProgress.TotalBytes,
+		CopiedBytes: lastProgress.TotalBytes,
+		BytesPerSec: lastProgress.BytesPerSec,
+		NewPath:     newDisplayPath,
 	})
 
 	// Log audit event (delete audit is handled inside executeTransferDelete)
@@ -607,69 +632,17 @@ func (h *Handler) executeTransferCopyMove(
 	return newDisplayPath, nil
 }
 
-// countFilesForDelete counts the total number of files to be deleted.
-// Folders are counted as the number of files they contain (recursively), not as 1.
-func (h *Handler) countFilesForDelete(claims *JWTClaims, paths []string) int {
-	total := 0
-	for _, p := range paths {
-		result, realPath, err := h.resolveStorageForOperation(p, claims)
-		if err != nil {
-			total++ // count as 1 if we can't resolve
-			continue
-		}
-
-		isNonLocal := result.StorageType == StorageExternal && realPath == ""
-		if isNonLocal {
-			bgCtx := context.Background()
-			info, err := result.Backend.Stat(bgCtx, result.RelPath)
-			if err != nil {
-				total++
-				continue
-			}
-			if info.IsDirectory {
-				stats := CalculateTotalSizeBackend(bgCtx, result.Backend, result.RelPath, true)
-				if stats.TotalFiles > 0 {
-					total += stats.TotalFiles
-				} else {
-					total++ // empty folder counts as 1
-				}
-			} else {
-				total++
-			}
-		} else {
-			info, err := os.Stat(realPath)
-			if err != nil {
-				total++
-				continue
-			}
-			if info.IsDir() {
-				stats := CalculateTotalSize(realPath, info)
-				if stats.TotalFiles > 0 {
-					total += stats.TotalFiles
-				} else {
-					total++ // empty folder counts as 1
-				}
-			} else {
-				total++
-			}
-		}
-	}
-	return total
-}
-
 // executeTransferDelete performs server-side batch delete (move to trash)
+// Returns failed paths and error (if any)
 func (h *Handler) executeTransferDelete(
 	ctx context.Context,
 	claims *JWTClaims,
 	clientIP string,
 	paths []string,
 	sendProgress ProgressSender,
-) error {
-	// Count total files for accurate progress
-	totalFiles := h.countFilesForDelete(claims, paths)
-	if totalFiles == 0 {
-		totalFiles = len(paths)
-	}
+) ([]FailedPathInfo, error) {
+	// Use path count for progress (each path = 1 unit for smooth progress)
+	totalFiles := len(paths)
 
 	sendProgress(CopyProgress{
 		Status:     "started",
@@ -677,19 +650,20 @@ func (h *Handler) executeTransferDelete(
 	})
 
 	processedFiles := 0
-	var failures []string
+	var failures []FailedPathInfo
 
 	for _, p := range paths {
 		// Check for cancellation
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return failures, ctx.Err()
 		}
 
 		// Resolve path
 		result, realPath, err := h.resolveStorageForOperation(p, claims)
 		if err != nil {
-			failures = append(failures, fmt.Sprintf("%s: %s", p, err.Error()))
+			failures = append(failures, FailedPathInfo{Path: p, Error: err.Error()})
 			processedFiles++
+			sendProgress(CopyProgress{Status: "progress", TotalFiles: totalFiles, CopiedFiles: processedFiles})
 			continue
 		}
 
@@ -697,40 +671,44 @@ func (h *Handler) executeTransferDelete(
 		displayPath := result.DisplayPath
 
 		if storageType == "root" || displayPath == "/home" || displayPath == "/shared" {
-			failures = append(failures, fmt.Sprintf("%s: cannot delete root folders", p))
+			failures = append(failures, FailedPathInfo{Path: p, Error: "cannot delete root folders"})
 			processedFiles++
+			sendProgress(CopyProgress{Status: "progress", TotalFiles: totalFiles, CopiedFiles: processedFiles})
 			continue
 		}
 
 		// Check readonly
 		if err := checkReadonly(result); err != nil {
-			failures = append(failures, fmt.Sprintf("%s: %s", p, err.Error()))
+			failures = append(failures, FailedPathInfo{Path: p, Error: err.Error()})
 			processedFiles++
+			sendProgress(CopyProgress{Status: "progress", TotalFiles: totalFiles, CopiedFiles: processedFiles})
 			continue
 		}
 
 		// Check file lock
 		if lockErr := h.CheckFileLockForOperation(displayPath, claims.UserID); lockErr != nil {
-			failures = append(failures, fmt.Sprintf("%s: %s", p, lockErr.Message))
+			failures = append(failures, FailedPathInfo{Path: p, Error: lockErr.Message})
 			processedFiles++
+			sendProgress(CopyProgress{Status: "progress", TotalFiles: totalFiles, CopiedFiles: processedFiles})
 			continue
 		}
 		if lockErr := h.CheckFolderLocksForOperation(displayPath, claims.UserID); lockErr != nil {
-			failures = append(failures, fmt.Sprintf("%s: %s", p, lockErr.Message))
+			failures = append(failures, FailedPathInfo{Path: p, Error: lockErr.Message})
 			processedFiles++
+			sendProgress(CopyProgress{Status: "progress", TotalFiles: totalFiles, CopiedFiles: processedFiles})
 			continue
 		}
 
 		// Create trash directory
 		trashPath := h.getTrashPath(claims.Username)
 		if err := os.MkdirAll(trashPath, 0755); err != nil {
-			failures = append(failures, fmt.Sprintf("%s: failed to create trash directory", p))
+			failures = append(failures, FailedPathInfo{Path: p, Error: "failed to create trash directory"})
 			processedFiles++
+			sendProgress(CopyProgress{Status: "progress", TotalFiles: totalFiles, CopiedFiles: processedFiles})
 			continue
 		}
 
-		// Determine file count for this item (for progress)
-		var itemFileCount int
+		// Determine item info
 		var itemName string
 		var isDir bool
 		var size int64
@@ -740,8 +718,9 @@ func (h *Handler) executeTransferDelete(
 			bgCtx := context.Background()
 			info, err := result.Backend.Stat(bgCtx, result.RelPath)
 			if err != nil {
-				failures = append(failures, fmt.Sprintf("%s: item not found", p))
+				failures = append(failures, FailedPathInfo{Path: p, Error: "item not found"})
 				processedFiles++
+				sendProgress(CopyProgress{Status: "progress", TotalFiles: totalFiles, CopiedFiles: processedFiles})
 				continue
 			}
 			itemName = info.FileName
@@ -749,20 +728,14 @@ func (h *Handler) executeTransferDelete(
 			size = info.FileSize
 			if isDir {
 				stats := CalculateTotalSizeBackend(bgCtx, result.Backend, result.RelPath, true)
-				if stats.TotalFiles > 0 {
-					itemFileCount = stats.TotalFiles
-				} else {
-					itemFileCount = 1
-				}
 				size = stats.TotalBytes
-			} else {
-				itemFileCount = 1
 			}
 		} else {
 			info, err := os.Stat(realPath)
 			if err != nil {
-				failures = append(failures, fmt.Sprintf("%s: item not found", p))
+				failures = append(failures, FailedPathInfo{Path: p, Error: "item not found"})
 				processedFiles++
+				sendProgress(CopyProgress{Status: "progress", TotalFiles: totalFiles, CopiedFiles: processedFiles})
 				continue
 			}
 			itemName = info.Name()
@@ -770,14 +743,7 @@ func (h *Handler) executeTransferDelete(
 			size = info.Size()
 			if isDir {
 				stats := CalculateTotalSize(realPath, info)
-				if stats.TotalFiles > 0 {
-					itemFileCount = stats.TotalFiles
-				} else {
-					itemFileCount = 1
-				}
 				size = stats.TotalBytes
-			} else {
-				itemFileCount = 1
 			}
 		}
 
@@ -797,20 +763,23 @@ func (h *Handler) executeTransferDelete(
 			bgCtx := context.Background()
 			if isDir {
 				if err := downloadDirToLocal(bgCtx, result.Backend, result.RelPath, trashItemPath); err != nil {
-					failures = append(failures, fmt.Sprintf("%s: %s", p, err.Error()))
-					processedFiles += itemFileCount
+					failures = append(failures, FailedPathInfo{Path: p, Error: err.Error()})
+					processedFiles++
+					sendProgress(CopyProgress{Status: "progress", TotalFiles: totalFiles, CopiedFiles: processedFiles})
 					continue
 				}
 			} else {
 				if err := downloadFileToLocal(bgCtx, result.Backend, result.RelPath, trashItemPath); err != nil {
-					failures = append(failures, fmt.Sprintf("%s: %s", p, err.Error()))
-					processedFiles += itemFileCount
+					failures = append(failures, FailedPathInfo{Path: p, Error: err.Error()})
+					processedFiles++
+					sendProgress(CopyProgress{Status: "progress", TotalFiles: totalFiles, CopiedFiles: processedFiles})
 					continue
 				}
 			}
 			if err := result.Backend.DeleteAll(bgCtx, result.RelPath); err != nil {
-				failures = append(failures, fmt.Sprintf("%s: %s", p, err.Error()))
-				processedFiles += itemFileCount
+				failures = append(failures, FailedPathInfo{Path: p, Error: err.Error()})
+				processedFiles++
+				sendProgress(CopyProgress{Status: "progress", TotalFiles: totalFiles, CopiedFiles: processedFiles})
 				continue
 			}
 			if isDir {
@@ -832,8 +801,9 @@ func (h *Handler) executeTransferDelete(
 			_ = h.saveTrashMeta(claims.Username, meta)
 		} else {
 			if err := moveOrCopy(realPath, trashItemPath); err != nil {
-				failures = append(failures, fmt.Sprintf("%s: %s", p, err.Error()))
-				processedFiles += itemFileCount
+				failures = append(failures, FailedPathInfo{Path: p, Error: err.Error()})
+				processedFiles++
+				sendProgress(CopyProgress{Status: "progress", TotalFiles: totalFiles, CopiedFiles: processedFiles})
 				continue
 			}
 			if isDir {
@@ -877,7 +847,7 @@ func (h *Handler) executeTransferDelete(
 			"serverSide": true,
 		})
 
-		processedFiles += itemFileCount
+		processedFiles++
 
 		// Send progress after each item
 		sendProgress(CopyProgress{
@@ -891,12 +861,30 @@ func (h *Handler) executeTransferDelete(
 	if len(failures) > 0 {
 		successCount := len(paths) - len(failures)
 		if successCount == 0 {
-			return fmt.Errorf("all %d items failed to delete", len(failures))
+			return failures, fmt.Errorf("all %d items failed to delete", len(failures))
 		}
-		return fmt.Errorf("%d succeeded, %d failed", successCount, len(failures))
+		return failures, fmt.Errorf("%d succeeded, %d failed", successCount, len(failures))
 	}
 
-	return nil
+	return nil, nil
+}
+
+// ClearCompletedTransferJobs deletes all completed/error/cancelled transfer jobs for the current user
+func (h *Handler) ClearCompletedTransferJobs(c echo.Context) error {
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
+	}
+
+	_, err = h.db.Exec(`
+		DELETE FROM transfer_jobs
+		WHERE user_id = $1 AND status IN ('completed', 'error', 'cancelled')
+	`, claims.UserID)
+	if err != nil {
+		return RespondError(c, ErrInternal("Failed to clear completed jobs"))
+	}
+
+	return RespondSuccess(c, map[string]bool{"success": true})
 }
 
 // Cleanup goroutine to remove old completed jobs

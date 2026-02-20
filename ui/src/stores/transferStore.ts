@@ -2,7 +2,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { moveItemStream, copyItemStream, compressFilesStream, moveToTrash, TransferProgress, CompressionProgress } from '../api/files'
-import { createTransferJob, cancelTransferJob, listTransferJobs, getTransferJob, TransferProgressEvent } from '../api/transfers'
+import { createTransferJob, cancelTransferJob, listTransferJobs, getTransferJob, clearCompletedTransferJobs, TransferProgressEvent } from '../api/transfers'
 
 // Map of local item IDs to promises that resolve with the server job ID
 // Used to wait for server job creation before cancelling
@@ -66,6 +66,8 @@ export interface TransferItem {
   // Server-side job
   serverJobId?: string      // Server-side job UUID (if managed by server)
   isServerSide?: boolean    // Whether this is a server-side job
+  // Error detail
+  failedPaths?: { path: string; error: string }[]
 }
 
 interface TransferState {
@@ -166,6 +168,8 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
         deletePaths: paths,
         deleteNames: names,
         progress: 0,
+        totalFiles: paths.length,
+        copiedFiles: 0,
       }],
       isPanelOpen: true,
     }))
@@ -191,6 +195,34 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
       })
       setTimeout(() => pendingServerJobIds.delete(serverJobId), 2000)
       pendingJobIdMap.delete(tempId)
+
+      // Poll server for final status — fast ops may complete before serverJobId is linked
+      setTimeout(() => {
+        const item = get().items.find(i => i.serverJobId === serverJobId)
+        if (item && item.status === 'transferring') {
+          getTransferJob(serverJobId).then(job => {
+            if (job.status === 'completed' || job.status === 'error' || job.status === 'cancelled') {
+              set(state => ({
+                items: state.items.map(i =>
+                  i.serverJobId === serverJobId ? {
+                    ...i,
+                    status: (job.status === 'completed' ? 'completed' : 'error') as TransferStatus,
+                    progress: job.status === 'completed' ? 100 : i.progress,
+                    totalFiles: job.totalFiles || i.totalFiles,
+                    copiedFiles: job.copiedFiles || i.copiedFiles,
+                    totalBytes: job.totalBytes || i.totalBytes,
+                    bytesPerSec: job.bytesPerSec || i.bytesPerSec,
+                    error: job.status === 'error' ? (job.errorMessage || '전송 실패') : i.error,
+                    completedAt: Date.now(),
+                    cancel: undefined,
+                  } : i
+                ),
+              }))
+            }
+          }).catch(() => {})
+        }
+      }, 500)
+
       return serverJobId
     }).catch(error => {
       // Mark as error if API call failed
@@ -333,6 +365,12 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
           }
           if (failures.length > 0) {
             const successCount = total - failures.length
+            // Store failed paths in item state for UI display
+            set(state => ({
+              items: state.items.map(it =>
+                it.id === id ? { ...it, failedPaths: failures } : it
+              ),
+            }))
             if (successCount === 0) {
               throw new Error(`삭제 실패: ${failures[0].error}`)
             }
@@ -448,6 +486,8 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
     set(state => ({
       items: state.items.filter(i => i.status === 'pending' || i.status === 'transferring'),
     }))
+    // Also clear completed jobs from server
+    clearCompletedTransferJobs().catch(() => {})
   },
 
   addServerTransfer: async (type, sourcePath, sourceName, destination, overwrite, mergeMode, fileConflict) => {
@@ -606,6 +646,10 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
             status: 'completed' as TransferStatus,
             completedAt: Date.now(),
             progress: 100,
+            totalFiles: event.totalFiles || i.totalFiles,
+            copiedFiles: event.copiedFiles || i.copiedFiles,
+            totalBytes: event.totalBytes || i.totalBytes,
+            bytesPerSec: event.bytesPerSec || i.bytesPerSec,
             cancel: undefined,
           } : i
         ),
@@ -619,6 +663,7 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
             error: event.errorMessage || '전송 실패',
             completedAt: Date.now(),
             cancel: undefined,
+            failedPaths: event.failedPaths || i.failedPaths,
           } : i
         ),
       }))
@@ -641,13 +686,13 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
           i.serverJobId === event.jobId ? {
             ...i,
             status: 'transferring' as TransferStatus,
-            totalBytes: (event.totalBytes != null && event.totalBytes > 0) ? event.totalBytes : (i.totalBytes ?? event.totalBytes),
+            totalBytes: (event.totalBytes != null && event.totalBytes >= 0) ? event.totalBytes : i.totalBytes,
             copiedBytes: event.copiedBytes ?? i.copiedBytes,
-            totalFiles: (event.totalFiles != null && event.totalFiles > 0) ? event.totalFiles : (i.totalFiles ?? event.totalFiles),
+            totalFiles: (event.totalFiles != null && event.totalFiles >= 0) ? event.totalFiles : i.totalFiles,
             copiedFiles: event.copiedFiles ?? i.copiedFiles,
             currentFile: event.currentFile || i.currentFile,
             bytesPerSec: event.bytesPerSec ?? i.bytesPerSec,
-            progress: (event.progress != null && event.progress > 0) ? event.progress : (i.progress ?? event.progress),
+            progress: (event.progress != null && event.progress >= 0) ? event.progress : i.progress,
           } : i
         ),
       }))
