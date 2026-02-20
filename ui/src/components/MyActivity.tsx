@@ -2,9 +2,12 @@ import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } fro
 import { createPortal } from 'react-dom'
 import { getRecentFiles, hideRecentItem, clearAllRecentItems, RecentFile, downloadFile, FileInfo, getFolderStats, FolderStats, getFileMetadata, FileMetadata, updateFileMetadata, getStarredFiles, StarredFile } from '../api/files'
 import { getFileIcon } from '../utils/fileIcons'
+import { useTransferStore } from '../stores/transferStore'
 import { FileRow, FileCard, VirtualizedFileTable, FileInfoPanel, VIRTUALIZATION_THRESHOLD } from './filelist'
 const FileViewer = lazy(() => import('./FileViewer'))
 const TextEditor = lazy(() => import('./TextEditor'))
+const ShareModal = lazy(() => import('./ShareModal'))
+const LinkShareModal = lazy(() => import('./LinkShareModal'))
 import './MyActivity.css'
 
 type FileTypeFilter = 'all' | 'document' | 'spreadsheet' | 'presentation' | 'image' | 'video' | 'audio' | 'archive' | 'folder'
@@ -111,6 +114,12 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
   const [descriptionInput, setDescriptionInput] = useState('')
   const [tagInput, setTagInput] = useState('')
   const [tagSuggestions] = useState<string[]>([])
+
+  // Delete, Share, LinkShare
+  const [deleteTarget, setDeleteTarget] = useState<FileInfo | null>(null)
+  const [shareTarget, setShareTarget] = useState<FileInfo | null>(null)
+  const [linkShareTarget, setLinkShareTarget] = useState<FileInfo | null>(null)
+  const addDeletion = useTransferStore((state) => state.addDeletion)
 
   // Clear confirm dialog
   const [showClearConfirm, setShowClearConfirm] = useState(false)
@@ -427,6 +436,24 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
       setShowClearConfirm(false)
     }
   }, [])
+
+  const handleDeleteClick = useCallback((file: FileInfo) => {
+    setDeleteTarget(file)
+    setContextMenu(null)
+  }, [])
+
+  const handleDeleteConfirm = useCallback(() => {
+    if (!deleteTarget) return
+    const targetPath = deleteTarget.path
+    const targetName = deleteTarget.name
+    setDeleteTarget(null)
+    setSelectedFile(null)
+    addDeletion([targetPath], [targetName])
+    // Remove from local state
+    if (activeTab === 'recent') {
+      setActivities(prev => prev.filter(a => normalizePath(a.path) !== targetPath))
+    }
+  }, [deleteTarget, activeTab, addDeletion])
 
   const handleView = useCallback((file: FileInfo) => {
     if (isEditableFile(file)) {
@@ -784,6 +811,39 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
             경로 복사
           </button>
 
+          <div className="context-menu-divider" />
+
+          {/* Share */}
+          <button onClick={() => { setShareTarget(contextMenu); setContextMenu(null); }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="2"/>
+              <circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+              <circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="2"/>
+              <path d="M8.59 13.51L15.42 17.49" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M15.41 6.51L8.59 10.49" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            공유
+          </button>
+
+          {/* Link Share */}
+          <button onClick={() => { setLinkShareTarget(contextMenu); setContextMenu(null); }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            링크 공유
+          </button>
+
+          {/* Delete */}
+          <div className="context-menu-divider" />
+          <button className="context-menu-danger" onClick={() => { handleDeleteClick(contextMenu); }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M3 6H5H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            삭제
+          </button>
+
           {/* Divider + Hide from recent */}
           {activeTab === 'recent' && <div className="context-menu-divider" />}
           {activeTab === 'recent' && (
@@ -825,9 +885,9 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
           onClose={() => setSelectedFile(null)}
           onView={handleView}
           onDownload={(file) => downloadFile(file.path)}
-          onShare={() => {}}
-          onLinkShare={() => {}}
-          onDelete={() => {}}
+          onShare={(file) => setShareTarget(file)}
+          onLinkShare={(file) => setLinkShareTarget(file)}
+          onDelete={handleDeleteClick}
           onDescriptionChange={setDescriptionInput}
           onDescriptionSave={handleSaveDescription}
           onDescriptionEdit={setEditingDescription}
@@ -864,6 +924,45 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
             onNavigate={(file) => setViewingFile(file)}
           />
         </Suspense>
+      )}
+
+      {/* Share Modal */}
+      {shareTarget && (
+        <Suspense fallback={null}>
+          <ShareModal
+            isOpen={!!shareTarget}
+            onClose={() => setShareTarget(null)}
+            itemPath={shareTarget.path}
+            itemName={shareTarget.name}
+            isFolder={shareTarget.isDir}
+          />
+        </Suspense>
+      )}
+
+      {/* Link Share Modal */}
+      {linkShareTarget && (
+        <Suspense fallback={null}>
+          <LinkShareModal
+            isOpen={!!linkShareTarget}
+            onClose={() => setLinkShareTarget(null)}
+            itemPath={linkShareTarget.path}
+            itemName={linkShareTarget.name}
+            isFolder={linkShareTarget.isDir}
+          />
+        </Suspense>
+      )}
+
+      {/* Delete confirm dialog */}
+      {deleteTarget && (
+        <div className="clear-confirm-overlay" onClick={() => setDeleteTarget(null)}>
+          <div className="clear-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <p>'{deleteTarget.name}'을(를) 삭제하시겠습니까?<br/><small>휴지통으로 이동됩니다.</small></p>
+            <div className="clear-confirm-actions">
+              <button className="btn-cancel" onClick={() => setDeleteTarget(null)}>취소</button>
+              <button className="btn-danger" onClick={handleDeleteConfirm}>삭제</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Clear all confirm dialog */}
