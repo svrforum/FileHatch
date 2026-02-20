@@ -407,9 +407,21 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
     setContextMenu(null)
   }, [contextMenu])
 
-  const handleCopyPath = useCallback(() => {
+  const handleCopyPath = useCallback(async () => {
     if (contextMenu) {
-      navigator.clipboard.writeText(contextMenu.path)
+      try {
+        await navigator.clipboard.writeText(contextMenu.path)
+      } catch {
+        // Fallback for non-secure contexts (HTTP)
+        const textarea = document.createElement('textarea')
+        textarea.value = contextMenu.path
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
     }
     setContextMenu(null)
   }, [contextMenu])
