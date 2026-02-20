@@ -1,6 +1,44 @@
 // 파일 상세정보 패널 컴포넌트 - 우측에 표시되는 파일 정보 패널
 
-import { FileInfo, FolderStats, formatFileSize, FileMetadata } from '../../api/files'
+import { useQuery } from '@tanstack/react-query'
+import { FileInfo, FolderStats, formatFileSize, FileMetadata, getFileActivity, FileActivity } from '../../api/files'
+
+const EVENT_LABELS: Record<string, string> = {
+  'file.upload': '업로드',
+  'file.download': '다운로드',
+  'file.view': '조회',
+  'file.edit': '편집',
+  'file.delete': '삭제',
+  'file.rename': '이름변경',
+  'file.copy': '복사',
+  'file.move': '이동',
+  'file.overwrite': '덮어쓰기',
+  'folder.create': '폴더 생성',
+  'folder.delete': '폴더 삭제',
+  'share.create': '공유 생성',
+  'share.delete': '공유 삭제',
+  'share.access': '공유 접근',
+}
+
+function formatEventLabel(event: string): string {
+  return EVENT_LABELS[event] || event
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffSec = Math.floor(diffMs / 1000)
+  const diffMin = Math.floor(diffSec / 60)
+  const diffHour = Math.floor(diffMin / 60)
+  const diffDay = Math.floor(diffHour / 24)
+
+  if (diffSec < 60) return '방금 전'
+  if (diffMin < 60) return `${diffMin}분 전`
+  if (diffHour < 24) return `${diffHour}시간 전`
+  if (diffDay < 7) return `${diffDay}일 전`
+  return date.toLocaleDateString('ko-KR')
+}
 
 interface FileInfoPanelProps {
   selectedFile: FileInfo | null
@@ -57,6 +95,16 @@ function FileInfoPanel({
   onRemoveTag,
   getFileIcon,
 }: FileInfoPanelProps) {
+  // Fetch file activity
+  const filePath = selectedFile?.path || ''
+  const { data: activities } = useQuery({
+    queryKey: ['fileActivity', filePath],
+    queryFn: () => getFileActivity(filePath, 20),
+    enabled: !!filePath,
+    staleTime: 30000,
+    retry: 1,
+  })
+
   // Empty state when no file is selected
   if (!selectedFile) {
     return (
@@ -234,6 +282,24 @@ function FileInfoPanel({
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Activity Section */}
+      {activities && activities.length > 0 && (
+        <div className="details-activity">
+          <div className="activity-header">
+            <span className="metadata-label">활동</span>
+          </div>
+          <div className="activity-list">
+            {activities.map((item: FileActivity) => (
+              <div key={item.id} className="activity-item">
+                <span className="activity-event">{formatEventLabel(item.event)}</span>
+                <span className="activity-user">{item.username}</span>
+                <span className="activity-time">{formatRelativeTime(item.time)}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}

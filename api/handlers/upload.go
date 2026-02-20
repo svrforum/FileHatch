@@ -582,29 +582,40 @@ func (h *UploadHandler) getUserIDByUsername(username string) *string {
 	return &userID
 }
 
-// getUniqueFilePath returns a unique file path by adding [1], [2], etc. if file exists
+// getUniqueFilePath atomically finds and reserves a unique file path.
+// Uses O_CREATE|O_EXCL to prevent TOCTOU race conditions between concurrent uploads.
 func (h *UploadHandler) getUniqueFilePath(path string) string {
-	// Check if file exists
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	// Try the original path first - atomically create a placeholder
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	if err == nil {
+		f.Close()
 		return path
 	}
 
-	// File exists, need to generate unique name
+	// File exists, try numbered alternatives
 	dir := filepath.Dir(path)
 	ext := filepath.Ext(path)
 	base := strings.TrimSuffix(filepath.Base(path), ext)
 
-	// Try adding [1], [2], etc.
 	for i := 1; i < 1000; i++ {
 		newPath := filepath.Join(dir, fmt.Sprintf("%s[%d]%s", base, i, ext))
-		if _, err := os.Stat(newPath); os.IsNotExist(err) {
+		f, err := os.OpenFile(newPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		if err == nil {
+			f.Close()
 			return newPath
 		}
 	}
 
-	// Fallback: use timestamp (very unlikely to reach here)
-	timestamp := fmt.Sprintf("%d", os.Getpid())
-	return filepath.Join(dir, fmt.Sprintf("%s_%s%s", base, timestamp, ext))
+	// Fallback: use nanosecond timestamp for uniqueness (not PID which is shared across goroutines)
+	timestamp := fmt.Sprintf("%d", time.Now().UnixNano())
+	fallbackPath := filepath.Join(dir, fmt.Sprintf("%s_%s%s", base, timestamp, ext))
+	f, err = os.OpenFile(fallbackPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	if err == nil {
+		f.Close()
+		return fallbackPath
+	}
+	// Absolute last resort
+	return fallbackPath
 }
 
 // TusHandler returns the UnroutedHandler for tus uploads

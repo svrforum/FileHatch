@@ -852,3 +852,103 @@ func (h *AuditHandler) ClearRecentItems(c echo.Context) error {
 		"hidden_count": hiddenCount,
 	})
 }
+
+// GetFileActivity returns activity history for a specific file/folder path
+func (h *AuditHandler) GetFileActivity(c echo.Context) error {
+	claims, err := RequireClaims(c)
+	if err != nil {
+		return err
+	}
+
+	filePath := c.QueryParam("path")
+	if filePath == "" {
+		return RespondError(c, ErrMissingParameter("path"))
+	}
+
+	// Authorization: verify the user owns the file path or has access
+	// Home directory files: must be the user's own home path
+	// Shared drive files: user must have access to the shared folder
+	if strings.HasPrefix(filePath, "/home/") {
+		expectedPrefix := "/home/" + claims.Username + "/"
+		homeExact := "/home/" + claims.Username
+		if filePath != homeExact && !strings.HasPrefix(filePath, expectedPrefix) {
+			if !claims.IsAdmin {
+				return RespondError(c, ErrForbidden("Access denied"))
+			}
+		}
+	}
+	// Admin can see all activity; non-admin restricted to own home above
+
+	limitStr := c.QueryParam("limit")
+	limit := 50
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 200 {
+			limit = l
+		}
+	}
+
+	// Escape LIKE metacharacters to prevent pattern injection
+	escapedPath := strings.NewReplacer("%", "\\%", "_", "\\_", "\\", "\\\\").Replace(filePath)
+
+	rows, err := h.db.Query(`
+		SELECT al.id, al.ts, al.actor_id, COALESCE(u.username, 'system') as username,
+		       al.event_type, al.target_resource, al.details
+		FROM audit_logs al
+		LEFT JOIN users u ON al.actor_id = u.id
+		WHERE (al.target_resource = $1
+		    OR al.details::text LIKE '%' || $2 || '%' ESCAPE '\')
+		  AND al.event_type IN (
+		    'file.upload', 'file.download', 'file.view', 'file.edit',
+		    'file.delete', 'file.rename', 'file.copy', 'file.move', 'file.overwrite',
+		    'folder.create', 'folder.delete',
+		    'share.create', 'share.delete', 'share.access'
+		  )
+		ORDER BY al.ts DESC
+		LIMIT $3
+	`, filePath, escapedPath, limit)
+	if err != nil {
+		return RespondError(c, ErrInternal("Failed to query activity"))
+	}
+	defer rows.Close()
+
+	type ActivityItem struct {
+		ID       string          `json:"id"`
+		Time     time.Time       `json:"time"`
+		ActorID  string          `json:"actorId"`
+		Username string          `json:"username"`
+		Event    string          `json:"event"`
+		Target   *string         `json:"target,omitempty"`
+		Details  json.RawMessage `json:"details,omitempty"`
+	}
+
+	var activities []ActivityItem
+	for rows.Next() {
+		var item ActivityItem
+		var target sql.NullString
+		var details sql.NullString
+		if err := rows.Scan(&item.ID, &item.Time, &item.ActorID, &item.Username,
+			&item.Event, &target, &details); err != nil {
+			log.Printf("[Activity] scan error: %v", err)
+			continue
+		}
+		if target.Valid {
+			item.Target = &target.String
+		}
+		if details.Valid {
+			item.Details = json.RawMessage(details.String)
+		}
+		activities = append(activities, item)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("[Activity] rows iteration error: %v", err)
+	}
+
+	if activities == nil {
+		activities = []ActivityItem{}
+	}
+
+	return RespondSuccess(c, map[string]interface{}{
+		"activities": activities,
+		"total":      len(activities),
+	})
+}

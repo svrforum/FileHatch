@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { searchFiles, FileInfo, formatFileSize, MatchType } from '../api/files'
 import './SearchModal.css'
 
@@ -12,12 +12,38 @@ interface SearchModalProps {
 
 type TabType = 'all' | 'name' | 'tag' | 'description'
 
+type FileTypePreset = '' | 'document' | 'spreadsheet' | 'image' | 'video' | 'audio' | 'archive'
+
+type SizeUnit = 'KB' | 'MB' | 'GB'
+
 const TABS: { key: TabType; label: string }[] = [
   { key: 'all', label: '전체' },
   { key: 'name', label: '파일명' },
   { key: 'description', label: '설명' },
   { key: 'tag', label: '태그' },
 ]
+
+const FILE_TYPE_PRESETS: { key: FileTypePreset; label: string; extensions: string }[] = [
+  { key: '', label: '모든 파일', extensions: '' },
+  { key: 'document', label: '문서', extensions: 'doc,docx,pdf,txt,md,hwp,hwpx,odt,rtf' },
+  { key: 'spreadsheet', label: '스프레드시트', extensions: 'xls,xlsx,csv,ods' },
+  { key: 'image', label: '이미지', extensions: 'jpg,jpeg,png,gif,webp,svg,bmp,ico,tiff' },
+  { key: 'video', label: '비디오', extensions: 'mp4,mkv,avi,mov,wmv,flv,webm' },
+  { key: 'audio', label: '오디오', extensions: 'mp3,wav,flac,aac,ogg,wma,m4a' },
+  { key: 'archive', label: '압축파일', extensions: 'zip,tar,gz,7z,rar,bz2,xz' },
+]
+
+function sizeToBytes(value: string, unit: SizeUnit): number | undefined {
+  const num = parseFloat(value)
+  if (isNaN(num) || num < 0) return undefined
+  if (num === 0) return undefined
+  const multipliers: Record<SizeUnit, number> = {
+    KB: 1024,
+    MB: 1024 * 1024,
+    GB: 1024 * 1024 * 1024,
+  }
+  return Math.floor(num * multipliers[unit])
+}
 
 function SearchModal({ isOpen, onClose, initialQuery, onNavigate, onFileSelect }: SearchModalProps) {
   const [query, setQuery] = useState(initialQuery)
@@ -31,6 +57,56 @@ function SearchModal({ isOpen, onClose, initialQuery, onNavigate, onFileSelect }
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
+  // Advanced filter state
+  const [showFilters, setShowFilters] = useState(false)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [fileType, setFileType] = useState<FileTypePreset>('')
+  const [minSizeValue, setMinSizeValue] = useState('')
+  const [minSizeUnit, setMinSizeUnit] = useState<SizeUnit>('MB')
+  const [maxSizeValue, setMaxSizeValue] = useState('')
+  const [maxSizeUnit, setMaxSizeUnit] = useState<SizeUnit>('MB')
+
+  const hasActiveFilters = useMemo(() => {
+    return dateFrom !== '' || dateTo !== '' || fileType !== '' || minSizeValue !== '' || maxSizeValue !== ''
+  }, [dateFrom, dateTo, fileType, minSizeValue, maxSizeValue])
+
+  const filterParams = useMemo(() => {
+    const params: {
+      dateFrom?: string
+      dateTo?: string
+      minSize?: number
+      maxSize?: number
+      ext?: string
+    } = {}
+
+    if (dateFrom) params.dateFrom = dateFrom
+    if (dateTo) params.dateTo = dateTo
+
+    const minBytes = sizeToBytes(minSizeValue, minSizeUnit)
+    if (minBytes !== undefined) params.minSize = minBytes
+
+    const maxBytes = sizeToBytes(maxSizeValue, maxSizeUnit)
+    if (maxBytes !== undefined) params.maxSize = maxBytes
+
+    if (fileType) {
+      const preset = FILE_TYPE_PRESETS.find(p => p.key === fileType)
+      if (preset) params.ext = preset.extensions
+    }
+
+    return params
+  }, [dateFrom, dateTo, fileType, minSizeValue, minSizeUnit, maxSizeValue, maxSizeUnit])
+
+  const clearFilters = useCallback(() => {
+    setDateFrom('')
+    setDateTo('')
+    setFileType('')
+    setMinSizeValue('')
+    setMinSizeUnit('MB')
+    setMaxSizeValue('')
+    setMaxSizeUnit('MB')
+  }, [])
+
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -40,12 +116,14 @@ function SearchModal({ isOpen, onClose, initialQuery, onNavigate, onFileSelect }
       setPage(1)
       setHasMore(false)
       setTotal(0)
+      setShowFilters(false)
+      clearFilters()
       // Focus input after a short delay
       setTimeout(() => inputRef.current?.focus(), 100)
     }
-  }, [isOpen, initialQuery])
+  }, [isOpen, initialQuery, clearFilters])
 
-  // Search when query or tab changes
+  // Search when query, tab, or filters change
   useEffect(() => {
     if (!isOpen || !query.trim()) {
       setResults([])
@@ -62,6 +140,7 @@ function SearchModal({ isOpen, onClose, initialQuery, onNavigate, onFileSelect }
           page: 1,
           limit: 20,
           matchType: activeTab as MatchType,
+          ...filterParams,
         })
         setResults(response.results || [])
         setTotal(response.total)
@@ -78,7 +157,7 @@ function SearchModal({ isOpen, onClose, initialQuery, onNavigate, onFileSelect }
 
     const debounce = setTimeout(doSearch, 300)
     return () => clearTimeout(debounce)
-  }, [isOpen, query, activeTab])
+  }, [isOpen, query, activeTab, filterParams])
 
   // Load more for infinite scroll
   const loadMore = useCallback(async () => {
@@ -91,6 +170,7 @@ function SearchModal({ isOpen, onClose, initialQuery, onNavigate, onFileSelect }
         page: nextPage,
         limit: 20,
         matchType: activeTab as MatchType,
+        ...filterParams,
       })
       setResults(prev => [...prev, ...(response.results || [])])
       setHasMore(response.hasMore)
@@ -100,7 +180,7 @@ function SearchModal({ isOpen, onClose, initialQuery, onNavigate, onFileSelect }
     } finally {
       setIsLoading(false)
     }
-  }, [isLoading, hasMore, query, page, activeTab])
+  }, [isLoading, hasMore, query, page, activeTab, filterParams])
 
   // Intersection Observer for infinite scroll
   useEffect(() => {
@@ -178,12 +258,117 @@ function SearchModal({ isOpen, onClose, initialQuery, onNavigate, onFileSelect }
               </button>
             )}
           </div>
+          <button
+            className={`search-modal-filter-toggle ${showFilters ? 'active' : ''} ${hasActiveFilters ? 'has-filters' : ''}`}
+            onClick={() => setShowFilters(!showFilters)}
+            title="고급 필터"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M3 4h18l-7 8.5V18l-4 2v-7.5L3 4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+            </svg>
+            {hasActiveFilters && <span className="filter-badge" />}
+          </button>
           <button className="search-modal-close" onClick={onClose}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
           </button>
         </div>
+
+        {showFilters && (
+          <div className="search-filters">
+            <div className="search-filters-row">
+              <div className="search-filter-group">
+                <label className="search-filter-label">파일 유형</label>
+                <select
+                  className="search-filter-select"
+                  value={fileType}
+                  onChange={e => setFileType(e.target.value as FileTypePreset)}
+                >
+                  {FILE_TYPE_PRESETS.map(preset => (
+                    <option key={preset.key} value={preset.key}>{preset.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="search-filter-group">
+                <label className="search-filter-label">시작일</label>
+                <input
+                  type="date"
+                  className="search-filter-date"
+                  value={dateFrom}
+                  onChange={e => setDateFrom(e.target.value)}
+                  max={dateTo || undefined}
+                />
+              </div>
+              <div className="search-filter-group">
+                <label className="search-filter-label">종료일</label>
+                <input
+                  type="date"
+                  className="search-filter-date"
+                  value={dateTo}
+                  onChange={e => setDateTo(e.target.value)}
+                  min={dateFrom || undefined}
+                />
+              </div>
+            </div>
+            <div className="search-filters-row">
+              <div className="search-filter-group">
+                <label className="search-filter-label">최소 크기</label>
+                <div className="search-filter-size">
+                  <input
+                    type="number"
+                    className="search-filter-size-input"
+                    value={minSizeValue}
+                    onChange={e => setMinSizeValue(e.target.value)}
+                    placeholder="0"
+                    min="0"
+                    step="any"
+                  />
+                  <select
+                    className="search-filter-size-unit"
+                    value={minSizeUnit}
+                    onChange={e => setMinSizeUnit(e.target.value as SizeUnit)}
+                  >
+                    <option value="KB">KB</option>
+                    <option value="MB">MB</option>
+                    <option value="GB">GB</option>
+                  </select>
+                </div>
+              </div>
+              <div className="search-filter-group">
+                <label className="search-filter-label">최대 크기</label>
+                <div className="search-filter-size">
+                  <input
+                    type="number"
+                    className="search-filter-size-input"
+                    value={maxSizeValue}
+                    onChange={e => setMaxSizeValue(e.target.value)}
+                    placeholder="0"
+                    min="0"
+                    step="any"
+                  />
+                  <select
+                    className="search-filter-size-unit"
+                    value={maxSizeUnit}
+                    onChange={e => setMaxSizeUnit(e.target.value as SizeUnit)}
+                  >
+                    <option value="KB">KB</option>
+                    <option value="MB">MB</option>
+                    <option value="GB">GB</option>
+                  </select>
+                </div>
+              </div>
+              {hasActiveFilters && (
+                <div className="search-filter-group search-filter-actions">
+                  <label className="search-filter-label">&nbsp;</label>
+                  <button className="search-filter-clear" onClick={clearFilters}>
+                    필터 초기화
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="search-modal-tabs">
           {TABS.map(tab => (

@@ -3,12 +3,14 @@ package handlers
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
@@ -84,18 +86,9 @@ func (h *Handler) GetFile(c echo.Context) error {
 			return RespondError(c, ErrBadRequest("Path is a directory"))
 		}
 
-		// Set headers
 		fileName := info.FileName
 		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(fileName), "."))
 		contentType := getMimeType(ext)
-
-		c.Response().Header().Set("Content-Type", contentType)
-		if info.FileSize > 0 {
-			c.Response().Header().Set("Content-Length", strconv.FormatInt(info.FileSize, 10))
-		}
-		if isDownload {
-			setContentDisposition(c, fileName)
-		}
 
 		// Log audit event for downloads
 		if isDownload {
@@ -110,9 +103,53 @@ func (h *Handler) GetFile(c echo.Context) error {
 			})
 		}
 
-		c.Response().WriteHeader(http.StatusOK)
-		_, err = io.Copy(c.Response().Writer, reader)
-		return err
+		// For Range request support: buffer to temp file, then use http.ServeContent.
+		// This enables video seeking, download resume, and partial content (206) responses.
+		tmpDir := filepath.Join(h.dataRoot, ".tmp")
+		if err := os.MkdirAll(tmpDir, 0755); err != nil {
+			log.Printf("[Download] Failed to create temp dir: %v", err)
+		}
+		tmpFile, err := os.CreateTemp(tmpDir, "ext_download_*")
+		if err != nil {
+			// Fallback: stream directly without Range support
+			c.Response().Header().Set("Content-Type", contentType)
+			if info.FileSize > 0 {
+				c.Response().Header().Set("Content-Length", strconv.FormatInt(info.FileSize, 10))
+			}
+			if isDownload {
+				setContentDisposition(c, fileName)
+			}
+			c.Response().WriteHeader(http.StatusOK)
+			_, copyErr := io.Copy(c.Response().Writer, reader)
+			return copyErr
+		}
+		defer os.Remove(tmpFile.Name())
+		defer tmpFile.Close()
+
+		if _, err := io.Copy(tmpFile, reader); err != nil {
+			return RespondError(c, ErrInternal("Failed to read from external storage"))
+		}
+
+		// Seek back to beginning for ServeContent
+		if _, err := tmpFile.Seek(0, io.SeekStart); err != nil {
+			return RespondError(c, ErrInternal("Failed to prepare file for serving"))
+		}
+
+		// Set content type and disposition headers
+		c.Response().Header().Set("Content-Type", contentType)
+		if isDownload {
+			setContentDisposition(c, fileName)
+		}
+
+		// Use FileModTime from backend if available, otherwise fall back to current time
+		modTime := info.FileModTime
+		if modTime.IsZero() {
+			modTime = time.Now()
+		}
+
+		// http.ServeContent handles Range requests, Content-Length, and Last-Modified automatically
+		http.ServeContent(c.Response(), c.Request(), fileName, modTime, tmpFile)
+		return nil
 	}
 
 	// For home folder files accessed by the owner, no additional check needed

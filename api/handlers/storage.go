@@ -146,9 +146,14 @@ func (h *Handler) getSharedStorageUsage() int64 {
 		return cached
 	}
 
-	// Calculate and cache
-	sharedPath := filepath.Join(h.dataRoot, "shared")
-	size, _ := h.calculateDirSize(sharedPath)
+	// DB에서 active 공유 폴더의 storage_used 합계 조회 (filepath.Walk 대신)
+	var size int64
+	err := h.db.QueryRow(`SELECT COALESCE(SUM(storage_used), 0) FROM shared_folders WHERE is_active = TRUE`).Scan(&size)
+	if err != nil {
+		// DB 쿼리 실패 시 fallback으로 filesystem walk
+		sharedPath := filepath.Join(h.dataRoot, "shared")
+		size, _ = h.calculateDirSize(sharedPath)
+	}
 	cache.SetSharedUsage(size)
 	return size
 }

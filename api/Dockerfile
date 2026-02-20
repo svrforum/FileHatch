@@ -24,8 +24,9 @@ FROM alpine:3.23
 WORKDIR /app
 
 # Install ca-certificates for HTTPS, docker-cli for system logs,
-# ffmpeg for video thumbnails, and libwebp-tools for WebP conversion
-RUN apk --no-cache add ca-certificates tzdata docker-cli ffmpeg libwebp-tools
+# ffmpeg for video thumbnails, libwebp-tools for WebP conversion,
+# and poppler-utils for PDF thumbnails (pdftoppm)
+RUN apk --no-cache add ca-certificates tzdata docker-cli ffmpeg libwebp-tools poppler-utils
 
 # Copy binary from builder
 COPY --from=builder /build/main .

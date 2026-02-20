@@ -1135,7 +1135,12 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       setSelectedFiles(new Set([file.path]))
     }
     setSelectedFile(file)
-  }, [selectedFile, selectedFiles, displayFiles, isMobile, isSelectionMode, onNavigate])
+    // Sync focusedIndex so keyboard shortcuts (e.g. Space preview) work after mouse click
+    if (displayFiles) {
+      const idx = displayFiles.findIndex(f => f.path === file.path)
+      if (idx >= 0) setFocusedIndex(idx)
+    }
+  }, [selectedFile, selectedFiles, displayFiles, isMobile, isSelectionMode, onNavigate, setFocusedIndex])
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedFiles.size === 0) return
@@ -1215,6 +1220,16 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     localStorage.setItem('fileViewMode', mode)
   }, [])
 
+  const handlePreview = useCallback((file: FileInfo) => {
+    if (isZipFile(file)) {
+      setZipViewingFile(file)
+    } else if (isEditableFile(file)) {
+      setEditingFile(file)
+    } else if (isViewableFile(file)) {
+      setViewingFile(file)
+    }
+  }, [isZipFile, isEditableFile, isViewableFile])
+
   // Keyboard navigation hook
   const modalsOpen = !!(viewingFile || editingFile || onlyOfficeConfig || deleteTarget || deleteTargets || renameTarget || showNewFileModal || showCompressModal || showDownloadModal)
 
@@ -1241,6 +1256,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     onPaste: handlePaste,
     onUndo: handleUndo,
     onRedo: handleRedo,
+    onPreview: handlePreview,
   })
 
   const handleSort = useCallback((field: SortField) => {

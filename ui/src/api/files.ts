@@ -447,15 +447,31 @@ export interface SearchOptions {
   page?: number
   limit?: number
   matchType?: MatchType
+  dateFrom?: string
+  dateTo?: string
+  minSize?: number
+  maxSize?: number
+  ext?: string
 }
 
 export async function searchFiles(
   query: string,
   options: SearchOptions = {}
 ): Promise<SearchResponse> {
-  const { path = '/', page = 1, limit = 20, matchType = 'all' } = options
+  const { path = '/', page = 1, limit = 20, matchType = 'all', dateFrom, dateTo, minSize, maxSize, ext } = options
   return api.get<SearchResponse>(
-    apiUrl.withParams('/files/search', { q: query, path, page, limit, matchType })
+    apiUrl.withParams('/files/search', {
+      q: query,
+      path,
+      page,
+      limit,
+      matchType,
+      dateFrom,
+      dateTo,
+      minSize,
+      maxSize,
+      ext,
+    })
   )
 }
 
@@ -766,6 +782,24 @@ export async function hideRecentItem(filePath: string): Promise<{ message: strin
 export async function clearAllRecentItems(): Promise<{ message: string; hidden_count: number }> {
   const result = await api.delete<{ data: { message: string; hidden_count: number } }>('/files/recent')
   return result.data
+}
+
+// File Activity (per-file audit stream)
+export interface FileActivity {
+  id: string
+  time: string
+  actorId: string
+  username: string
+  event: string
+  target?: string
+  details?: Record<string, unknown>
+}
+
+export async function getFileActivity(path: string, limit = 50): Promise<FileActivity[]> {
+  const result = await api.get<{ data: { activities: FileActivity[]; total: number } }>(
+    apiUrl.withParams('/files/activity', { path, limit })
+  )
+  return result.data?.activities ?? []
 }
 
 // Compress files/folders into a zip archive

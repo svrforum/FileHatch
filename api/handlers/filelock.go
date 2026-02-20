@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -54,9 +55,6 @@ func (h *Handler) LockFile(c echo.Context) error {
 	if _, err := os.Stat(realPath); os.IsNotExist(err) {
 		return RespondError(c, ErrNotFound("File not found"))
 	}
-
-	// Clean up expired locks first
-	h.cleanupExpiredLocks()
 
 	// Check if already locked by someone else
 	var existingLock FileLock
@@ -206,9 +204,6 @@ func (h *Handler) GetFileLock(c echo.Context) error {
 		return RespondError(c, ErrMissingParameter("path"))
 	}
 
-	// Clean up expired locks first
-	h.cleanupExpiredLocks()
-
 	var lock FileLock
 	var username string
 	err := h.db.QueryRow(`
@@ -252,9 +247,6 @@ func (h *Handler) CheckFileLocks(c echo.Context) error {
 			"locks": map[string]interface{}{},
 		})
 	}
-
-	// Clean up expired locks first
-	h.cleanupExpiredLocks()
 
 	rows, err := h.db.Query(`
 		SELECT fl.file_path, fl.locked_by, u.username, fl.locked_at, fl.expires_at
@@ -323,6 +315,20 @@ func (h *Handler) GetMyLocks(c echo.Context) error {
 	})
 }
 
+// StartLockCleanupRoutine starts a background goroutine that periodically removes expired locks
+func (h *Handler) StartLockCleanupRoutine() {
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		// Run once immediately
+		h.cleanupExpiredLocks()
+		for range ticker.C {
+			h.cleanupExpiredLocks()
+		}
+	}()
+	log.Println("[Locks] Started expired lock cleanup routine (interval: 1m)")
+}
+
 // cleanupExpiredLocks removes expired file locks
 func (h *Handler) cleanupExpiredLocks() {
 	_, _ = h.db.Exec(`
@@ -360,9 +366,6 @@ func (h *Handler) UpdateLocksUnderPath(oldFolderPath, newFolderPath string) erro
 // CheckFileLockForOperation checks if a file is locked by another user.
 // Returns nil if the operation is allowed, or an APIError if blocked.
 func (h *Handler) CheckFileLockForOperation(filePath, callerUserID string) *APIError {
-	// Clean up expired locks first
-	h.cleanupExpiredLocks()
-
 	var lockedBy, username string
 	err := h.db.QueryRow(`
 		SELECT fl.locked_by, u.username
@@ -390,8 +393,6 @@ func (h *Handler) CheckFileLockForOperation(filePath, callerUserID string) *APIE
 // CheckFolderLocksForOperation checks if any file under a folder is locked by another user.
 // Returns nil if the operation is allowed, or an APIError if blocked.
 func (h *Handler) CheckFolderLocksForOperation(folderPath, callerUserID string) *APIError {
-	h.cleanupExpiredLocks()
-
 	prefix := folderPath + "/"
 	var lockedBy, username, filePath string
 	err := h.db.QueryRow(`

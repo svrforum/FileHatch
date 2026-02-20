@@ -554,6 +554,11 @@ func (h *Handler) ListFiles(c echo.Context) error {
 		response.PageSize = pageSize
 		response.TotalPages = totalPages
 	} else {
+		// 페이지네이션 미지정 시에도 안전 상한 적용
+		if len(files) > 10000 {
+			files = files[:10000]
+			response.Total = 10000
+		}
 		response.Files = files
 	}
 

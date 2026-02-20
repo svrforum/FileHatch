@@ -28,6 +28,7 @@ interface UseKeyboardNavigationProps {
   onPaste: () => void
   onUndo: () => void
   onRedo: () => void
+  onPreview: (file: FileInfo) => void
 }
 
 export function useKeyboardNavigation({
@@ -53,6 +54,7 @@ export function useKeyboardNavigation({
   onPaste,
   onUndo,
   onRedo,
+  onPreview,
 }: UseKeyboardNavigationProps) {
   // Type-ahead search state
   const searchBuffer = useRef('')
@@ -68,7 +70,7 @@ export function useKeyboardNavigation({
         return
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return
-      if (e.key.length !== 1) return
+      if (e.key.length !== 1 || e.key === ' ') return
 
       const pressedKey = e.key.toLowerCase()
 
@@ -293,6 +295,16 @@ export function useKeyboardNavigation({
             onGoBack()
           }
           break
+        case ' ':
+          if (modalsOpen) return
+          e.preventDefault()
+          if (focusedIndex >= 0 && focusedIndex < files.length) {
+            const file = files[focusedIndex]
+            if (!file.isDir) {
+              onPreview(file)
+            }
+          }
+          break
         case 'F2':
           e.preventDefault()
           if (selectedFile) {
@@ -309,6 +321,6 @@ export function useKeyboardNavigation({
     containerRef, modalsOpen, canGoBack,
     setFocusedIndex, setSelectedFile, setSelectedFiles,
     onDoubleClick, onDelete, onBulkDelete, onRename,
-    onCopy, onCut, onPaste, onUndo, onRedo, onGoBack
+    onCopy, onCut, onPaste, onUndo, onRedo, onGoBack, onPreview
   ])
 }

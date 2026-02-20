@@ -44,6 +44,48 @@ type SearchResponse struct {
 	MatchType string         `json:"matchType,omitempty"` // Filter applied: "all", "name", "tag", "description", "trash"
 }
 
+// SearchFilter holds advanced search filter parameters
+type SearchFilter struct {
+	DateFrom  time.Time
+	DateTo    time.Time
+	MinSize   int64
+	MaxSize   int64
+	ExtFilter map[string]bool
+}
+
+// IsActive returns true if any filter is set
+func (f *SearchFilter) IsActive() bool {
+	return !f.DateFrom.IsZero() || !f.DateTo.IsZero() || f.MinSize > 0 || f.MaxSize > 0 || len(f.ExtFilter) > 0
+}
+
+// Match returns true if the search result passes all active filters
+func (f *SearchFilter) Match(result SearchResult) bool {
+	// Extension filter
+	if len(f.ExtFilter) > 0 {
+		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(result.Name), "."))
+		if !f.ExtFilter[ext] {
+			return false
+		}
+	}
+	// Size filter (skip directories for size filtering)
+	if !result.IsDir {
+		if f.MinSize > 0 && result.Size < f.MinSize {
+			return false
+		}
+		if f.MaxSize > 0 && result.Size > f.MaxSize {
+			return false
+		}
+	}
+	// Date filter
+	if !f.DateFrom.IsZero() && result.ModTime.Before(f.DateFrom) {
+		return false
+	}
+	if !f.DateTo.IsZero() && result.ModTime.After(f.DateTo) {
+		return false
+	}
+	return true
+}
+
 // isGlobPattern checks if a query string contains glob pattern characters
 func isGlobPattern(query string) bool {
 	return strings.ContainsAny(query, "*?[")
@@ -97,6 +139,55 @@ func (h *Handler) SearchFiles(c echo.Context) error {
 		matchTypeFilter = "all"
 	}
 
+	// Parse advanced filter parameters
+	dateFrom := c.QueryParam("dateFrom")
+	dateTo := c.QueryParam("dateTo")
+	minSizeStr := c.QueryParam("minSize")
+	maxSizeStr := c.QueryParam("maxSize")
+	extensions := c.QueryParam("ext")
+
+	var minSize, maxSize int64
+	if minSizeStr != "" {
+		if v, err := strconv.ParseInt(minSizeStr, 10, 64); err == nil && v >= 0 {
+			minSize = v
+		}
+	}
+	if maxSizeStr != "" {
+		if v, err := strconv.ParseInt(maxSizeStr, 10, 64); err == nil && v >= 0 {
+			maxSize = v
+		}
+	}
+
+	var dateFromTime, dateToTime time.Time
+	if dateFrom != "" {
+		dateFromTime, _ = time.Parse("2006-01-02", dateFrom)
+	}
+	if dateTo != "" {
+		dateToTime, _ = time.Parse("2006-01-02", dateTo)
+		if !dateToTime.IsZero() {
+			dateToTime = dateToTime.Add(24*time.Hour - time.Nanosecond) // include the end date fully
+		}
+	}
+
+	var extFilter map[string]bool
+	if extensions != "" {
+		extFilter = make(map[string]bool)
+		for _, ext := range strings.Split(extensions, ",") {
+			ext = strings.TrimSpace(strings.ToLower(ext))
+			if ext != "" {
+				extFilter[ext] = true
+			}
+		}
+	}
+
+	filter := &SearchFilter{
+		DateFrom:  dateFromTime,
+		DateTo:    dateToTime,
+		MinSize:   minSize,
+		MaxSize:   maxSize,
+		ExtFilter: extFilter,
+	}
+
 	// Get user claims
 	var claims *JWTClaims
 	if user, ok := c.Get("user").(*JWTClaims); ok {
@@ -148,6 +239,17 @@ func (h *Handler) SearchFiles(c echo.Context) error {
 				existingPaths[mr.Path] = true
 			}
 		}
+	}
+
+	// Apply advanced filters
+	if filter.IsActive() {
+		filtered := make([]SearchResult, 0, len(allResults))
+		for _, r := range allResults {
+			if filter.Match(r) {
+				filtered = append(filtered, r)
+			}
+		}
+		allResults = filtered
 	}
 
 	// Apply pagination

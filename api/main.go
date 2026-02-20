@@ -415,6 +415,9 @@ func main() {
 	authApi.POST("/files/recent/hide", auditHandler.HideRecentItem)
 	authApi.DELETE("/files/recent", auditHandler.ClearRecentItems)
 
+	// File activity API (protected)
+	authApi.GET("/files/activity", auditHandler.GetFileActivity)
+
 	// User preferences (protected)
 	authApi.GET("/user/preferences", userPrefsHandler.GetPreferences)
 	authApi.PUT("/user/preferences", userPrefsHandler.UpdatePreferences)
@@ -662,6 +665,9 @@ func main() {
 
 	// Start transfer job cleanup (removes old completed jobs)
 	h.StartTransferJobCleanup()
+
+	// Start expired lock cleanup routine
+	h.StartLockCleanupRoutine()
 
 	// Start file watcher for real-time updates and SMB audit logging
 	fileWatcher, err := handlers.NewFileWatcher(dataRoot, db)

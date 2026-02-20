@@ -28,8 +28,9 @@ func Connect() (*sql.DB, error) {
 
 	// Connection pool settings
 	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
+	db.SetMaxIdleConns(10)
 	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(3 * time.Minute)
 
 	// Verify connection
 	if err := db.Ping(); err != nil {

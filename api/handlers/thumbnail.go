@@ -47,6 +47,11 @@ var (
 		".mp4": true, ".mkv": true, ".avi": true, ".mov": true, ".wmv": true, ".flv": true, ".webm": true,
 	}
 
+	// Supported PDF extensions
+	supportedPDFExts = map[string]bool{
+		".pdf": true,
+	}
+
 	// Thumbnail worker pool
 	thumbnailWorkerPool *ThumbnailWorkerPool
 	thumbnailPoolOnce   sync.Once
@@ -66,6 +71,7 @@ type ThumbnailJob struct {
 	CacheKey    string
 	Size        ThumbnailSize
 	IsVideo     bool
+	IsPDF       bool
 	ModTime     time.Time
 	ResultChan  chan ThumbnailResult
 }
@@ -103,6 +109,8 @@ func (p *ThumbnailWorkerPool) worker() {
 
 		if job.IsVideo {
 			data, err = generateVideoThumbnail(job.FilePath, job.Size)
+		} else if job.IsPDF {
+			data, err = generatePDFThumbnail(job.FilePath, job.Size)
 		} else {
 			data, err = generateImageThumbnail(job.FilePath, job.Size)
 		}
@@ -236,8 +244,9 @@ func (h *Handler) GetThumbnail(c echo.Context) error {
 	ext := strings.ToLower(filepath.Ext(fileName))
 	isImage := supportedImageExts[ext]
 	isVideo := supportedVideoExts[ext]
+	isPDF := supportedPDFExts[ext]
 
-	if !isImage && !isVideo {
+	if !isImage && !isVideo && !isPDF {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Unsupported file type for thumbnail",
 		})
@@ -293,6 +302,8 @@ func (h *Handler) GetThumbnail(c echo.Context) error {
 	var thumbData []byte
 	if isVideo {
 		thumbData, err = generateVideoThumbnail(localFilePath, size)
+	} else if isPDF {
+		thumbData, err = generatePDFThumbnail(localFilePath, size)
 	} else {
 		thumbData, err = generateImageThumbnail(localFilePath, size)
 	}
@@ -409,6 +420,65 @@ func generateVideoThumbnail(filePath string, size ThumbnailSize) ([]byte, error)
 	data, err := os.ReadFile(tmpPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read thumbnail: %w", err)
+	}
+
+	return data, nil
+}
+
+// generatePDFThumbnail generates a thumbnail for a PDF file using pdftoppm
+func generatePDFThumbnail(filePath string, size ThumbnailSize) ([]byte, error) {
+	// Check if pdftoppm is available
+	if _, err := exec.LookPath("pdftoppm"); err != nil {
+		return nil, fmt.Errorf("pdftoppm not found: %w", err)
+	}
+
+	// Create temp file for output
+	tmpDir := os.TempDir()
+	tmpPrefix := filepath.Join(tmpDir, fmt.Sprintf("pdf_thumb_%d", time.Now().UnixNano()))
+
+	// pdftoppm outputs to {prefix}-{page}.jpg
+	// -f 1 -l 1: first page only
+	// -jpeg: output as JPEG
+	// -scale-to: scale to fit within size
+	scaleSize := size.Width
+	if size.Height < scaleSize {
+		scaleSize = size.Height
+	}
+
+	args := []string{
+		"-f", "1",
+		"-l", "1",
+		"-jpeg",
+		"-jpegopt", "quality=85",
+		"-scale-to", strconv.Itoa(scaleSize),
+		filePath,
+		tmpPrefix,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "pdftoppm", args...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("pdftoppm failed: %s: %w", string(output), err)
+	}
+
+	// pdftoppm creates {prefix}-{page}.jpg with varying zero-padding depending on version.
+	// Use glob to find and clean up all generated files.
+	matches, _ := filepath.Glob(tmpPrefix + "-*.jpg")
+	defer func() {
+		for _, m := range matches {
+			os.Remove(m)
+		}
+	}()
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("pdftoppm produced no output files")
+	}
+
+	data, err := os.ReadFile(matches[0])
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PDF thumbnail: %w", err)
 	}
 
 	return data, nil
@@ -547,8 +617,9 @@ func (h *Handler) PreloadThumbnails(c echo.Context) error {
 		ext := strings.ToLower(filepath.Ext(entry.Name()))
 		isImage := supportedImageExts[ext]
 		isVideo := supportedVideoExts[ext]
+		isPDF := supportedPDFExts[ext]
 
-		if !isImage && !isVideo {
+		if !isImage && !isVideo && !isPDF {
 			continue
 		}
 
@@ -571,6 +642,7 @@ func (h *Handler) PreloadThumbnails(c echo.Context) error {
 			FilePath: filePath,
 			Size:     ThumbnailSizes["medium"],
 			IsVideo:  isVideo,
+			IsPDF:    isPDF,
 			ModTime:  fileInfo.ModTime(),
 		})
 		queued++
@@ -657,8 +729,9 @@ func (h *Handler) GetBatchThumbnails(c echo.Context) error {
 		ext := strings.ToLower(filepath.Ext(fileName))
 		isImage := supportedImageExts[ext]
 		isVideo := supportedVideoExts[ext]
+		isPDF := supportedPDFExts[ext]
 
-		if !isImage && !isVideo {
+		if !isImage && !isVideo && !isPDF {
 			results[path] = map[string]string{"error": "unsupported"}
 			continue
 		}
@@ -688,6 +761,7 @@ func (h *Handler) GetBatchThumbnails(c echo.Context) error {
 				FilePath: realPath,
 				Size:     size,
 				IsVideo:  isVideo,
+				IsPDF:    isPDF,
 				ModTime:  fileModTime,
 			})
 		}
@@ -790,7 +864,7 @@ func (h *Handler) GetResponsiveThumbnail(c echo.Context) error {
 	}
 
 	ext := strings.ToLower(filepath.Ext(fileName))
-	if !supportedImageExts[ext] && !supportedVideoExts[ext] {
+	if !supportedImageExts[ext] && !supportedVideoExts[ext] && !supportedPDFExts[ext] {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Unsupported file type",
 		})
@@ -815,5 +889,5 @@ func (h *Handler) GetResponsiveThumbnail(c echo.Context) error {
 // IsThumbnailSupported checks if a file type supports thumbnails
 func IsThumbnailSupported(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
-	return supportedImageExts[ext] || supportedVideoExts[ext]
+	return supportedImageExts[ext] || supportedVideoExts[ext] || supportedPDFExts[ext]
 }

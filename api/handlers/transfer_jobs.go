@@ -45,7 +45,7 @@ type CreateTransferRequest struct {
 	Overwrite       bool     `json:"overwrite,omitempty"`
 	Mode            string   `json:"mode,omitempty"`         // merge
 	FileConflict    string   `json:"fileConflict,omitempty"` // overwrite, skip, rename
-	Paths           []string `json:"paths,omitempty"`        // paths for delete operation
+	Paths           []string `json:"paths,omitempty"`        // paths for bulk operations (delete, copy, move)
 }
 
 // TransferProgressEvent is sent via WebSocket for real-time progress
@@ -65,7 +65,7 @@ type TransferProgressEvent struct {
 	FailedPaths []FailedPathInfo `json:"failedPaths,omitempty"`
 }
 
-// FailedPathInfo represents a failed path during delete operation
+// FailedPathInfo represents a failed path during a bulk operation (delete, copy, move)
 type FailedPathInfo struct {
 	Path  string `json:"path"`
 	Error string `json:"error"`
@@ -206,7 +206,8 @@ func (h *Handler) CreateTransferJob(c echo.Context) error {
 	if req.Type == "" {
 		return RespondError(c, ErrMissingParameter("type"))
 	}
-	if req.Type == "delete" {
+	switch req.Type {
+	case "delete":
 		if len(req.Paths) == 0 {
 			return RespondError(c, ErrMissingParameter("paths"))
 		}
@@ -218,21 +219,39 @@ func (h *Handler) CreateTransferJob(c echo.Context) error {
 				return RespondError(c, ErrBadRequest("Empty path in paths array"))
 			}
 		}
-	} else {
+	case "copy", "move":
+		// Support both single sourcePath and multiple paths
+		if len(req.Paths) > 0 {
+			// Bulk mode: validate paths
+			if len(req.Paths) > 10000 {
+				return RespondError(c, ErrBadRequest("Too many paths: maximum 10000 paths"))
+			}
+			for _, p := range req.Paths {
+				if p == "" {
+					return RespondError(c, ErrBadRequest("Empty path in paths array"))
+				}
+			}
+			if req.SourcePath == "" {
+				req.SourcePath = req.Paths[0] // Use first path for display/tracking
+			}
+		} else if req.SourcePath == "" {
+			return RespondError(c, ErrMissingParameter("sourcePath or paths"))
+		}
+		if req.DestinationPath == "" {
+			return RespondError(c, ErrMissingParameter("destinationPath"))
+		}
+	default:
 		if req.SourcePath == "" {
 			return RespondError(c, ErrMissingParameter("sourcePath"))
 		}
-		if (req.Type == "copy" || req.Type == "move") && req.DestinationPath == "" {
-			return RespondError(c, ErrMissingParameter("destinationPath"))
-		}
 	}
 
+	// Serialize paths for bulk operations (delete, copy, move)
 	var deletePathsJSON *string
-	if req.Type == "delete" {
+	if len(req.Paths) > 0 {
 		data, _ := json.Marshal(req.Paths)
 		s := string(data)
 		deletePathsJSON = &s
-		// Use first path as source_path for display
 		if req.SourcePath == "" {
 			req.SourcePath = req.Paths[0]
 		}
@@ -392,7 +411,12 @@ func (h *Handler) executeTransferJob(jobID, userID, username, clientIP string, r
 
 	switch req.Type {
 	case "copy", "move":
-		newDisplayPath, jobErr = h.executeTransferCopyMove(ctx, claims, cleanSourcePath, req.DestinationPath, req.Type, overwrite, isMerge, req.FileConflict, progressSender)
+		if len(req.Paths) > 1 {
+			// Bulk copy/move: multiple source paths
+			newDisplayPath, deleteFailedPaths, jobErr = h.executeTransferBulkCopyMove(ctx, claims, req.Paths, req.DestinationPath, req.Type, overwrite, isMerge, req.FileConflict, progressSender)
+		} else {
+			newDisplayPath, jobErr = h.executeTransferCopyMove(ctx, claims, cleanSourcePath, req.DestinationPath, req.Type, overwrite, isMerge, req.FileConflict, progressSender)
+		}
 	case "delete":
 		deleteFailedPaths, jobErr = h.executeTransferDelete(ctx, claims, clientIP, req.Paths, progressSender)
 	default:
@@ -462,10 +486,22 @@ func (h *Handler) executeTransferJob(jobID, userID, username, clientIP string, r
 		if req.Type == "move" {
 			eventType = EventFileMove
 		}
-		_ = h.auditHandler.LogEvent(&userID, clientIP, eventType, req.SourcePath, map[string]interface{}{
-			"destination": newDisplayPath,
-			"serverSide":  true,
-		})
+		if len(req.Paths) > 1 {
+			// Bulk copy/move: log each path
+			for _, p := range req.Paths {
+				_ = h.auditHandler.LogEvent(&userID, clientIP, eventType, p, map[string]interface{}{
+					"destination": newDisplayPath,
+					"serverSide":  true,
+					"bulk":        true,
+					"totalPaths":  len(req.Paths),
+				})
+			}
+		} else {
+			_ = h.auditHandler.LogEvent(&userID, clientIP, eventType, req.SourcePath, map[string]interface{}{
+				"destination": newDisplayPath,
+				"serverSide":  true,
+			})
+		}
 	}
 }
 
@@ -630,6 +666,95 @@ func (h *Handler) executeTransferCopyMove(
 	}
 
 	return newDisplayPath, nil
+}
+
+// executeTransferBulkCopyMove performs bulk copy/move for multiple source paths.
+// It iterates over each source path, executing copy/move individually, and continues on error.
+// Returns the destination display path, any failed paths, and an overall error summary.
+func (h *Handler) executeTransferBulkCopyMove(
+	ctx context.Context,
+	claims *JWTClaims,
+	paths []string,
+	destination, opType string,
+	overwrite, isMerge bool,
+	fileConflict string,
+	sendProgress ProgressSender,
+) (string, []FailedPathInfo, error) {
+	totalPaths := len(paths)
+
+	sendProgress(CopyProgress{
+		Status:     "started",
+		TotalFiles: totalPaths,
+	})
+
+	processedFiles := 0
+	var failures []FailedPathInfo
+	var lastNewPath string
+
+	for i, srcPath := range paths {
+		// Check for cancellation
+		if ctx.Err() != nil {
+			return lastNewPath, failures, ctx.Err()
+		}
+
+		cleanSrc := srcPath
+		if len(cleanSrc) > 0 && cleanSrc[0] == '/' {
+			cleanSrc = cleanSrc[1:]
+		}
+
+		// Send progress with current file before starting
+		sendProgress(CopyProgress{
+			Status:      "progress",
+			TotalFiles:  totalPaths,
+			CopiedFiles: processedFiles,
+			CurrentFile: fmt.Sprintf("%d/%d: %s", i+1, totalPaths, filepath.Base(srcPath)),
+		})
+
+		// Create a sub-progress sender that maps the inner copy/move progress
+		// but keeps the outer file count progress
+		innerProgress := func(p CopyProgress) {
+			// Forward inner progress but override the file counts with bulk counts
+			p.TotalFiles = totalPaths
+			p.CopiedFiles = processedFiles
+			p.CurrentFile = fmt.Sprintf("%d/%d: %s", i+1, totalPaths, filepath.Base(srcPath))
+			if p.Status == "completed" {
+				p.Status = "progress" // inner completion is just progress for the outer loop
+			}
+			sendProgress(p)
+		}
+
+		newPath, err := h.executeTransferCopyMove(ctx, claims, cleanSrc, destination, opType, overwrite, isMerge, fileConflict, innerProgress)
+		if err != nil {
+			// Check if context was cancelled during the inner operation
+			if ctx.Err() != nil {
+				return lastNewPath, failures, ctx.Err()
+			}
+			log.Printf("[Transfer] Bulk %s error for %s: %v", opType, srcPath, err)
+			failures = append(failures, FailedPathInfo{Path: srcPath, Error: err.Error()})
+		} else {
+			lastNewPath = newPath
+		}
+
+		processedFiles++
+
+		// Send progress after each item
+		sendProgress(CopyProgress{
+			Status:      "progress",
+			TotalFiles:  totalPaths,
+			CopiedFiles: processedFiles,
+			CurrentFile: filepath.Base(srcPath),
+		})
+	}
+
+	if len(failures) > 0 {
+		successCount := totalPaths - len(failures)
+		if successCount == 0 {
+			return lastNewPath, failures, fmt.Errorf("all %d items failed to %s", len(failures), opType)
+		}
+		return lastNewPath, failures, fmt.Errorf("%d succeeded, %d failed", successCount, len(failures))
+	}
+
+	return lastNewPath, nil, nil
 }
 
 // executeTransferDelete performs server-side batch delete (move to trash)
