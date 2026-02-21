@@ -421,7 +421,7 @@ export const useUploadStore = create<UploadState>((set, get) => ({
       try {
         await item.upload.abort(true) // Terminate on server
       } catch {
-        item.upload.abort()
+        try { item.upload.abort() } catch { /* ignore */ }
       }
     }
     set((state) => ({ items: state.items.filter((i) => i.id !== id) }))

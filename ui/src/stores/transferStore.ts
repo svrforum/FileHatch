@@ -476,10 +476,22 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
   },
 
   removeItem: (id) => {
+    const item = get().items.find(i => i.id === id)
+
+    // Remove from list immediately
     pendingJobIdMap.delete(id)
     set(state => ({
       items: state.items.filter(i => i.id !== id),
     }))
+
+    // Cancel active transfer in background (best effort)
+    if (item?.status === 'transferring') {
+      if (item.isServerSide && item.serverJobId) {
+        cancelTransferJob(item.serverJobId).catch(() => {})
+      } else if (item.cancel) {
+        try { item.cancel() } catch { /* ignore */ }
+      }
+    }
   },
 
   clearCompleted: () => {

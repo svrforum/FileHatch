@@ -39,7 +39,7 @@ type PanelTab = 'all' | 'active' | 'completed' | 'error'
 
 function UploadPanel() {
   const { items, downloads, interruptedUploads, isPanelOpen: uploadPanelOpen, closePanel: closeUploadPanel, removeUpload, clearCompleted, clearCompletedDownloads, clearErrors: clearUploadErrors, removeDownload, startUpload, retryUpload, pauseUpload, loadInterruptedUploads, dismissInterruptedUpload, clearInterruptedUploads } = useUploadStore()
-  const { items: transferItems, isPanelOpen: transferPanelOpen, closePanel: closeTransferPanel, removeItem: removeTransfer, clearCompleted: clearCompletedTransfers, retryTransfer, cancelServerJob } = useTransferStore()
+  const { items: transferItems, isPanelOpen: transferPanelOpen, closePanel: closeTransferPanel, removeItem: removeTransfer, clearCompleted: clearCompletedTransfers, retryTransfer } = useTransferStore()
   const [activeTab, setActiveTab] = useState<PanelTab>('all')
 
   // Panel is open if either upload or transfer panel is open
@@ -661,20 +661,11 @@ function UploadPanel() {
                   </svg>
                 </button>
               )}
-              {item.status === 'transferring' && (item.cancel || item.isServerSide) && (
-                <button className="item-btn" onClick={() => item.isServerSide ? cancelServerJob(item.id) : item.cancel?.()} title="취소">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                    <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>
-                  </svg>
-                </button>
-              )}
-              {item.status !== 'transferring' && (
-                <button className="item-btn remove" onClick={() => removeTransfer(item.id)} title="삭제">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </button>
-              )}
+              <button className="item-btn remove" onClick={() => removeTransfer(item.id)} title={item.status === 'transferring' ? '취소' : '삭제'}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </button>
             </div>
           </div>
         ))}
