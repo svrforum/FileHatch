@@ -192,7 +192,7 @@ export const useUploadStore = create<UploadState>((set, get) => ({
   // Start a single upload
   startUpload: (id, overwrite = false) => {
     const item = get().items.find((i) => i.id === id)
-    if (!item || item.status === 'uploading') return
+    if (!item || item.status === 'uploading' || item.status === 'completed') return
 
     const { token, username } = getAuthInfo()
     const fp = tusFingerprint(item.file, item.path)
@@ -269,7 +269,7 @@ export const useUploadStore = create<UploadState>((set, get) => ({
   // Check for duplicates and quota before starting upload
   checkAndStartUpload: async (id) => {
     const item = get().items.find((i) => i.id === id)
-    if (!item || item.status === 'uploading') return
+    if (!item || item.status !== 'pending') return
 
     // Quota check with caching and timeout
     try {

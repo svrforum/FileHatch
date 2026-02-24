@@ -157,11 +157,8 @@ export function useFileUploadDragDrop({
         uploadStore.addFiles([file], targetPath)
       }
 
-      // Open upload panel and start uploads
+      // Open upload panel (addFiles already triggers startAllUploads)
       uploadStore.openPanel()
-      setTimeout(() => {
-        uploadStore.startAllUploads()
-      }, 100)
 
       addToast(`${allFiles.length}개 파일 업로드를 시작합니다`, 'info')
     } else {
@@ -173,14 +170,11 @@ export function useFileUploadDragDrop({
         return
       }
 
-      // Add all files at once to upload store
+      // Add all files at once to upload store (addFiles already triggers startAllUploads)
       uploadStore.addFiles(fileList, currentPath)
 
-      // Open upload panel and start uploads
+      // Open upload panel
       uploadStore.openPanel()
-      setTimeout(() => {
-        uploadStore.startAllUploads()
-      }, 100)
 
       addToast(`${fileList.length}개 파일 업로드를 시작합니다`, 'info')
     }
@@ -263,10 +257,8 @@ export function useFileUploadDragDrop({
         uploadStore.addFiles([file], uploadPath)
       }
 
+      // Open upload panel (addFiles already triggers startAllUploads)
       uploadStore.openPanel()
-      setTimeout(() => {
-        uploadStore.startAllUploads()
-      }, 100)
 
       addToast(`${allFiles.length}개 파일을 "${folder.name}"에 업로드합니다`, 'info')
     } else {
@@ -277,11 +269,9 @@ export function useFileUploadDragDrop({
         return
       }
 
+      // addFiles already triggers startAllUploads
       uploadStore.addFiles(fileList, targetPath)
       uploadStore.openPanel()
-      setTimeout(() => {
-        uploadStore.startAllUploads()
-      }, 100)
 
       addToast(`${fileList.length}개 파일을 "${folder.name}"에 업로드합니다`, 'info')
     }

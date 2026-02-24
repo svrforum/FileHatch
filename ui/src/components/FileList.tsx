@@ -357,6 +357,8 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   }, [handleFolderMoveDragLeave, handleFolderUploadDragLeave])
 
   const handleFolderDrop = useCallback(async (e: React.DragEvent, folder: FileInfo) => {
+    e.preventDefault()
+    e.stopPropagation()
     // Try internal file move first
     await handleFolderMoveDrop(e, folder)
     // Then try external file upload
