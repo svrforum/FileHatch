@@ -6,6 +6,7 @@ import { SharedFolderWithPermission } from '../../api/sharedFolders'
 export type SortField = 'name' | 'size' | 'date'
 export type SortOrder = 'asc' | 'desc'
 export type ViewMode = 'list' | 'grid'
+export type GroupBy = 'folders_first' | 'files_first' | 'none'
 
 export type ContextMenuType =
   | { type: 'file'; x: number; y: number; file: FileInfo; selectedPaths: string[] }

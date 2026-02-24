@@ -66,9 +66,10 @@ function parseContentDisposition(header: string | null, fallback: string): strin
 export async function fetchFiles(
   path: string = '/',
   sort: string = 'name',
-  order: string = 'asc'
+  order: string = 'asc',
+  groupBy: string = 'folders_first'
 ): Promise<ListFilesResponse> {
-  return api.get<ListFilesResponse>(apiUrl.withParams('/files', { path, sort, order }))
+  return api.get<ListFilesResponse>(apiUrl.withParams('/files', { path, sort, order, group_by: groupBy }))
 }
 
 export async function downloadFile(

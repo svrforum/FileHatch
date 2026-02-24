@@ -30,7 +30,7 @@ import LinkShareModal from './LinkShareModal'
 import FolderSelectModal from './FolderSelectModal'
 import ConflictModal, { ConflictInfo, ConflictResolution } from './ConflictModal'
 import {
-  SortField, SortOrder, ViewMode, ContextMenuType,
+  SortField, SortOrder, ViewMode, GroupBy, ContextMenuType,
   MultiSelectBar, ContextMenu, FileInfoPanel,
   FileListHeader, RenameModal, NewFileModal, CompressModal, DownloadOptionsModal,
   VirtualizedFileTable, VirtualizedFileGrid
@@ -52,6 +52,11 @@ interface FileListProps {
 function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, highlightedFilePath, onClearHighlight }: FileListProps) {
   const [sortBy, setSortBy] = useState<SortField>('name')
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+  const [groupBy, setGroupBy] = useState<GroupBy>(() => {
+    const saved = localStorage.getItem('fileGroupBy')
+    if (saved === 'files_first' || saved === 'none') return saved
+    return 'folders_first'
+  })
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     // Persist view mode preference
     const saved = localStorage.getItem('fileViewMode')
@@ -183,8 +188,8 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
 
   // Regular file list query
   const { data, isLoading, error } = useQuery({
-    queryKey: ['files', currentPath, sortBy, sortOrder],
-    queryFn: () => fetchFiles(currentPath, sortBy, sortOrder),
+    queryKey: ['files', currentPath, sortBy, sortOrder, groupBy],
+    queryFn: () => fetchFiles(currentPath, sortBy, sortOrder, groupBy),
     enabled: !isSpecialShareView,
     staleTime: 30000, // Consider data fresh for 30 seconds
   })
@@ -1346,12 +1351,14 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       <FileListHeader
         currentPath={currentPath}
         viewMode={viewMode}
+        groupBy={groupBy}
         selectedCount={selectedFiles.size}
         totalCount={data?.total || displayFiles.length}
         totalSize={data?.totalSize || 0}
         canGoBack={canGoBack()}
         onGoBack={goBack}
         onViewModeChange={toggleViewMode}
+        onGroupByChange={(g) => { setGroupBy(g); localStorage.setItem('fileGroupBy', g) }}
         onRefresh={() => queryClient.invalidateQueries({ queryKey: ['files', currentPath] })}
         getPathDisplayName={getPathDisplayName}
         localSearchQuery={localSearchQuery}

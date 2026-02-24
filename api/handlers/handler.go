@@ -347,6 +347,11 @@ func (h *Handler) ListFiles(c echo.Context) error {
 		sortOrder = "asc"
 	}
 
+	groupBy := c.QueryParam("group_by") // "folders_first" (default), "files_first", "none"
+	if groupBy == "" {
+		groupBy = "folders_first"
+	}
+
 	// Pagination parameters (optional - if not provided, return all files)
 	pageStr := c.QueryParam("page")
 	pageSizeStr := c.QueryParam("pageSize")
@@ -463,7 +468,7 @@ func (h *Handler) ListFiles(c echo.Context) error {
 	// Handle external storage with non-local backend (S3)
 	// For local-mount external storages, realPath is set and we fall through to normal os.Stat/ReadDir
 	if storageType == StorageExternal && realPath == "" {
-		return h.listExternalStorageFiles(c, requestPath, claims, displayPath, sortBy, sortOrder, usePagination, page, pageSize)
+		return h.listExternalStorageFiles(c, requestPath, claims, displayPath, sortBy, sortOrder, groupBy, usePagination, page, pageSize)
 	}
 
 	// Check if directory exists
@@ -526,7 +531,7 @@ func (h *Handler) ListFiles(c echo.Context) error {
 	}
 
 	// Sort files
-	sortFiles(files, sortBy, sortOrder)
+	sortFiles(files, sortBy, sortOrder, groupBy)
 
 	// Apply pagination if requested
 	total := len(files)
@@ -566,7 +571,7 @@ func (h *Handler) ListFiles(c echo.Context) error {
 }
 
 // listExternalStorageFiles lists files from a non-local external storage backend (e.g., S3)
-func (h *Handler) listExternalStorageFiles(c echo.Context, requestPath string, claims *JWTClaims, displayPath, sortBy, sortOrder string, usePagination bool, page, pageSize int) error {
+func (h *Handler) listExternalStorageFiles(c echo.Context, requestPath string, claims *JWTClaims, displayPath, sortBy, sortOrder, groupBy string, usePagination bool, page, pageSize int) error {
 	// Re-resolve via StorageRouter to get the backend
 	result, err := h.storageRouter.Resolve(requestPath, claims)
 	if err != nil {
@@ -624,7 +629,7 @@ func (h *Handler) listExternalStorageFiles(c echo.Context, requestPath string, c
 		})
 	}
 
-	sortFiles(files, sortBy, sortOrder)
+	sortFiles(files, sortBy, sortOrder, groupBy)
 
 	total := len(files)
 	response := ListFilesResponse{
@@ -656,11 +661,15 @@ func (h *Handler) listExternalStorageFiles(c echo.Context, requestPath string, c
 }
 
 // sortFiles sorts a slice of FileInfo
-func sortFiles(files []FileInfo, sortBy, order string) {
+// groupBy: "folders_first" (default), "files_first", "none"
+func sortFiles(files []FileInfo, sortBy, order, groupBy string) {
 	sort.Slice(files, func(i, j int) bool {
-		// Directories always come first
-		if files[i].IsDir != files[j].IsDir {
-			return files[i].IsDir
+		// Group directories and files based on groupBy option
+		if groupBy != "none" && files[i].IsDir != files[j].IsDir {
+			if groupBy == "files_first" {
+				return !files[i].IsDir // files come first
+			}
+			return files[i].IsDir // folders come first (default)
 		}
 
 		var less bool

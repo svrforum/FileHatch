@@ -1,18 +1,20 @@
 // 파일 리스트 헤더 컴포넌트 - 경로 표시, 정렬, 뷰 모드 전환, 로컬 검색
 
 import { useState, useRef, useEffect } from 'react'
-import { ViewMode } from './types'
+import { ViewMode, GroupBy } from './types'
 import { formatFileSize } from '../../api/files'
 
 interface FileListHeaderProps {
   currentPath: string
   viewMode: ViewMode
+  groupBy: GroupBy
   selectedCount: number
   totalCount: number
   totalSize: number
   canGoBack: boolean
   onGoBack: () => void
   onViewModeChange: (mode: ViewMode) => void
+  onGroupByChange: (groupBy: GroupBy) => void
   onRefresh: () => void
   getPathDisplayName: (path: string) => string
   // 로컬 검색
@@ -25,12 +27,14 @@ interface FileListHeaderProps {
 function FileListHeader({
   currentPath,
   viewMode,
+  groupBy,
   selectedCount,
   totalCount,
   totalSize,
   canGoBack,
   onGoBack,
   onViewModeChange,
+  onGroupByChange,
   onRefresh,
   getPathDisplayName,
   localSearchQuery,
@@ -78,6 +82,13 @@ function FileListHeader({
     onLocalSearchChange('')
     searchInputRef.current?.focus()
   }
+
+  const handleGroupByToggle = () => {
+    const next: GroupBy = groupBy === 'folders_first' ? 'files_first' : groupBy === 'files_first' ? 'none' : 'folders_first'
+    onGroupByChange(next)
+  }
+
+  const groupByLabel = groupBy === 'folders_first' ? '폴더 우선' : groupBy === 'files_first' ? '파일 우선' : '구분 없음'
 
   return (
     <div className="file-list-header">
@@ -144,6 +155,33 @@ function FileListHeader({
           </button>
         </div>
 
+        <button
+          className="view-btn group-by-btn"
+          onClick={handleGroupByToggle}
+          title={groupByLabel}
+        >
+          {groupBy === 'folders_first' ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="18" height="8" rx="2" stroke="currentColor" strokeWidth="2"/>
+              <path d="M7 7H7.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <rect x="3" y="15" width="18" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2"/>
+              <path d="M7 18H7.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          ) : groupBy === 'files_first' ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="18" height="8" rx="1" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2"/>
+              <path d="M7 7H7.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <rect x="3" y="15" width="18" height="6" rx="2" stroke="currentColor" strokeWidth="2"/>
+              <path d="M7 18H7.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="18" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
+              <rect x="3" y="10" width="18" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
+              <rect x="3" y="17" width="18" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
+            </svg>
+          )}
+        </button>
         <button
           className="view-btn refresh-btn"
           onClick={onRefresh}

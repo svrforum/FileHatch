@@ -115,7 +115,6 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
 
     set(state => ({
       items: [...state.items, ...newItems],
-      isPanelOpen: true,
     }))
   },
 
@@ -138,7 +137,6 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
 
     set(state => ({
       items: [...state.items, newItem],
-      isPanelOpen: true,
     }))
 
     // Auto-start the compression
@@ -171,7 +169,6 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
         totalFiles: paths.length,
         copiedFiles: 0,
       }],
-      isPanelOpen: true,
     }))
 
     // Create server-side delete job and store the promise for cancel support
@@ -518,7 +515,6 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
         isServerSide: true,
         progress: 0,
       }],
-      isPanelOpen: true,
     }))
 
     // Create server-side job and store the promise for cancel support
@@ -614,7 +610,6 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
               bytesPerSec: event.bytesPerSec,
               progress: event.progress,
             }],
-            isPanelOpen: true,
           }))
         }).catch(() => {
           fetchingJobIds.delete(event.jobId)
@@ -642,7 +637,6 @@ export const useTransferStore = create<TransferState>()(persist((set, get) => ({
               bytesPerSec: event.bytesPerSec,
               progress: event.progress,
             }],
-            isPanelOpen: true,
           }))
         })
       }
