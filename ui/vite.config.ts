@@ -46,8 +46,8 @@ export default defineConfig({
           // API responses are NOT cached - always fetch from network
           // This prevents stale data issues and authentication problems
         ],
-        // Exclude API routes from precaching
-        navigateFallbackDenylist: [/^\/api\//]
+        // Exclude API and proxy routes from service worker navigation fallback
+        navigateFallbackDenylist: [/^\/api\//, /^\/onlyoffice\//, /^\/webdav/]
       },
       devOptions: {
         enabled: false // Disable PWA in development

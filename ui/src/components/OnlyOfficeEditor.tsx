@@ -148,8 +148,10 @@ function OnlyOfficeEditor({ config, publicUrl, onClose, onError }: OnlyOfficeEdi
       }
     }
 
-    // Get OnlyOffice server URL - use publicUrl if configured, otherwise default to current host:8088
-    const onlyOfficeUrl = publicUrl || `${window.location.protocol}//${window.location.hostname}:8088`
+    // Get OnlyOffice server URL - use publicUrl if configured, otherwise use /onlyoffice proxy path
+    // The UI Express server proxies /onlyoffice/* to the OnlyOffice container (server.cjs)
+    // This avoids requiring direct port 8088 access, which fails behind reverse proxies or with HTTPS
+    const onlyOfficeUrl = publicUrl || `${window.location.origin}/onlyoffice`
 
     // Delayed initialization to ensure DOM is ready
     const delayedInit = () => {
