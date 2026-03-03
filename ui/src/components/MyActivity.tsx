@@ -103,6 +103,7 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
   // Context menu
   const [contextMenu, setContextMenu] = useState<FileInfo | null>(null)
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 })
+  const [contextMenuAdjusted, setContextMenuAdjusted] = useState(false)
   const contextMenuRef = useRef<HTMLDivElement>(null)
 
   // File info panel
@@ -256,12 +257,58 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
     }
   }, [selectedFile])
 
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   // Close context menu on click outside
   useEffect(() => {
     const handleClick = () => setContextMenu(null)
     document.addEventListener('click', handleClick)
     return () => document.removeEventListener('click', handleClick)
   }, [])
+
+  // Adjust context menu position to keep it within viewport
+  useEffect(() => {
+    if (contextMenu && contextMenuRef.current && !isMobile) {
+      const rect = contextMenuRef.current.getBoundingClientRect()
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+      const HEADER_HEIGHT = 64
+      const MIN_Y = HEADER_HEIGHT + 10
+
+      let adjustedX = contextMenuPosition.x
+      let adjustedY = contextMenuPosition.y
+
+      if (adjustedX + rect.width > viewportWidth - 10) {
+        adjustedX = adjustedX - rect.width
+        if (adjustedX < 10) adjustedX = viewportWidth - rect.width - 10
+      }
+
+      if (adjustedY + rect.height > viewportHeight - 10) {
+        const aboveY = adjustedY - rect.height
+        if (aboveY >= MIN_Y) {
+          adjustedY = aboveY
+        } else {
+          adjustedY = MIN_Y
+        }
+      }
+
+      if (adjustedX < 10) adjustedX = 10
+      if (adjustedY < MIN_Y) adjustedY = MIN_Y
+
+      if (adjustedX !== contextMenuPosition.x || adjustedY !== contextMenuPosition.y) {
+        setContextMenuPosition({ x: adjustedX, y: adjustedY })
+      }
+      setContextMenuAdjusted(true)
+    } else if (contextMenu && isMobile) {
+      setContextMenuAdjusted(true)
+    }
+  }, [contextMenu, isMobile])
 
   // Convert activities to FileInfo and filter
   const displayFiles = useMemo(() => {
@@ -346,6 +393,16 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
 
   // Handlers
   const handleSelectFile = useCallback((file: FileInfo, e: React.MouseEvent) => {
+    // Mobile: tap shows context menu (bottom sheet)
+    if (isMobile) {
+      e.stopPropagation()
+      setContextMenuAdjusted(false)
+      setContextMenu(file)
+      setContextMenuPosition({ x: 0, y: 0 })
+      return
+    }
+
+    // Desktop behavior
     if (e.ctrlKey || e.metaKey) {
       setSelectedFiles(prev => {
         const next = new Set(prev)
@@ -366,7 +423,7 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
       setSelectedFiles(new Set())
       setSelectedFile(file)
     }
-  }, [focusedIndex, displayFiles])
+  }, [isMobile, focusedIndex, displayFiles])
 
   const handleDoubleClick = useCallback((file: FileInfo) => {
     if (file.isDir) {
@@ -384,6 +441,7 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
   const handleContextMenu = useCallback((e: React.MouseEvent, file: FileInfo) => {
     e.preventDefault()
     e.stopPropagation()
+    setContextMenuAdjusted(false)
     setContextMenu(file)
     setContextMenuPosition({ x: e.clientX, y: e.clientY })
   }, [])
@@ -776,11 +834,21 @@ function MyActivity({ onNavigate, onFileSelect }: MyActivityProps) {
       </div>
 
       {/* Context Menu */}
+      {contextMenu && isMobile && (
+        <div
+          className="activity-context-menu--mobile-overlay"
+          onClick={() => setContextMenu(null)}
+        />
+      )}
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="activity-context-menu"
-          style={{ left: contextMenuPosition.x, top: contextMenuPosition.y }}
+          className={`activity-context-menu${isMobile ? ' activity-context-menu--mobile' : ''}`}
+          style={isMobile ? undefined : {
+            left: contextMenuPosition.x,
+            top: contextMenuPosition.y,
+            visibility: contextMenuAdjusted ? 'visible' : 'hidden',
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Open/View */}

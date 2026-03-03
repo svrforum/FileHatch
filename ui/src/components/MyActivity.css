@@ -730,3 +730,64 @@
 .clear-confirm-actions .btn-danger:hover {
   background: #d32f2f;
 }
+
+/* Mobile bottom-sheet context menu */
+.activity-context-menu--mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 999;
+  animation: fadeIn 0.15s ease;
+}
+
+.activity-context-menu--mobile {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  max-height: 70vh;
+  width: 100%;
+  min-width: 100%;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  border: none;
+  border-top: 1px solid var(--border-light);
+  padding: var(--spacing-sm);
+  padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  z-index: 1000;
+  animation: activitySlideInUp 0.25s var(--ease-out-expo);
+}
+
+.activity-context-menu--mobile::before {
+  content: '';
+  display: block;
+  width: 36px;
+  height: 4px;
+  background: var(--border-default);
+  border-radius: 2px;
+  margin: 0 auto var(--spacing-xs);
+}
+
+.activity-context-menu--mobile button {
+  padding: var(--spacing-md) var(--spacing-md);
+  font-size: 15px;
+  min-height: 44px;
+}
+
+@keyframes activitySlideInUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
