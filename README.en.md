@@ -1015,6 +1015,14 @@ Issues and pull requests are welcome!
 
 ---
 
+## ☕ Sponsor
+
+If you find FileHatch useful, consider supporting the project!
+
+<a href="https://buymeacoffee.com/svrforum" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
+
+---
+
 ## License
 
 This project does not have a license specified yet. To be updated.
@@ -1030,3 +1038,4 @@ This project uses the following open-source projects:
 - [TUS](https://tus.io/) - Resumable upload protocol
 - [OnlyOffice](https://www.onlyoffice.com/) - Document editor
 - [Keycloak](https://www.keycloak.org/) - SSO solution
+- [Buy Me a Coffee](https://buymeacoffee.com/svrforum) - Support the project

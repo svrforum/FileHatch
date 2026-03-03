@@ -1010,6 +1010,14 @@ docker compose build ui
 
 ---
 
+## ☕ 후원
+
+FileHatch가 유용하셨다면, 프로젝트를 후원해주세요!
+
+<a href="https://buymeacoffee.com/svrforum" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
+
+---
+
 ## 라이선스
 
 이 프로젝트는 아직 라이선스가 지정되지 않았습니다. 추후 업데이트 예정입니다.
@@ -1025,3 +1033,4 @@ docker compose build ui
 - [TUS](https://tus.io/) - 재개 가능한 업로드 프로토콜
 - [OnlyOffice](https://www.onlyoffice.com/) - 문서 편집기
 - [Keycloak](https://www.keycloak.org/) - SSO 솔루션
+- [Buy Me a Coffee](https://buymeacoffee.com/svrforum) - 프로젝트 후원
