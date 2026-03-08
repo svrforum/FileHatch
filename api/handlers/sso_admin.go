@@ -104,6 +104,21 @@ func (h *SSOHandler) CreateProvider(c echo.Context) error {
 		req.Scopes = "openid email profile"
 	}
 
+	// OIDC: auto-discover endpoints if not explicitly provided
+	if req.ProviderType == "oidc" && req.IssuerURL != "" {
+		if discovered, err := discoverOIDCEndpoints(req.IssuerURL); err == nil {
+			if req.AuthorizationURL == "" {
+				req.AuthorizationURL = discovered.AuthorizationEndpoint
+			}
+			if req.TokenURL == "" {
+				req.TokenURL = discovered.TokenEndpoint
+			}
+			if req.UserinfoURL == "" {
+				req.UserinfoURL = discovered.UserinfoEndpoint
+			}
+		}
+	}
+
 	var id string
 	err := h.db.QueryRow(`
 		INSERT INTO sso_providers (name, provider_type, client_id, client_secret, issuer_url,
@@ -161,6 +176,21 @@ func (h *SSOHandler) UpdateProvider(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid request",
 		})
+	}
+
+	// OIDC: auto-discover endpoints if not explicitly provided
+	if req.ProviderType == "oidc" && req.IssuerURL != "" {
+		if discovered, err := discoverOIDCEndpoints(req.IssuerURL); err == nil {
+			if req.AuthorizationURL == "" {
+				req.AuthorizationURL = discovered.AuthorizationEndpoint
+			}
+			if req.TokenURL == "" {
+				req.TokenURL = discovered.TokenEndpoint
+			}
+			if req.UserinfoURL == "" {
+				req.UserinfoURL = discovered.UserinfoEndpoint
+			}
+		}
 	}
 
 	// Build update query
@@ -294,4 +324,21 @@ func (h *SSOHandler) UpdateSSOSettings(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"message": "SSO settings updated successfully",
 	})
+}
+
+// DiscoverEndpoints returns discovered OIDC endpoints for a given issuer URL
+func (h *SSOHandler) DiscoverEndpoints(c echo.Context) error {
+	issuerURL := c.QueryParam("issuerUrl")
+	if issuerURL == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "issuerUrl parameter is required",
+		})
+	}
+	discovered, err := discoverOIDCEndpoints(issuerURL)
+	if err != nil {
+		return c.JSON(http.StatusBadGateway, map[string]string{
+			"error": err.Error(),
+		})
+	}
+	return c.JSON(http.StatusOK, discovered)
 }

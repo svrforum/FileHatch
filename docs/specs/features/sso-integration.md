@@ -13,7 +13,7 @@ FileHatch의 SSO(Single Sign-On) 시스템은 OAuth2/OIDC 프로토콜을 기반
 | DB 테이블 | `sso_providers`, `system_settings` (SSO 설정), `users` (프로바이더 연동) |
 | 프론트엔드 | `LoginPage.tsx` (SSO 로그인 버튼), `AdminSSOSettings.tsx` (관리자 설정) |
 | 지원 프로토콜 | OAuth 2.0, OpenID Connect (OIDC) |
-| 지원 프로바이더 | Google, GitHub, Microsoft Azure AD, OIDC 호환 (Keycloak 등) |
+| 지원 프로바이더 | Google, GitHub, Microsoft Azure AD, OIDC 호환 (Keycloak, Authentik, Okta, Auth0 등) |
 
 ### 관련 파일
 
@@ -120,7 +120,9 @@ URL이 명시적으로 설정되지 않은 경우 프로바이더 유형에 따�
 | `google` | `https://accounts.google.com/o/oauth2/v2/auth` | `https://oauth2.googleapis.com/token` | `https://www.googleapis.com/oauth2/v3/userinfo` |
 | `github` | `https://github.com/login/oauth/authorize` | `https://github.com/login/oauth/access_token` | `https://api.github.com/user` |
 | `azure` | `https://login.microsoftonline.com/common/oauth2/v2.0/authorize` | `https://login.microsoftonline.com/common/oauth2/v2.0/token` | `https://graph.microsoft.com/v1.0/me` |
-| `oidc` | `{issuerUrl}/protocol/openid-connect/auth` | `{issuerUrl}/protocol/openid-connect/token` | `{issuerUrl}/protocol/openid-connect/userinfo` |
+| `oidc` | OIDC Discovery 자동 검색 → Keycloak 폴백 | OIDC Discovery 자동 검색 → Keycloak 폴백 | OIDC Discovery 자동 검색 → Keycloak 폴백 |
+
+> **OIDC URL 결정 우선순위**: (1) DB에 저장된 커스텀 URL → (2) `.well-known/openid-configuration` 자동 검색 → (3) Keycloak 패턴 폴백 (`{issuerUrl}/protocol/openid-connect/*`)
 
 ### 프로바이더 CRUD (관리자)
 
@@ -129,6 +131,7 @@ URL이 명시적으로 설정되지 않은 경우 프로바이더 유형에 따�
 - **엔드포인트**: `POST /admin/sso/providers`
 - **필수 필드**: `name`, `providerType`, `clientId`, `clientSecret`
 - **기본값**: Scopes가 비어 있으면 `"openid email profile"` 자동 설정
+- **OIDC 자동 검색**: `providerType`이 `oidc`이고 `issuerUrl`이 있으면, 빈 URL 필드를 `.well-known/openid-configuration`에서 자동으로 채움
 - DB에 삽입 후 생성된 UUID `id`를 반환한다.
 
 #### 목록 조회 (Read)
@@ -914,5 +917,5 @@ EXTERNAL_URL=https://files.example.com
 | Client Secret 암호화 | DB에 일반 텍스트 저장 | AES-GCM 암호화 저장 |
 | Refresh Token | 미사용 (발급만 받음) | Access Token 갱신에 활용 |
 | 그룹/역할 매핑 | 미지원 | Keycloak 그룹 → FileHatch 관리자/일반 사용자 자동 매핑 |
-| OIDC Discovery | URL 패턴 기반 추론 | `.well-known/openid-configuration` 자동 검색 |
+| OIDC Discovery | `.well-known/openid-configuration` 자동 검색 (5분 캐시) | ✅ 구현 완료 — Keycloak, Authentik, Okta, Auth0 등 호환 |
 | SSO 로그아웃 | 미지원 | 프로바이더 측 로그아웃 연동 (Back-Channel Logout) |

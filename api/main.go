@@ -502,6 +502,7 @@ func main() {
 	adminApi.DELETE("/admin/sso/providers/:id", ssoHandler.DeleteProvider)
 	adminApi.GET("/admin/sso/settings", ssoHandler.GetSSOSettings)
 	adminApi.PUT("/admin/sso/settings", ssoHandler.UpdateSSOSettings)
+	adminApi.GET("/admin/sso/discover", ssoHandler.DiscoverEndpoints)
 
 	// Security Management API (admin only) - Brute Force Protection
 	adminApi.GET("/admin/security/locked-users", bruteForceGuard.GetLockedUsers)

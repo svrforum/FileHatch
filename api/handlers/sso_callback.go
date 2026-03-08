@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"crypto/rand"
@@ -20,6 +21,67 @@ import (
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// OIDCDiscoveryResponse holds discovered OIDC endpoints
+type OIDCDiscoveryResponse struct {
+	AuthorizationEndpoint string `json:"authorization_endpoint"`
+	TokenEndpoint         string `json:"token_endpoint"`
+	UserinfoEndpoint      string `json:"userinfo_endpoint"`
+	Issuer                string `json:"issuer"`
+}
+
+type cachedDiscovery struct {
+	resp      *OIDCDiscoveryResponse
+	expiresAt time.Time
+}
+
+var (
+	discoveryCache = make(map[string]*cachedDiscovery)
+	discoveryMu    sync.RWMutex
+)
+
+// discoverOIDCEndpoints fetches .well-known/openid-configuration from issuer URL.
+// Results are cached for 5 minutes.
+func discoverOIDCEndpoints(issuerURL string) (*OIDCDiscoveryResponse, error) {
+	key := strings.TrimSuffix(issuerURL, "/")
+
+	// Check cache
+	discoveryMu.RLock()
+	if cached, ok := discoveryCache[key]; ok && time.Now().Before(cached.expiresAt) {
+		discoveryMu.RUnlock()
+		return cached.resp, nil
+	}
+	discoveryMu.RUnlock()
+
+	// Fetch discovery document
+	discoveryURL := key + "/.well-known/openid-configuration"
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(discoveryURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch OIDC discovery: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("OIDC discovery returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var discovery OIDCDiscoveryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&discovery); err != nil {
+		return nil, fmt.Errorf("failed to parse OIDC discovery: %w", err)
+	}
+
+	// Cache result
+	discoveryMu.Lock()
+	discoveryCache[key] = &cachedDiscovery{
+		resp:      &discovery,
+		expiresAt: time.Now().Add(5 * time.Minute),
+	}
+	discoveryMu.Unlock()
+
+	return &discovery, nil
+}
 
 // GetAuthURL returns the authorization URL for an SSO provider
 func (h *SSOHandler) GetAuthURL(c echo.Context) error {
@@ -83,7 +145,12 @@ func (h *SSOHandler) GetAuthURL(c echo.Context) error {
 			authorizationURL = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
 		case "oidc":
 			if provider.IssuerURL != "" {
-				authorizationURL = strings.TrimSuffix(provider.IssuerURL, "/") + "/protocol/openid-connect/auth"
+				if discovered, err := discoverOIDCEndpoints(provider.IssuerURL); err == nil {
+					authorizationURL = discovered.AuthorizationEndpoint
+				} else {
+					fmt.Printf("[SSO] OIDC discovery failed for %s: %v, falling back to Keycloak pattern\n", provider.IssuerURL, err)
+					authorizationURL = strings.TrimSuffix(provider.IssuerURL, "/") + "/protocol/openid-connect/auth"
+				}
 			}
 		}
 	}
@@ -181,7 +248,11 @@ func (h *SSOHandler) HandleCallback(c echo.Context) error {
 			tokenURLStr = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 		case "oidc":
 			if provider.IssuerURL != "" {
-				tokenURLStr = strings.TrimSuffix(provider.IssuerURL, "/") + "/protocol/openid-connect/token"
+				if discovered, err := discoverOIDCEndpoints(provider.IssuerURL); err == nil {
+					tokenURLStr = discovered.TokenEndpoint
+				} else {
+					tokenURLStr = strings.TrimSuffix(provider.IssuerURL, "/") + "/protocol/openid-connect/token"
+				}
 			}
 		}
 	}
@@ -335,7 +406,11 @@ func (h *SSOHandler) getUserInfo(provider SSOProvider, accessToken string) (*OID
 			userinfoURL = "https://graph.microsoft.com/v1.0/me"
 		case "oidc":
 			if provider.IssuerURL != "" {
-				userinfoURL = strings.TrimSuffix(provider.IssuerURL, "/") + "/protocol/openid-connect/userinfo"
+				if discovered, err := discoverOIDCEndpoints(provider.IssuerURL); err == nil {
+					userinfoURL = discovered.UserinfoEndpoint
+				} else {
+					userinfoURL = strings.TrimSuffix(provider.IssuerURL, "/") + "/protocol/openid-connect/userinfo"
+				}
 			}
 		}
 	}

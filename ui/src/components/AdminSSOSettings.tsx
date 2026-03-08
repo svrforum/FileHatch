@@ -9,6 +9,7 @@ import {
   deleteSSOProvider,
   getSSOSettings,
   updateSSOSettings,
+  discoverOIDCEndpoints,
   SSOSettings
 } from '../api/auth'
 import './AdminSettings.css'
@@ -54,6 +55,8 @@ function AdminSSOSettings() {
     buttonColor: ''
   })
   const [savingSso, setSavingSso] = useState(false)
+  const [discovering, setDiscovering] = useState(false)
+  const [discoveryError, setDiscoveryError] = useState('')
 
   // Load SSO settings and providers on mount
   useEffect(() => {
@@ -179,6 +182,31 @@ function AdminSSOSettings() {
       showError(error instanceof Error ? error.message : 'SSO 프로바이더 저장에 실패했습니다.')
     } finally {
       setSavingSso(false)
+    }
+  }
+
+  const handleDiscoverEndpoints = async () => {
+    if (!providerForm.issuerUrl) {
+      showError('Issuer URL을 먼저 입력하세요.')
+      return
+    }
+    setDiscovering(true)
+    setDiscoveryError('')
+    try {
+      const endpoints = await discoverOIDCEndpoints(providerForm.issuerUrl)
+      setProviderForm(prev => ({
+        ...prev,
+        authorizationUrl: endpoints.authorization_endpoint || prev.authorizationUrl,
+        tokenUrl: endpoints.token_endpoint || prev.tokenUrl,
+        userinfoUrl: endpoints.userinfo_endpoint || prev.userinfoUrl,
+      }))
+      showSuccess('OIDC 엔드포인트를 자동으로 검색했습니다.')
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '엔드포인트 검색에 실패했습니다.'
+      setDiscoveryError(msg)
+      showError(msg)
+    } finally {
+      setDiscovering(false)
     }
   }
 
@@ -439,8 +467,8 @@ function AdminSSOSettings() {
               <div className="sso-guide-item">
                 <div className="sso-guide-icon keycloak">K</div>
                 <div className="sso-guide-content">
-                  <h4>Keycloak / OIDC</h4>
-                  <p>Keycloak Realm에서 Client를 생성하고, Issuer URL에 <code>https://keycloak.example.com/realms/REALM_NAME</code> 형식으로 입력하세요.</p>
+                  <h4>OIDC (Keycloak, Authentik 등)</h4>
+                  <p>OIDC 프로바이더의 Issuer URL을 입력하고 "자동 검색" 버튼을 클릭하면 엔드포인트가 자동으로 설정됩니다. Keycloak, Authentik, Okta, Auth0 등 표준 OIDC 프로바이더를 지원합니다.</p>
                 </div>
               </div>
             </div>
@@ -511,13 +539,32 @@ function AdminSSOSettings() {
                 <>
                   <div className="as-form-group">
                     <label>Issuer URL *</label>
-                    <input
-                      type="text"
-                      value={providerForm.issuerUrl}
-                      onChange={(e) => setProviderForm({ ...providerForm, issuerUrl: e.target.value })}
-                      placeholder="https://keycloak.example.com/realms/master"
-                    />
-                    <span className="as-form-hint">Keycloak: https://host/realms/REALM_NAME</span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="text"
+                        value={providerForm.issuerUrl}
+                        onChange={(e) => setProviderForm({ ...providerForm, issuerUrl: e.target.value })}
+                        placeholder="https://keycloak.example.com/realms/master"
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        className="as-btn-secondary"
+                        onClick={handleDiscoverEndpoints}
+                        disabled={discovering || !providerForm.issuerUrl}
+                        style={{ whiteSpace: 'nowrap', minWidth: '100px' }}
+                      >
+                        {discovering ? '검색 중...' : '자동 검색'}
+                      </button>
+                    </div>
+                    <span className="as-form-hint">
+                      Issuer URL 입력 후 "자동 검색"을 클릭하면 엔드포인트 URL이 자동으로 채워집니다.
+                    </span>
+                    {discoveryError && (
+                      <span className="as-form-hint" style={{ color: 'var(--error-color, #F44336)' }}>
+                        {discoveryError}
+                      </span>
+                    )}
                   </div>
                   <div className="as-form-row">
                     <div className="as-form-group">
@@ -526,7 +573,7 @@ function AdminSSOSettings() {
                         type="text"
                         value={providerForm.authorizationUrl}
                         onChange={(e) => setProviderForm({ ...providerForm, authorizationUrl: e.target.value })}
-                        placeholder="자동 생성됨"
+                        placeholder="자동 검색됨"
                       />
                     </div>
                     <div className="as-form-group">
@@ -535,9 +582,18 @@ function AdminSSOSettings() {
                         type="text"
                         value={providerForm.tokenUrl}
                         onChange={(e) => setProviderForm({ ...providerForm, tokenUrl: e.target.value })}
-                        placeholder="자동 생성됨"
+                        placeholder="자동 검색됨"
                       />
                     </div>
+                  </div>
+                  <div className="as-form-group">
+                    <label>Userinfo URL (선택)</label>
+                    <input
+                      type="text"
+                      value={providerForm.userinfoUrl}
+                      onChange={(e) => setProviderForm({ ...providerForm, userinfoUrl: e.target.value })}
+                      placeholder="자동 검색됨"
+                    />
                   </div>
                 </>
               )}

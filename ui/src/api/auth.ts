@@ -410,3 +410,15 @@ export async function updateSSOSettings(
   const settingsData = typeof _tokenOrSettings === 'string' ? settings! : _tokenOrSettings
   await api.put('/admin/sso/settings', settingsData)
 }
+
+/**
+ * Discover OIDC endpoints from issuer URL (admin only)
+ */
+export async function discoverOIDCEndpoints(issuerUrl: string): Promise<{
+  authorization_endpoint: string
+  token_endpoint: string
+  userinfo_endpoint: string
+  issuer: string
+}> {
+  return api.get(`/admin/sso/discover?issuerUrl=${encodeURIComponent(issuerUrl)}`)
+}
