@@ -347,7 +347,7 @@ func (vfs *VirtualFS) RemoveAll(ctx context.Context, name string) error {
 | 인증 | 필수 (Basic Auth) |
 | 용도 | 파일/디렉토리 이동 또는 이름 변경 |
 | 감사 로그 | `file.move` 이벤트 기록 |
-| 구현 | `VirtualFS.Rename()` -> `os.Rename()` |
+| 구현 | `VirtualFS.Rename()` -> `moveOrCopy()` (cross-device 지원) |
 
 ### 6.9 LOCK / UNLOCK
 
@@ -636,7 +636,20 @@ Handler.MoveToTrashInternal(username, userID, virtualPath, realPath)
 | 사용자 속성 미지원 | 파일 태그, 설명, 즐겨찾기 등 FileHatch 고유 메타데이터는 WebDAV를 통해 조회/수정 불가 |
 | 파일 잠금 미연동 | WebDAV의 LOCK/UNLOCK과 웹 UI의 파일 잠금(`file_locks` 테이블)은 별개 시스템 |
 | 버전 관리 미지원 | DAV Class 3 (RFC 3253) 미구현 |
-| 실시간 동기화 미발생 | WebDAV를 통한 파일 변경 시 WebSocket `FileChangeEvent`가 발생하지 않음 (FileWatcher가 감지할 수 있으나, 직접 브로드캐스트하지 않음) |
+| ~~실시간 동기화 미발생~~ | ~~WebDAV를 통한 파일 변경 시 WebSocket `FileChangeEvent`가 발생하지 않음~~ → **v0.11.8에서 해결**: Mkdir, RemoveAll, Rename 성공 시 WebSocket 브로드캐스트 발생 |
+
+### 12.1.1 v0.11.8 안정성 개선 (Issue #27)
+
+| 개선 사항 | 설명 |
+|-----------|------|
+| 가상 디렉토리 ModTime 고정 | `virtualDirInfo.ModTime()`이 매번 `time.Now()` 반환 → 서버 시작 시점의 고정값(`webdavEpoch`)으로 변경. 클라이언트 캐시 일관성 확보 |
+| Cache-Control 헤더 | GET/HEAD 외 모든 응답에 `Cache-Control: no-cache, no-store, must-revalidate` 헤더 추가. 폴더 목록 캐시 문제 해결 |
+| Cross-device Rename 지원 | `os.Rename` → `moveOrCopy` 함수 사용. NAS/볼륨 마운트 환경에서 파일 이동/이름 변경 실패 해결 |
+| 임시 파일 필터링 | Office 앱의 임시 파일(`~$*`, `.~lock.*`, `*.tmp`)은 휴지통 대신 영구 삭제 |
+| WebSocket 브로드캐스트 | Mkdir, RemoveAll, Rename 성공 시 `FileChangeEvent` 브로드캐스트. 웹 UI 실시간 반영 |
+| 감사 로그 후처리 | 감사 로그를 작업 실행 전이 아닌 성공(2xx) 후에만 기록. 실패한 작업의 잘못된 로그 방지 |
+| 프록시 타임아웃 | UI 프록시(`server.cjs`)에 10분 타임아웃 설정. 대용량 파일 업로드 시 프록시 타임아웃 해결 |
+| 휴지통 cross-device 수정 | `MoveToTrashInternal`에서도 `moveOrCopy` 사용. 볼륨 간 휴지통 이동 실패 해결 |
 
 ### 12.2 보안 고려사항
 

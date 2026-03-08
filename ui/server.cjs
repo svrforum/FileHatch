@@ -141,6 +141,8 @@ const webdavProxy = createProxyMiddleware({
   target: API_URL,
   changeOrigin: true,
   agent: keepAliveAgent,
+  proxyTimeout: 600000,
+  timeout: 600000,
   pathRewrite: (path, req) => {
     // Ensure path always starts with /webdav/
     let targetPath = req.originalUrl;

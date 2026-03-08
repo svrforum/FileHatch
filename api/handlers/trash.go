@@ -1299,7 +1299,7 @@ func (h *Handler) MoveToTrashInternal(username, userID, virtualPath, realPath st
 	trashID := fmt.Sprintf("%d_%s", time.Now().UnixNano(), info.Name())
 	trashItemPath := filepath.Join(trashPath, trashID)
 
-	if err := os.Rename(realPath, trashItemPath); err != nil {
+	if err := moveOrCopy(realPath, trashItemPath); err != nil {
 		return err
 	}
 

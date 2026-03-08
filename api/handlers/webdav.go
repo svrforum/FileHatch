@@ -80,11 +80,14 @@ func (h *WebDAVHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	// Log access
-	h.logAccess(user.ID, r)
+	// Serve WebDAV request with status capturing
+	sw := newStatusCapturingWriter(w, r)
+	davHandler.ServeHTTP(sw, r)
 
-	// Serve WebDAV request
-	davHandler.ServeHTTP(w, r)
+	// Only log access for successful write operations
+	if sw.statusCode == 0 || (sw.statusCode >= 200 && sw.statusCode < 300) {
+		h.logAccess(user.ID, r)
+	}
 }
 
 // UserInfo holds basic user info
@@ -193,6 +196,41 @@ func getClientIP(r *http.Request) string {
 	return ip
 }
 
+// statusCapturingWriter wraps http.ResponseWriter to capture status codes
+// and inject Cache-Control headers for non-GET/HEAD responses.
+type statusCapturingWriter struct {
+	http.ResponseWriter
+	statusCode     int
+	wroteHeader    bool
+	noCacheHeaders bool
+}
+
+func newStatusCapturingWriter(w http.ResponseWriter, r *http.Request) *statusCapturingWriter {
+	return &statusCapturingWriter{
+		ResponseWriter: w,
+		noCacheHeaders: r.Method != "GET" && r.Method != "HEAD",
+	}
+}
+
+func (w *statusCapturingWriter) WriteHeader(code int) {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
+	w.statusCode = code
+	if w.noCacheHeaders {
+		w.ResponseWriter.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusCapturingWriter) Write(b []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(b)
+}
+
 // VirtualFS implements webdav.FileSystem with virtual directories
 // Structure:
 //   /home/         -> User's home directory
@@ -210,7 +248,11 @@ func (vfs *VirtualFS) Mkdir(ctx context.Context, name string, perm os.FileMode) 
 	if err != nil {
 		return err
 	}
-	return os.Mkdir(realPath, perm)
+	if err := os.Mkdir(realPath, perm); err != nil {
+		return err
+	}
+	vfs.broadcastChange(name, "create", true)
+	return nil
 }
 
 // OpenFile opens a file
@@ -246,21 +288,51 @@ func (vfs *VirtualFS) RemoveAll(ctx context.Context, name string) error {
 		return err
 	}
 
-	// Get virtual path for trash metadata
-	virtualPath := vfs.getVirtualPath(name)
+	// Pre-stat for broadcast info
+	info, statErr := os.Stat(realPath)
+	isDir := statErr == nil && info.IsDir()
 
-	// Use trash functionality if handler is available
-	if vfs.handler != nil {
-		return vfs.handler.MoveToTrashInternal(
+	// Temp files (e.g., ~$doc.docx, .~lock.file, *.tmp) are permanently deleted
+	if isTempFile(name) {
+		err = os.RemoveAll(realPath)
+	} else if vfs.handler != nil {
+		// Get virtual path for trash metadata
+		virtualPath := vfs.getVirtualPath(name)
+		err = vfs.handler.MoveToTrashInternal(
 			vfs.user.Username,
 			vfs.user.ID,
 			virtualPath,
 			realPath,
 		)
+	} else {
+		// Fallback to permanent deletion if handler is not available
+		err = os.RemoveAll(realPath)
 	}
 
-	// Fallback to permanent deletion if handler is not available
-	return os.RemoveAll(realPath)
+	if err == nil {
+		vfs.broadcastChange(name, "remove", isDir)
+	}
+	return err
+}
+
+// broadcastChange sends a WebSocket file change event for WebDAV operations.
+func (vfs *VirtualFS) broadcastChange(virtualName, eventType string, isDir bool) {
+	BroadcastFileChange(FileChangeEvent{
+		Type:      eventType,
+		Path:      virtualName,
+		Name:      filepath.Base(virtualName),
+		IsDir:     isDir,
+		Timestamp: time.Now().Unix(),
+	})
+}
+
+// isTempFile checks if a file is a temporary file created by Office applications.
+func isTempFile(name string) bool {
+	base := filepath.Base(name)
+	lower := strings.ToLower(base)
+	return strings.HasPrefix(base, "~$") ||
+		strings.HasPrefix(base, ".~lock.") ||
+		strings.HasSuffix(lower, ".tmp")
 }
 
 // getVirtualPath converts WebDAV path to virtual display path
@@ -292,7 +364,17 @@ func (vfs *VirtualFS) Rename(ctx context.Context, oldName, newName string) error
 	if err != nil {
 		return err
 	}
-	return os.Rename(oldPath, newPath)
+
+	// Pre-stat for broadcast info
+	info, statErr := os.Stat(oldPath)
+	isDir := statErr == nil && info.IsDir()
+
+	if err := moveOrCopy(oldPath, newPath); err != nil {
+		return err
+	}
+	vfs.broadcastChange(oldName, "remove", isDir)
+	vfs.broadcastChange(newName, "create", isDir)
+	return nil
 }
 
 // Stat returns file info
@@ -481,6 +563,8 @@ func (vfs *VirtualFS) getUserSharedFolders() ([]SharedFolderInfo, error) {
 	return folders, nil
 }
 
+var webdavEpoch = time.Now()
+
 // virtualDirInfo implements os.FileInfo for virtual directories
 type virtualDirInfo struct {
 	name  string
@@ -490,7 +574,7 @@ type virtualDirInfo struct {
 func (v *virtualDirInfo) Name() string       { return v.name }
 func (v *virtualDirInfo) Size() int64        { return 0 }
 func (v *virtualDirInfo) Mode() os.FileMode  { return os.ModeDir | 0755 }
-func (v *virtualDirInfo) ModTime() time.Time { return time.Now() }
+func (v *virtualDirInfo) ModTime() time.Time { return webdavEpoch }
 func (v *virtualDirInfo) IsDir() bool        { return v.isDir }
 func (v *virtualDirInfo) Sys() interface{}   { return nil }
 
