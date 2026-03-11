@@ -97,31 +97,39 @@ type UserInfo struct {
 	IsAdmin  bool
 }
 
-// authenticateUser verifies username and application password
+// authenticateUser verifies username and password for WebDAV access.
+// It first tries the application password (smb_hash), then falls back
+// to the regular login password (password_hash) for user convenience.
 func (h *WebDAVHandler) authenticateUser(username, password string) (*UserInfo, error) {
 	var user UserInfo
 	var smbHash sql.NullString
+	var passwordHash sql.NullString
 
 	err := h.db.QueryRow(`
-		SELECT id, username, is_admin, smb_hash
+		SELECT id, username, is_admin, smb_hash, password_hash
 		FROM users
 		WHERE username = $1 AND is_active = true
-	`, username).Scan(&user.ID, &user.Username, &user.IsAdmin, &smbHash)
+	`, username).Scan(&user.ID, &user.Username, &user.IsAdmin, &smbHash, &passwordHash)
 
 	if err != nil {
 		return nil, fmt.Errorf("user not found")
 	}
 
-	if !smbHash.Valid || smbHash.String == "" {
-		return nil, fmt.Errorf("application password not set")
+	// Try application password first (smb_hash)
+	if smbHash.Valid && smbHash.String != "" {
+		if err := bcrypt.CompareHashAndPassword([]byte(smbHash.String), []byte(password)); err == nil {
+			return &user, nil
+		}
 	}
 
-	// Verify password
-	if err := bcrypt.CompareHashAndPassword([]byte(smbHash.String), []byte(password)); err != nil {
-		return nil, fmt.Errorf("invalid password")
+	// Fall back to regular login password (password_hash)
+	if passwordHash.Valid && passwordHash.String != "" {
+		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash.String), []byte(password)); err == nil {
+			return &user, nil
+		}
 	}
 
-	return &user, nil
+	return nil, fmt.Errorf("invalid password")
 }
 
 // logAccess logs WebDAV access to audit log

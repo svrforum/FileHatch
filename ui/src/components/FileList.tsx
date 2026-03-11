@@ -593,6 +593,17 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     }
   }, [showError])
 
+  // Memoized callbacks for OnlyOffice editor to prevent re-render flickering
+  const handleOnlyOfficeClose = useCallback(() => {
+    setOnlyOfficeConfig(null)
+    setOnlyOfficeFile(null)
+    queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+  }, [queryClient, currentPath])
+
+  const handleOnlyOfficeError = useCallback((error: string) => {
+    showError(error)
+  }, [showError])
+
   const isZipFile = useCallback((file: FileInfo) => {
     const ext = file.extension?.toLowerCase() || file.name.split('.').pop()?.toLowerCase()
     return ext === 'zip'
@@ -1746,14 +1757,8 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         <OnlyOfficeEditor
           config={onlyOfficeConfig}
           publicUrl={onlyOfficePublicUrl}
-          onClose={() => {
-            setOnlyOfficeConfig(null)
-            setOnlyOfficeFile(null)
-            queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
-          }}
-          onError={(error) => {
-            showError(error)
-          }}
+          onClose={handleOnlyOfficeClose}
+          onError={handleOnlyOfficeError}
         />
       )}
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { OnlyOfficeConfig } from '../api/files'
 import './OnlyOfficeEditor.css'
 
@@ -62,6 +62,15 @@ function OnlyOfficeEditor({ config, publicUrl, onClose, onError }: OnlyOfficeEdi
   const isMountedRef = useRef(true)
   const initializingRef = useRef(false)
 
+  // Use refs for callbacks to avoid useEffect re-triggering on callback changes
+  const onCloseRef = useRef(onClose)
+  const onErrorRef = useRef(onError)
+  onCloseRef.current = onClose
+  onErrorRef.current = onError
+
+  const stableOnClose = useCallback(() => onCloseRef.current(), [])
+  const stableOnError = useCallback((err: string) => onErrorRef.current?.(err), [])
+
   useEffect(() => {
     isMountedRef.current = true
 
@@ -124,12 +133,12 @@ function OnlyOfficeEditor({ config, publicUrl, onClose, onError }: OnlyOfficeEdi
               const errMsg = event.data?.errorDescription || 'Unknown error'
               if (isMountedRef.current) {
                 setError(errMsg)
-                onError?.(errMsg)
+                stableOnError(errMsg)
                 setIsLoading(false)
               }
             },
             onRequestClose: () => {
-              onClose()
+              stableOnClose()
             },
           },
           width: '100%',
@@ -142,7 +151,7 @@ function OnlyOfficeEditor({ config, publicUrl, onClose, onError }: OnlyOfficeEdi
         const errMsg = err instanceof Error ? err.message : 'Failed to initialize editor'
         if (isMountedRef.current) {
           setError(errMsg)
-          onError?.(errMsg)
+          stableOnError(errMsg)
           setIsLoading(false)
         }
       }
@@ -195,7 +204,7 @@ function OnlyOfficeEditor({ config, publicUrl, onClose, onError }: OnlyOfficeEdi
         editorRef.current = null
       }
     }
-  }, [config, publicUrl, onClose, onError])
+  }, [config, publicUrl, stableOnClose, stableOnError])
 
   return (
     <div className="onlyoffice-overlay">
