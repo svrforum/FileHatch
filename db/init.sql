@@ -364,7 +364,11 @@ INSERT INTO schema_migrations (version, name) VALUES
     ('20240101000003', '003_external_storages'),
     ('20240101000004', '004_fix_external_storage_fk'),
     ('20240101000005', '005_user_preferences'),
-    ('20240101000006', '006_hidden_recent_items')
+    ('20240101000006', '006_hidden_recent_items'),
+    ('20240101000007', '007_transfer_jobs'),
+    ('20240101000008', '008_transfer_jobs_delete'),
+    ('20240101000009', '009_performance_indexes'),
+    ('20240101000010', '010_add_missing_user_columns')
 ON CONFLICT (version) DO NOTHING;
 
 -- =============================================================================
