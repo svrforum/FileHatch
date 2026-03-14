@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 )
@@ -36,22 +37,21 @@ func TestIsTempFile(t *testing.T) {
 }
 
 func TestVirtualDirInfo_ModTime(t *testing.T) {
-	before := time.Now()
-	info1 := &virtualDirInfo{name: "test", isDir: true}
-	time.Sleep(10 * time.Millisecond)
-	info2 := &virtualDirInfo{name: "test2", isDir: true}
-
-	t1 := info1.ModTime()
-	t2 := info2.ModTime()
-
-	// Both should return the same fixed time (webdavEpoch)
-	if !t1.Equal(t2) {
-		t.Errorf("ModTime() should return fixed time, got %v and %v", t1, t2)
+	// With explicit modTime set, should return that time
+	fixedTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	info := &virtualDirInfo{name: "test", isDir: true, modTime: fixedTime}
+	if !info.ModTime().Equal(fixedTime) {
+		t.Errorf("ModTime() with explicit time should return %v, got %v", fixedTime, info.ModTime())
 	}
 
-	// The fixed time should be before or equal to the test start
-	if t1.After(before) {
-		t.Errorf("ModTime() should return time <= test start, got %v (test started at %v)", t1, before)
+	// Without modTime (zero value), should return current time (not a frozen epoch)
+	before := time.Now()
+	infoNoTime := &virtualDirInfo{name: "test2", isDir: true}
+	mt := infoNoTime.ModTime()
+	after := time.Now()
+
+	if mt.Before(before) || mt.After(after) {
+		t.Errorf("ModTime() without explicit time should return ~now, got %v (expected between %v and %v)", mt, before, after)
 	}
 }
 
@@ -127,5 +127,62 @@ func TestStatusCapturingWriter_ImplicitOK(t *testing.T) {
 
 	if sw.statusCode != http.StatusOK {
 		t.Errorf("Implicit statusCode should be %d, got %d", http.StatusOK, sw.statusCode)
+	}
+}
+
+func TestDestinationHeaderRewrite(t *testing.T) {
+	// Simulate what ServeHTTP does: rewrite Destination header
+	// when the host doesn't match r.Host (reverse proxy scenario)
+	tests := []struct {
+		name        string
+		reqHost     string
+		destination string
+		expected    string
+	}{
+		{
+			"Mismatched host - proxy scenario",
+			"api:8080",
+			"http://external.example.com:3080/webdav/home/newname.txt",
+			"http://api:8080/webdav/home/newname.txt",
+		},
+		{
+			"Matching host - no rewrite needed",
+			"localhost:8080",
+			"http://localhost:8080/webdav/home/newname.txt",
+			"http://localhost:8080/webdav/home/newname.txt",
+		},
+		{
+			"Empty host in destination - relative URL",
+			"api:8080",
+			"/webdav/home/newname.txt",
+			"/webdav/home/newname.txt",
+		},
+		{
+			"HTTPS destination with mismatched host",
+			"api:8080",
+			"https://files.company.com/webdav/home/renamed.docx",
+			"https://api:8080/webdav/home/renamed.docx",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("MOVE", "/webdav/home/oldname.txt", nil)
+			req.Host = tt.reqHost
+			req.Header.Set("Destination", tt.destination)
+
+			// Apply the same logic as ServeHTTP
+			if dst := req.Header.Get("Destination"); dst != "" {
+				if dstURL, parseErr := url.Parse(dst); parseErr == nil && dstURL.Host != "" && dstURL.Host != req.Host {
+					dstURL.Host = req.Host
+					req.Header.Set("Destination", dstURL.String())
+				}
+			}
+
+			got := req.Header.Get("Destination")
+			if got != tt.expected {
+				t.Errorf("Destination = %q, want %q", got, tt.expected)
+			}
+		})
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,6 +79,20 @@ func (h *WebDAVHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				fmt.Printf("[WebDAV] %s %s: %v\n", r.Method, r.URL.Path, err)
 			}
 		},
+	}
+
+	// Fix Destination header for MOVE/COPY behind reverse proxy.
+	// WebDAV clients send the external host in the Destination header,
+	// but the reverse proxy changes r.Host to the internal backend host.
+	// The upstream webdav library rejects the request with 502 Bad Gateway
+	// when Destination host doesn't match r.Host.
+	if r.Method == "MOVE" || r.Method == "COPY" {
+		if dst := r.Header.Get("Destination"); dst != "" {
+			if dstURL, parseErr := url.Parse(dst); parseErr == nil && dstURL.Host != "" && dstURL.Host != r.Host {
+				dstURL.Host = r.Host
+				r.Header.Set("Destination", dstURL.String())
+			}
+		}
 	}
 
 	// Serve WebDAV request with status capturing
@@ -214,6 +229,8 @@ type statusCapturingWriter struct {
 }
 
 func newStatusCapturingWriter(w http.ResponseWriter, r *http.Request) *statusCapturingWriter {
+	// Apply no-cache headers for all WebDAV methods except file content retrieval (GET/HEAD).
+	// This is especially important for PROPFIND to prevent clients from caching directory listings.
 	return &statusCapturingWriter{
 		ResponseWriter: w,
 		noCacheHeaders: r.Method != "GET" && r.Method != "HEAD",
@@ -389,17 +406,19 @@ func (vfs *VirtualFS) Rename(ctx context.Context, oldName, newName string) error
 func (vfs *VirtualFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	// Handle virtual root
 	if name == "/" || name == "" {
-		return &virtualDirInfo{name: "/", isDir: true}, nil
+		return &virtualDirInfo{name: "/", isDir: true, modTime: time.Now()}, nil
 	}
 
-	// Handle /home virtual directory
+	// Handle /home virtual directory - always use current time to prevent ETag caching.
+	// The real directory mtime only changes for direct children, not nested changes,
+	// so using time.Now() ensures clients always get fresh directory listings.
 	if name == "/home" || name == "/home/" {
-		return &virtualDirInfo{name: "home", isDir: true}, nil
+		return &virtualDirInfo{name: "home", isDir: true, modTime: time.Now()}, nil
 	}
 
-	// Handle /shared virtual directory
+	// Handle /shared virtual directory - same as /home
 	if name == "/shared" || name == "/shared/" {
-		return &virtualDirInfo{name: "shared", isDir: true}, nil
+		return &virtualDirInfo{name: "shared", isDir: true, modTime: time.Now()}, nil
 	}
 
 	// Resolve actual path
@@ -571,20 +590,24 @@ func (vfs *VirtualFS) getUserSharedFolders() ([]SharedFolderInfo, error) {
 	return folders, nil
 }
 
-var webdavEpoch = time.Now()
-
 // virtualDirInfo implements os.FileInfo for virtual directories
 type virtualDirInfo struct {
-	name  string
-	isDir bool
+	name    string
+	isDir   bool
+	modTime time.Time
 }
 
-func (v *virtualDirInfo) Name() string       { return v.name }
-func (v *virtualDirInfo) Size() int64        { return 0 }
-func (v *virtualDirInfo) Mode() os.FileMode  { return os.ModeDir | 0755 }
-func (v *virtualDirInfo) ModTime() time.Time { return webdavEpoch }
-func (v *virtualDirInfo) IsDir() bool        { return v.isDir }
-func (v *virtualDirInfo) Sys() interface{}   { return nil }
+func (v *virtualDirInfo) Name() string      { return v.name }
+func (v *virtualDirInfo) Size() int64       { return 0 }
+func (v *virtualDirInfo) Mode() os.FileMode { return os.ModeDir | 0755 }
+func (v *virtualDirInfo) ModTime() time.Time {
+	if !v.modTime.IsZero() {
+		return v.modTime
+	}
+	return time.Now()
+}
+func (v *virtualDirInfo) IsDir() bool      { return v.isDir }
+func (v *virtualDirInfo) Sys() interface{} { return nil }
 
 // VirtualRootDir represents the root directory with /home and /shared
 type VirtualRootDir struct {
@@ -628,7 +651,7 @@ func (d *VirtualRootDir) Readdir(count int) ([]os.FileInfo, error) {
 }
 
 func (d *VirtualRootDir) Stat() (os.FileInfo, error) {
-	return &virtualDirInfo{name: "/", isDir: true}, nil
+	return &virtualDirInfo{name: "/", isDir: true, modTime: time.Now()}, nil
 }
 
 func (d *VirtualRootDir) Write(p []byte) (n int, err error) {
@@ -682,7 +705,7 @@ func (d *VirtualHomeDir) Readdir(count int) ([]os.FileInfo, error) {
 }
 
 func (d *VirtualHomeDir) Stat() (os.FileInfo, error) {
-	return &virtualDirInfo{name: "home", isDir: true}, nil
+	return &virtualDirInfo{name: "home", isDir: true, modTime: time.Now()}, nil
 }
 
 func (d *VirtualHomeDir) Write(p []byte) (n int, err error) {
@@ -734,7 +757,7 @@ func (d *VirtualSharedDir) Readdir(count int) ([]os.FileInfo, error) {
 }
 
 func (d *VirtualSharedDir) Stat() (os.FileInfo, error) {
-	return &virtualDirInfo{name: "shared", isDir: true}, nil
+	return &virtualDirInfo{name: "shared", isDir: true, modTime: time.Now()}, nil
 }
 
 func (d *VirtualSharedDir) Write(p []byte) (n int, err error) {
