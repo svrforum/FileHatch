@@ -17,8 +17,20 @@ import {
 } from '../utils/uploadUtils'
 
 // Constants
-const MAX_CONCURRENT_UPLOADS = 3
+const DEFAULT_MAX_CONCURRENT_UPLOADS = 3
 const API_TIMEOUT = 3000 // 3 seconds
+const UPLOAD_CONCURRENCY_KEY = 'filehatch-upload-concurrency'
+
+function getMaxConcurrentUploads(): number {
+  try {
+    const saved = localStorage.getItem(UPLOAD_CONCURRENCY_KEY)
+    if (saved) {
+      const n = parseInt(saved, 10)
+      if (n >= 1 && n <= 10) return n
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_MAX_CONCURRENT_UPLOADS
+}
 
 export interface UploadItem {
   id: string
@@ -74,6 +86,9 @@ interface UploadState {
   pauseUpload: (id: string) => void
   resumeUpload: (id: string) => void
   removeUpload: (id: string) => void
+  pauseAllUploads: () => void
+  resumeAllUploads: () => void
+  cancelAllUploads: () => void
   clearCompleted: () => void
   clearErrors: () => void
   updateProgress: (id: string, progress: number, uploadSpeed?: number, lastBytesUploaded?: number, lastUpdateTime?: number) => void
@@ -98,6 +113,10 @@ interface UploadState {
   togglePanel: () => void
   openPanel: () => void
   closePanel: () => void
+
+  // Concurrency settings
+  maxConcurrentUploads: number
+  setMaxConcurrentUploads: (n: number) => void
 
   // Getters
   getPendingCount: () => number
@@ -360,7 +379,7 @@ export const useUploadStore = create<UploadState>((set, get) => ({
     const uploadingCount = items.filter((i) => i.status === 'uploading').length
     const pendingItems = items.filter((i) => i.status === 'pending')
 
-    const slotsAvailable = MAX_CONCURRENT_UPLOADS - uploadingCount
+    const slotsAvailable = get().maxConcurrentUploads - uploadingCount
     const toStart = pendingItems.slice(0, slotsAvailable)
 
     // Stagger start to prevent server overload
@@ -379,7 +398,7 @@ export const useUploadStore = create<UploadState>((set, get) => ({
     if (duplicateFile) return
 
     const uploadingCount = items.filter((i) => i.status === 'uploading').length
-    if (uploadingCount >= MAX_CONCURRENT_UPLOADS) return
+    if (uploadingCount >= get().maxConcurrentUploads) return
 
     const pendingItems = items.filter((i) => i.status === 'pending')
     if (pendingItems.length > 0) {
@@ -425,6 +444,46 @@ export const useUploadStore = create<UploadState>((set, get) => ({
       }
     }
     set((state) => ({ items: state.items.filter((i) => i.id !== id) }))
+  },
+
+  pauseAllUploads: () => {
+    const { items } = get()
+    const uploading = items.filter(i => i.status === 'uploading')
+    for (const item of uploading) {
+      if (item.upload) {
+        item.upload.abort()
+      }
+    }
+    set(state => ({
+      items: state.items.map(i =>
+        i.status === 'uploading' ? { ...i, status: 'paused' as const } : i
+      ),
+    }))
+  },
+
+  resumeAllUploads: () => {
+    const { items } = get()
+    const paused = items.filter(i => i.status === 'paused')
+    for (const item of paused) {
+      get().startUpload(item.id)
+    }
+  },
+
+  cancelAllUploads: async () => {
+    const { items } = get()
+    const active = items.filter(i =>
+      i.status === 'uploading' || i.status === 'pending' || i.status === 'paused'
+    )
+    for (const item of active) {
+      if (item.upload) {
+        try { await item.upload.abort(true) } catch { try { item.upload.abort() } catch { /* ignore */ } }
+      }
+    }
+    set(state => ({
+      items: state.items.filter(i =>
+        i.status !== 'uploading' && i.status !== 'pending' && i.status !== 'paused'
+      ),
+    }))
   },
 
   clearCompleted: () => {
@@ -537,6 +596,14 @@ export const useUploadStore = create<UploadState>((set, get) => ({
   togglePanel: () => set((state) => ({ isPanelOpen: !state.isPanelOpen })),
   openPanel: () => set({ isPanelOpen: true }),
   closePanel: () => set({ isPanelOpen: false }),
+
+  // Concurrency settings
+  maxConcurrentUploads: getMaxConcurrentUploads(),
+  setMaxConcurrentUploads: (n: number) => {
+    const clamped = Math.max(1, Math.min(10, n))
+    localStorage.setItem(UPLOAD_CONCURRENCY_KEY, String(clamped))
+    set({ maxConcurrentUploads: clamped })
+  },
 
   // Getters
   getPendingCount: () => get().items.filter((i) => i.status === 'pending' || i.status === 'duplicate').length,

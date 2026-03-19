@@ -206,8 +206,8 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
     enabled: !!token,
   })
 
-  // Default values when loading
-  const displayStorage = storageUsage ?? { totalUsed: 0, quota: 10 * 1024 * 1024 * 1024, homeUsed: 0, sharedUsed: 0, trashUsed: 0, isAdmin: false, disk: undefined, dataUsed: 0 }
+  // Only use actual data, no fake defaults
+  const displayStorage = storageUsage
 
   // Refresh storage usage when uploads complete
   const completedUploadCount = safeItems.filter(i => i.status === 'completed').length
@@ -215,8 +215,11 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
 
   useEffect(() => {
     if (completedUploadCount > 0 || completedTransferCount > 0) {
-      // Invalidate storage query when uploads/transfers complete
-      queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
+      // Delay invalidation to allow backend DB to update storage counters
+      const timer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
+      }, 1000)
+      return () => clearTimeout(timer)
     }
   }, [completedUploadCount, completedTransferCount, queryClient])
 
@@ -675,42 +678,50 @@ function Sidebar({ currentPath, onNavigate, onUploadClick, onNewFolderClick, onA
 
         {/* Storage Info */}
         <div className="storage-info">
-          {/* Admin: Show server disk info first */}
-          {displayStorage.isAdmin && displayStorage.disk && displayStorage.disk.total > 0 && (
+          {isStorageLoading || !displayStorage ? (
+            <div className="storage-header">
+              <span className="storage-label">저장 공간</span>
+              <span className="storage-value">로딩...</span>
+            </div>
+          ) : (
             <>
-              <div className="storage-header">
-                <span className="storage-label">서버 디스크</span>
+              {/* Admin: Show server disk info first */}
+              {displayStorage.isAdmin && displayStorage.disk && displayStorage.disk.total > 0 && (
+                <>
+                  <div className="storage-header">
+                    <span className="storage-label">서버 디스크</span>
+                    <span className="storage-value">
+                      {`${formatFileSize(displayStorage.disk.used)} / ${formatFileSize(displayStorage.disk.total)}`}
+                    </span>
+                  </div>
+                  <div className="storage-bar">
+                    <div className="storage-bar-fill" style={{ width: `${Math.min(100, (displayStorage.disk.used / displayStorage.disk.total) * 100)}%` }} />
+                  </div>
+                </>
+              )}
+              {/* User quota storage (shown to all users) */}
+              <div className="storage-header" style={displayStorage.isAdmin ? { marginTop: '8px' } : undefined}>
+                <span className="storage-label">{displayStorage.isAdmin ? '할당 디스크' : '저장 공간'}</span>
                 <span className="storage-value">
-                  {isStorageLoading ? '로딩...' : `${formatFileSize(displayStorage.disk.used)} / ${formatFileSize(displayStorage.disk.total)}`}
+                  {displayStorage.quota === 0
+                    ? `${formatFileSize(displayStorage.totalUsed)} / 무제한`
+                    : `${formatFileSize(displayStorage.totalUsed)} / ${formatFileSize(displayStorage.quota)}`
+                  }
                 </span>
               </div>
-              <div className="storage-bar">
-                <div className="storage-bar-fill" style={{ width: `${Math.min(100, (displayStorage.disk.used / displayStorage.disk.total) * 100)}%` }} />
-              </div>
-            </>
-          )}
-          {/* User quota storage (shown to all users) */}
-          <div className="storage-header" style={displayStorage.isAdmin ? { marginTop: '8px' } : undefined}>
-            <span className="storage-label">{displayStorage.isAdmin ? '할당 디스크' : '저장 공간'}</span>
-            <span className="storage-value">
-              {isStorageLoading ? '로딩...' : (
-                displayStorage.quota === 0
-                  ? `${formatFileSize(displayStorage.totalUsed)} / 무제한`
-                  : `${formatFileSize(displayStorage.totalUsed)} / ${formatFileSize(displayStorage.quota)}`
+              {displayStorage.quota > 0 && (
+                <div className="storage-bar">
+                  <div className="storage-bar-fill" style={{ width: `${Math.min(100, (displayStorage.totalUsed / displayStorage.quota) * 100)}%` }} />
+                </div>
               )}
-            </span>
-          </div>
-          {displayStorage.quota > 0 && (
-            <div className="storage-bar">
-              <div className="storage-bar-fill" style={{ width: `${Math.min(100, (displayStorage.totalUsed / displayStorage.quota) * 100)}%` }} />
-            </div>
-          )}
-          {!isStorageLoading && displayStorage.trashUsed > 0 && (
-            <div className="storage-detail">
-              <span className="storage-detail-text">
-                휴지통: {formatFileSize(displayStorage.trashUsed)}
-              </span>
-            </div>
+              {displayStorage.trashUsed > 0 && (
+                <div className="storage-detail">
+                  <span className="storage-detail-text">
+                    휴지통: {formatFileSize(displayStorage.trashUsed)}
+                  </span>
+                </div>
+              )}
+            </>
           )}
         </div>
 

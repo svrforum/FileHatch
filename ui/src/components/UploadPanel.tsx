@@ -38,7 +38,7 @@ function virtualPathToUrl(virtualPath: string): string {
 type PanelTab = 'all' | 'active' | 'completed' | 'error'
 
 function UploadPanel() {
-  const { items, downloads, interruptedUploads, isPanelOpen: uploadPanelOpen, closePanel: closeUploadPanel, removeUpload, clearCompleted, clearCompletedDownloads, clearErrors: clearUploadErrors, removeDownload, startUpload, retryUpload, pauseUpload, loadInterruptedUploads, dismissInterruptedUpload, clearInterruptedUploads } = useUploadStore()
+  const { items, downloads, interruptedUploads, isPanelOpen: uploadPanelOpen, closePanel: closeUploadPanel, removeUpload, clearCompleted, clearCompletedDownloads, clearErrors: clearUploadErrors, removeDownload, startUpload, retryUpload, pauseUpload, pauseAllUploads, resumeAllUploads, cancelAllUploads, loadInterruptedUploads, dismissInterruptedUpload, clearInterruptedUploads, maxConcurrentUploads, setMaxConcurrentUploads } = useUploadStore()
   const { items: transferItems, isPanelOpen: transferPanelOpen, closePanel: closeTransferPanel, removeItem: removeTransfer, clearCompleted: clearCompletedTransfers, retryTransfer } = useTransferStore()
   const [activeTab, setActiveTab] = useState<PanelTab>('all')
 
@@ -66,12 +66,13 @@ function UploadPanel() {
   }, [isPanelOpen, closePanel])
   // Memoize all counts in a single pass to avoid 13+ separate .filter() calls per render
   const counts = useMemo(() => {
-    let uploading = 0, completed = 0, pending = 0, error = 0
+    let uploading = 0, completed = 0, pending = 0, error = 0, paused = 0
     for (const i of items) {
       if (i.status === 'uploading') uploading++
       else if (i.status === 'completed') completed++
       else if (i.status === 'pending') pending++
       else if (i.status === 'error') error++
+      else if (i.status === 'paused') paused++
     }
 
     let downloading = 0, dlCompleted = 0, dlError = 0
@@ -94,7 +95,7 @@ function UploadPanel() {
     }
 
     return {
-      uploadingCount: uploading, completedCount: completed, pendingCount: pending, errorCount: error,
+      uploadingCount: uploading, completedCount: completed, pendingCount: pending, errorCount: error, pausedCount: paused,
       downloadingCount: downloading, downloadCompletedCount: dlCompleted, downloadErrorCount: dlError,
       transferringCount: transferring, transferPendingCount: tPending, transferCompletedCount: tCompleted, transferErrorCount: tError,
       compressingCount: compressing, compressPendingCount: cPending, compressCompletedCount: cCompleted, compressErrorCount: cError,
@@ -107,7 +108,7 @@ function UploadPanel() {
   }, [items, downloads, transferItems, interruptedUploads])
 
   const {
-    uploadingCount, pendingCount,
+    uploadingCount, pendingCount, pausedCount,
     downloadingCount,
     transferringCount, transferPendingCount,
     compressingCount, compressPendingCount,
@@ -313,6 +314,28 @@ function UploadPanel() {
         <div className="upload-panel-header">
         <h3>전송 현황</h3>
         <div className="upload-panel-actions">
+          {(uploadingCount > 0 || pendingCount > 0) && pausedCount === 0 && (
+            <button className="panel-action-btn" onClick={pauseAllUploads} title="전체 일시정지">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <rect x="6" y="4" width="4" height="16" fill="currentColor"/>
+                <rect x="14" y="4" width="4" height="16" fill="currentColor"/>
+              </svg>
+            </button>
+          )}
+          {pausedCount > 0 && (
+            <button className="panel-action-btn" onClick={resumeAllUploads} title="전체 재개">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M5 3L19 12L5 21V3Z" fill="currentColor"/>
+              </svg>
+            </button>
+          )}
+          {(uploadingCount > 0 || pendingCount > 0 || pausedCount > 0) && (
+            <button className="panel-action-btn cancel-all" onClick={cancelAllUploads} title="전체 취소">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>
+              </svg>
+            </button>
+          )}
           {totalCompletedCount > 0 && (
             <button className="panel-action-btn" onClick={handleClearAll}>
               완료 항목 삭제
@@ -348,6 +371,25 @@ function UploadPanel() {
           {totalErrorCount > 0 && <span className="tab-badge error">{totalErrorCount}</span>}
         </button>
       </div>
+
+      {activeTab === 'active' && (
+        <div className="upload-panel-concurrency">
+          <span className="concurrency-label">동시 업로드 수</span>
+          <div className="concurrency-control">
+            <button
+              className="concurrency-btn"
+              onClick={() => setMaxConcurrentUploads(maxConcurrentUploads - 1)}
+              disabled={maxConcurrentUploads <= 1}
+            >−</button>
+            <span className="concurrency-value">{maxConcurrentUploads}</span>
+            <button
+              className="concurrency-btn"
+              onClick={() => setMaxConcurrentUploads(maxConcurrentUploads + 1)}
+              disabled={maxConcurrentUploads >= 10}
+            >+</button>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'error' && totalErrorCount > 0 && (
         <div className="upload-panel-batch-actions">

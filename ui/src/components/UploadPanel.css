@@ -83,11 +83,18 @@
   border-radius: 6px;
   transition: all var(--transition-fast);
   background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .panel-action-btn:hover {
   background: rgba(255, 255, 255, 0.25);
   color: white;
+}
+
+.panel-action-btn.cancel-all:hover {
+  background: rgba(239, 68, 68, 0.4);
 }
 
 .panel-close-btn {
@@ -162,6 +169,65 @@
 .upload-panel-tab .tab-badge.error {
   background: rgba(239, 68, 68, 0.1);
   color: var(--color-error);
+}
+
+/* Concurrency control */
+.upload-panel-concurrency {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 24px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.concurrency-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.concurrency-control {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.concurrency-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.concurrency-btn:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  color: var(--color-primary);
+}
+
+.concurrency-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.concurrency-value {
+  width: 32px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: var(--bg-secondary);
+  line-height: 28px;
 }
 
 /* Batch actions bar */
