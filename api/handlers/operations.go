@@ -87,6 +87,16 @@ func (h *Handler) RenameItem(c echo.Context) error {
 		return RespondError(c, ErrUnauthorized("Authentication required"))
 	}
 
+	// Check shared drive write permission (read-only viewers cannot rename)
+	if storageType == StorageShared {
+		if claims == nil {
+			return RespondError(c, ErrUnauthorized("Authentication required"))
+		}
+		if !h.CanWriteSharedDrive(claims.UserID, "/"+requestPath) {
+			return RespondError(c, ErrForbidden("No permission to rename items in this shared drive"))
+		}
+	}
+
 	// Check file lock
 	if claims != nil {
 		// For files, check single lock; for folders, also check children
@@ -266,6 +276,19 @@ func (h *Handler) MoveItem(c echo.Context) error {
 	// Check permissions
 	if (srcStorageType == StorageHome || destStorageType == StorageHome) && claims == nil {
 		return RespondError(c, ErrUnauthorized("Authentication required"))
+	}
+
+	// Check shared drive write permission on source (move removes from src) and destination (move writes to dest)
+	if srcStorageType == StorageShared || destStorageType == StorageShared {
+		if claims == nil {
+			return RespondError(c, ErrUnauthorized("Authentication required"))
+		}
+		if srcStorageType == StorageShared && !h.CanWriteSharedDrive(claims.UserID, "/"+requestPath) {
+			return RespondError(c, ErrForbidden("No permission to move items out of this shared drive"))
+		}
+		if destStorageType == StorageShared && !h.CanWriteSharedDrive(claims.UserID, req.Destination) {
+			return RespondError(c, ErrForbidden("No permission to move items into this shared drive"))
+		}
 	}
 
 	// Check file lock on source
@@ -493,6 +516,16 @@ func (h *Handler) CopyItem(c echo.Context) error {
 	// Check permissions
 	if (srcStorageType == StorageHome || destStorageType == StorageHome) && claims == nil {
 		return RespondError(c, ErrUnauthorized("Authentication required"))
+	}
+
+	// Check shared drive write permission on destination (copy creates new content there)
+	if destStorageType == StorageShared {
+		if claims == nil {
+			return RespondError(c, ErrUnauthorized("Authentication required"))
+		}
+		if !h.CanWriteSharedDrive(claims.UserID, req.Destination) {
+			return RespondError(c, ErrForbidden("No permission to copy items into this shared drive"))
+		}
 	}
 
 	ctx := context.Background()
@@ -776,6 +809,16 @@ func (h *Handler) CopyItemStream(c echo.Context) error {
 		return RespondError(c, ErrForbidden(err.Error()))
 	}
 
+	// Check shared drive write permission on destination (copy creates new content there)
+	if paths.DestStorageType == StorageShared {
+		if paths.Claims == nil {
+			return RespondError(c, ErrUnauthorized("Authentication required"))
+		}
+		if !h.CanWriteSharedDrive(paths.Claims.UserID, destination) {
+			return RespondError(c, ErrForbidden("No permission to copy items into this shared drive"))
+		}
+	}
+
 	srcIsNonLocal := paths.SrcStorageType == StorageExternal && paths.SrcRealPath == ""
 	destIsNonLocal := paths.DestStorageType == StorageExternal && paths.DestRealPath == ""
 
@@ -927,6 +970,19 @@ func (h *Handler) MoveItemStream(c echo.Context) error {
 	}
 	if err := checkReadonly(paths.DestResult); err != nil {
 		return RespondError(c, ErrForbidden(err.Error()))
+	}
+
+	// Check shared drive write permission on source and destination
+	if paths.SrcStorageType == StorageShared || paths.DestStorageType == StorageShared {
+		if paths.Claims == nil {
+			return RespondError(c, ErrUnauthorized("Authentication required"))
+		}
+		if paths.SrcStorageType == StorageShared && !h.CanWriteSharedDrive(paths.Claims.UserID, "/"+requestPath) {
+			return RespondError(c, ErrForbidden("No permission to move items out of this shared drive"))
+		}
+		if paths.DestStorageType == StorageShared && !h.CanWriteSharedDrive(paths.Claims.UserID, destination) {
+			return RespondError(c, ErrForbidden("No permission to move items into this shared drive"))
+		}
 	}
 
 	srcIsNonLocal := paths.SrcStorageType == StorageExternal && paths.SrcRealPath == ""

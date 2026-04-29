@@ -288,6 +288,13 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 		return RespondError(c, ErrForbidden(err.Error()))
 	}
 
+	// Check shared drive write permission (read-only viewers cannot send items to trash)
+	if storageType == StorageShared {
+		if !h.CanWriteSharedDrive(claims.UserID, "/"+requestPath) {
+			return RespondError(c, ErrForbidden("No permission to delete items in this shared drive"))
+		}
+	}
+
 	// Check file lock
 	if lockErr := h.CheckFileLockForOperation(displayPath, claims.UserID); lockErr != nil {
 		return RespondError(c, lockErr)
@@ -468,6 +475,14 @@ func (h *Handler) BatchMoveToTrash(c echo.Context) error {
 		if err := checkReadonly(result); err != nil {
 			failed = append(failed, BatchMoveToTrashResult{Path: path, Error: err.Error()})
 			continue
+		}
+
+		// Check shared drive write permission (read-only viewers cannot send items to trash)
+		if storageType == StorageShared {
+			if !h.CanWriteSharedDrive(claims.UserID, path) {
+				failed = append(failed, BatchMoveToTrashResult{Path: path, Error: "No permission to delete items in this shared drive"})
+				continue
+			}
 		}
 
 		// Check file lock

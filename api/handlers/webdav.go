@@ -297,8 +297,11 @@ func (vfs *VirtualFS) OpenFile(ctx context.Context, name string, flag int, perm 
 		return &VirtualSharedDir{vfs: vfs}, nil
 	}
 
+	// Determine write intent from open flags so viewer-only users cannot upload via PUT
+	write := flag&(os.O_WRONLY|os.O_RDWR|os.O_CREATE|os.O_TRUNC|os.O_APPEND) != 0
+
 	// Resolve actual path
-	realPath, err := vfs.resolvePath(name, false)
+	realPath, err := vfs.resolvePath(name, write)
 	if err != nil {
 		return nil, err
 	}

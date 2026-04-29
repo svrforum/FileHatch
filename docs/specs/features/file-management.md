@@ -207,6 +207,27 @@ const virtualizer = useVirtualizer({
 모든 `/api/files/*` 엔드포인트는 `JWTMiddleware()` 필수이다.
 공유 폴더(`/shared/` 접두사) 경로 접근 시 추가로 `PermissionChecker.CheckSharedFolderAccess()` 검증이 수행된다.
 
+### 4.5 공유 드라이브 쓰기 권한 검증
+
+공유 폴더에 대한 모든 mutating 작업은 `Handler.CanWriteSharedDrive()` (= `PermissionLevel >= PermissionReadWrite`) 검증을 통과해야 한다. ReadOnly(viewer) 권한 사용자가 어떤 경로로도 공유 폴더 데이터를 변경할 수 없도록 모든 핸들러가 일관되게 검사한다.
+
+| 핸들러 | 라우트 | 검증 대상 |
+|--------|--------|-----------|
+| `DeleteFile` | DELETE `/api/files/*` | source |
+| `DeleteFolder` | DELETE `/api/folders/*` | source |
+| `SaveFileContent` | PUT `/api/file/*` | target |
+| `RenameItem` | PUT `/api/files/rename/*` | source |
+| `MoveItem` | PUT `/api/files/move/*` | source + destination |
+| `MoveItemStream` | GET `/api/files/move-stream/*` | source + destination |
+| `CopyItem` | POST `/api/files/copy/*` | destination |
+| `CopyItemStream` | GET `/api/files/copy-stream/*` | destination |
+| `MoveToTrash` | POST `/api/trash/*` | source |
+| `BatchMoveToTrash` | POST `/api/trash/batch` | source (각 항목별) |
+| `CreateFolder` | POST `/api/folders` | parent |
+| `UploadFile` | POST `/api/upload` | parent |
+
+WebDAV 경로 또한 동일한 시맨틱을 따른다. `VirtualFS.OpenFile()`은 호출 시점의 `flag`(O_WRONLY/O_RDWR/O_CREATE/O_TRUNC/O_APPEND)에서 쓰기 의도를 추출하여 viewer 권한자의 PUT을 거부한다. `RemoveAll`/`Rename`은 항상 `write=true`로 검사한다.
+
 ---
 
 ## 5. 데이터 흐름
