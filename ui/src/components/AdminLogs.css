@@ -358,6 +358,7 @@
 .logs-table td {
   padding: 16px 20px;
   text-align: left;
+  vertical-align: middle;
   border-bottom: 1px solid var(--border-light);
 }
 

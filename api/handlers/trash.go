@@ -749,7 +749,7 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 			delete(meta, trashID)
 			_ = h.saveTrashMeta(claims.Username, meta)
 
-			_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", restorePath, map[string]interface{}{
+			_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventTrashRestore, restorePath, map[string]interface{}{
 				"trashId": trashID,
 			})
 
@@ -783,7 +783,7 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 		delete(meta, trashID)
 		_ = h.saveTrashMeta(claims.Username, meta)
 
-		_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", restorePath, map[string]interface{}{
+		_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventTrashRestore, restorePath, map[string]interface{}{
 			"trashId": trashID,
 		})
 
@@ -842,7 +842,7 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 	_ = h.saveTrashMeta(claims.Username, meta)
 
 	// Log restore event for recent files tracking
-	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", restorePath, map[string]interface{}{
+	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventTrashRestore, restorePath, map[string]interface{}{
 		"trashId": trashID,
 	})
 
@@ -908,6 +908,15 @@ func (h *Handler) DeleteFromTrash(c echo.Context) error {
 	if err := h.UpdateUserTrashStorage(claims.UserID, -item.Size); err != nil {
 		fmt.Printf("[Storage] Failed to update storage for %s: %v\n", claims.Username, err)
 	}
+
+	// Audit log: permanent deletion (irreversible)
+	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventTrashDelete, item.OriginalPath, map[string]interface{}{
+		"trashId":   trashID,
+		"name":      item.Name,
+		"size":      item.Size,
+		"isDir":     item.IsDir,
+		"permanent": true,
+	})
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -988,7 +997,7 @@ func (h *Handler) BatchRestoreFromTrash(c echo.Context) error {
 				os.RemoveAll(trashItemPath)
 				delete(meta, trashID)
 				restored = append(restored, trashID)
-				_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", restorePath, map[string]interface{}{
+				_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventTrashRestore, restorePath, map[string]interface{}{
 					"trashId": trashID,
 				})
 				continue
@@ -1014,7 +1023,7 @@ func (h *Handler) BatchRestoreFromTrash(c echo.Context) error {
 			}
 			delete(meta, trashID)
 			restored = append(restored, trashID)
-			_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", restorePath, map[string]interface{}{
+			_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventTrashRestore, restorePath, map[string]interface{}{
 				"trashId": trashID,
 			})
 			continue
@@ -1055,7 +1064,7 @@ func (h *Handler) BatchRestoreFromTrash(c echo.Context) error {
 		delete(meta, trashID)
 		restored = append(restored, trashID)
 
-		_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), "trash.restore", restorePath, map[string]interface{}{
+		_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventTrashRestore, restorePath, map[string]interface{}{
 			"trashId": trashID,
 		})
 
@@ -1109,6 +1118,7 @@ func (h *Handler) BatchDeleteFromTrash(c echo.Context) error {
 	var deleted []string
 	var failed []string
 	var totalDeletedSize int64
+	var deletedItems []TrashItem
 
 	for _, trashID := range req.IDs {
 		item, exists := meta[trashID]
@@ -1126,6 +1136,7 @@ func (h *Handler) BatchDeleteFromTrash(c echo.Context) error {
 		delete(meta, trashID)
 		deleted = append(deleted, trashID)
 		totalDeletedSize += item.Size
+		deletedItems = append(deletedItems, item)
 	}
 
 	// Save metadata once
@@ -1138,6 +1149,18 @@ func (h *Handler) BatchDeleteFromTrash(c echo.Context) error {
 		if err := h.UpdateUserTrashStorage(claims.UserID, -totalDeletedSize); err != nil {
 			fmt.Printf("[Storage] Failed to update storage for %s: %v\n", claims.Username, err)
 		}
+	}
+
+	// Audit log: one entry per item permanently deleted (irreversible)
+	for _, item := range deletedItems {
+		_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventTrashDelete, item.OriginalPath, map[string]interface{}{
+			"trashId":   item.ID,
+			"name":      item.Name,
+			"size":      item.Size,
+			"isDir":     item.IsDir,
+			"permanent": true,
+			"batch":     true,
+		})
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
@@ -1164,9 +1187,13 @@ func (h *Handler) EmptyTrash(c echo.Context) error {
 		return RespondError(c, ErrUnauthorized(""))
 	}
 
-	// Count items before deletion
+	// Count items before deletion (and capture totals for audit)
 	meta, _ := h.loadTrashMeta(claims.Username)
 	deletedCount := len(meta)
+	var totalSize int64
+	for _, item := range meta {
+		totalSize += item.Size
+	}
 
 	trashPath := h.getTrashPath(claims.Username)
 
@@ -1181,6 +1208,16 @@ func (h *Handler) EmptyTrash(c echo.Context) error {
 	// Update storage tracking: set trash to 0
 	if _, err := h.db.Exec(`UPDATE users SET trash_used = 0, updated_at = NOW() WHERE id = $1`, claims.UserID); err != nil {
 		fmt.Printf("[Storage] Failed to reset trash for %s: %v\n", claims.Username, err)
+	}
+
+	// Audit log: empty trash is a single irreversible action
+	if deletedCount > 0 {
+		_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventTrashDelete, "/trash", map[string]interface{}{
+			"deletedCount": deletedCount,
+			"totalSize":    totalSize,
+			"permanent":    true,
+			"emptyAll":     true,
+		})
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{

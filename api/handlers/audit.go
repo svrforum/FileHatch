@@ -33,6 +33,9 @@ type AuditHandler struct {
 	eventCh         chan auditEntry
 	stopOnce        sync.Once
 	done            chan struct{}
+	// dedupe tracks recent (actor, eventType, targetResource) → timestamp to suppress
+	// duplicate view/preview events triggered by thumbnails or range requests.
+	dedupe sync.Map
 }
 
 const auditBufferSize = 1000
@@ -197,6 +200,10 @@ const (
 	EventFolderCreate = "folder.create"
 	EventFolderDelete = "folder.delete"
 
+	// Trash events
+	EventTrashRestore = "trash.restore"
+	EventTrashDelete  = "trash.delete"
+
 	// SMB events
 	EventSMBCreate = "smb.create"
 	EventSMBModify = "smb.modify"
@@ -268,6 +275,41 @@ func (h *AuditHandler) LogEventFromContext(c echo.Context, eventType, targetReso
 	}
 
 	_ = h.LogEvent(actorID, ipAddr, eventType, targetResource, details)
+}
+
+// dedupeKey builds a key used by LogEventDeduped's in-memory bookkeeping.
+func dedupeKey(actorID *string, eventType, targetResource string) string {
+	if actorID == nil {
+		return ":" + eventType + ":" + targetResource
+	}
+	return *actorID + ":" + eventType + ":" + targetResource
+}
+
+// LogEventDeduped logs an event only if (actor, eventType, targetResource) has not
+// been logged within the given window. Use this for high-frequency events like
+// file views and previews where browser thumbnails and range requests would
+// otherwise multiply each user action into dozens of audit rows.
+func (h *AuditHandler) LogEventDeduped(actorID *string, ipAddr, eventType, targetResource string, window time.Duration, details map[string]interface{}) error {
+	key := dedupeKey(actorID, eventType, targetResource)
+	now := time.Now()
+
+	if cached, ok := h.dedupe.Load(key); ok {
+		if last, ok := cached.(time.Time); ok && now.Sub(last) < window {
+			return nil
+		}
+	}
+	h.dedupe.Store(key, now)
+
+	// Opportunistically prune entries older than 4× window to bound memory.
+	cutoff := now.Add(-4 * window)
+	h.dedupe.Range(func(k, v interface{}) bool {
+		if t, ok := v.(time.Time); ok && t.Before(cutoff) {
+			h.dedupe.Delete(k)
+		}
+		return true
+	})
+
+	return h.LogEvent(actorID, ipAddr, eventType, targetResource, details)
 }
 
 // ListAuditLogs returns audit logs with pagination and filtering
@@ -901,6 +943,7 @@ func (h *AuditHandler) GetFileActivity(c echo.Context) error {
 		    'file.upload', 'file.download', 'file.view', 'file.edit',
 		    'file.delete', 'file.rename', 'file.copy', 'file.move', 'file.overwrite',
 		    'folder.create', 'folder.delete',
+		    'trash.restore', 'trash.delete',
 		    'share.create', 'share.delete', 'share.access'
 		  )
 		ORDER BY al.ts DESC

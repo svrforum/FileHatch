@@ -91,6 +91,13 @@ func (h *AuditHandler) StopAuditLogger() {
 | `folder.create` | `EventFolderCreate` | 폴더 생성 |
 | `folder.delete` | `EventFolderDelete` | 폴더 삭제 |
 
+#### 휴지통 이벤트
+
+| 이벤트 타입 | 상수 | 설명 |
+|-------------|------|------|
+| `trash.restore` | `EventTrashRestore` | 휴지통 복원 |
+| `trash.delete` | `EventTrashDelete` | 휴지통 영구 삭제 (단건 / 일괄 / 비우기) |
+
 #### SMB 이벤트
 
 | 이벤트 타입 | 상수 | 설명 |
@@ -150,7 +157,13 @@ auditHandler.LogEvent(&userID, ipAddr, "smb_create", auditPath, map[string]inter
     "smbClient": hostname,
     "operation": operation,
 })
+
+// 방법 3: 고빈도 이벤트(file.view, 미리보기)는 dedupe 윈도우 적용
+// 같은 (actorID, eventType, targetResource) 조합이 윈도우 내에 다시 발생하면 스킵
+auditHandler.LogEventDeduped(&userID, ipAddr, EventFileView, virtualPath, 5*time.Minute, details)
 ```
+
+`viewDedupeWindow` 기본값은 `5분`. 비디오 시킹/이미지 썸네일/Range 요청이 단일 사용자 행위를 수십 건의 로그로 부풀리는 것을 방지한다.
 
 ### 2.7 로그 조회 (필터링)
 

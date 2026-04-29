@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
 	"time"
 )
@@ -33,6 +34,38 @@ func TestIsTempFile(t *testing.T) {
 				t.Errorf("isTempFile(%q) = %v, want %v", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+// Issue #33: ensure freshDirInfo masks the underlying directory mtime so that
+// WebDAV PROPFIND responses get a fresh ETag/Last-Modified on every request.
+// Without this, clients (Windows redirector, macOS Finder) keep cached listings
+// for minutes after a new file appears in a nested subdirectory.
+func TestFreshDirInfo_ReportsCurrentTime(t *testing.T) {
+	tmp := t.TempDir()
+	info, err := os.Stat(tmp)
+	if err != nil {
+		t.Fatalf("stat tmp: %v", err)
+	}
+
+	fresh := &freshDirInfo{FileInfo: info}
+
+	// Underlying ModTime should be old (immediately after directory creation),
+	// but freshDirInfo.ModTime() must always reflect ~now to defeat ETag caching.
+	t1 := fresh.ModTime()
+	time.Sleep(2 * time.Millisecond)
+	t2 := fresh.ModTime()
+
+	if !t2.After(t1) {
+		t.Errorf("freshDirInfo.ModTime() should advance between calls; got t1=%v t2=%v", t1, t2)
+	}
+
+	// Other FileInfo methods should pass through to the wrapped value.
+	if fresh.Name() != info.Name() {
+		t.Errorf("Name passthrough failed: got %q want %q", fresh.Name(), info.Name())
+	}
+	if !fresh.IsDir() {
+		t.Errorf("IsDir should be true for a wrapped directory")
 	}
 }
 

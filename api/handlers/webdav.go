@@ -430,8 +430,28 @@ func (vfs *VirtualFS) Stat(ctx context.Context, name string) (os.FileInfo, error
 		return nil, err
 	}
 
-	return os.Stat(realPath)
+	info, err := os.Stat(realPath)
+	if err != nil {
+		return nil, err
+	}
+	// Real directories use freshDirInfo so each PROPFIND yields a new ETag —
+	// otherwise nested changes (a file added in /shared/foo/sub/) leave the
+	// parent's mtime unchanged and WebDAV clients cache stale listings for
+	// minutes. See Issue #33.
+	if info.IsDir() {
+		return &freshDirInfo{FileInfo: info}, nil
+	}
+	return info, nil
 }
+
+// freshDirInfo wraps os.FileInfo for a directory and reports time.Now() as ModTime.
+// This defeats client-side ETag caching of directory listings without affecting
+// individual file metadata.
+type freshDirInfo struct {
+	os.FileInfo
+}
+
+func (f *freshDirInfo) ModTime() time.Time { return time.Now() }
 
 // resolvePath converts virtual path to real filesystem path
 func (vfs *VirtualFS) resolvePath(name string, write bool) (string, error) {

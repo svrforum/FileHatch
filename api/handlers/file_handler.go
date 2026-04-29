@@ -15,6 +15,10 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// viewDedupeWindow suppresses duplicate file.view audit rows produced by range/seek
+// requests, video thumbnails, or rapid re-opens within the same browsing session.
+const viewDedupeWindow = 5 * time.Minute
+
 // GetFile handles file download requests
 // @Summary		Download file
 // @Description	Download a file by path. Supports both inline viewing and forced download.
@@ -90,13 +94,19 @@ func (h *Handler) GetFile(c echo.Context) error {
 		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(fileName), "."))
 		contentType := getMimeType(ext)
 
-		// Log audit event for downloads
+		// Log audit event for downloads (always) and inline views (deduped).
+		var userID *string
+		if claims != nil {
+			userID = &claims.UserID
+		}
 		if isDownload {
-			var userID *string
-			if claims != nil {
-				userID = &claims.UserID
-			}
 			_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileDownload, virtualPath, map[string]any{
+				"filename":    fileName,
+				"size":        info.FileSize,
+				"storageType": storageType,
+			})
+		} else {
+			_ = h.auditHandler.LogEventDeduped(userID, c.RealIP(), EventFileView, virtualPath, viewDedupeWindow, map[string]any{
 				"filename":    fileName,
 				"size":        info.FileSize,
 				"storageType": storageType,
@@ -190,13 +200,20 @@ func (h *Handler) GetFile(c echo.Context) error {
 		setContentDisposition(c, info.Name())
 	}
 
-	// Log audit event for downloads
+	// Log audit event for downloads (always) and inline views (deduped over 5 minutes
+	// to avoid one user-initiated view producing dozens of rows from range/seek requests).
+	var userID *string
+	if claims != nil {
+		userID = &claims.UserID
+	}
 	if isDownload {
-		var userID *string
-		if claims != nil {
-			userID = &claims.UserID
-		}
 		_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventFileDownload, virtualPath, map[string]any{
+			"filename":    info.Name(),
+			"size":        info.Size(),
+			"storageType": storageType,
+		})
+	} else {
+		_ = h.auditHandler.LogEventDeduped(userID, c.RealIP(), EventFileView, virtualPath, viewDedupeWindow, map[string]any{
 			"filename":    info.Name(),
 			"size":        info.Size(),
 			"storageType": storageType,

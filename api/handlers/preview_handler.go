@@ -97,6 +97,22 @@ func (h *Handler) GetPreview(c echo.Context) error {
 		return c.NoContent(http.StatusNotModified)
 	}
 
+	// Audit log: deduped per-user/file over viewDedupeWindow so opening one preview
+	// (which can trigger multiple range/thumbnail requests) records a single event.
+	{
+		var userID *string
+		if claims != nil {
+			userID = &claims.UserID
+		}
+		_ = h.auditHandler.LogEventDeduped(userID, c.RealIP(), EventFileView, displayPath, viewDedupeWindow, map[string]any{
+			"filename":    fileName,
+			"size":        fileSize,
+			"mimeType":    mimeType,
+			"storageType": result.StorageType,
+			"source":      "preview",
+		})
+	}
+
 	// For images, return the file with caching headers
 	if strings.HasPrefix(mimeType, "image/") {
 		SetCacheHeaders(c.Response().Writer, etag, 86400) // 24 hour cache
