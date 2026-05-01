@@ -395,6 +395,9 @@ func main() {
 	api.GET("/onlyoffice/config/*", h.GetOnlyOfficeConfig, authHandler.JWTMiddleware)
 	api.POST("/onlyoffice/callback", h.OnlyOfficeCallback)
 
+	// rhwp HWP viewer/editor settings (Issue #35)
+	api.GET("/rhwp/settings", h.GetRhwpSettings)
+
 	// SMB Management API (protected)
 	authApi.GET("/smb/users", smbHandler.ListSMBUsers)
 	authApi.POST("/smb/users", smbHandler.CreateSMBUser)
