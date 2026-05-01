@@ -5,6 +5,12 @@ on:
     tags:
       - 'v*'
 
+# 동시 푸시된 태그가 :latest를 두고 경합하지 않도록 직렬화한다
+# (cancel-in-progress: false → 이전 릴리즈가 끝날 때까지 대기, 취소하지 않음)
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 env:
   REGISTRY: docker.io
   IMAGE_PREFIX: svrforum/filehatch
@@ -86,6 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      is_latest: ${{ steps.version.outputs.is_latest }}
       api_changed: ${{ steps.changes.outputs.api }}
       ui_changed: ${{ steps.changes.outputs.ui }}
       samba_changed: ${{ steps.changes.outputs.samba }}
@@ -100,8 +107,27 @@ jobs:
         id: version
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
+          CURRENT_TAG=${GITHUB_REF#refs/tags/}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
+
+          # :latest 태깅 적격성 판정
+          # 1) -rc/-beta/-alpha 가 포함된 프리릴리즈는 :latest 대상이 아님
+          # 2) 정규 릴리즈는 git에 존재하는 모든 정규 태그 중 최고 semver일 때만 :latest 부여
+          #    → 동시/지연 푸시로 구버전이 :latest 를 덮어쓰는 사고 방지 (Issue #34)
+          if echo "$CURRENT_TAG" | grep -qE -- '-(rc|beta|alpha)'; then
+            echo "is_latest=false" >> $GITHUB_OUTPUT
+            echo "Pre-release detected ($CURRENT_TAG): :latest 태그 부여 생략"
+          else
+            HIGHEST=$(git tag -l 'v*' --sort=-v:refname | grep -vE -- '-(rc|beta|alpha)' | head -n 1)
+            if [ "$HIGHEST" = "$CURRENT_TAG" ]; then
+              echo "is_latest=true" >> $GITHUB_OUTPUT
+              echo "$CURRENT_TAG 가 정규 태그 중 최고 semver: :latest 태그 부여"
+            else
+              echo "is_latest=false" >> $GITHUB_OUTPUT
+              echo "최고 semver 는 $HIGHEST: $CURRENT_TAG 의 :latest 태그 부여 생략"
+            fi
+          fi
 
       - name: Check component changes
         id: changes
@@ -158,7 +184,7 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}-api:${{ needs.detect.outputs.version }}
-            ${{ env.IMAGE_PREFIX }}-api:latest
+            ${{ needs.detect.outputs.is_latest == 'true' && format('{0}-api:latest', env.IMAGE_PREFIX) || '' }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
@@ -192,7 +218,7 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}-ui:${{ needs.detect.outputs.version }}
-            ${{ env.IMAGE_PREFIX }}-ui:latest
+            ${{ needs.detect.outputs.is_latest == 'true' && format('{0}-ui:latest', env.IMAGE_PREFIX) || '' }}
           cache-from: type=gha,scope=ui
           cache-to: type=gha,mode=max,scope=ui
 
@@ -226,7 +252,7 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}-samba:${{ needs.detect.outputs.version }}
-            ${{ env.IMAGE_PREFIX }}-samba:latest
+            ${{ needs.detect.outputs.is_latest == 'true' && format('{0}-samba:latest', env.IMAGE_PREFIX) || '' }}
           cache-from: type=gha,scope=samba
           cache-to: type=gha,mode=max,scope=samba
 
@@ -316,7 +342,9 @@ jobs:
             docker pull svrforum/filehatch-samba:${{ needs.detect.outputs.version }}
             ```
 
-            Or use `latest` tag:
+            ${{ needs.detect.outputs.is_latest != 'true' && '> :warning: This release is not the highest semver tag — `:latest` was NOT updated. Pull by the explicit version above.' || '' }}
+
+            Or use the `latest` tag (always tracks the highest released semver):
             ```bash
             docker pull svrforum/filehatch-api:latest
             docker pull svrforum/filehatch-ui:latest
