@@ -304,6 +304,17 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve self-hosted rhwp-studio assets (GitHub Pages mirror — same-origin to avoid
+// Chrome Private Network Access blocking and WASM init race in iframe embed)
+const fs = require('fs');
+const rhwpStudioDir = path.join(__dirname, 'rhwp-studio');
+if (fs.existsSync(rhwpStudioDir)) {
+  app.use('/rhwp', express.static(rhwpStudioDir, {
+    maxAge: '7d',
+    etag: true,
+  }));
+}
+
 // Serve static files
 app.use(express.static(path.join(__dirname, 'dist'), {
   maxAge: '1d',

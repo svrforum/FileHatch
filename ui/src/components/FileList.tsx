@@ -1786,6 +1786,12 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
           studioUrl={rhwpSettings.studioUrl}
           onClose={() => setHwpViewingFile(null)}
           onError={(msg) => showError(msg)}
+          onFallbackDownload={() => {
+            const fileToDownload = hwpViewingFile
+            setHwpViewingFile(null)
+            showError('한글 뷰어 로딩 실패 (rhwp v0.7.x 베타) — 파일을 대신 다운로드합니다.')
+            if (fileToDownload) downloadFileDirect(fileToDownload.path)
+          }}
           onSaved={() => {
             showSuccess('저장 완료')
             queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
