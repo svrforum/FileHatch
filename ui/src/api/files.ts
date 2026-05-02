@@ -625,7 +625,6 @@ export function getFileTypeIcon(file: FileInfo): string {
   if (videoExts.includes(ext || '')) return 'video'
   if (audioExts.includes(ext || '')) return 'audio'
   if (docExts.includes(ext || '')) return 'document'
-  if (ext === 'hwp' || ext === 'hwpx') return 'hwp'
   if (codeExts.includes(ext || '')) return 'code'
   if (archiveExts.includes(ext || '')) return 'archive'
 
@@ -1078,49 +1077,4 @@ export async function checkFileLocks(paths: string[]): Promise<{ locks: Record<s
 // Get all my locks
 export async function getMyLocks(): Promise<{ locks: FileLock[]; total: number }> {
   return api.get<{ locks: FileLock[]; total: number }>('/files/locks/my')
-}
-
-// rhwp HWP viewer/editor settings
-export interface RhwpSettings {
-  enabled: boolean
-  studioUrl: string
-}
-
-// HWP/HWPX 확장자 검사
-export function isHwpSupported(extension: string | undefined): boolean {
-  if (!extension) return false
-  const ext = extension.toLowerCase().replace(/^\./, '')
-  return ext === 'hwp' || ext === 'hwpx'
-}
-
-// rhwp settings 조회
-export async function getRhwpSettings(): Promise<RhwpSettings> {
-  const response = await fetch(`${API_BASE}/rhwp/settings`)
-  if (!response.ok) {
-    throw new Error('Failed to fetch rhwp settings')
-  }
-  return response.json()
-}
-
-// 바이너리 파일 저장 (HWP 등) — PUT /api/files/content/* 재사용
-// 기존 SaveFileContent 핸들러는 c.Request().Body 를 스트림으로 읽으므로 바이너리 OK
-export async function saveBinaryFileContent(
-  path: string,
-  data: ArrayBuffer | Uint8Array,
-  mimeType: string,
-): Promise<void> {
-  const cleanPath = path.startsWith('/') ? path.slice(1) : path
-  const encodedPath = cleanPath.split('/').map(s => encodeURIComponent(s)).join('/')
-  const response = await fetch(`${API_BASE}/files/content/${encodedPath}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': mimeType,
-      ...getAuthHeaders(),
-    },
-    body: data instanceof ArrayBuffer ? new Uint8Array(data) : data,
-  })
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: 'Failed to save file' }))
-    throw new Error(err.error || 'Failed to save file')
-  }
 }

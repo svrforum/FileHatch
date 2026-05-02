@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchFiles, downloadFileDirect, getFolderStats, renameItem, copyItem, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, extractZip, downloadAsZip, checkFileExists, getRhwpSettings, isHwpSupported, type RhwpSettings } from '../api/files'
+import { fetchFiles, downloadFileDirect, getFolderStats, renameItem, copyItem, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, extractZip, downloadAsZip, checkFileExists } from '../api/files'
 import { useSharedFolders } from '../hooks/useSharedFolders'
 import { useExternalStorages, isExternalStorageReadonly } from '../hooks/useExternalStorages'
 import { getSharedWithMe, getSharedByMe, getMyShareLinks, SharedWithMeItem, SharedByMeItem, LinkShare, deleteFileShare, deleteShareLink } from '../api/fileShares'
@@ -25,7 +25,6 @@ const TextEditor = lazy(() => import('./TextEditor'))
 const FileViewer = lazy(() => import('./FileViewer'))
 import ZipViewer from './ZipViewer'
 import OnlyOfficeEditor from './OnlyOfficeEditor'
-import RhwpEditor from './RhwpEditor'
 import ShareModal from './ShareModal'
 import LinkShareModal from './LinkShareModal'
 import FolderSelectModal from './FolderSelectModal'
@@ -85,8 +84,6 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [editingFile, setEditingFile] = useState<FileInfo | null>(null)
   const [viewingFile, setViewingFile] = useState<FileInfo | null>(null)
   const [zipViewingFile, setZipViewingFile] = useState<FileInfo | null>(null)
-  const [hwpViewingFile, setHwpViewingFile] = useState<FileInfo | null>(null)
-  const [rhwpSettings, setRhwpSettings] = useState<RhwpSettings | null>(null)
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
   // OnlyOffice status - use React Query with infinite staleTime for global caching
   const { data: onlyOfficeStatus } = useQuery({
@@ -188,15 +185,6 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     window.addEventListener('ws-reconnected', handleReconnect)
     return () => window.removeEventListener('ws-reconnected', handleReconnect)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // rhwp 설정 1회 fetch (실패 시 비활성)
-  useEffect(() => {
-    let cancelled = false
-    getRhwpSettings()
-      .then(s => { if (!cancelled) setRhwpSettings(s) })
-      .catch(() => { /* enabled=false 와 동일 — 조용히 비활성 */ })
-    return () => { cancelled = true }
-  }, [])
 
   // Regular file list query
   const { data, isLoading, error } = useQuery({
@@ -630,14 +618,12 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       setEditingFile(file)
     } else if (isViewableFile(file)) {
       setViewingFile(file)
-    } else if (rhwpSettings?.enabled && isHwpSupported(file.extension)) {
-      setHwpViewingFile(file)
     } else if (onlyOfficeAvailable && isOnlyOfficeSupported(file.extension)) {
       handleOnlyOfficeEdit(file)
     } else {
       downloadFileDirect(file.path)
     }
-  }, [onNavigate, isEditableFile, isViewableFile, isZipFile, onlyOfficeAvailable, handleOnlyOfficeEdit, rhwpSettings])
+  }, [onNavigate, isEditableFile, isViewableFile, isZipFile, onlyOfficeAvailable, handleOnlyOfficeEdit])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, file: FileInfo) => {
     e.preventDefault()
@@ -1606,7 +1592,6 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         onMultiDownload={handleMultiDownload}
         onEdit={(file) => setEditingFile(file)}
         onOnlyOfficeEdit={handleOnlyOfficeEdit}
-        onHwpOpen={rhwpSettings?.enabled ? (file) => setHwpViewingFile(file) : undefined}
         onView={(file) => setViewingFile(file)}
         onRename={handleRenameClick}
         onCopy={handleCopyClick}
@@ -1643,7 +1628,6 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         isEditableFile={isEditableFile}
         isViewableFile={isViewableFile}
         isOnlyOfficeSupported={isOnlyOfficeSupported}
-        isHwpSupported={isHwpSupported}
         isStarred={(path) => starredFiles[path] ?? false}
         onToggleStar={handleToggleStar}
         isLocked={isLocked}
@@ -1775,27 +1759,6 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
           publicUrl={onlyOfficePublicUrl}
           onClose={handleOnlyOfficeClose}
           onError={handleOnlyOfficeError}
-        />
-      )}
-
-      {/* rhwp HWP Editor Modal */}
-      {hwpViewingFile && rhwpSettings && (
-        <RhwpEditor
-          filePath={hwpViewingFile.path}
-          fileName={hwpViewingFile.name}
-          studioUrl={rhwpSettings.studioUrl}
-          onClose={() => setHwpViewingFile(null)}
-          onError={(msg) => showError(msg)}
-          onFallbackDownload={() => {
-            const fileToDownload = hwpViewingFile
-            setHwpViewingFile(null)
-            showError('한글 뷰어 로딩 실패 (rhwp v0.7.x 베타) — 파일을 대신 다운로드합니다.')
-            if (fileToDownload) downloadFileDirect(fileToDownload.path)
-          }}
-          onSaved={() => {
-            showSuccess('저장 완료')
-            queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
-          }}
         />
       )}
 
