@@ -34,6 +34,7 @@ interface ContextMenuProps {
   onMultiDownload: (paths: string[]) => void
   onEdit: (file: FileInfo) => void
   onOnlyOfficeEdit: (file: FileInfo) => void
+  onHwpOpen?: (file: FileInfo) => void
   onView: (file: FileInfo) => void
   onRename: (file: FileInfo) => void
   onCopy: (file: FileInfo) => void
@@ -51,6 +52,7 @@ interface ContextMenuProps {
   isEditableFile: (file: FileInfo) => boolean
   isViewableFile: (file: FileInfo) => boolean
   isOnlyOfficeSupported: (ext?: string) => boolean
+  isHwpSupported?: (ext?: string) => boolean
   // Star functionality
   isStarred?: (path: string) => boolean
   onToggleStar?: (file: FileInfo) => void
@@ -87,6 +89,7 @@ function ContextMenu({
   onMultiDownload,
   onEdit,
   onOnlyOfficeEdit,
+  onHwpOpen,
   onView,
   onRename,
   onCopy,
@@ -104,6 +107,7 @@ function ContextMenu({
   isEditableFile,
   isViewableFile,
   isOnlyOfficeSupported,
+  isHwpSupported,
   isStarred,
   onToggleStar,
   isLocked,
@@ -413,6 +417,16 @@ function ContextMenu({
                 <path d="M8 13H16M8 17H12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
               </svg>
               Office 편집
+            </button>
+          )}
+          {!contextMenu.file.isDir && isHwpSupported?.(contextMenu.file.extension) && onHwpOpen && (
+            <button className="context-menu-item" onClick={() => { onHwpOpen(contextMenu.file); onClose(); }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="#1B7AE3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M14 2V8H20" stroke="#1B7AE3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <text x="12" y="17" textAnchor="middle" fontSize="6" fill="#1B7AE3" fontWeight="bold">한</text>
+              </svg>
+              한글 문서로 열기
             </button>
           )}
           {!contextMenu.file.isDir && isViewableFile(contextMenu.file) && (
