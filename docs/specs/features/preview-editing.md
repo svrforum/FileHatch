@@ -31,6 +31,7 @@
 | 오디오 | mp3, wav, ogg, flac, m4a | `audio/*` | 스트리밍 URL 반환 | 1시간 |
 | PDF | pdf | `application/pdf` | 스트리밍 URL 반환 | 1시간 |
 | Office | doc, docx, xls, xlsx, ppt, pptx, odt, ods, odp, rtf, csv | - | OnlyOffice 편집기 | - |
+| 한글 | hwp, hwpx | `application/x-hwp`, `application/vnd.hancom.hwpx` | rhwp 임베드 (iframe) | - |
 | 압축 | zip | `application/zip` | ZipViewer 컴포넌트 | - |
 
 ### 2.2 미리보기 API 핸들러 (`api/handlers/preview_handler.go`)
@@ -1015,3 +1016,51 @@ const editorConfig = {
 | `ui/src/components/OnlyOfficeEditor.css` | OnlyOfficeEditor 스타일 |
 | `ui/src/components/ZipViewer.tsx` | ZIP 아카이브 탐색기 |
 | `ui/src/api/files.ts` | 미리보기/OnlyOffice/파일 생성 API 함수 |
+
+---
+
+## 10. rhwp HWP 뷰어/에디터 (Issue #35)
+
+### 개요
+
+[rhwp](https://github.com/edwardkim/rhwp) (Rust + WASM 기반 오픈소스 HWP 엔진, MIT) 의 `@rhwp/editor` npm 패키지를 iframe 임베드 방식으로 통합한다. OnlyOffice 와 달리 별도 Docker 컨테이너 없이 정적 자산만 호스팅한다.
+
+### 구성
+
+- **백엔드**: `GET /api/rhwp/settings` 가 `studioUrl` 노출 (`RHWP_STUDIO_URL` 환경 변수, 기본값 `https://edwardkim.github.io/rhwp/`)
+- **프론트엔드**: `RhwpEditor.tsx` 컴포넌트가 iframe 마운트 + 인증된 파일 다운로드 → `editor.loadFile(buffer)` 로 전달
+- **저장**: `editor.exportHwp()` → `Uint8Array` → `PUT /api/files/content/*` (기존 `SaveFileContent` 핸들러 재사용, 바이너리 스트림 OK)
+
+### 파일 흐름
+
+```
+[더블클릭]
+  ↓
+FileList.handleItemDoubleClick → isHwpSupported → setHwpViewingFile
+  ↓
+<RhwpEditor> 마운트
+  ↓
+createEditor(container, { studioUrl })  // iframe 생성
+  ↓
+fetch(getFileUrl(path), Authorization)  → ArrayBuffer
+  ↓
+editor.loadFile(buffer, fileName)       // postMessage to iframe
+  ↓
+[사용자 편집]
+  ↓
+editor.exportHwp() → Uint8Array
+  ↓
+PUT /api/files/content/<path>          // 감사 로그 EventFileEdit 자동 기록
+```
+
+### 환경 변수
+
+| 변수 | 기본값 | 용도 |
+|------|--------|------|
+| `RHWP_STUDIO_URL` | `https://edwardkim.github.io/rhwp/` | iframe SRC. 폐쇄망/self-host 시 내부 정적 자산 URL 로 교체 |
+
+### 제약 사항 (rhwp v0.7.x)
+
+- 조판 품질이 한컴보다 일부 떨어질 수 있음 (대부분 일반 문서는 정상)
+- HWPX 출처 문서 저장은 rhwp 자체적으로 비활성화 (#196 — HWPX→HWP 변환 안정성 #197 해결 시까지)
+- UI 에 "베타" 배지로 안내
