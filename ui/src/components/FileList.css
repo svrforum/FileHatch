@@ -382,14 +382,17 @@
   flex: 1;
 }
 
-/* 가상 스크롤용 스타일 - 명시적 높이와 overflow 필요 */
+/* 가상 스크롤용 스타일 - 명시적 높이와 overflow 필요
+ * Issue #36: 부모 flex 체인에서 height 제약이 끊길 경우 height: 0으로 컨테이너가 무너져
+ * tanstack/react-virtual이 0개 행만 렌더링하여 스크롤이 작동하지 않는 문제를 방지.
+ * min-height fallback으로 최소한 한 화면 분의 행이 항상 보이도록 보장한다. */
 .file-table-body-virtual {
   display: block;
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  /* 부모가 flex container이므로 이 요소가 사용 가능한 공간을 모두 사용 */
-  height: 0; /* flex: 1과 함께 사용하면 남은 공간을 채움 */
+  flex: 1 1 auto;
+  min-height: 320px; /* fallback: 부모 height 체인이 끊겨도 최소 가시 영역 보장 */
+  max-height: calc(100vh - 200px); /* 헤더/패널 등 외부 영역 제외한 가용 높이 */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .file-row {

@@ -81,7 +81,7 @@ interface UploadState {
   startAllUploads: () => Promise<void>
   startNextUpload: () => void
   checkAndStartUpload: (id: string) => Promise<void>
-  resolveDuplicate: (action: 'overwrite' | 'rename' | 'cancel' | 'overwrite_all') => void
+  resolveDuplicate: (action: 'overwrite' | 'rename' | 'cancel' | 'overwrite_all' | 'cancel_all') => void
   retryUpload: (id: string) => void
   pauseUpload: (id: string) => void
   resumeUpload: (id: string) => void
@@ -150,7 +150,11 @@ export const useUploadStore = create<UploadState>((set, get) => ({
 
     const fileArray = Array.from(files).filter((file) => file.size > 0)
 
-    // Filter out duplicates already in queue
+    // Filter out duplicates already in queue.
+    // Issue #36: Also dedup within this single addFiles batch — a folder
+    // dropped twice (or a file picker that yields the same File handle
+    // multiple times) must not enqueue the same upload more than once.
+    const seenInBatch = new Set<string>()
     const newItems: UploadItem[] = fileArray
       .map((file) => {
         // Get relative path for folder uploads
@@ -171,13 +175,23 @@ export const useUploadStore = create<UploadState>((set, get) => ({
         }
       })
       .filter((item) => {
-        // Check if already exists in queue
+        const key = `${item.file.name}|${item.file.size}|${item.path}`
+        if (seenInBatch.has(key)) return false
+        seenInBatch.add(key)
+
+        // Check if already exists in queue.
+        // Issue #36: include duplicate/paused so a folder dropped twice (or while
+        // a duplicate modal is still pending) does not enqueue the same file
+        // multiple times — which would later collide with [1]/[2]/[3]/... renaming.
         const isDuplicate = existingItems.some(
           (existing) =>
             existing.file.name === item.file.name &&
             existing.file.size === item.file.size &&
             existing.path === item.path &&
-            (existing.status === 'pending' || existing.status === 'uploading')
+            (existing.status === 'pending' ||
+              existing.status === 'uploading' ||
+              existing.status === 'duplicate' ||
+              existing.status === 'paused')
         )
         return !isDuplicate
       })
@@ -326,6 +340,11 @@ export const useUploadStore = create<UploadState>((set, get) => ({
           get().startUpload(id, true)
           return
         }
+        // Issue #36: A "전체 취소" or other clearing action may have removed
+        // this item from the queue while we were awaiting checkFileExists.
+        // Don't resurrect it as a duplicate prompt.
+        const stillQueued = get().items.some((i) => i.id === id)
+        if (!stillQueued) return
         // Show duplicate modal
         set({
           duplicateFile: {
@@ -345,11 +364,18 @@ export const useUploadStore = create<UploadState>((set, get) => ({
   },
 
   // Resolve duplicate file conflict
-  resolveDuplicate: (action) => {
+  resolveDuplicate: async (action) => {
     const { duplicateFile } = get()
     if (!duplicateFile) return
 
     const { id } = duplicateFile
+
+    // cancel_all: clear modal first to unblock startAllUploads guards, then drop the entire batch
+    if (action === 'cancel_all') {
+      set({ duplicateFile: null })
+      await get().cancelAllUploads()
+      return
+    }
 
     switch (action) {
       case 'overwrite':
@@ -363,7 +389,9 @@ export const useUploadStore = create<UploadState>((set, get) => ({
         get().startUpload(id, false)
         break
       case 'cancel':
-        get().removeUpload(id)
+        // Await abort/removal before kicking off the next batch so the canceled
+        // file's tus session is fully terminated on the server.
+        await get().removeUpload(id)
         break
     }
 
@@ -471,19 +499,28 @@ export const useUploadStore = create<UploadState>((set, get) => ({
 
   cancelAllUploads: async () => {
     const { items } = get()
-    const active = items.filter(i =>
-      i.status === 'uploading' || i.status === 'pending' || i.status === 'paused'
-    )
+    // Issue #36: include 'duplicate' so the "전체 취소" action from
+    // DuplicateModal actually drops every file that is waiting on user
+    // resolution — otherwise the modal pops back up for the next item.
+    const isActive = (s: UploadItem['status']) =>
+      s === 'uploading' || s === 'pending' || s === 'paused' || s === 'duplicate'
+    const active = items.filter(i => isActive(i.status))
+
+    // Issue #36: Drop the queue and clear the duplicate prompt FIRST. Any
+    // concurrent checkAndStartUpload that resolves while we are still
+    // awaiting tus aborts below would otherwise see the item still in the
+    // queue and resurrect the duplicate modal for it.
+    set(state => ({
+      items: state.items.filter(i => !isActive(i.status)),
+      duplicateFile: null,
+      overwriteAll: false,
+    }))
+
     for (const item of active) {
       if (item.upload) {
         try { await item.upload.abort(true) } catch { try { item.upload.abort() } catch { /* ignore */ } }
       }
     }
-    set(state => ({
-      items: state.items.filter(i =>
-        i.status !== 'uploading' && i.status !== 'pending' && i.status !== 'paused'
-      ),
-    }))
   },
 
   clearCompleted: () => {

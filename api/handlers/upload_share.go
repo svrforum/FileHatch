@@ -386,15 +386,41 @@ func (h *UploadShareHandler) handleCompletedUploads() {
 			continue
 		}
 
-		// Check if file already exists, generate unique name
-		finalPath = h.getUniqueFilePath(finalPath)
-
-		// Move file from temp to destination (cross-device safe)
+		// Issue #36: Same race protection as the home/shared upload path. Lock
+		// the destination so concurrent completions cannot each generate a
+		// different "[N]" suffix, and discard duplicates that arrive with the
+		// exact same name and size.
+		unlockPath := LockCompletionPath(finalPath)
 		srcPath := filepath.Join(h.dataRoot, ".share-uploads", event.Upload.ID)
-		if err := moveOrCopy(srcPath, finalPath); err != nil {
-			fmt.Printf("Failed to move file: %v\n", err)
+		if existing, statErr := os.Stat(finalPath); statErr == nil &&
+			!existing.IsDir() && existing.Size() == event.Upload.Size {
+			LogWarn("[ShareUpload] Discarding duplicate completion (same name+size)",
+				"path", finalPath, "size", event.Upload.Size, "shareToken", shareToken)
+			unlockPath()
+			if err := os.Remove(srcPath); err != nil && !os.IsNotExist(err) {
+				LogWarn("[ShareUpload] Failed to clean up duplicate temp file", "path", srcPath, "error", err.Error())
+			}
+			if err := os.Remove(srcPath + ".info"); err != nil && !os.IsNotExist(err) {
+				LogWarn("[ShareUpload] Failed to clean up duplicate info file", "path", srcPath+".info", "error", err.Error())
+			}
 			continue
 		}
+
+		originalFinal := finalPath
+		finalPath = h.getUniqueFilePath(finalPath)
+		if finalPath != originalFinal {
+			LogWarn("[ShareUpload] Filename auto-renamed due to conflict",
+				"original", originalFinal, "renamed", finalPath,
+				"size", event.Upload.Size, "shareToken", shareToken)
+		}
+
+		// Move file from temp to destination (cross-device safe)
+		if err := moveOrCopy(srcPath, finalPath); err != nil {
+			fmt.Printf("Failed to move file: %v\n", err)
+			unlockPath()
+			continue
+		}
+		unlockPath()
 
 		// Clean up .info file
 		infoPath := srcPath + ".info"

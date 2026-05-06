@@ -482,10 +482,43 @@ func (h *UploadHandler) handleCompletedUploads() {
 				}
 			}
 
-			// Check if file already exists
+			// Issue #36: Serialize completion handling for the same destination path.
+			// Without this, two tus completions racing for the same file (e.g. tus
+			// retry that fresh-starts as a new upload, or the client queuing the
+			// same file twice) can each pick a different "[N]" suffix and produce
+			// duplicate "name[1]/name[2]/..." copies of the same upload.
+			unlockPath := LockCompletionPath(finalPath)
+			duplicateDiscarded := false
 			if !overwrite {
-				// Generate unique name if file exists and overwrite is not requested
-				finalPath = h.getUniqueFilePath(finalPath)
+				// If a file with the exact same name AND size already exists,
+				// treat the new completion as a duplicate (e.g. a re-queued or
+				// retried upload of the same source) and discard it instead of
+				// auto-renaming to "[1]".
+				if existing, statErr := os.Stat(finalPath); statErr == nil &&
+					!existing.IsDir() && existing.Size() == event.Upload.Size {
+					duplicateDiscarded = true
+					LogWarn("[Upload] Discarding duplicate completion (same name+size)",
+						"path", finalPath, "size", event.Upload.Size, "user", username)
+				} else {
+					originalFinal := finalPath
+					finalPath = h.getUniqueFilePath(finalPath)
+					if finalPath != originalFinal {
+						LogWarn("[Upload] Filename auto-renamed due to conflict",
+							"original", originalFinal, "renamed", finalPath,
+							"size", event.Upload.Size, "user", username)
+					}
+				}
+			}
+
+			if duplicateDiscarded {
+				unlockPath()
+				if err := os.Remove(srcPath); err != nil && !os.IsNotExist(err) {
+					LogWarn("[Upload] Failed to clean up duplicate temp file", "path", srcPath, "error", err.Error())
+				}
+				if err := os.Remove(srcPath + ".info"); err != nil && !os.IsNotExist(err) {
+					LogWarn("[Upload] Failed to clean up duplicate info file", "path", srcPath+".info", "error", err.Error())
+				}
+				continue
 			}
 			// If overwrite is true, the existing file will be replaced by moveOrCopy
 
@@ -498,8 +531,10 @@ func (h *UploadHandler) handleCompletedUploads() {
 				LogError("[Upload] Failed to move file", err, "src", srcPath, "dst", finalPath)
 				BroadcastUploadError(username, filename, "파일 이동 실패: "+err.Error())
 				tracker.UnmarkUploading(finalPath)
+				unlockPath()
 				continue
 			}
+			unlockPath()
 
 			// Set permissions for shared folders
 			if strings.HasPrefix(destPath, "/shared/") {

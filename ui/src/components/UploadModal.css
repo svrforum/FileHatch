@@ -407,6 +407,49 @@
   transform: translateY(0) scale(0.98);
 }
 
+.btn-secondary-outline {
+  padding: 14px 28px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-normal, -0.01em);
+  transition: all var(--duration-fast, 0.15s) var(--ease-out-expo, ease);
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1.5px solid var(--border-color, #e5e8eb);
+}
+
+.btn-secondary-outline:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.btn-secondary-outline:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.confirm-batch-hint {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.confirm-path-hint {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+/* Issue #36: DuplicateModal must render above the UploadModal so its buttons
+ * are clickable. Both share .modal-overlay (z-index: 1000) but the duplicate
+ * dialog is the active prompt and must take precedence. */
+.duplicate-modal-overlay {
+  z-index: 1100;
+}
+
 /* Confirm Modal */
 .confirm-modal {
   background: var(--bg-primary);
