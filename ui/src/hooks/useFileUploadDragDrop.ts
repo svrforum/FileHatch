@@ -147,14 +147,27 @@ export function useFileUploadDragDrop({
         return
       }
 
-      // Group files by their folder path and add to upload store
+      // Issue #36 (v0.14.4): Group files by target path and submit each group
+      // in a single addFiles call. Calling addFiles once per file (the previous
+      // implementation) defeated the in-batch dedup added in v0.14.3 — the
+      // `seenInBatch` Set in uploadStore.addFiles is recreated per call, so a
+      // 228-file folder produced 228 separate batches with no cross-batch dedup
+      // and 228 stacked startAllUploads timers, which triggered race conditions
+      // in checkFileExists and overwhelmed the server with parallel POSTs.
+      const grouped = new Map<string, File[]>()
       for (const { file, relativePath } of allFiles) {
         const pathParts = relativePath.split('/')
         pathParts.pop() // Remove filename
         const targetPath = pathParts.length > 0
           ? `${currentPath}/${pathParts.join('/')}`
           : currentPath
-        uploadStore.addFiles([file], targetPath)
+        const bucket = grouped.get(targetPath)
+        if (bucket) bucket.push(file)
+        else grouped.set(targetPath, [file])
+      }
+
+      for (const [targetPath, files] of grouped) {
+        uploadStore.addFiles(files, targetPath)
       }
 
       // Open upload panel (addFiles already triggers startAllUploads)
@@ -248,13 +261,22 @@ export function useFileUploadDragDrop({
         return
       }
 
+      // Issue #36 (v0.14.4): Group by target path — see handleFileDrop above
+      // for the rationale.
+      const grouped = new Map<string, File[]>()
       for (const { file, relativePath } of allFiles) {
         const pathParts = relativePath.split('/')
         pathParts.pop()
         const uploadPath = pathParts.length > 0
           ? `${targetPath}/${pathParts.join('/')}`
           : targetPath
-        uploadStore.addFiles([file], uploadPath)
+        const bucket = grouped.get(uploadPath)
+        if (bucket) bucket.push(file)
+        else grouped.set(uploadPath, [file])
+      }
+
+      for (const [uploadPath, files] of grouped) {
+        uploadStore.addFiles(files, uploadPath)
       }
 
       // Open upload panel (addFiles already triggers startAllUploads)

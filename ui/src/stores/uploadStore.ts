@@ -135,6 +135,28 @@ function generateId(filename: string): string {
   return `${filename}-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
+// Issue #36 (v0.14.4): Re-entrancy guard for checkAndStartUpload.
+// startAllUploads can be invoked many times in quick succession (e.g. one
+// invocation per addFiles call when a folder of N files is dropped, or via
+// startNextUpload race after onSuccess/onError). Without a guard, the await
+// inside checkAndStartUpload (quota + checkFileExists) means multiple parallel
+// calls can all pass the `status === 'pending'` check before any of them flips
+// the status to 'uploading' — resulting in duplicate tus POSTs for the same
+// item, spurious "파일이 이미 존재" modals, and "업로드 중 오류" toasts.
+const inFlightStarts = new Set<string>()
+
+// Issue #36 (v0.14.4): Coalesce startAllUploads timers across rapid addFiles
+// calls. A folder drop that yields one addFiles call per subdirectory must
+// not stack one setTimeout per call — only the last one matters.
+let startAllScheduled: ReturnType<typeof setTimeout> | null = null
+function scheduleStartAll(get: () => UploadState): void {
+  if (startAllScheduled) clearTimeout(startAllScheduled)
+  startAllScheduled = setTimeout(() => {
+    startAllScheduled = null
+    void get().startAllUploads()
+  }, 100)
+}
+
 export const useUploadStore = create<UploadState>((set, get) => ({
   items: [],
   downloads: [],
@@ -218,8 +240,8 @@ export const useUploadStore = create<UploadState>((set, get) => ({
 
     set((state) => ({ items: [...state.items, ...newItems] }))
 
-    // Auto-start uploads
-    setTimeout(() => get().startAllUploads(), 100)
+    // Auto-start uploads (coalesced — see scheduleStartAll)
+    scheduleStartAll(get)
   },
 
   // Start a single upload
@@ -301,66 +323,76 @@ export const useUploadStore = create<UploadState>((set, get) => ({
 
   // Check for duplicates and quota before starting upload
   checkAndStartUpload: async (id) => {
+    // Issue #36 (v0.14.4): Re-entrancy guard. Without this, parallel
+    // startAllUploads calls (one per addFiles, or after onSuccess/onError)
+    // can all see the same item as 'pending' and all start it.
+    if (inFlightStarts.has(id)) return
+
     const item = get().items.find((i) => i.id === id)
     if (!item || item.status !== 'pending') return
 
-    // Quota check with caching and timeout
+    inFlightStarts.add(id)
     try {
-      const storagePromise = getCachedStorageUsage(getStorageUsage)
-      const storage = await Promise.race([
-        storagePromise,
-        createTimeout<never>(API_TIMEOUT, 'Quota check timeout'),
-      ])
+      // Quota check with caching and timeout
+      try {
+        const storagePromise = getCachedStorageUsage(getStorageUsage)
+        const storage = await Promise.race([
+          storagePromise,
+          createTimeout<never>(API_TIMEOUT, 'Quota check timeout'),
+        ])
 
-      // quota === 0 means unlimited
-      if (storage.quota > 0) {
-        const remaining = storage.quota - storage.totalUsed
-        if (item.file.size > remaining) {
-          const errorMessage = `저장 공간이 부족합니다. 필요: ${formatFileSize(item.file.size)}, 남은 공간: ${formatFileSize(remaining)}`
-          useToastStore.getState().showError(errorMessage)
-          get().setStatus(id, 'error', errorMessage)
-          setTimeout(() => get().startNextUpload(), 100)
+        // quota === 0 means unlimited
+        if (storage.quota > 0) {
+          const remaining = storage.quota - storage.totalUsed
+          if (item.file.size > remaining) {
+            const errorMessage = `저장 공간이 부족합니다. 필요: ${formatFileSize(item.file.size)}, 남은 공간: ${formatFileSize(remaining)}`
+            useToastStore.getState().showError(errorMessage)
+            get().setStatus(id, 'error', errorMessage)
+            setTimeout(() => get().startNextUpload(), 100)
+            return
+          }
+        }
+      } catch {
+        // Continue - backend will validate
+      }
+
+      // Duplicate check with timeout
+      try {
+        const checkPromise = checkFileExists(item.path, item.file.name)
+        const result = await Promise.race([
+          checkPromise,
+          createTimeout<never>(API_TIMEOUT, 'File check timeout'),
+        ])
+
+        if (result.exists) {
+          if (get().overwriteAll) {
+            get().startUpload(id, true)
+            return
+          }
+          // Issue #36: A "전체 취소" or other clearing action may have removed
+          // this item from the queue while we were awaiting checkFileExists.
+          // Don't resurrect it as a duplicate prompt.
+          const stillQueued = get().items.some((i) => i.id === id)
+          if (!stillQueued) return
+          // Show duplicate modal
+          set({
+            duplicateFile: {
+              id,
+              filename: item.relativePath || item.file.name,
+              path: item.path,
+            },
+          })
+          get().setStatus(id, 'duplicate')
           return
         }
+      } catch {
+        // If check fails, let backend handle it
       }
-    } catch {
-      // Continue - backend will validate
+
+      get().startUpload(id, false)
+    } finally {
+      inFlightStarts.delete(id)
     }
-
-    // Duplicate check with timeout
-    try {
-      const checkPromise = checkFileExists(item.path, item.file.name)
-      const result = await Promise.race([
-        checkPromise,
-        createTimeout<never>(API_TIMEOUT, 'File check timeout'),
-      ])
-
-      if (result.exists) {
-        if (get().overwriteAll) {
-          get().startUpload(id, true)
-          return
-        }
-        // Issue #36: A "전체 취소" or other clearing action may have removed
-        // this item from the queue while we were awaiting checkFileExists.
-        // Don't resurrect it as a duplicate prompt.
-        const stillQueued = get().items.some((i) => i.id === id)
-        if (!stillQueued) return
-        // Show duplicate modal
-        set({
-          duplicateFile: {
-            id,
-            filename: item.relativePath || item.file.name,
-            path: item.path,
-          },
-        })
-        get().setStatus(id, 'duplicate')
-        return
-      }
-    } catch {
-      // If check fails, let backend handle it
-    }
-
-    get().startUpload(id, false)
   },
 
   // Resolve duplicate file conflict
