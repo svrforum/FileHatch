@@ -17,7 +17,7 @@ import (
 type CreateFileRequest struct {
 	Path     string `json:"path"`
 	Filename string `json:"filename"`
-	FileType string `json:"fileType"` // text, docx, xlsx, pptx
+	FileType string `json:"fileType"` // text, md, html, json, docx, xlsx, pptx, hwp
 }
 
 // CreateFile creates a new empty file
@@ -197,6 +197,8 @@ func getTemplateContent(fileType string) []byte {
 		return createXlsxTemplate()
 	case "pptx":
 		return createPptxTemplate()
+	case "hwp":
+		return createHwpTemplate()
 	default:
 		return []byte("")
 	}

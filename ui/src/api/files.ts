@@ -713,6 +713,7 @@ export const fileTypeOptions: FileTypeOption[] = [
   { type: 'docx', name: 'Word 문서', extension: '.docx', icon: 'word' },
   { type: 'xlsx', name: 'Excel 스프레드시트', extension: '.xlsx', icon: 'excel' },
   { type: 'pptx', name: 'PowerPoint 프레젠테이션', extension: '.pptx', icon: 'powerpoint' },
+  { type: 'hwp', name: '한글 문서', extension: '.hwp', icon: 'hwp' },
 ]
 
 // Create a new file
