@@ -257,14 +257,26 @@ function RhwpEditor({
     }
   }, [filePath, fileName, isSaving, showSaveButton, loadState, sendRequest])
 
-  // Ctrl+S / ESC
+  // Ctrl+S / ESC — 부모 window 와 iframe 의 contentDocument 양쪽에 등록.
+  //
+  // 이유: iframe 안에 포커스가 있을 때 keydown 이벤트는 iframe 경계를 넘어
+  // 부모 window 로 전파되지 않는다. 부모만 듣고 있으면 사용자가 한글 에디터
+  // 안을 클릭한 후 Ctrl+S 를 누를 때 우리 handleSave 가 발화하지 않고,
+  // rhwp-studio 의 자체 단축키 핸들러 또는 브라우저 기본 (Save Page As) 가
+  // 동작해 다운로드처럼 보이는 문제가 발생한다.
+  //
+  // /rhwp/ 는 same-origin self-host 이므로 contentDocument 접근 가능.
+  // capture phase 로 등록해 rhwp-studio 의 bubble-phase 핸들러보다 먼저
+  // 가로채고 stopImmediatePropagation + preventDefault 로 차단한다.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault()
+        e.stopImmediatePropagation()
         if (showSaveButton) handleSave()
-      }
-      if (e.key === 'Escape') {
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
         if (showSaveButton && loadState === 'ready') {
           if (confirm('편집 내용이 저장되지 않았을 수 있습니다. 닫으시겠습니까?')) {
             onClose()
@@ -275,7 +287,30 @@ function RhwpEditor({
       }
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+
+    // iframe contentDocument 에도 등록. iframe.load 가 발생할 때마다 재바인딩.
+    let iframeDoc: Document | null = null
+    const iframe = iframeRef.current
+    const tryBindIframe = () => {
+      try {
+        const doc = iframe?.contentDocument
+        if (doc && doc !== iframeDoc) {
+          iframeDoc?.removeEventListener('keydown', onKey, true)
+          doc.addEventListener('keydown', onKey, true)
+          iframeDoc = doc
+        }
+      } catch {
+        // cross-origin 이면 무시 (현재 same-origin 이라 발생 안 함)
+      }
+    }
+    tryBindIframe()
+    iframe?.addEventListener('load', tryBindIframe)
+
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      iframe?.removeEventListener('load', tryBindIframe)
+      iframeDoc?.removeEventListener('keydown', onKey, true)
+    }
   }, [handleSave, loadState, onClose, showSaveButton])
 
   const handleDownload = useCallback(() => {
