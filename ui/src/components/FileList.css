@@ -330,6 +330,18 @@
   margin-top: var(--spacing-sm);
 }
 
+.input-warning {
+  font-size: 13px;
+  color: #b15607;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: var(--spacing-sm);
+  margin-bottom: 0;
+  line-height: 1.4;
+}
+
 .new-file-modal .modal-body {
   padding: var(--spacing-lg);
 }

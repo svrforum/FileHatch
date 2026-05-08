@@ -64,6 +64,8 @@ interface NewFileModalProps {
   fileName: string
   fileType: string
   fileTypeOptions: FileTypeOption[]
+  warning?: string | null
+  isCreating?: boolean
   onFileNameChange: (name: string) => void
   onConfirm: () => void
   onClose: () => void
@@ -74,6 +76,8 @@ export function NewFileModal({
   fileName,
   fileType,
   fileTypeOptions,
+  warning,
+  isCreating = false,
   onFileNameChange,
   onConfirm,
   onClose
@@ -101,19 +105,27 @@ export function NewFileModal({
             value={fileName}
             onChange={e => onFileNameChange(e.target.value)}
             autoFocus
+            disabled={isCreating}
             onKeyDown={e => {
-              if (e.key === 'Enter') onConfirm()
+              if (e.key === 'Enter' && !isCreating) onConfirm()
               if (e.key === 'Escape') onClose()
             }}
           />
           <p className="input-hint">
             파일 종류: {selectedOption?.name}
           </p>
+          {warning && (
+            <p className="input-warning" role="alert">{warning}</p>
+          )}
         </div>
         <div className="modal-footer">
-          <button className="btn-cancel" onClick={onClose}>취소</button>
-          <button className="btn-confirm" onClick={onConfirm} disabled={!fileName.trim()}>
-            만들기
+          <button className="btn-cancel" onClick={onClose} disabled={isCreating}>취소</button>
+          <button
+            className="btn-confirm"
+            onClick={onConfirm}
+            disabled={!fileName.trim() || isCreating}
+          >
+            {isCreating ? '만드는 중...' : '만들기'}
           </button>
         </div>
       </div>

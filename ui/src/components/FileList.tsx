@@ -104,6 +104,8 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [newFileType, setNewFileType] = useState('')
   const [newFileName, setNewFileName] = useState('')
   const [showNewFileSubmenu, setShowNewFileSubmenu] = useState(false)
+  const [newFileWarning, setNewFileWarning] = useState<string | null>(null)
+  const [newFileCreating, setNewFileCreating] = useState(false)
   const [shareTarget, setShareTarget] = useState<FileInfo | null>(null)
   const [linkShareTarget, setLinkShareTarget] = useState<FileInfo | null>(null)
   const { sharedFolders } = useSharedFolders()
@@ -1059,35 +1061,107 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     setCopyTarget(null)
   }, [copyTarget, currentPath, queryClient])
 
+  // 다음 가용 파일명 탐색 — basename + (1)/(2)/... 형식, 최대 999회 시도
+  const findAvailableFilename = useCallback(
+    async (basename: string, extension: string): Promise<string> => {
+      let candidate = `${basename}${extension}`
+      for (let n = 0; n <= 999; n++) {
+        try {
+          const res = await checkFileExists(currentPath, candidate)
+          if (!res.exists) return candidate
+        } catch {
+          // probe 실패 시 후보 그대로 반환 — 백엔드 검증에 의존
+          return candidate
+        }
+        candidate = `${basename} (${n + 1})${extension}`
+      }
+      return candidate
+    },
+    [currentPath],
+  )
+
   // Handle creating new file
-  const handleNewFileSelect = useCallback((fileType: string) => {
-    const option = fileTypeOptions.find(o => o.type === fileType)
-    if (option) {
+  const handleNewFileSelect = useCallback(
+    async (fileType: string) => {
+      const option = fileTypeOptions.find((o) => o.type === fileType)
+      if (!option) return
       setNewFileType(fileType)
+      setNewFileWarning(null)
+      setNewFileCreating(false)
+      // 모달 즉시 오픈 (기본 이름) — 다음 가용 이름 비동기 probe
       setNewFileName(`새 파일${option.extension}`)
       setShowNewFileModal(true)
       setShowNewFileSubmenu(false)
       closeContextMenu()
-    }
-  }, [])
+      const available = await findAvailableFilename('새 파일', option.extension)
+      // 사용자가 모달 열리자마자 입력을 수정했을 수 있으므로 default 그대로일 때만 갱신
+      setNewFileName((prev) => (prev === `새 파일${option.extension}` ? available : prev))
+    },
+    [findAvailableFilename],
+  )
 
   const handleNewFileCreate = useCallback(async () => {
-    if (!newFileName.trim() || !newFileType) {
+    const trimmed = newFileName.trim()
+    if (!trimmed || !newFileType) {
+      setShowNewFileModal(false)
+      return
+    }
+    const option = fileTypeOptions.find((o) => o.type === newFileType)
+    if (!option) {
       setShowNewFileModal(false)
       return
     }
 
+    setNewFileCreating(true)
+    setNewFileWarning(null)
     try {
-      await createFile(currentPath, newFileName.trim(), newFileType)
+      await createFile(currentPath, trimmed, newFileType)
       queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
-      showSuccess(`"${newFileName.trim()}"이(가) 생성되었습니다`)
+      showSuccess(`"${trimmed}"이(가) 생성되었습니다`)
+      setShowNewFileModal(false)
+      setNewFileName('')
+      setNewFileType('')
+      setNewFileWarning(null)
     } catch (err) {
-      showError(err instanceof Error ? err.message : '파일 생성에 실패했습니다')
+      const msg = err instanceof Error ? err.message : '파일 생성에 실패했습니다'
+      // 중복 파일 — 모달 유지하고 다음 가용 이름으로 입력 갱신, inline 안내
+      if (/already exists|이미 존재|conflict|409/i.test(msg)) {
+        // 입력에서 확장자 분리 (사용자가 확장자 변경했을 수 있음)
+        const dotIdx = trimmed.lastIndexOf('.')
+        const ext = dotIdx > 0 ? trimmed.slice(dotIdx) : option.extension
+        // 기존 ' (N)' 접미사 제거 후 base 추출
+        const baseRaw = dotIdx > 0 ? trimmed.slice(0, dotIdx) : trimmed
+        const base = baseRaw.replace(/\s*\(\d+\)$/, '')
+        const next = await findAvailableFilename(base, ext)
+        setNewFileName(next)
+        setNewFileWarning(
+          `"${trimmed}" 은(는) 이미 존재합니다. "${next}" 로 변경되었습니다. 만들기를 다시 누르거나 이름을 수정하세요.`,
+        )
+      } else {
+        showError(msg)
+        setShowNewFileModal(false)
+        setNewFileName('')
+        setNewFileType('')
+        setNewFileWarning(null)
+      }
+    } finally {
+      setNewFileCreating(false)
     }
+  }, [newFileName, newFileType, currentPath, queryClient, findAvailableFilename])
+
+  const handleNewFileClose = useCallback(() => {
     setShowNewFileModal(false)
     setNewFileName('')
     setNewFileType('')
-  }, [newFileName, newFileType, currentPath, queryClient])
+    setNewFileWarning(null)
+    setNewFileCreating(false)
+  }, [])
+
+  const handleNewFileNameChange = useCallback((name: string) => {
+    setNewFileName(name)
+    // 사용자가 입력 수정 시 inline warning 자동 dismiss (혼란 방지)
+    setNewFileWarning(null)
+  }, [])
 
   // 공유 해제 핸들러 (VirtualizedFileTable용)
   const handleUnshare = useCallback(async (sharedFile: { shareId?: number }) => {
@@ -1822,9 +1896,11 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         fileName={newFileName}
         fileType={newFileType}
         fileTypeOptions={fileTypeOptions}
-        onFileNameChange={setNewFileName}
+        warning={newFileWarning}
+        isCreating={newFileCreating}
+        onFileNameChange={handleNewFileNameChange}
         onConfirm={handleNewFileCreate}
-        onClose={() => setShowNewFileModal(false)}
+        onClose={handleNewFileClose}
       />
 
       {/* Compress Modal */}
