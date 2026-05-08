@@ -82,7 +82,9 @@ jobs:
       - name: Go Lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          # v1.x 핀 — 'latest' 가 v2.x 로 resolve 되면 v1 호환 .golangci.yml
+          # 과 충돌 ('unsupported version of the configuration: ""') 발생.
+          version: v1.64.8
           working-directory: ./api
           args: --timeout=5m
 
