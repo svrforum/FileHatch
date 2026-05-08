@@ -31,6 +31,7 @@
 | 오디오 | mp3, wav, ogg, flac, m4a | `audio/*` | 스트리밍 URL 반환 | 1시간 |
 | PDF | pdf | `application/pdf` | 스트리밍 URL 반환 | 1시간 |
 | Office | doc, docx, xls, xlsx, ppt, pptx, odt, ods, odp, rtf, csv | - | OnlyOffice 편집기 | - |
+| 한글 | hwp, hwpx | `application/x-hwp`, `application/vnd.hancom.hwpx` | rhwp 임베드 (iframe) | - |
 | 압축 | zip | `application/zip` | ZipViewer 컴포넌트 | - |
 
 ### 2.2 미리보기 API 핸들러 (`api/handlers/preview_handler.go`)
@@ -1015,3 +1016,59 @@ const editorConfig = {
 | `ui/src/components/OnlyOfficeEditor.css` | OnlyOfficeEditor 스타일 |
 | `ui/src/components/ZipViewer.tsx` | ZIP 아카이브 탐색기 |
 | `ui/src/api/files.ts` | 미리보기/OnlyOffice/파일 생성 API 함수 |
+
+---
+
+## 10. rhwp HWP 뷰어/에디터 (Issue #35, v0.15.0)
+
+### 개요
+
+[rhwp](https://github.com/edwardkim/rhwp) (Rust + WASM 기반 오픈소스 HWP 엔진, MIT) 의 `@rhwp/editor` npm 패키지를 iframe 임베드 방식으로 통합한다. OnlyOffice 와 달리 별도 Docker 컨테이너 없이 정적 자산만 UI 컨테이너에서 self-host 한다 (`/rhwp/`).
+
+> **버전 이력**: v0.14.0 도입 → v0.14.2 롤백 (upstream wasm 초기화 race) → **v0.15.0 재도입** (rhwp v0.7.10 의 [PR #581](https://github.com/edwardkim/rhwp/pull/581) race fix 반영, 기본 활성화).
+
+### 구성
+
+- **백엔드**: `GET /api/rhwp/settings` 가 `studioUrl` 노출. **기본값 `/rhwp/`** (UI 컨테이너 self-host). `RHWP_STUDIO_URL` 환경 변수로 외부 CDN/내부 mirror 등 override 가능.
+- **프론트엔드**: `RhwpEditor.tsx` 컴포넌트가 iframe 마운트 + 인증된 파일 다운로드 → `editor.loadFile(buffer)` 로 전달. 로드 실패 시 모달 내 에러 화면 + [다운로드] 버튼 (자동 다운로드 없음).
+- **저장**: `editor.exportHwp()` → `Uint8Array` → `PUT /api/files/content/*` (기존 `SaveFileContent` 핸들러 재사용, 바이너리 스트림 OK)
+
+### 파일 흐름
+
+```
+[더블클릭]
+  ↓
+FileList.handleItemDoubleClick → isHwpSupported → setHwpViewingFile
+  ↓
+<RhwpEditor> 마운트
+  ↓
+createEditor(container, { studioUrl })  // iframe 생성
+  ↓
+fetch(getFileUrl(path), Authorization)  → ArrayBuffer
+  ↓
+editor.loadFile(buffer, fileName)       // postMessage to iframe
+  ↓
+[사용자 편집]
+  ↓
+editor.exportHwp() → Uint8Array
+  ↓
+PUT /api/files/content/<path>          // 감사 로그 EventFileEdit 자동 기록
+```
+
+### 환경 변수
+
+| 변수 | 기본값 | 용도 |
+|------|--------|------|
+| `RHWP_STUDIO_URL` | `/rhwp/` | iframe SRC. 기본은 UI 컨테이너 self-host. 외부 CDN (`https://edwardkim.github.io/rhwp/`) 또는 내부 mirror URL 로 override 가능. PNA(Private Network Access) 환경에서는 self-host 권장. |
+
+### 에러 처리 정책 (v0.15.0)
+
+- iframe `'ready'` 응답 timeout (30s), `loadFile` 실패 등 모든 로드 에러 → 에디터 모달 내 **에러 화면 + [다운로드] 버튼** 표시
+- 사용자가 명시적으로 [다운로드] 버튼을 누른 경우에만 파일 다운로드 (v0.14.1 의 자동 다운로드 + 토스트 동작은 제거됨)
+- v0.14.1 에 있던 wasm 초기화 retry/polling 회피 코드는 upstream race fix 반영으로 제거됨 — 단발 ready ping 으로 충분
+
+### 제약 사항 (rhwp v0.7.10+)
+
+- 조판 품질이 한컴보다 일부 떨어질 수 있음 (대부분 일반 문서는 정상)
+- HWPX 출처 문서 저장은 rhwp 자체적으로 비활성화 (#196 — HWPX→HWP 변환 안정성 #197 해결 시까지)
+- UI 에 "베타" 배지로 표기 (조판 품질 한계 안내 목적, 기능 자체는 기본 활성화 + 정상 동작)

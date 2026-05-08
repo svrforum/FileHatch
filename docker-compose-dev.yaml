@@ -35,6 +35,7 @@ services:
       - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - EXTERNAL_URL=${EXTERNAL_URL:-}
+      - RHWP_STUDIO_URL=${RHWP_STUDIO_URL:-}
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${CONFIG_PATH:-./config}:/etc/filehatch

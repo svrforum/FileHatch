@@ -304,6 +304,29 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve self-hosted rhwp-studio assets (GitHub Pages mirror — same-origin to avoid
+// Chrome Private Network Access blocking and WASM init race in iframe embed)
+const fs = require('fs');
+const rhwpStudioDir = path.join(__dirname, 'rhwp-studio');
+if (fs.existsSync(rhwpStudioDir)) {
+  app.use('/rhwp', express.static(rhwpStudioDir, {
+    maxAge: '7d',
+    etag: true,
+    fallthrough: false,
+  }));
+  // Catch fallthrough errors from express.static (e.g., missing wasm) and return
+  // a clean 404 instead of letting them propagate to the SPA index.html catch-all.
+  // Without this, browsers receive HTML where they expect WASM/JS and produce
+  // confusing "expected magic word" / "MIME type" errors.
+  app.use('/rhwp', (err, req, res, next) => {
+    if (err && err.status === 404) {
+      res.status(404).type('text/plain').send('rhwp-studio asset not found');
+      return;
+    }
+    next(err);
+  });
+}
+
 // Serve static files
 app.use(express.static(path.join(__dirname, 'dist'), {
   maxAge: '1d',

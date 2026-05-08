@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchFiles, downloadFileDirect, getFolderStats, renameItem, copyItem, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, extractZip, downloadAsZip, checkFileExists } from '../api/files'
+import { fetchFiles, downloadFileDirect, getFolderStats, renameItem, copyItem, getFileUrl, getAuthToken, FileInfo, FolderStats, checkOnlyOfficeStatus, getOnlyOfficeConfig, isOnlyOfficeSupported, OnlyOfficeConfig, createFile, fileTypeOptions, extractZip, downloadAsZip, checkFileExists, getRhwpSettings, isHwpSupported, type RhwpSettings } from '../api/files'
 import { useSharedFolders } from '../hooks/useSharedFolders'
+import { PERMISSION_READ_WRITE } from '../api/sharedFolders'
 import { useExternalStorages, isExternalStorageReadonly } from '../hooks/useExternalStorages'
 import { getSharedWithMe, getSharedByMe, getMyShareLinks, SharedWithMeItem, SharedByMeItem, LinkShare, deleteFileShare, deleteShareLink } from '../api/fileShares'
 import { useUploadStore } from '../stores/uploadStore'
@@ -25,6 +26,7 @@ const TextEditor = lazy(() => import('./TextEditor'))
 const FileViewer = lazy(() => import('./FileViewer'))
 import ZipViewer from './ZipViewer'
 import OnlyOfficeEditor from './OnlyOfficeEditor'
+import RhwpEditor from './RhwpEditor'
 import ShareModal from './ShareModal'
 import LinkShareModal from './LinkShareModal'
 import FolderSelectModal from './FolderSelectModal'
@@ -84,6 +86,8 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
   const [editingFile, setEditingFile] = useState<FileInfo | null>(null)
   const [viewingFile, setViewingFile] = useState<FileInfo | null>(null)
   const [zipViewingFile, setZipViewingFile] = useState<FileInfo | null>(null)
+  const [hwpViewingFile, setHwpViewingFile] = useState<FileInfo | null>(null)
+  const [rhwpSettings, setRhwpSettings] = useState<RhwpSettings | null>(null)
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
   // OnlyOffice status - use React Query with infinite staleTime for global caching
   const { data: onlyOfficeStatus } = useQuery({
@@ -185,6 +189,15 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     window.addEventListener('ws-reconnected', handleReconnect)
     return () => window.removeEventListener('ws-reconnected', handleReconnect)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // rhwp 설정 1회 fetch (실패 시 비활성)
+  useEffect(() => {
+    let cancelled = false
+    getRhwpSettings()
+      .then(s => { if (!cancelled) setRhwpSettings(s) })
+      .catch(() => { /* enabled=false 와 동일 — 조용히 비활성 */ })
+    return () => { cancelled = true }
+  }, [])
 
   // Regular file list query
   const { data, isLoading, error } = useQuery({
@@ -552,6 +565,22 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     unlockFile(file.path)
   }, [unlockFile])
 
+  // Resolve whether the current user has write permission on the given file's location.
+  // - 일반 경로: 항상 true (백엔드 권한 검증에 의존)
+  // - /shared/<folderName>/...: useSharedFolders 캐시에서 매칭되는 폴더의 permissionLevel 확인
+  // - 매칭 실패: true 반환 후 백엔드에서 최종 거부
+  // _file 인자는 미래 per-file 권한 확장을 위해 시그니처 유지.
+  const resolveWritePermission = useCallback(
+    (_file: FileInfo): boolean => {
+      if (!currentPath.startsWith('/shared/')) return true
+      const folderName = currentPath.substring(8).split('/')[0]
+      const folder = sharedFolders.find((f) => f.name === folderName)
+      if (!folder) return true
+      return folder.permissionLevel === PERMISSION_READ_WRITE
+    },
+    [currentPath, sharedFolders],
+  )
+
   // Check if file is editable (text-based)
   const isEditableFile = useCallback((file: FileInfo): boolean => {
     const ext = file.extension?.toLowerCase() || ''
@@ -618,12 +647,14 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
       setEditingFile(file)
     } else if (isViewableFile(file)) {
       setViewingFile(file)
+    } else if (rhwpSettings?.enabled && isHwpSupported(file.extension)) {
+      setHwpViewingFile(file)
     } else if (onlyOfficeAvailable && isOnlyOfficeSupported(file.extension)) {
       handleOnlyOfficeEdit(file)
     } else {
       downloadFileDirect(file.path)
     }
-  }, [onNavigate, isEditableFile, isViewableFile, isZipFile, onlyOfficeAvailable, handleOnlyOfficeEdit])
+  }, [onNavigate, isEditableFile, isViewableFile, isZipFile, onlyOfficeAvailable, handleOnlyOfficeEdit, rhwpSettings])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, file: FileInfo) => {
     e.preventDefault()
@@ -1592,6 +1623,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         onMultiDownload={handleMultiDownload}
         onEdit={(file) => setEditingFile(file)}
         onOnlyOfficeEdit={handleOnlyOfficeEdit}
+        onHwpOpen={rhwpSettings?.enabled ? (file) => setHwpViewingFile(file) : undefined}
         onView={(file) => setViewingFile(file)}
         onRename={handleRenameClick}
         onCopy={handleCopyClick}
@@ -1628,6 +1660,7 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
         isEditableFile={isEditableFile}
         isViewableFile={isViewableFile}
         isOnlyOfficeSupported={isOnlyOfficeSupported}
+        isHwpSupported={isHwpSupported}
         isStarred={(path) => starredFiles[path] ?? false}
         onToggleStar={handleToggleStar}
         isLocked={isLocked}
@@ -1759,6 +1792,27 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
           publicUrl={onlyOfficePublicUrl}
           onClose={handleOnlyOfficeClose}
           onError={handleOnlyOfficeError}
+        />
+      )}
+
+      {/* rhwp HWP Editor Modal */}
+      {hwpViewingFile && rhwpSettings && (
+        <RhwpEditor
+          filePath={hwpViewingFile.path}
+          fileName={hwpViewingFile.name}
+          studioUrl={rhwpSettings.studioUrl}
+          hasWritePermission={resolveWritePermission(hwpViewingFile)}
+          onClose={() => setHwpViewingFile(null)}
+          onError={(msg) => showError(msg)}
+          onSaved={() => {
+            showInfo('저장되었습니다')
+            queryClient.invalidateQueries({ queryKey: ['files', currentPath] })
+            setHwpViewingFile(null)
+          }}
+          onDownload={() => {
+            const f = hwpViewingFile
+            if (f) downloadFileDirect(f.path)
+          }}
         />
       )}
 

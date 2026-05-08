@@ -47,7 +47,7 @@ export default defineConfig({
           // This prevents stale data issues and authentication problems
         ],
         // Exclude API and proxy routes from service worker navigation fallback
-        navigateFallbackDenylist: [/^\/api\//, /^\/onlyoffice\//, /^\/webdav/]
+        navigateFallbackDenylist: [/^\/api\//, /^\/onlyoffice\//, /^\/webdav/, /^\/rhwp\//, /^\/rhwp-studio\//]
       },
       devOptions: {
         enabled: false // Disable PWA in development
