@@ -26,6 +26,8 @@ interface RhwpEditorProps {
   readyTimeoutMs?: number
   /** 테스트 전용 — ready polling 간격 (기본 300ms) */
   readyPollIntervalMs?: number
+  /** loadFile 타임아웃 (기본 60000ms). 비표준 hwp/hwpx 파싱이 오래 걸리는 사례 대응 (Issue #37). */
+  loadFileTimeoutMs?: number
 }
 
 interface RhwpResponse {
@@ -53,7 +55,7 @@ function humanizeError(raw: string): string {
     return '한글 뷰어가 응답하지 않습니다. 브라우저를 새로고침해 주세요.'
   }
   if (raw.includes('Request timeout: loadFile')) {
-    return '한글 문서 처리 시간이 초과되었습니다.'
+    return '한글 문서 처리 시간이 초과되었습니다. 비표준 형식이거나 파일이 손상되었을 수 있습니다. 다운로드 후 한컴 오피스에서 열어보세요.'
   }
   return raw || '한글 문서를 처리할 수 없습니다.'
 }
@@ -70,6 +72,7 @@ function RhwpEditor({
   onDownload,
   readyTimeoutMs = 30000,
   readyPollIntervalMs = 300,
+  loadFileTimeoutMs = 60000,
 }: RhwpEditorProps) {
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -191,12 +194,15 @@ function RhwpEditor({
         if (!isMountedRef.current) return
 
         // 3) loadFile 단발 (재시도 없음)
+        // 비표준 hwp/hwpx (예: linseg array empty 같은 spec 이탈) 파싱은 wasm 에서
+        // 수십 초 걸릴 수 있다. 15s 는 너무 짧아 정상 처리 가능 파일에서도
+        // 타임아웃이 발생했다 (Issue #37 ②). 기본 60s 로 완화.
         setStatusMsg('한글 문서 로드 중...')
         const bytes = Array.from(new Uint8Array(buffer))
         const result = await sendRequest<{ pageCount: number }>(
           'loadFile',
           { data: bytes, fileName },
-          15000,
+          loadFileTimeoutMs,
         )
         if (!isMountedRef.current) return
 
@@ -232,7 +238,7 @@ function RhwpEditor({
       iframe.removeEventListener('load', onIframeLoad)
       pendingRef.current.clear()
     }
-  }, [filePath, fileName, studioUrl, sendRequest, readyTimeoutMs, readyPollIntervalMs])
+  }, [filePath, fileName, studioUrl, sendRequest, readyTimeoutMs, readyPollIntervalMs, loadFileTimeoutMs])
 
   const showSaveButton = !readOnly && hasWritePermission
 

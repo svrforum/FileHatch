@@ -689,6 +689,34 @@ function FileList({ currentPath, onNavigate, onUploadClick, onNewFolderClick, hi
     setContextMenu(null)
   }, [])
 
+  // 컨텍스트 메뉴 전역 닫기 — ESC 키 + 메뉴 바깥 클릭/우클릭.
+  // 기존엔 file-list-container 의 onClick 만 닫기에 묶여 있어, 우측 파일 정보
+  // 패널이나 좌측 사이드바를 누르면 메뉴가 닫히지 않았다 (Issue #37 ①).
+  useEffect(() => {
+    if (!contextMenu) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        closeContextMenu()
+      }
+    }
+    const onPointerDown = (e: MouseEvent) => {
+      const menu = contextMenuRef.current
+      // 메뉴 자체나 그 안의 서브메뉴 위 클릭은 메뉴 onClick 이 처리하도록 둠
+      if (menu && menu.contains(e.target as Node)) return
+      closeContextMenu()
+    }
+    // capture 단계로 등록 — 자식 노드가 stopPropagation 해도 닫히도록
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('mousedown', onPointerDown, true)
+    window.addEventListener('contextmenu', onPointerDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('mousedown', onPointerDown, true)
+      window.removeEventListener('contextmenu', onPointerDown, true)
+    }
+  }, [contextMenu, closeContextMenu])
+
   const handleDeleteClick = useCallback((file: FileInfo) => {
     setDeleteTarget(file)
     closeContextMenu()
