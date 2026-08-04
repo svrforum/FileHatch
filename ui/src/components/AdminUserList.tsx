@@ -151,11 +151,11 @@ function AdminUserList() {
   }), [users])
 
   if (!currentUser?.isAdmin) {
-    return <div className="admin-page">권한이 없습니다.</div>
+    return <div className="admin-page admin-user-list-page">권한이 없습니다.</div>
   }
 
   return (
-    <div className="admin-page">
+    <div className="admin-page admin-user-list-page">
       <div className="admin-page-header">
         <div className="header-content">
           <h2>사용자 관리</h2>
