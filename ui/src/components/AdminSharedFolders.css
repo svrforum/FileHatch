@@ -154,7 +154,7 @@
   margin-bottom: 24px;
 }
 
-.search-box {
+.admin-shared-folders-page .search-box {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -166,17 +166,17 @@
   transition: all 0.2s ease;
 }
 
-.search-box:focus-within {
+.admin-shared-folders-page .search-box:focus-within {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
-.search-box svg {
+.admin-shared-folders-page .search-box svg {
   color: var(--text-tertiary);
   flex-shrink: 0;
 }
 
-.search-box input {
+.admin-shared-folders-page .search-box input {
   flex: 1;
   border: none;
   background: transparent;
@@ -184,11 +184,11 @@
   color: var(--text-primary);
 }
 
-.search-box input:focus {
+.admin-shared-folders-page .search-box input:focus {
   outline: none;
 }
 
-.search-box input::placeholder {
+.admin-shared-folders-page .search-box input::placeholder {
   color: var(--text-tertiary);
 }
 
@@ -1336,7 +1336,7 @@
   border-radius: 10px;
 }
 
-.view-btn {
+.admin-shared-folders-page .view-btn {
   width: 36px;
   height: 36px;
   display: flex;
@@ -1350,12 +1350,12 @@
   transition: all 0.2s ease;
 }
 
-.view-btn:hover {
+.admin-shared-folders-page .view-btn:hover {
   color: var(--text-secondary);
   background: var(--bg-tertiary);
 }
 
-.view-btn.active {
+.admin-shared-folders-page .view-btn.active {
   background: var(--bg-primary);
   color: var(--color-primary);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -1556,7 +1556,7 @@
     gap: 12px;
   }
 
-  .search-box {
+  .admin-shared-folders-page .search-box {
     max-width: none;
   }
 

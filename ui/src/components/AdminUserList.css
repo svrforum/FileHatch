@@ -169,7 +169,7 @@
   align-items: center;
 }
 
-.search-box {
+.admin-user-list-page .search-box {
   flex: 1;
   display: flex;
   align-items: center;
@@ -181,17 +181,17 @@
   transition: all 0.2s ease;
 }
 
-.search-box:focus-within {
+.admin-user-list-page .search-box:focus-within {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
-.search-box svg {
+.admin-user-list-page .search-box svg {
   color: var(--text-tertiary);
   flex-shrink: 0;
 }
 
-.search-box input {
+.admin-user-list-page .search-box input {
   flex: 1;
   border: none;
   background: transparent;
@@ -200,7 +200,7 @@
   outline: none;
 }
 
-.search-box input::placeholder {
+.admin-user-list-page .search-box input::placeholder {
   color: var(--text-tertiary);
 }
 
@@ -230,7 +230,7 @@
   padding: 4px;
 }
 
-.view-btn {
+.admin-user-list-page .view-btn {
   width: 40px;
   height: 40px;
   border: none;
@@ -244,11 +244,11 @@
   transition: all 0.2s ease;
 }
 
-.view-btn:hover {
+.admin-user-list-page .view-btn:hover {
   color: var(--text-primary);
 }
 
-.view-btn.active {
+.admin-user-list-page .view-btn.active {
   background: var(--bg-secondary);
   color: var(--text-primary);
 }
@@ -1070,7 +1070,7 @@
     flex-wrap: wrap;
   }
 
-  .search-box {
+  .admin-user-list-page .search-box {
     width: 100%;
     order: 2;
   }
