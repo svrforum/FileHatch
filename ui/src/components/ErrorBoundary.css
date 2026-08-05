@@ -3,6 +3,7 @@
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 20px;
   background: var(--color-primary-gradient);
 }
@@ -83,7 +84,9 @@
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .error-boundary-btn.primary {

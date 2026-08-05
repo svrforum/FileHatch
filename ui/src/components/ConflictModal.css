@@ -57,7 +57,9 @@
   border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 500;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   border: 1px solid var(--border-medium);
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -114,7 +116,9 @@
   color: var(--text-secondary);
   background: transparent;
   border: 1px solid var(--border-light);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   height: 36px;
 }
 

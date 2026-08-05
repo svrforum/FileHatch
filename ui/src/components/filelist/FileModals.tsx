@@ -24,9 +24,9 @@ export function RenameModal({ target, newName, onNameChange, onConfirm, onClose 
   if (!target) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal rename-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
+    <div className="fh-modal-overlay modal-overlay file-list-modal-overlay" onClick={onClose}>
+      <div className="fh-modal modal file-list-modal rename-modal" onClick={e => e.stopPropagation()}>
+        <div className="fh-modal__header modal-header">
           <h3>이름 변경</h3>
           <button className="modal-close" onClick={onClose}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -34,7 +34,7 @@ export function RenameModal({ target, newName, onNameChange, onConfirm, onClose 
             </svg>
           </button>
         </div>
-        <div className="modal-body">
+        <div className="fh-modal__body modal-body">
           <input
             type="text"
             className="rename-input"
@@ -47,9 +47,9 @@ export function RenameModal({ target, newName, onNameChange, onConfirm, onClose 
             }}
           />
         </div>
-        <div className="modal-footer">
-          <button className="btn-cancel" onClick={onClose}>취소</button>
-          <button className="btn-confirm" onClick={onConfirm} disabled={!newName.trim() || newName === target.name}>
+        <div className="fh-modal__footer modal-footer">
+          <button className="fh-button fh-button--secondary btn-cancel" onClick={onClose}>취소</button>
+          <button className="fh-button fh-button--primary btn-confirm" onClick={onConfirm} disabled={!newName.trim() || newName === target.name}>
             변경
           </button>
         </div>
@@ -87,9 +87,9 @@ export function NewFileModal({
   const selectedOption = fileTypeOptions.find(o => o.type === fileType)
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal new-file-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
+    <div className="fh-modal-overlay modal-overlay file-list-modal-overlay" onClick={onClose}>
+      <div className="fh-modal modal file-list-modal new-file-modal" onClick={e => e.stopPropagation()}>
+        <div className="fh-modal__header modal-header">
           <h3>새 파일 만들기</h3>
           <button className="modal-close" onClick={onClose}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -97,11 +97,11 @@ export function NewFileModal({
             </svg>
           </button>
         </div>
-        <div className="modal-body">
-          <label className="input-label">파일 이름</label>
+        <div className="fh-modal__body fh-form-field modal-body">
+          <label className="fh-form-field__label input-label">파일 이름</label>
           <input
             type="text"
-            className="rename-input"
+            className="fh-form-field__control rename-input"
             value={fileName}
             onChange={e => onFileNameChange(e.target.value)}
             autoFocus
@@ -118,10 +118,10 @@ export function NewFileModal({
             <p className="input-warning" role="alert">{warning}</p>
           )}
         </div>
-        <div className="modal-footer">
-          <button className="btn-cancel" onClick={onClose} disabled={isCreating}>취소</button>
+        <div className="fh-modal__footer modal-footer">
+          <button className="fh-button fh-button--secondary btn-cancel" onClick={onClose} disabled={isCreating}>취소</button>
           <button
-            className="btn-confirm"
+            className="fh-button fh-button--primary btn-confirm"
             onClick={onConfirm}
             disabled={!fileName.trim() || isCreating}
           >
@@ -154,9 +154,9 @@ export function CompressModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal compress-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
+    <div className="fh-modal-overlay modal-overlay file-list-modal-overlay" onClick={onClose}>
+      <div className="fh-modal modal file-list-modal compress-modal" onClick={e => e.stopPropagation()}>
+        <div className="fh-modal__header modal-header">
           <h3>압축 파일 만들기</h3>
           <button className="modal-close" onClick={onClose}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -164,7 +164,7 @@ export function CompressModal({
             </svg>
           </button>
         </div>
-        <div className="modal-body">
+        <div className="fh-modal__body modal-body">
           <label className="input-label">압축 파일 이름</label>
           <div className="compress-input-wrapper">
             <input
@@ -184,9 +184,9 @@ export function CompressModal({
             {itemCount}개 항목을 압축합니다
           </p>
         </div>
-        <div className="modal-footer">
-          <button className="btn-cancel" onClick={onClose}>취소</button>
-          <button className="btn-confirm" onClick={onConfirm} disabled={!fileName.trim()}>
+        <div className="fh-modal__footer modal-footer">
+          <button className="fh-button fh-button--secondary btn-cancel" onClick={onClose}>취소</button>
+          <button className="fh-button fh-button--primary btn-confirm" onClick={onConfirm} disabled={!fileName.trim()}>
             압축
           </button>
         </div>
@@ -231,9 +231,9 @@ export function DownloadOptionsModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={() => !isDownloading && onClose()}>
-      <div className="modal download-options-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
+    <div className="fh-modal-overlay modal-overlay file-list-modal-overlay" onClick={() => !isDownloading && onClose()}>
+      <div className="fh-modal modal file-list-modal download-options-modal" onClick={e => e.stopPropagation()}>
+        <div className="fh-modal__header modal-header">
           <h3>다운로드 방식 선택</h3>
           <button className="modal-close" onClick={() => !isDownloading && onClose()} disabled={isDownloading}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -241,7 +241,7 @@ export function DownloadOptionsModal({
             </svg>
           </button>
         </div>
-        <div className="modal-body">
+        <div className="fh-modal__body modal-body">
           <p className="download-info">
             {itemCount}개 파일을 다운로드합니다
           </p>

@@ -11,7 +11,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   animation: fadeIn 0.2s var(--ease-out-expo, ease);
 }
 
@@ -26,6 +26,10 @@
   display: flex;
   flex-direction: column;
   animation: modalSlideIn var(--duration-spring, 0.5s) var(--spring, cubic-bezier(0.175, 0.885, 0.32, 1.275));
+}
+
+.create-folder-modal {
+  max-width: 400px;
 }
 
 @keyframes modalSlideIn {
@@ -64,7 +68,9 @@
   border-radius: var(--radius-full);
   color: var(--text-tertiary);
   background: var(--bg-secondary);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .upload-modal .close-btn:hover {
@@ -85,7 +91,9 @@
   justify-content: center;
   gap: var(--spacing-md);
   cursor: pointer;
-  transition: all var(--duration-normal, 0.25s) var(--ease-out-expo, ease);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-normal, 0.25s);
+  transition-timing-function: var(--ease-out-expo, ease);
   background: var(--bg-secondary);
 }
 
@@ -98,7 +106,9 @@
 
 .drop-zone svg {
   color: var(--text-tertiary);
-  transition: all var(--duration-normal, 0.25s) var(--ease-out-expo, ease);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-normal, 0.25s);
+  transition-timing-function: var(--ease-out-expo, ease);
 }
 
 .drop-zone.dragging svg,
@@ -135,7 +145,9 @@
   font-weight: var(--font-weight-medium);
   color: var(--text-primary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .upload-select-btn:hover {
@@ -187,7 +199,9 @@
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
   position: relative;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   border: 1px solid transparent;
 }
 
@@ -297,7 +311,9 @@
   border-radius: var(--radius-full);
   color: var(--text-tertiary);
   opacity: 0;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .file-item:hover .remove-btn {
@@ -327,7 +343,9 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   letter-spacing: var(--letter-spacing-normal, -0.01em);
-  transition: all var(--duration-fast, 0.15s) var(--ease-out-expo, ease);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast, 0.15s);
+  transition-timing-function: var(--ease-out-expo, ease);
   cursor: pointer;
   border: none;
 }
@@ -391,7 +409,9 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   letter-spacing: var(--letter-spacing-normal, -0.01em);
-  transition: all var(--duration-fast, 0.15s) var(--ease-out-expo, ease);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast, 0.15s);
+  transition-timing-function: var(--ease-out-expo, ease);
   cursor: pointer;
   background: transparent;
   color: var(--color-error);
@@ -413,7 +433,9 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   letter-spacing: var(--letter-spacing-normal, -0.01em);
-  transition: all var(--duration-fast, 0.15s) var(--ease-out-expo, ease);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast, 0.15s);
+  transition-timing-function: var(--ease-out-expo, ease);
   cursor: pointer;
   background: transparent;
   color: var(--text-secondary);
@@ -444,10 +466,10 @@
 }
 
 /* Issue #36: DuplicateModal must render above the UploadModal so its buttons
- * are clickable. Both share .modal-overlay (z-index: 1000) but the duplicate
+ * are clickable. Both share the modal layer, but the duplicate
  * dialog is the active prompt and must take precedence. */
 .duplicate-modal-overlay {
-  z-index: 1100;
+  z-index: calc(var(--z-modal) + 10);
 }
 
 /* Confirm Modal */
@@ -652,7 +674,7 @@
     height: 4px;
     background: var(--border-medium);
     border-radius: 2px;
-    z-index: 1;
+    z-index: var(--z-content-raised);
   }
 
   .upload-modal .modal-header {

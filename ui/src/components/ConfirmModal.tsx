@@ -31,9 +31,9 @@ function ConfirmModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onCancel} role="presentation">
+    <div className="fh-modal-overlay modal-overlay" onClick={onCancel} role="presentation">
       <div
-        className="confirm-modal"
+        className="fh-modal confirm-modal"
         onClick={(e) => e.stopPropagation()}
         role="alertdialog"
         aria-modal="true"
@@ -55,12 +55,12 @@ function ConfirmModal({
         <h3 id="confirm-modal-title" className="confirm-title">{title}</h3>
         <p id="confirm-modal-message" className="confirm-message">{message}</p>
         <div className="confirm-actions">
-          <button className="btn-secondary" onClick={onCancel}>
+          <button className="fh-button fh-button--secondary btn-secondary" onClick={onCancel}>
             {cancelText}
           </button>
           <button
             ref={confirmButtonRef}
-            className={danger ? 'btn-danger' : 'btn-primary'}
+            className={`fh-button ${danger ? 'fh-button--danger btn-danger' : 'fh-button--primary btn-primary'}`}
             onClick={onConfirm}
           >
             {confirmText}

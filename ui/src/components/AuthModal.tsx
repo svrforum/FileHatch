@@ -49,9 +49,9 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={handleClose}>
-      <div className="modal auth-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
+    <div className="fh-modal-overlay modal-overlay" onClick={handleClose}>
+      <div className="fh-modal modal auth-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="fh-modal__header modal-header">
           <h2>로그인</h2>
           <button className="close-btn" onClick={handleClose}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -63,7 +63,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
         <form onSubmit={handleSubmit} className="auth-form">
           {error && <div className="auth-error">{error}</div>}
 
-          <div className="form-group">
+          <div className="fh-form-field form-group">
             <label>사용자명</label>
             <input
               type="text"
@@ -75,7 +75,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
             />
           </div>
 
-          <div className="form-group">
+          <div className="fh-form-field form-group">
             <label>비밀번호</label>
             <input
               type="password"
@@ -89,7 +89,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
           <button
             type="submit"
-            className="submit-btn"
+            className="fh-button fh-button--primary submit-btn"
             disabled={isLoading}
           >
             {isLoading ? '로그인 중...' : '로그인'}

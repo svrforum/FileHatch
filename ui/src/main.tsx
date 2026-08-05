@@ -6,6 +6,7 @@ import { ToastContainer } from './components/Toast'
 import { ThemeProvider } from './contexts/ThemeContext'
 import App from './App'
 import './styles/global.css'
+import './styles/primitives.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {

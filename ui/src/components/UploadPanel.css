@@ -9,7 +9,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   animation: fadeIn 0.2s ease;
   backdrop-filter: blur(2px);
 }
@@ -81,7 +81,9 @@
   color: rgba(255, 255, 255, 0.9);
   padding: 6px 12px;
   border-radius: 6px;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   background: rgba(255, 255, 255, 0.15);
   display: flex;
   align-items: center;
@@ -105,7 +107,9 @@
   justify-content: center;
   border-radius: 8px;
   color: rgba(255, 255, 255, 0.8);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .panel-close-btn:hover:not(:disabled) {
@@ -134,7 +138,9 @@
   font-weight: 500;
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   border-bottom: 2px solid transparent;
   display: flex;
   align-items: center;
@@ -206,7 +212,9 @@
   font-weight: 600;
   color: var(--text-secondary);
   background: var(--bg-primary);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   cursor: pointer;
 }
 
@@ -246,7 +254,9 @@
   font-weight: 500;
   padding: 5px 12px;
   border-radius: 6px;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -359,7 +369,9 @@
   background: var(--bg-secondary);
   border-radius: 12px;
   border: 1px solid var(--border-light);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .upload-panel-item:hover {
@@ -457,7 +469,7 @@
   font-size: 12px;
   font-weight: 400;
   white-space: nowrap;
-  z-index: 10;
+  z-index: var(--z-local-overlay);
   pointer-events: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
@@ -588,7 +600,9 @@
   justify-content: center;
   border-radius: 6px;
   color: var(--text-tertiary);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .item-btn:hover {

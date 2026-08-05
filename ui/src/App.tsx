@@ -34,9 +34,9 @@ const NotificationCenter = lazy(() => import('./components/NotificationCenter'))
 // Admin loading skeleton
 function AdminSkeleton() {
   return (
-    <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div style={{ height: '32px', width: '200px', background: '#e0e0e0', borderRadius: '4px', animation: 'pulse 1.5s infinite' }} />
-      <div style={{ height: '200px', background: '#f5f5f5', borderRadius: '8px', animation: 'pulse 1.5s infinite' }} />
+    <div className="admin-skeleton" aria-hidden="true">
+      <div className="admin-skeleton__title" />
+      <div className="admin-skeleton__content" />
     </div>
   )
 }
