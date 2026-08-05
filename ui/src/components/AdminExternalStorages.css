@@ -197,6 +197,7 @@
 
 .admin-external-storages-page .search-box input:focus {
   outline: none;
+  box-shadow: none;
 }
 
 .admin-external-storages-page .search-box input::placeholder {

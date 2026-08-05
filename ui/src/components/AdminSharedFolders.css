@@ -192,6 +192,7 @@
 
 .admin-shared-folders-page .search-box input:focus {
   outline: none;
+  box-shadow: none;
 }
 
 .admin-shared-folders-page .search-box input::placeholder {

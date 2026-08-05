@@ -66,12 +66,12 @@
   margin: 0 var(--spacing-xl);
 }
 
-.search-box {
+.header .search-box {
   position: relative;
   width: 100%;
 }
 
-.search-box .search-icon {
+.header .search-box .search-icon {
   position: absolute;
   left: 14px;
   top: 50%;
@@ -465,7 +465,7 @@
     padding: 0 12px 0 38px;
   }
 
-  .search-box .search-icon {
+  .header .search-box .search-icon {
     left: 10px;
     width: 16px;
     height: 16px;
