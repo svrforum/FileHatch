@@ -108,7 +108,9 @@
   border-radius: 50%;
   background: var(--bg-secondary);
   color: var(--text-secondary);
-  transition: all 0.2s;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   flex-shrink: 0;
 }
 
@@ -705,7 +707,9 @@
   border-radius: var(--radius-sm);
   background: var(--bg-secondary);
   cursor: grab;
-  transition: all 0.15s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
   user-select: none;
 }
 
@@ -757,7 +761,9 @@
   border-radius: var(--radius-xs);
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
 }
 
 .sidebar-reorder-btn:hover:not(:disabled) {

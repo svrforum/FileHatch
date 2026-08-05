@@ -8,6 +8,7 @@
   display: flex;
   flex-direction: column;
   height: calc(100vh - var(--header-height));
+  height: calc(100dvh - var(--header-height));
   /* Sticky position for scroll behavior within grid */
   position: sticky;
   top: var(--header-height);
@@ -22,8 +23,9 @@
     top: var(--mobile-header-height);
     left: 0;
     height: calc(100vh - var(--mobile-header-height));
+    height: calc(100dvh - var(--mobile-header-height));
     transform: translateX(-100%);
-    z-index: 1200;
+    z-index: var(--z-drawer);
     box-shadow: none;
   }
 
@@ -47,7 +49,7 @@
     right: 0;
     bottom: 0;
     background: var(--bg-overlay);
-    z-index: 1150;
+    z-index: var(--z-drawer-backdrop);
     opacity: 0;
     visibility: hidden;
     transition: opacity var(--transition-normal), visibility var(--transition-normal);
@@ -78,7 +80,9 @@
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   letter-spacing: var(--letter-spacing-normal, -0.01em);
-  transition: all var(--duration-fast, 0.15s) var(--ease-out-expo, ease);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast, 0.15s);
+  transition-timing-function: var(--ease-out-expo, ease);
   box-shadow: var(--shadow-primary);
 }
 
@@ -101,7 +105,9 @@
   background: var(--bg-secondary);
   color: var(--text-secondary);
   border-radius: var(--radius-md);
-  transition: all var(--duration-fast, 0.15s) var(--ease-out-expo, ease);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast, 0.15s);
+  transition-timing-function: var(--ease-out-expo, ease);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
@@ -130,7 +136,9 @@
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  transition: all var(--duration-fast, 0.15s) var(--ease-out-expo, ease);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast, 0.15s);
+  transition-timing-function: var(--ease-out-expo, ease);
 }
 
 
@@ -188,7 +196,9 @@
   color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   background: var(--bg-secondary);
 }
 
@@ -247,7 +257,9 @@
   color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%);
   border: 1px solid rgba(139, 92, 246, 0.2);
 }
@@ -548,7 +560,9 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .shared-header:hover {
@@ -621,7 +635,9 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .recent-header:hover {
@@ -662,7 +678,9 @@
   border-radius: var(--radius-sm);
   color: var(--text-tertiary);
   font-size: 12px;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   text-decoration: none;
 }
 
@@ -700,7 +718,7 @@
 .version-text {
   font-size: 11px;
   color: var(--text-tertiary);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-family-mono);
 }
 
 .github-link {
@@ -710,7 +728,9 @@
   padding: 6px;
   border-radius: var(--radius-sm);
   color: var(--text-tertiary);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .github-link:hover {

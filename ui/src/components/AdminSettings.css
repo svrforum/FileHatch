@@ -241,7 +241,9 @@
   font-weight: 600;
   background: var(--bg-primary);
   color: var(--text-primary);
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   text-align: right;
 }
 
@@ -298,7 +300,9 @@
   right: 0;
   bottom: 0;
   background-color: var(--border-light);
-  transition: all 0.3s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.3s;
+  transition-timing-function: ease;
   border-radius: 32px;
 }
 
@@ -310,7 +314,9 @@
   left: 3px;
   bottom: 3px;
   background-color: white;
-  transition: all 0.3s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.3s;
+  transition-timing-function: ease;
   border-radius: 50%;
   box-shadow: var(--shadow-sm);
 }
@@ -342,7 +348,9 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23868e96' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   min-width: 200px;
 }
 
@@ -417,7 +425,9 @@
   border: none;
   border-radius: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   box-shadow: var(--shadow-primary);
 }
 
@@ -458,7 +468,7 @@
   border-radius: 14px;
   font-size: 15px;
   font-weight: 600;
-  z-index: 1000;
+  z-index: var(--z-toast);
   animation: as-toast-slide 0.3s ease-out;
   box-shadow: var(--shadow-lg);
 }
@@ -797,7 +807,9 @@
   border-radius: 6px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .as-btn-icon:hover {
@@ -818,7 +830,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   padding: 20px;
 }
 
@@ -860,7 +872,9 @@
   border-radius: 6px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .as-modal-close:hover {

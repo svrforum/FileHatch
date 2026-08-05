@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { getRecentFiles, hideRecentItem, clearAllRecentItems, RecentFile, downloadFile, FileInfo, getFolderStats, FolderStats, getFileMetadata, FileMetadata, updateFileMetadata, getStarredFiles, StarredFile } from '../api/files'
 import { getFileIcon } from '../utils/fileIcons'
 import { useTransferStore } from '../stores/transferStore'
-import { FileRow, FileCard, VirtualizedFileTable, FileInfoPanel, VIRTUALIZATION_THRESHOLD } from './filelist'
+import { FileRow, FileCard, VirtualizedFileTable, FileInfoPanel, VIRTUALIZATION_THRESHOLD } from './filelist/index'
 const FileViewer = lazy(() => import('./FileViewer'))
 const TextEditor = lazy(() => import('./TextEditor'))
 const ShareModal = lazy(() => import('./ShareModal'))

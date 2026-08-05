@@ -11,7 +11,7 @@
     position: fixed;
     right: 16px;
     bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-    z-index: 1000;
+    z-index: var(--z-sticky);
   }
 
   /* Overlay when FAB is open */
@@ -22,7 +22,7 @@
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.3);
-    z-index: -1;
+    z-index: var(--z-behind);
     animation: fadeIn 0.2s ease;
   }
 
@@ -47,7 +47,9 @@
     opacity: 0;
     visibility: hidden;
     transform: translateY(10px);
-    transition: all 0.2s ease;
+    transition-property: var(--transition-interactive-properties);
+    transition-duration: 0.2s;
+    transition-timing-function: ease;
   }
 
   .mobile-fab-container.open .mobile-fab-actions {
@@ -89,7 +91,9 @@
     border-radius: var(--radius-full);
     box-shadow: var(--shadow-md);
     color: var(--color-primary);
-    transition: all var(--transition-fast);
+    transition-property: var(--transition-interactive-properties);
+    transition-duration: var(--duration-fast);
+    transition-timing-function: var(--ease-standard);
   }
 
   .mobile-fab-action-icon.upload {
@@ -118,7 +122,9 @@
     box-shadow: var(--shadow-lg);
     color: white;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition-property: var(--transition-interactive-properties);
+    transition-duration: 0.2s;
+    transition-timing-function: ease;
     -webkit-tap-highlight-color: transparent;
   }
 

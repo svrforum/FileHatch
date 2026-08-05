@@ -5,7 +5,7 @@
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.9);
-  z-index: 2000;
+  z-index: var(--z-fullscreen);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -92,7 +92,9 @@
   height: 32px;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .zoom-controls button:hover:not(:disabled),
@@ -125,7 +127,9 @@
   height: 40px;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .close-btn:hover {
@@ -167,8 +171,10 @@
   justify-content: center;
   color: white;
   cursor: pointer;
-  transition: all var(--transition-fast);
-  z-index: 10;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
+  z-index: var(--z-local-overlay);
   border: 2px solid rgba(255, 255, 255, 0.2);
 }
 

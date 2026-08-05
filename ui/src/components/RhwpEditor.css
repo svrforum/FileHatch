@@ -4,8 +4,9 @@
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 9999;
+  z-index: var(--z-fullscreen);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -72,7 +73,9 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .rhwp-btn-save:hover:not(:disabled) {
@@ -95,7 +98,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .rhwp-btn-close:hover {

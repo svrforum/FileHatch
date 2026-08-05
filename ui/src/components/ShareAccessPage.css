@@ -1,5 +1,6 @@
 .share-access-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -155,7 +156,9 @@
   border: 2px solid var(--border-light);
   border-radius: 14px;
   outline: none;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   box-sizing: border-box;
   text-align: center;
   font-weight: 500;
@@ -189,7 +192,9 @@
   border: none;
   border-radius: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -219,7 +224,9 @@
   border: none;
   border-radius: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   margin-top: 8px;
 }
 
@@ -363,7 +370,7 @@
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.95);
-  z-index: 1000;
+  z-index: var(--z-fullscreen);
   display: flex;
   flex-direction: column;
   animation: fadeIn 0.2s ease-out;
@@ -408,7 +415,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .share-preview-action-btn svg {
@@ -634,7 +643,7 @@
   right: 0;
   bottom: 0;
   background: #fff;
-  z-index: 1000;
+  z-index: var(--z-fullscreen);
   display: flex;
   flex-direction: column;
   animation: fadeIn 0.2s ease-out;
@@ -672,7 +681,9 @@
   border: 1px solid var(--border-light);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .share-editor-close-btn svg {
@@ -756,7 +767,9 @@
   border: 1px solid var(--color-primary);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   flex-shrink: 0;
 }
 
@@ -794,7 +807,9 @@
   border: 1px solid var(--border-light);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .share-folder-select-all:hover {
@@ -887,7 +902,9 @@
   height: 18px;
   border: 2px solid var(--border-light);
   border-radius: 4px;
-  transition: all 0.15s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -977,7 +994,9 @@
   height: 36px;
   border-radius: 8px;
   color: var(--text-secondary);
-  transition: all 0.15s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
   flex-shrink: 0;
 }
 
@@ -1051,7 +1070,7 @@
 }
 
 [data-theme='dark'] .share-folder-item-size {
-  color: var(--text-dark-tertiary);
+  color: var(--text-tertiary);
 }
 
 [data-theme='dark'] .share-folder-item-download {
@@ -1065,7 +1084,7 @@
 
 [data-theme='dark'] .share-folder-loading,
 [data-theme='dark'] .share-folder-empty {
-  color: var(--text-dark-tertiary);
+  color: var(--text-tertiary);
 }
 
 /* Mobile responsive for folder contents */
