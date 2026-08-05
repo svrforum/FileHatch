@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"database/sql"
@@ -633,12 +634,14 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 			userID = &claims.UserID
 			accessorUsername = claims.Username
 		}
-		_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventShareAccess, path, map[string]interface{}{
-			"action":   "download",
-			"token":    token,
-			"filename": filename,
-			"size":     size,
-		})
+		if h.auditHandler != nil {
+			_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventShareAccess, path, map[string]interface{}{
+				"action":   "download",
+				"token":    token,
+				"filename": filename,
+				"size":     size,
+			})
+		}
 
 		if h.notificationService != nil {
 			title := "공유 링크가 접속되었습니다"
@@ -670,13 +673,20 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 		if resolveErr != nil {
 			return RespondError(c, ErrNotFound("File not found"))
 		}
-		ctx := context.Background()
+		ctx := c.Request().Context()
 		info, statErr := backend.Stat(ctx, relPath)
 		if statErr != nil {
 			return RespondError(c, ErrNotFound("File not found"))
 		}
 		if info.IsDirectory {
-			return RespondError(c, ErrBadRequest("Cannot download a directory"))
+			zipName := info.FileName + ".zip"
+			logDownloadEvent(zipName, info.FileSize)
+
+			if realPath, err := backend.GetRealPath(relPath); err == nil {
+				return streamLocalShareDirectory(c, realPath, info.FileName)
+			}
+
+			return streamBackendShareDirectory(c, ctx, backend, relPath, info.FileName)
 		}
 
 		logDownloadEvent(info.FileName, info.FileSize)
@@ -705,13 +715,135 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 	}
 
 	if info.IsDir() {
-		return RespondError(c, ErrBadRequest("Cannot download a directory"))
+		if err := validateSharedDirectoryPath(h.dataRoot, fullPath); err != nil {
+			return RespondError(c, ErrForbidden("Access denied"))
+		}
+
+		zipName := info.Name() + ".zip"
+		logDownloadEvent(zipName, info.Size())
+		return streamLocalShareDirectory(c, fullPath, info.Name())
 	}
 
 	logDownloadEvent(info.Name(), info.Size())
 
 	setContentDisposition(c, info.Name())
 	return c.File(fullPath)
+}
+
+func validateSharedDirectoryPath(dataRoot, directoryPath string) error {
+	resolvedRoot, err := filepath.EvalSymlinks(dataRoot)
+	if err != nil {
+		return err
+	}
+
+	resolvedDirectory, err := filepath.EvalSymlinks(directoryPath)
+	if err != nil {
+		return err
+	}
+
+	relPath, err := filepath.Rel(resolvedRoot, resolvedDirectory)
+	if err != nil {
+		return err
+	}
+	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(os.PathSeparator)) {
+		return fmt.Errorf("shared directory escapes data root")
+	}
+
+	return nil
+}
+
+func streamLocalShareDirectory(c echo.Context, directoryPath, directoryName string) error {
+	c.Response().Header().Set(echo.HeaderContentType, "application/zip")
+	setContentDisposition(c, directoryName+".zip")
+	c.Response().WriteHeader(http.StatusOK)
+
+	zipWriter := zip.NewWriter(c.Response())
+	rootName := filepath.ToSlash(directoryName) + "/"
+	if _, err := zipWriter.Create(rootName); err != nil {
+		_ = zipWriter.Close()
+		return err
+	}
+
+	err := filepath.Walk(directoryPath, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == directoryPath {
+			return nil
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(directoryPath, path)
+		if err != nil {
+			return err
+		}
+		zipPath := filepath.ToSlash(filepath.Join(directoryName, relPath))
+
+		if info.IsDir() {
+			_, err := zipWriter.Create(zipPath + "/")
+			return err
+		}
+
+		return zipAddFile(zipWriter, path, zipPath)
+	})
+	if err != nil {
+		_ = zipWriter.Close()
+		return err
+	}
+
+	return zipWriter.Close()
+}
+
+func streamBackendShareDirectory(
+	c echo.Context,
+	ctx context.Context,
+	backend StorageBackend,
+	relPath string,
+	directoryName string,
+) error {
+	c.Response().Header().Set(echo.HeaderContentType, "application/zip")
+	setContentDisposition(c, directoryName+".zip")
+	c.Response().WriteHeader(http.StatusOK)
+
+	zipWriter := zip.NewWriter(c.Response())
+	rootName := filepath.ToSlash(directoryName) + "/"
+	if _, err := zipWriter.Create(rootName); err != nil {
+		_ = zipWriter.Close()
+		return err
+	}
+
+	err := backend.Walk(ctx, relPath, func(path string, info *StorageFileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == relPath {
+			return nil
+		}
+		if os.FileMode(info.FileMode)&os.ModeSymlink != 0 {
+			return nil
+		}
+
+		relFromRoot, err := filepath.Rel(relPath, path)
+		if err != nil {
+			return err
+		}
+		zipPath := filepath.ToSlash(filepath.Join(directoryName, relFromRoot))
+
+		if info.IsDirectory {
+			_, err := zipWriter.Create(zipPath + "/")
+			return err
+		}
+
+		return addBackendFileToZip(ctx, zipWriter, backend, path, zipPath)
+	})
+	if err != nil {
+		_ = zipWriter.Close()
+		return err
+	}
+
+	return zipWriter.Close()
 }
 
 // GetShareOnlyOfficeConfig returns OnlyOffice configuration for editable share links
