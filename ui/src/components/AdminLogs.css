@@ -238,6 +238,7 @@
 
 .admin-logs-page .search-box input:focus {
   outline: none;
+  box-shadow: none;
 }
 
 .admin-logs-page .search-box input::placeholder {

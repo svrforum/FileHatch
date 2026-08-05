@@ -334,11 +334,6 @@ button {
   transition-timing-function: var(--ease-standard);
 }
 
-button:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -348,11 +343,6 @@ a {
   color: inherit;
   text-decoration: none;
   transition: color var(--transition-fast);
-}
-
-a:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
 }
 
 /* Form Elements */
@@ -411,7 +401,7 @@ input::placeholder, textarea::placeholder {
 }
 
 /* 모든 키보드 포커스에 컴포넌트 스타일보다 우선하는 접근성 fallback을 제공한다. */
-:focus-visible {
+:focus-visible:not(input, textarea, select) {
   outline: 2px solid var(--color-primary) !important;
   outline-offset: 2px !important;
 }

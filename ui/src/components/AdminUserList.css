@@ -210,6 +210,10 @@
   outline: none;
 }
 
+.admin-user-list-page .search-box input:focus {
+  box-shadow: none;
+}
+
 .admin-user-list-page .search-box input::placeholder {
   color: var(--text-tertiary);
 }
