@@ -1,0 +1,525 @@
+/* FileList responsive overrides */
+
+/* =================================
+   Mobile Responsive Styles
+   ================================= */
+
+@media (max-width: 768px) {
+  /* File List Wrapper */
+  .file-list-wrapper {
+    min-height: calc(100vh - var(--mobile-header-height) - 32px);
+    min-height: calc(100dvh - var(--mobile-header-height) - 32px);
+    overflow-x: hidden;
+  }
+
+  /* File List Container */
+  .file-list-container {
+    padding: 0;
+    min-height: calc(100vh - var(--mobile-header-height) - 32px);
+    min-height: calc(100dvh - var(--mobile-header-height) - 32px);
+    border-radius: 0;
+    box-shadow: none;
+    overflow-x: hidden;
+  }
+
+  /* File List Header - Mobile */
+  .file-list-header {
+    padding: var(--spacing-sm) var(--spacing-sm);
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .breadcrumb {
+    gap: var(--spacing-xs);
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    flex-wrap: wrap;
+  }
+
+  .back-btn {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+  }
+
+  .current-path {
+    font-size: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .file-count {
+    font-size: 12px;
+    margin-left: 0;
+    white-space: nowrap;
+    flex-basis: 100%;
+    color: var(--text-tertiary);
+  }
+
+  .view-options {
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  .view-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Local search - Mobile */
+  .local-search-container.active {
+    max-width: none;
+    width: 100%;
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .local-search-input-wrapper {
+    height: 40px;
+  }
+
+  /* Hide empty details panel on mobile - only show when file is selected */
+  .file-details-panel.empty {
+    display: none;
+  }
+
+  /* File Details Panel - Compact bottom sheet on mobile */
+  .file-details-panel:not(.empty) {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    max-height: 55vh;
+    height: auto;
+    z-index: var(--z-drawer);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+    animation: slideInUp 0.3s var(--ease-out-expo);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Drag handle indicator */
+  .file-details-panel:not(.empty)::before {
+    content: '';
+    position: sticky;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    display: block;
+    width: 36px;
+    height: 4px;
+    background: var(--border-medium);
+    border-radius: 2px;
+    margin: 8px auto 0;
+  }
+
+  /* Mobile overlay - clickable to close panel */
+  .mobile-panel-overlay {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: var(--z-drawer-backdrop);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  @keyframes slideInUp {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Compact header for bottom sheet */
+  .details-header {
+    padding: var(--spacing-sm) var(--spacing-md);
+    position: sticky;
+    top: 0;
+    background: var(--bg-primary);
+    z-index: var(--z-local-overlay);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .details-header h3 {
+    font-size: 14px;
+  }
+
+  /* Compact close button */
+  .file-details-panel:not(.empty) .close-details-btn {
+    width: 32px;
+    height: 32px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-full);
+  }
+
+  /* Compact icon area */
+  .details-icon {
+    padding: var(--spacing-sm);
+    display: none; /* Hide icon on mobile for compactness */
+  }
+
+  /* Compact thumbnail */
+  .details-thumbnail {
+    padding: var(--spacing-sm);
+  }
+
+  .details-thumbnail img {
+    max-height: 100px;
+  }
+
+  /* Compact file name */
+  .details-name {
+    font-size: 14px;
+    font-weight: 600;
+    padding: var(--spacing-xs) var(--spacing-md);
+  }
+
+  /* Compact details list - horizontal layout */
+  .details-list {
+    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-xs);
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .details-item {
+    gap: 2px;
+  }
+
+  .details-label {
+    font-size: 10px;
+  }
+
+  .details-value {
+    font-size: 12px;
+  }
+
+  .details-value.path {
+    font-size: 11px;
+    grid-column: 1 / -1;
+  }
+
+  /* Hide metadata section on mobile for compactness */
+  .details-metadata {
+    display: none;
+  }
+
+  /* Compact action buttons - horizontal row */
+  .details-actions {
+    padding: var(--spacing-sm) var(--spacing-md);
+    padding-bottom: calc(var(--spacing-sm) + env(safe-area-inset-bottom));
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    border-top: 1px solid var(--border-light);
+  }
+
+  .btn-detail-action {
+    flex: 1;
+    min-width: calc(50% - var(--spacing-xs));
+    padding: 10px 12px;
+    font-size: 13px;
+    min-height: 40px;
+  }
+
+  .btn-detail-action svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* File Table Header - Mobile */
+  .file-table-header {
+    grid-template-columns: 1fr 40px;
+    padding: var(--spacing-sm) var(--spacing-sm);
+  }
+
+  .file-table-header .col-size,
+  .file-table-header .col-date {
+    display: none;
+  }
+
+  /* File Row - Mobile optimized */
+  .file-row {
+    grid-template-columns: 1fr 40px;
+    padding: 12px var(--spacing-sm);
+    gap: var(--spacing-sm);
+    min-width: 0;
+  }
+
+  .col-name {
+    gap: var(--spacing-sm);
+  }
+
+  .file-icon {
+    flex-shrink: 0;
+  }
+
+  .file-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .file-name {
+    font-size: 14px;
+  }
+
+  /* Hide columns on mobile */
+  .file-row .col-size,
+  .file-row .col-date {
+    display: none;
+  }
+
+  .col-actions {
+    display: flex;
+  }
+
+  .action-btn {
+    opacity: 1;
+  }
+
+  /* Multi-select bar - Mobile */
+  .multi-select-bar {
+    left: var(--spacing-md);
+    right: var(--spacing-md);
+    bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom));
+    transform: none;
+    padding: 10px var(--spacing-md);
+    border-radius: var(--radius-lg);
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    justify-content: center;
+    z-index: var(--z-sticky);
+  }
+
+  .multi-action-btn {
+    padding: 10px 14px;
+    font-size: 13px;
+    min-height: 44px;
+  }
+
+  .select-count {
+    width: 100%;
+    text-align: center;
+    font-size: 13px;
+  }
+
+  /* Breadcrumb - Mobile */
+  .breadcrumb {
+    padding: var(--spacing-sm) var(--spacing-sm);
+    overflow: hidden;
+  }
+
+  .breadcrumb-item {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Toolbar - Mobile */
+  .file-toolbar {
+    padding: var(--spacing-sm) var(--spacing-sm);
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+  }
+
+  .toolbar-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+    min-height: 40px;
+  }
+
+  /* Empty state - Mobile */
+  .empty-state {
+    padding: var(--spacing-xl) var(--spacing-md);
+  }
+
+  .empty-icon svg {
+    width: 48px;
+    height: 48px;
+  }
+
+  .empty-title {
+    font-size: 16px;
+  }
+
+  .empty-description {
+    font-size: 13px;
+  }
+
+  .empty-action-btn {
+    padding: 12px 20px;
+    font-size: 14px;
+    min-height: 44px;
+  }
+
+  /* Metadata Section - Mobile */
+  .details-metadata {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .metadata-label {
+    font-size: 10px;
+    width: 36px;
+  }
+
+  .metadata-value {
+    font-size: 13px;
+  }
+
+  .tag-chip {
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+
+  /* Context Menu - Bottom sheet style on mobile */
+  .context-menu {
+    position: fixed;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    top: auto !important;
+    max-height: 70vh;
+    width: 100%;
+    min-width: 100%;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border: none;
+    border-top: 1px solid var(--border-light);
+    padding: var(--spacing-sm);
+    padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    animation: slideInUp 0.25s var(--ease-out-expo);
+  }
+
+  /* Drag handle for context menu */
+  .context-menu::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    background: var(--border-medium);
+    border-radius: 2px;
+    margin: 0 auto var(--spacing-xs);
+  }
+
+  /* Close button for context menu */
+  .context-menu-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: none;
+    border: none;
+    padding: 6px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: var(--z-content-raised);
+  }
+
+  .context-menu-close:active {
+    background: var(--bg-tertiary);
+  }
+
+  .context-menu-item {
+    padding: 14px 16px;
+    font-size: 15px;
+    min-height: 48px;
+    border-radius: var(--radius-md);
+  }
+
+  .context-menu-item svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Submenu displays inline on mobile */
+  .context-menu-item.has-submenu {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .context-menu-item.has-submenu > svg:first-child,
+  .context-menu-item.has-submenu > span:first-of-type {
+    display: none;
+  }
+
+  .submenu-arrow {
+    display: none;
+  }
+
+  .context-submenu {
+    position: static;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin-top: var(--spacing-xs);
+    min-width: 100%;
+  }
+
+  .context-submenu .context-menu-item {
+    padding-left: 24px;
+    background: var(--bg-secondary);
+  }
+
+  .context-menu-divider {
+    margin: var(--spacing-xs) 0;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 375px) {
+  .file-details-panel .details-actions {
+    flex-direction: column;
+  }
+
+  .multi-select-bar {
+    left: var(--spacing-sm);
+    right: var(--spacing-sm);
+  }
+
+  .multi-action-btn {
+    flex: 1;
+    min-width: calc(50% - var(--spacing-sm));
+  }
+}
+
+/* Selection mode checkbox */
+.selection-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.selection-checkbox svg {
+  transition: transform 0.15s ease;
+}
+
+.selection-checkbox.checked svg {
+  transform: scale(1.1);
+}

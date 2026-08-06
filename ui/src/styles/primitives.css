@@ -1,0 +1,166 @@
+/* FileHatch shared UI primitives.
+ * Feature styles may extend these classes, but should not redefine them globally.
+ */
+
+/* 기존 modal-* 이름은 마이그레이션 기간 동안 호환 alias로 유지한다. */
+:where(.fh-modal-overlay, .modal-overlay) {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-md);
+  background: var(--bg-overlay);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: var(--z-modal);
+  animation: fh-overlay-enter 0.2s var(--ease-out-expo);
+}
+
+:where(.fh-modal, .modal-content) {
+  position: relative;
+  width: min(90vw, 520px);
+  max-height: 85vh;
+  max-height: 85dvh;
+  overflow: hidden;
+  background: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-modal);
+  animation: fh-modal-enter var(--duration-spring) var(--spring);
+}
+
+.fh-modal__header,
+.fh-modal__footer {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-lg);
+}
+
+.fh-modal__header {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.fh-modal__body {
+  padding: var(--spacing-lg);
+  overflow-y: auto;
+}
+
+.fh-modal__footer {
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  border-top: 1px solid var(--border-light);
+}
+
+.fh-button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: 0 var(--spacing-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
+}
+
+.fh-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.fh-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.fh-button--primary {
+  color: var(--text-on-primary);
+  background: var(--btn-primary-gradient);
+  box-shadow: var(--shadow-primary);
+}
+
+.fh-button--secondary {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border-color: var(--border-light);
+}
+
+.fh-button--danger {
+  color: var(--text-on-primary);
+  background: var(--color-error);
+}
+
+.fh-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.fh-form-field__label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.fh-form-field__control {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--spacing-md);
+  color: var(--text-primary);
+  background: var(--color-form-bg);
+  border: 1px solid var(--color-form-border);
+  border-radius: var(--radius-sm);
+}
+
+.fh-form-field__control:focus-visible {
+  outline: 2px solid var(--color-form-border-focus);
+  outline-offset: 1px;
+}
+
+@keyframes fh-overlay-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fh-modal-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes fh-bottom-sheet-enter {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 480px) {
+  :where(.fh-modal-overlay, .modal-overlay) {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  :where(.fh-modal, .modal-content) {
+    width: 100%;
+    max-width: none;
+    max-height: 90vh;
+    max-height: 90dvh;
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+    animation: fh-bottom-sheet-enter var(--duration-spring) var(--ease-out-expo);
+  }
+}
