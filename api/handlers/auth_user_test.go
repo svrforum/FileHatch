@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/labstack/echo/v4"
@@ -291,4 +293,85 @@ func TestRequireClaims_Unauthenticated_ReturnsError(t *testing.T) {
 		t.Fatal("expected a non-nil error so callers short-circuit; got nil")
 	}
 	AssertStatus(t, tc.Recorder, http.StatusUnauthorized)
+}
+
+func TestAuthHandler_ListUsersReturnsPaginationAndLockState(t *testing.T) {
+	tc := SetupTest(t)
+	defer tc.Cleanup()
+
+	now := time.Now().UTC().Truncate(time.Second)
+	lockedUntil := now.Add(15 * time.Minute)
+	tc.Mock.ExpectQuery(regexp.QuoteMeta("SELECT COUNT(*) FROM users WHERE 1=1 AND locked_until IS NOT NULL AND locked_until > NOW()")).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	tc.Mock.ExpectQuery("SELECT id, username, email, provider, is_admin, is_active, smb_hash,[\\s\\S]+FROM users WHERE 1=1 AND locked_until IS NOT NULL").
+		WithArgs(25, 25).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "username", "email", "provider", "is_admin", "is_active", "smb_hash",
+			"totp_enabled", "storage_quota", "storage_used", "created_at", "updated_at",
+			"locked_until", "failed_login_count", "last_failed_login",
+		}).AddRow(
+			"user-1", "locked-user", nil, "local", false, true, nil,
+			false, int64(1024), int64(256), now, now, lockedUntil, 5, now,
+		))
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/admin/users?page=2&limit=25&status=locked", nil)
+	c := tc.Echo.NewContext(req, tc.Recorder)
+	if err := CreateTestAuthHandler(tc.DB).ListUsers(c); err != nil {
+		t.Fatalf("ListUsers() error = %v", err)
+	}
+
+	var response struct {
+		Users []User `json:"users"`
+		Total int    `json:"total"`
+		Page  int    `json:"page"`
+		Limit int    `json:"limit"`
+	}
+	if err := json.Unmarshal(tc.Recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Total != 1 || response.Page != 2 || response.Limit != 25 {
+		t.Fatalf("pagination = total:%d page:%d limit:%d", response.Total, response.Page, response.Limit)
+	}
+	if len(response.Users) != 1 || response.Users[0].LockedUntil == nil || response.Users[0].FailedLoginCount != 5 {
+		t.Fatalf("lock state not returned: %+v", response.Users)
+	}
+}
+
+func TestAuthHandler_ListUsersRejectsUnknownStatus(t *testing.T) {
+	tc := SetupTest(t)
+	defer tc.Cleanup()
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/admin/users?status=unexpected", nil)
+	c := tc.Echo.NewContext(req, tc.Recorder)
+	if err := CreateTestAuthHandler(tc.DB).ListUsers(c); err != nil {
+		t.Fatalf("ListUsers() error = %v", err)
+	}
+	AssertStatus(t, tc.Recorder, http.StatusBadRequest)
+}
+
+func TestAuthHandler_UpdateUserRejectsPasswordForSSOAccount(t *testing.T) {
+	tc := SetupTest(t)
+	defer tc.Cleanup()
+
+	handler := CreateTestAuthHandler(tc.DB)
+	tc.Mock.ExpectQuery(regexp.QuoteMeta(
+		"SELECT COALESCE(provider, 'local') FROM users WHERE id = $1",
+	)).WithArgs("sso-user-id").WillReturnRows(
+		sqlmock.NewRows([]string{"provider"}).AddRow("oidc"),
+	)
+
+	req, _ := NewJSONRequest(http.MethodPut, "/api/admin/users/sso-user-id", UpdateUserRequest{
+		Password: "Password123!",
+		IsActive: boolPointer(true),
+	})
+	c := tc.Echo.NewContext(req, tc.Recorder)
+	c.SetPath("/api/admin/users/:id")
+	c.SetParamNames("id")
+	c.SetParamValues("sso-user-id")
+
+	if err := handler.UpdateUser(c); err != nil {
+		t.Fatalf("UpdateUser() error = %v", err)
+	}
+	AssertStatus(t, tc.Recorder, http.StatusForbidden)
+	AssertJSONError(t, tc.Recorder, "SSO accounts cannot set a local password")
 }
