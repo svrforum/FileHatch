@@ -15,6 +15,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/svrforum/FileHatch/api/appconfig"
 	"github.com/svrforum/FileHatch/api/database"
 	_ "github.com/svrforum/FileHatch/api/docs" // Swagger docs
 	"github.com/svrforum/FileHatch/api/handlers"
@@ -22,39 +23,9 @@ import (
 	"golang.org/x/time/rate"
 )
 
-const dataRoot = "/data"
-
 // getCORSOrigins returns allowed CORS origins from environment or defaults
 func getCORSOrigins() []string {
-	origins := os.Getenv("CORS_ALLOWED_ORIGINS")
-	if origins == "" {
-		env := os.Getenv("FH_ENV")
-		if env == "production" {
-			log.Println("WARNING: CORS_ALLOWED_ORIGINS not set in production. Using restrictive defaults.")
-			// In production without explicit config, only allow same-origin
-			return []string{}
-		}
-		// Development defaults
-		log.Println("CORS: Using development defaults (localhost:3000, 3080, 5173)")
-		return []string{
-			"http://localhost:3000",
-			"http://localhost:3080",
-			"http://localhost:5173",
-			"http://127.0.0.1:3000",
-			"http://127.0.0.1:3080",
-			"http://127.0.0.1:5173",
-		}
-	}
-
-	// Parse comma-separated origins
-	originList := strings.Split(origins, ",")
-	result := make([]string, 0, len(originList))
-	for _, o := range originList {
-		o = strings.TrimSpace(o)
-		if o != "" {
-			result = append(result, o)
-		}
-	}
+	result := appconfig.AllowedOrigins()
 	log.Printf("CORS: Configured origins: %v", result)
 	return result
 }
@@ -93,6 +64,9 @@ func fixLocationHeader(location string, req *http.Request) string {
 }
 
 func main() {
+	dataRoot := appconfig.DataRoot()
+	configPath := appconfig.ConfigPath()
+
 	// Initialize Echo
 	e := echo.New()
 	e.HideBanner = true
@@ -113,6 +87,9 @@ func main() {
 	// Run database migrations automatically
 	if err := database.RunMigrations(db); err != nil {
 		log.Fatalf("Failed to run database migrations: %v", err)
+	}
+	if err := database.SecureInitialAdmin(db); err != nil {
+		log.Fatalf("Failed to secure initial admin account: %v", err)
 	}
 
 	// Create Settings handler early for middleware configuration
@@ -223,14 +200,17 @@ func main() {
 	uploadHandler.SetPermissionSource(h)
 
 	// Create SMB handler
-	smbHandler := handlers.NewSMBHandler(db, "/etc/filehatch")
+	smbHandler, err := handlers.NewSMBHandler(db, configPath, dataRoot)
+	if err != nil {
+		log.Fatalf("Failed to create SMB handler: %v", err)
+	}
 
 	// Create shutdown context for background goroutines
 	shutdownCtx, shutdownCancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer shutdownCancel()
 
 	// Create SMB Audit handler
-	smbAuditHandler := handlers.NewSMBAuditHandler(db, "/etc/filehatch")
+	smbAuditHandler := handlers.NewSMBAuditHandler(db, configPath)
 	// Start background sync every 30 seconds
 	smbAuditHandler.StartBackgroundSync(30*time.Second, shutdownCtx)
 
@@ -285,11 +265,8 @@ func main() {
 	// Create File Metadata handler (descriptions and tags)
 	fileMetadataHandler := handlers.NewFileMetadataHandler(db)
 
-	// Create SSO handler. It reuses the secret NewAuthHandler already resolved
-	// — this block used to re-read JWT_SECRET and fall back to the public
-	// development string on its own, so SSO-issued tokens could be signed with
-	// a different (and forgeable) key than the rest of the API.
-	ssoHandler := handlers.NewSSOHandler(db, string(handlers.SharedJWTSecret()), dataRoot)
+	// Create SSO handler with the same resolved signing key as AuthHandler.
+	ssoHandler := handlers.NewSSOHandler(db, string(authHandler.SigningKey()), dataRoot)
 
 	// Note: settingsHandler is already created earlier for middleware configuration
 
@@ -503,7 +480,10 @@ func main() {
 	adminApi.PUT("/admin/settings", settingsHandler.UpdateSettings)
 
 	// External Storage API (admin)
-	externalStorageHandler := handlers.NewExternalStorageHandler(db, dataRoot)
+	externalStorageHandler, err := handlers.NewExternalStorageHandler(db, dataRoot)
+	if err != nil {
+		log.Fatalf("Failed to create external storage handler: %v", err)
+	}
 	adminApi.POST("/admin/external-storages", externalStorageHandler.CreateExternalStorage)
 	adminApi.GET("/admin/external-storages", externalStorageHandler.ListExternalStorages)
 	adminApi.GET("/admin/external-storages/:id", externalStorageHandler.GetExternalStorage)

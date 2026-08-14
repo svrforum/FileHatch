@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/svrforum/FileHatch/api/appconfig"
 )
 
 // Permission levels for file shares
@@ -44,7 +45,7 @@ type FileShareHandler struct {
 func NewFileShareHandler(db *sql.DB, notificationService *NotificationService) *FileShareHandler {
 	return &FileShareHandler{
 		db:                  db,
-		auditHandler:        NewAuditHandler(db, "/data"),
+		auditHandler:        NewAuditHandler(db, appconfig.DataRoot()),
 		notificationService: notificationService,
 	}
 }

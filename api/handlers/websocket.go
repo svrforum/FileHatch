@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -13,23 +12,12 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
+	"github.com/svrforum/FileHatch/api/appconfig"
 )
 
 // getAllowedOrigins returns the list of allowed origins for WebSocket connections
 func getAllowedOrigins() []string {
-	origins := os.Getenv("ALLOWED_ORIGINS")
-	if origins == "" {
-		// Development defaults - allow common local development ports
-		return []string{
-			"http://localhost:3000",
-			"http://localhost:3080",
-			"http://localhost:5173",
-			"http://127.0.0.1:3000",
-			"http://127.0.0.1:3080",
-			"http://127.0.0.1:5173",
-		}
-	}
-	return strings.Split(origins, ",")
+	return appconfig.AllowedOrigins()
 }
 
 // isOriginAllowed checks if the origin is in the allowed list
@@ -65,7 +53,7 @@ func isOriginAllowed(origin string) bool {
 	}
 
 	// In development mode, be more permissive
-	if os.Getenv("FH_ENV") != "production" {
+	if !appconfig.IsProduction() {
 		log.Printf("WARNING: WebSocket connection from non-allowed origin: %s (allowed in development)", origin)
 		return true
 	}
@@ -96,7 +84,7 @@ type FileChangeEvent struct {
 type Client struct {
 	conn       *websocket.Conn
 	send       chan []byte
-	userID     string   // User ID for notification targeting
+	userID     string // User ID for notification targeting
 	username   string
 	watchPaths []string // Virtual paths this client is watching
 }
@@ -188,7 +176,7 @@ func BroadcastFileChange(event FileChangeEvent) {
 
 // NotificationEvent represents a notification message for WebSocket
 type NotificationEvent struct {
-	Type string       `json:"type"` // Always "notification"
+	Type string        `json:"type"` // Always "notification"
 	Data *Notification `json:"data"`
 }
 

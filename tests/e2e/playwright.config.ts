@@ -1,5 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
+if (process.env.E2E_ALLOW_MUTATION !== 'true') {
+  throw new Error(
+    'Mutation E2E tests are disabled. Set E2E_ALLOW_MUTATION=true only for an isolated test environment.',
+  );
+}
+
 /**
  * FileHatch E2E Test Configuration
  * @see https://playwright.dev/docs/test-configuration

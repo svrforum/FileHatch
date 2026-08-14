@@ -87,7 +87,10 @@ fi
 if [ "$CREATE_ENV" = true ]; then
     # 보안 키 생성
     JWT_SECRET=$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | xxd -p | tr -d '\n' | head -c 64)
-    ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | xxd -p | tr -d '\n' | head -c 64)
+    STORAGE_ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | xxd -p | tr -d '\n' | head -c 64)
+    SMB_ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | xxd -p | tr -d '\n' | head -c 64)
+    TOTP_ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | xxd -p | tr -d '\n' | head -c 64)
+    INITIAL_ADMIN_PASSWORD=$(openssl rand -base64 24 2>/dev/null | tr -d '/+=' | head -c 24 || head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 24)
     DB_PASS=$(openssl rand -base64 24 2>/dev/null | tr -d '/+=' | head -c 24 || head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 24)
 
     # .env.example을 기반으로 .env 생성
@@ -96,13 +99,17 @@ if [ "$CREATE_ENV" = true ]; then
 
         # 보안 키 설정
         sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$JWT_SECRET/" .env
-        sed -i "s/^ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$ENCRYPTION_KEY/" .env
+        sed -i "s/^INITIAL_ADMIN_PASSWORD=.*/INITIAL_ADMIN_PASSWORD=$INITIAL_ADMIN_PASSWORD/" .env
+        sed -i "s/^STORAGE_ENCRYPTION_KEY=.*/STORAGE_ENCRYPTION_KEY=$STORAGE_ENCRYPTION_KEY/" .env
+        sed -i "s/^SMB_ENCRYPTION_KEY=.*/SMB_ENCRYPTION_KEY=$SMB_ENCRYPTION_KEY/" .env
+        sed -i "s/^TOTP_ENCRYPTION_KEY=.*/TOTP_ENCRYPTION_KEY=$TOTP_ENCRYPTION_KEY/" .env
+        sed -i "s/^DB_USER=.*/DB_USER=fh_user/" .env
         sed -i "s/^DB_PASS=.*/DB_PASS=$DB_PASS/" .env
+        sed -i "s/^DB_NAME=.*/DB_NAME=fh_main/" .env
+        chmod 600 .env
 
         echo -e "  ${GREEN}✓ .env 파일이 생성되었습니다.${NC}"
-        echo -e "  ${GREEN}✓ JWT_SECRET이 자동 생성되었습니다.${NC}"
-        echo -e "  ${GREEN}✓ ENCRYPTION_KEY가 자동 생성되었습니다.${NC}"
-        echo -e "  ${GREEN}✓ DB_PASS가 자동 생성되었습니다.${NC}"
+        echo -e "  ${GREEN}✓ 용도별 보안 키와 초기 비밀번호가 .env에 생성되었습니다.${NC}"
     else
         echo -e "${RED}오류: .env.example 파일을 찾을 수 없습니다.${NC}"
         exit 1
@@ -205,11 +212,10 @@ echo -e "  웹 UI:    ${BLUE}http://localhost:3080${NC}"
 echo -e "  SMB:      ${BLUE}\\\\\\localhost\\home${NC} (Windows)"
 echo -e "            ${BLUE}smb://localhost/home${NC} (Mac/Linux)"
 echo ""
-echo -e "${YELLOW}기본 계정:${NC}"
+echo -e "${YELLOW}초기 관리자 계정:${NC}"
 echo -e "  사용자명: ${BLUE}admin${NC}"
-echo -e "  비밀번호: ${BLUE}admin1234${NC}"
-echo ""
-echo -e "${RED}⚠ 보안 주의: 프로덕션 환경에서는 반드시 admin 비밀번호를 변경하세요!${NC}"
+echo -e "  비밀번호: ${BLUE}.env의 INITIAL_ADMIN_PASSWORD 값${NC}"
+echo -e "  ${RED}⚠ 최초 로그인 후 관리자 이름과 비밀번호를 변경하세요.${NC}"
 echo ""
 echo -e "${YELLOW}유용한 명령어:${NC}"
 echo -e "  로그 확인:        ${BLUE}docker compose logs -f${NC}"

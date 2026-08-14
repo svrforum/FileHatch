@@ -11,7 +11,8 @@
 #      ./scripts/setup-keycloak.sh
 #
 # Keycloak Admin Console: http://${HOST_IP}:8080/auth
-# Admin credentials: admin / admin123
+# Admin credentials must be supplied with KEYCLOAK_ADMIN and
+# KEYCLOAK_ADMIN_PASSWORD. No production defaults are provided.
 
 services:
   # Keycloak Identity Provider
@@ -20,8 +21,8 @@ services:
     image: quay.io/keycloak/keycloak:26.5.1
     restart: unless-stopped
     environment:
-      - KEYCLOAK_ADMIN=admin
-      - KEYCLOAK_ADMIN_PASSWORD=admin123
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN:?KEYCLOAK_ADMIN is required for production SSO}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required for production SSO}
       - KC_HTTP_RELATIVE_PATH=/auth
       # KC_HOSTNAME must match the URL used by both browser and API container
       # This ensures token issuer consistency (critical for SSO to work)

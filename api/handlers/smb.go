@@ -30,30 +30,29 @@ func validateSMBConfigValue(field, value string) error {
 type SMBHandler struct {
 	db         *sql.DB
 	configPath string
+	dataRoot   string
 	crypto     *SMBCrypto
 }
 
-func NewSMBHandler(db *sql.DB, configPath string) *SMBHandler {
+func NewSMBHandler(db *sql.DB, configPath, dataRoot string) (*SMBHandler, error) {
 	crypto, err := NewSMBCrypto(configPath)
 	if err != nil {
-		fmt.Printf("Warning: Failed to initialize SMB encryption: %v\n", err)
-		// Continue without encryption in non-production
+		return nil, fmt.Errorf("initialize SMB encryption: %w", err)
 	}
 
 	handler := &SMBHandler{
 		db:         db,
 		configPath: configPath,
+		dataRoot:   dataRoot,
 		crypto:     crypto,
 	}
 
-	// Migrate existing plaintext passwords if crypto is available
-	if crypto != nil {
-		if err := crypto.MigrateFromPlaintext(); err != nil {
-			fmt.Printf("Warning: Failed to migrate SMB passwords: %v\n", err)
-		}
+	// 기존 평문 비밀번호 마이그레이션 실패는 서비스 시작을 막지 않는다.
+	if err := crypto.MigrateFromPlaintext(); err != nil {
+		fmt.Printf("Warning: Failed to migrate SMB passwords: %v\n", err)
 	}
 
-	return handler
+	return handler, nil
 }
 
 // IsSMBEnabled checks if SMB is enabled in system settings
@@ -92,6 +91,7 @@ type SMBConfig struct {
 	Workgroup   string `json:"workgroup"`
 	ServerName  string `json:"serverName"`
 	GuestAccess bool   `json:"guestAccess"`
+	DataRoot    string `json:"-"`
 }
 
 // SetPasswordRequest represents request to set SMB password
@@ -414,7 +414,7 @@ func (h *SMBHandler) UpdateSMBConfig(c echo.Context) error {
    max log size = 50
 
 [data]
-   path = /data
+   path = {{.DataRoot}}
    browseable = yes
    read only = no
    guest ok = {{if .GuestAccess}}yes{{else}}no{{end}}
@@ -439,6 +439,7 @@ func (h *SMBHandler) UpdateSMBConfig(c echo.Context) error {
 	}
 	defer f.Close()
 
+	config.DataRoot = h.dataRoot
 	if err := t.Execute(f, config); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Failed to generate config",

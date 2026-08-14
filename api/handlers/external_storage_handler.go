@@ -44,16 +44,18 @@ type ExternalStorageAccess struct {
 
 // ExternalStorageHandler handles external storage admin operations
 type ExternalStorageHandler struct {
-	db           *sql.DB
-	auditHandler *AuditHandler
+	db            *sql.DB
+	encryptionKey []byte
+	auditHandler  *AuditHandler
 }
 
 // NewExternalStorageHandler creates a new ExternalStorageHandler
-func NewExternalStorageHandler(db *sql.DB, dataRoot string) *ExternalStorageHandler {
+func NewExternalStorageHandler(db *sql.DB, dataRoot string) (*ExternalStorageHandler, error) {
 	return &ExternalStorageHandler{
-		db:           db,
-		auditHandler: NewAuditHandler(db, dataRoot),
-	}
+		db:            db,
+		encryptionKey: GetKeyring(purposeStorage).Primary(),
+		auditHandler:  NewAuditHandler(db, dataRoot),
+	}, nil
 }
 
 // reserved mount paths that cannot be used
@@ -121,7 +123,7 @@ func (h *ExternalStorageHandler) CreateExternalStorage(c echo.Context) error {
 	}
 
 	// Encrypt config
-	encryptedConfig, err := EncryptAESGCM(req.Config, getStorageEncryptionKey())
+	encryptedConfig, err := EncryptAESGCM(req.Config, h.encryptionKey)
 	if err != nil {
 		return RespondError(c, ErrInternal("Failed to encrypt configuration"))
 	}
@@ -231,7 +233,7 @@ func (h *ExternalStorageHandler) GetExternalStorage(c echo.Context) error {
 	}
 
 	// Decrypt config and mask sensitive fields
-	maskedConfig := maskConfig(configEncrypted, s.BackendType)
+	maskedConfig := maskConfig(configEncrypted, s.BackendType, h.encryptionKey)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"storage": s,
@@ -301,7 +303,7 @@ func (h *ExternalStorageHandler) UpdateExternalStorage(c echo.Context) error {
 		if err := validateExternalStorageConfig(backendType, *req.Config); err != nil {
 			return RespondError(c, ErrBadRequest(err.Error()))
 		}
-		encrypted, err := EncryptAESGCM(*req.Config, getStorageEncryptionKey())
+		encrypted, err := EncryptAESGCM(*req.Config, h.encryptionKey)
 		if err != nil {
 			return RespondError(c, ErrInternal("Failed to encrypt configuration"))
 		}
@@ -670,7 +672,7 @@ func validateExternalStorageConfig(backendType string, config json.RawMessage) e
 }
 
 // maskConfig decrypts config and masks sensitive fields
-func maskConfig(configEncrypted, backendType string) map[string]interface{} {
+func maskConfig(configEncrypted, backendType string, _ []byte) map[string]interface{} {
 	result := make(map[string]interface{})
 
 	configJSON, err := decryptStorageConfig(configEncrypted)

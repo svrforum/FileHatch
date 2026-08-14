@@ -14,6 +14,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
+	"github.com/svrforum/FileHatch/api/appconfig"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -26,10 +27,8 @@ type AuthHandler struct {
 	passwordPolicyProvider PasswordPolicyProvider
 }
 
-// Package-level JWT secret for shared access
+// 패키지 내부에서 공유하는 JWT 서명 키다.
 var sharedJWTSecret []byte
-
-const defaultConfigPath = "/etc/filehatch"
 
 // jwtSecretFile holds a secret generated on the operator's behalf when
 // JWT_SECRET was never set. It lives on the config volume so restarts keep
@@ -86,7 +85,8 @@ func SharedJWTSecret() []byte {
 }
 
 func NewAuthHandler(db *sql.DB, providers ...PasswordPolicyProvider) *AuthHandler {
-	configPath := defaultConfigPath
+	configPath := appconfig.ConfigPath()
+	dataRoot := appconfig.DataRoot()
 	secret := resolveJWTSecret(configPath)
 
 	var provider PasswordPolicyProvider = staticPasswordPolicyProvider{
@@ -100,9 +100,9 @@ func NewAuthHandler(db *sql.DB, providers ...PasswordPolicyProvider) *AuthHandle
 	return &AuthHandler{
 		db:                     db,
 		jwtSecret:              secret,
-		dataRoot:               "/data",
+		dataRoot:               dataRoot,
 		configPath:             configPath,
-		auditHandler:           NewAuditHandler(db, "/data"),
+		auditHandler:           NewAuditHandler(db, dataRoot),
 		passwordPolicyProvider: provider,
 	}
 }
@@ -132,6 +132,13 @@ func (h *AuthHandler) GetPasswordPolicy(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{"policy": policy})
 }
 
+// SigningKey는 SSO 토큰 발급에 사용할 JWT 서명 키 복사본을 반환한다.
+func (h *AuthHandler) SigningKey() []byte {
+	key := make([]byte, len(h.jwtSecret))
+	copy(key, h.jwtSecret)
+	return key
+}
+
 // GenerateJWT generates a JWT token for a user (exported for use by other handlers)
 func GenerateJWT(userID, username string, isAdmin bool) (string, error) {
 	return GenerateJWTWithExpiration(userID, username, isAdmin, false, 24*time.Hour)
@@ -139,6 +146,10 @@ func GenerateJWT(userID, username string, isAdmin bool) (string, error) {
 
 // GenerateJWTWithExpiration generates a JWT token with custom expiration duration
 func GenerateJWTWithExpiration(userID, username string, isAdmin, rememberMe bool, expiration time.Duration) (string, error) {
+	if len(sharedJWTSecret) == 0 {
+		return "", fmt.Errorf("JWT signing key is not configured")
+	}
+
 	claims := &JWTClaims{
 		UserID:     userID,
 		Username:   username,
@@ -157,7 +168,14 @@ func GenerateJWTWithExpiration(userID, username string, isAdmin, rememberMe bool
 
 // ValidateJWTToken validates a JWT token string (exported for use by other handlers)
 func ValidateJWTToken(tokenString string) (*jwt.Token, error) {
+	if len(sharedJWTSecret) == 0 {
+		return nil, fmt.Errorf("JWT signing key is not configured")
+	}
+
 	return jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, fmt.Errorf("unexpected JWT signing method: %s", token.Method.Alg())
+		}
 		return sharedJWTSecret, nil
 	})
 }
@@ -785,6 +803,9 @@ func (h *AuthHandler) JWTMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 
 		// Parse and validate token
 		token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+			if token.Method != jwt.SigningMethodHS256 {
+				return nil, fmt.Errorf("unexpected JWT signing method: %s", token.Method.Alg())
+			}
 			return h.jwtSecret, nil
 		})
 
@@ -833,6 +854,9 @@ func (h *AuthHandler) OptionalJWTMiddleware(next echo.HandlerFunc) echo.HandlerF
 		}
 
 		token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+			if token.Method != jwt.SigningMethodHS256 {
+				return nil, fmt.Errorf("unexpected JWT signing method: %s", token.Method.Alg())
+			}
 			return h.jwtSecret, nil
 		})
 

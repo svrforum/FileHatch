@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/svrforum/FileHatch/api/appconfig"
+
 	"github.com/labstack/echo/v4"
 )
 
@@ -25,14 +27,14 @@ type SMBAuditHandler struct {
 
 // SMBAuditEntry represents a parsed SMB audit log entry
 type SMBAuditEntry struct {
-	Timestamp   time.Time `json:"timestamp"`
-	Username    string    `json:"username"`
-	ClientIP    string    `json:"clientIp"`
-	Hostname    string    `json:"hostname"`
-	ShareName   string    `json:"shareName"`
-	Operation   string    `json:"operation"`
-	FilePath    string    `json:"filePath"`
-	RawMessage  string    `json:"rawMessage"`
+	Timestamp  time.Time `json:"timestamp"`
+	Username   string    `json:"username"`
+	ClientIP   string    `json:"clientIp"`
+	Hostname   string    `json:"hostname"`
+	ShareName  string    `json:"shareName"`
+	Operation  string    `json:"operation"`
+	FilePath   string    `json:"filePath"`
+	RawMessage string    `json:"rawMessage"`
 }
 
 // NewSMBAuditHandler creates a new SMBAuditHandler
@@ -40,7 +42,7 @@ func NewSMBAuditHandler(db *sql.DB, configPath string) *SMBAuditHandler {
 	return &SMBAuditHandler{
 		db:           db,
 		configPath:   configPath,
-		auditHandler: NewAuditHandler(db, "/data"),
+		auditHandler: NewAuditHandler(db, appconfig.DataRoot()),
 		lastPosition: 0,
 	}
 }
@@ -183,10 +185,17 @@ func (h *SMBAuditHandler) ProcessAuditLog() (int, error) {
 
 		// Build file path for audit log
 		auditPath := entry.FilePath
+		dataRoot := appconfig.DataRoot()
 		if entry.ShareName == "shared" {
-			auditPath = "/shared-drives" + strings.TrimPrefix(entry.FilePath, "/data/shared")
+			auditPath = "/shared-drives" + strings.TrimPrefix(
+				entry.FilePath,
+				filepath.Join(dataRoot, "shared"),
+			)
 		} else if entry.ShareName != "" {
-			auditPath = "/home/" + entry.Username + strings.TrimPrefix(entry.FilePath, "/data/users/"+entry.Username)
+			auditPath = "/home/" + entry.Username + strings.TrimPrefix(
+				entry.FilePath,
+				filepath.Join(dataRoot, "users", entry.Username),
+			)
 		}
 
 		// Log to audit table

@@ -21,22 +21,24 @@ services:
       - "localhost:host-gateway"
     environment:
       - TZ=${TZ:-Asia/Seoul}
+      # 개발 전용 기본값입니다. 운영은 docker-compose.yml의 필수 값을 사용합니다.
+      - FH_ENV=development
       - DB_HOST=${DB_HOST:-db}
       - DB_PORT=${DB_PORT:-5432}
-      - DB_USER=${DB_USER:-fh_user}
-      - DB_PASS=${DB_PASS:-fh_password}
-      - DB_NAME=${DB_NAME:-fh_main}
+      - DB_USER=${DB_USER:-fh_dev_user}
+      - DB_PASS=${DB_PASS:-fh_dev_password}
+      - DB_NAME=${DB_NAME:-fh_dev}
       - VALKEY_HOST=${VALKEY_HOST:-valkey}
       - VALKEY_PORT=${VALKEY_PORT:-6379}
       - JWT_SECRET=${JWT_SECRET:-}
-      # ENCRYPTION_KEY was documented but never read by the API; the code
-      # looks for these three names and otherwise falls back to keys that are
-      # hardcoded in the source.
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-admin1234}
+      # 비워 두면 개발용 config 볼륨에 임의 키가 생성되어 보존됩니다.
       - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:-}
       - SMB_ENCRYPTION_KEY=${SMB_ENCRYPTION_KEY:-}
       - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:-}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-*}
-      - ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_URL:-http://onlyoffice}
+      - API_INTERNAL_URL=${API_INTERNAL_URL:-http://api:8080}
+      - ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_INTERNAL_URL:-http://onlyoffice}
       - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - EXTERNAL_URL=${EXTERNAL_URL:-}
@@ -73,7 +75,7 @@ services:
     environment:
       - TZ=${TZ:-Asia/Seoul}
       - API_URL=http://api:8080
-      - ONLYOFFICE_URL=${ONLYOFFICE_URL:-http://onlyoffice}
+      - ONLYOFFICE_URL=${ONLYOFFICE_INTERNAL_URL:-http://onlyoffice}
       - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}
     depends_on:
       api:
@@ -114,13 +116,13 @@ services:
     restart: unless-stopped
     environment:
       - TZ=${TZ:-Asia/Seoul}
-      - POSTGRES_USER=${DB_USER:-fh_user}
-      - POSTGRES_PASSWORD=${DB_PASS:-fh_password}
-      - POSTGRES_DB=${DB_NAME:-fh_main}
+      - POSTGRES_USER=${DB_USER:-fh_dev_user}
+      - POSTGRES_PASSWORD=${DB_PASS:-fh_dev_password}
+      - POSTGRES_DB=${DB_NAME:-fh_dev}
     volumes:
       - ${DATABASE_PATH:-./database}:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-fh_user} -d ${DB_NAME:-fh_main}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-fh_dev_user} -d ${DB_NAME:-fh_dev}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -174,8 +176,8 @@ services:
       - "${KEYCLOAK_PORT:-8180}:8080"
     environment:
       - TZ=${TZ:-Asia/Seoul}
-      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN:-admin}
-      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin123}
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN:-dev-admin}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-dev-only-keycloak-password}
       - KC_HTTP_RELATIVE_PATH=/auth
       - KC_HOSTNAME=${KEYCLOAK_HOSTNAME:-localhost}
       - KC_HOSTNAME_PORT=${KEYCLOAK_PORT:-8180}

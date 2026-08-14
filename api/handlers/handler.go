@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/svrforum/FileHatch/api/appconfig"
 )
 
 // Handler is the main handler struct for file operations
@@ -24,7 +25,7 @@ type Handler struct {
 
 // NewHandler creates a new Handler instance
 func NewHandler(db *sql.DB) *Handler {
-	dataRoot := "/data"
+	dataRoot := appconfig.DataRoot()
 	return &Handler{
 		db:            db,
 		dataRoot:      dataRoot,
@@ -850,9 +851,9 @@ var mimeTypes = map[string]string{
 	// Documents
 	"pdf": "application/pdf", "doc": "application/msword",
 	"docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-	"xls": "application/vnd.ms-excel",
+	"xls":  "application/vnd.ms-excel",
 	"xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-	"ppt": "application/vnd.ms-powerpoint",
+	"ppt":  "application/vnd.ms-powerpoint",
 	"pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 	// Text
 	"txt": "text/plain", "md": "text/markdown", "json": "application/json",

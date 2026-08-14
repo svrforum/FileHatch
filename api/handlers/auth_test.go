@@ -13,6 +13,20 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+}
+
+func TestAuthHandler_SigningKeyReturnsCopy(t *testing.T) {
+	original := []byte("test-jwt-secret-for-testing-only-32chars")
+	handler := &AuthHandler{jwtSecret: original}
+
+	key := handler.SigningKey()
+	key[0] = 'X'
+
+	if original[0] == key[0] {
+		t.Fatal("SigningKey() exposed the handler's mutable key storage")
+	}
+}
+
 func TestLogin_Success(t *testing.T) {
 	tc := SetupTest(t)
 	defer tc.Cleanup()
