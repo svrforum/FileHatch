@@ -128,6 +128,30 @@
   color: var(--text-tertiary);
 }
 
+.login-form .password-field {
+  gap: 0;
+}
+
+.login-form .password-field-control input:not([type="checkbox"]) {
+  padding-right: 5.5rem;
+}
+
+.login-form .password-visibility-button {
+  min-width: 4rem;
+  min-height: 44px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.login-form .password-visibility-button:hover,
+.login-form .password-visibility-button:focus-visible {
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
 /* Remember Me Checkbox */
 .form-group.remember-me {
   margin-bottom: 10px;

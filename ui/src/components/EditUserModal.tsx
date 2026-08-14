@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { updateUser, adminReset2FA, User } from '../api/auth'
+import { updateUser, adminReset2FA, getPasswordPolicy, PasswordPolicy, User } from '../api/auth'
 import {
   getAllSharedFolders,
   getSharedFolderMembers,
@@ -12,6 +12,7 @@ import {
   PERMISSION_READ_WRITE,
 } from '../api/sharedFolders'
 import './EditUserModal.css'
+import PasswordField from './PasswordField'
 
 interface EditUserModalProps {
   isOpen: boolean
@@ -39,6 +40,7 @@ function EditUserModal({ isOpen, user, currentUserId, onClose, onUpdated }: Edit
   const [isAdmin, setIsAdmin] = useState(false)
   const [isActive, setIsActive] = useState(true)
   const [storageQuota, setStorageQuota] = useState<number>(0)
+  const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicy | null>(null)
 
   // Shared folders state
   const [sharedFolders, setSharedFolders] = useState<SharedFolder[]>([])
@@ -112,6 +114,7 @@ function EditUserModal({ isOpen, user, currentUserId, onClose, onUpdated }: Edit
       setError(null)
       setFolderSearch('')
       loadSharedFoldersAndPermissions()
+      void getPasswordPolicy().then(setPasswordPolicy).catch(() => setPasswordPolicy(null))
     }
   }, [user, isOpen])
 
@@ -185,8 +188,8 @@ function EditUserModal({ isOpen, user, currentUserId, onClose, onUpdated }: Edit
       return
     }
 
-    if (password && password.length < 8) {
-      setError('비밀번호는 8자 이상이어야 합니다')
+    if (passwordPolicy && password && password.length < passwordPolicy.minLength) {
+      setError(`비밀번호는 ${passwordPolicy.minLength}자 이상이어야 합니다`)
       return
     }
 
@@ -259,25 +262,30 @@ function EditUserModal({ isOpen, user, currentUserId, onClose, onUpdated }: Edit
             {/* Password Section */}
             <div className="form-section">
               <h3>비밀번호 변경</h3>
+              {user.provider !== 'local' && (
+                <p className="form-hint">SSO 전용 계정의 로컬 비밀번호는 이 화면에서 설정할 수 없습니다.</p>
+              )}
               <div className="form-row">
                 <div className="form-group">
-                  <label>새 비밀번호</label>
-                  <input
-                    type="password"
+                  <PasswordField
+                    label="새 비밀번호"
                     value={password}
-                    onChange={e => setPassword(e.target.value)}
+                    onChange={setPassword}
                     placeholder="변경 시에만 입력"
-                    minLength={8}
+                    minLength={passwordPolicy?.minLength}
+                    maxLength={passwordPolicy?.maxLength}
+                    disabled={user.provider !== 'local'}
                   />
                 </div>
                 <div className="form-group">
-                  <label>비밀번호 확인</label>
-                  <input
-                    type="password"
+                  <PasswordField
+                    label="비밀번호 확인"
                     value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
+                    onChange={setConfirmPassword}
                     placeholder="비밀번호 재입력"
-                    minLength={8}
+                    minLength={passwordPolicy?.minLength}
+                    maxLength={passwordPolicy?.maxLength}
+                    disabled={user.provider !== 'local'}
                   />
                 </div>
               </div>

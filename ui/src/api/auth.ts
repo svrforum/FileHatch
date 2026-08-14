@@ -4,7 +4,7 @@
  * Handles user authentication, profile management, 2FA, and SSO operations.
  */
 
-import { api } from './client'
+import { api, getAuthHeaders } from './client'
 
 // =============================================================================
 // User Types
@@ -23,6 +23,53 @@ export interface User {
   storageQuota: number  // 0 = unlimited
   storageUsed: number
   createdAt: string
+  lockedUntil?: string
+  failedLoginCount?: number
+  lastFailedLogin?: string
+}
+
+export interface PasswordPolicy {
+  minLength: number
+  maxLength: number
+  requireUppercase: boolean
+  requireLowercase: boolean
+  requireNumber: boolean
+  requireSpecial: boolean
+  minCharacterTypes: number
+  revision?: string
+}
+
+export interface UserImportRowResult {
+  row: number
+  username: string
+  status: 'created' | 'created_with_warning' | 'failed' | 'skipped' | 'valid'
+  code?: string
+  message?: string
+  retryable?: boolean
+}
+
+export interface UserImportSummary {
+  total: number
+  created: number
+  warnings: number
+  failed: number
+  skipped: number
+}
+
+export interface UserImportValidation {
+  digest: string
+  policyRevision: string
+  expiresAt: string
+  summary: UserImportSummary
+  rows: UserImportRowResult[]
+}
+
+export interface UserImportJob extends UserImportValidation {
+  id: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  resultTotal?: number
+  offset?: number
+  limit?: number
 }
 
 export interface LoginRequest {
@@ -147,6 +194,14 @@ export async function login(data: LoginRequest): Promise<AuthResponse> {
   return api.post<AuthResponse>('/auth/login', data, { noAuth: true })
 }
 
+export async function getPasswordPolicy(): Promise<PasswordPolicy> {
+  const result = await api.get<PasswordPolicy | { policy: PasswordPolicy }>(
+    '/auth/password-policy',
+    { noAuth: true }
+  )
+  return 'policy' in result ? result.policy : result
+}
+
 /**
  * Complete initial admin setup
  * Requires temporary token from login response
@@ -267,8 +322,73 @@ export async function regenerateBackupCodes(_token?: string): Promise<{ backupCo
  * List all users (admin only)
  * @param _token - Deprecated, token is now handled automatically
  */
-export async function listUsers(_token?: string): Promise<{ users: User[]; total: number }> {
-  return api.get<{ users: User[]; total: number }>('/admin/users')
+export async function listUsers(
+  _token?: string,
+  options: { page?: number; limit?: number; search?: string; status?: string } = {}
+): Promise<{ users: User[]; total: number; page?: number; limit?: number }> {
+  const params = new URLSearchParams()
+  if (options.page) params.set('page', String(options.page))
+  if (options.limit) params.set('limit', String(options.limit))
+  if (options.search) params.set('search', options.search)
+  if (options.status && options.status !== 'all') params.set('status', options.status)
+  const query = params.toString()
+  return api.get(`/admin/users${query ? `?${query}` : ''}`)
+}
+
+export async function unlockUser(username: string): Promise<{ changed: boolean }> {
+  return api.delete<{ changed: boolean }>(
+    `/admin/security/locked-users/${encodeURIComponent(username)}`
+  )
+}
+
+export async function downloadUserImportTemplate(): Promise<Blob> {
+  const response = await fetch('/api/admin/users/import-template', {
+    credentials: 'include',
+    headers: getAuthHeaders(),
+  })
+  if (!response.ok) throw new Error('CSV 양식을 내려받지 못했습니다')
+  return response.blob()
+}
+
+function importFormData(file: File): FormData {
+  const data = new FormData()
+  data.append('file', file)
+  return data
+}
+
+export async function validateUserImport(file: File): Promise<UserImportValidation> {
+  return api.post<UserImportValidation>('/admin/users/import/validate', importFormData(file))
+}
+
+export async function createUserImportJob(
+  file: File,
+  idempotencyKey: string,
+  validation: Pick<UserImportValidation, 'digest' | 'policyRevision'>
+): Promise<{ importJobId: string }> {
+  const form = importFormData(file)
+  form.append('digest', validation.digest)
+  form.append('policyRevision', validation.policyRevision)
+  return api.post('/admin/users/import-jobs', form, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  })
+}
+
+export async function getUserImportJob(id: string, offset = 0, limit = 100): Promise<UserImportJob> {
+  return api.get<UserImportJob>(
+    `/admin/users/import-jobs/${encodeURIComponent(id)}?offset=${offset}&limit=${limit}`
+  )
+}
+
+export async function cancelUserImportJob(id: string): Promise<void> {
+  await api.delete(`/admin/users/import-jobs/${encodeURIComponent(id)}`)
+}
+
+export async function downloadUserImportResult(id: string): Promise<Blob> {
+  const response = await fetch(`/api/admin/users/import-jobs/${encodeURIComponent(id)}/result`, {
+    headers: getAuthHeaders(),
+  })
+  if (!response.ok) throw new Error('등록 결과를 내려받지 못했습니다')
+  return response.blob()
 }
 
 /**

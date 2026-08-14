@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -33,20 +34,63 @@ type UpdateUserRequest struct {
 	StorageQuota *int64 `json:"storageQuota,omitempty"` // nil = don't change, 0 = unlimited
 }
 
-// ListUsers returns all users (admin only)
+// ListUsers returns a server-paginated user list (admin only).
 func (h *AuthHandler) ListUsers(c echo.Context) error {
 	// storage_used comes from the column the upload/delete paths already
 	// maintain. It used to be recomputed per user with a full filepath.Walk of
 	// their home directory, inside the rows.Next() loop — so listing N users
 	// walked N home trees while holding the cursor (and one of 25 pooled
 	// connections) open.
-	rows, err := h.db.Query(`
+	page, err := strconv.Atoi(c.QueryParam("page"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	limit, err := strconv.Atoi(c.QueryParam("limit"))
+	if err != nil || limit < 1 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	search := strings.TrimSpace(c.QueryParam("search"))
+	status := strings.TrimSpace(c.QueryParam("status"))
+	where := " WHERE 1=1"
+	args := []interface{}{}
+	if search != "" {
+		args = append(args, "%"+search+"%")
+		where += fmt.Sprintf(" AND (username ILIKE $%d OR COALESCE(email, '') ILIKE $%d)", len(args), len(args))
+	}
+	switch status {
+	case "", "all":
+	case "active":
+		where += " AND is_active = true"
+	case "inactive":
+		where += " AND is_active = false"
+	case "admin":
+		where += " AND is_admin = true"
+	case "locked":
+		where += " AND locked_until IS NOT NULL AND locked_until > NOW()"
+	default:
+		return RespondError(c, ErrBadRequest("Invalid user status filter"))
+	}
+
+	var total int
+	if err := h.db.QueryRow("SELECT COUNT(*) FROM users"+where, args...).Scan(&total); err != nil {
+		return RespondError(c, ErrInternal("Database error"))
+	}
+
+	args = append(args, limit, (page-1)*limit)
+	query := fmt.Sprintf(`
 		SELECT id, username, email, provider, is_admin, is_active, smb_hash,
-		       COALESCE(totp_enabled, false), storage_quota,
-		       COALESCE(storage_used, 0), created_at, updated_at
-		FROM users
+		       COALESCE(totp_enabled, false), storage_quota, COALESCE(storage_used, 0),
+		       created_at, updated_at, locked_until,
+		       COALESCE(failed_login_count, 0), last_failed_login
+		FROM users%s
 		ORDER BY created_at DESC
-	`)
+		LIMIT $%d OFFSET $%d
+	`, where, len(args)-1, len(args))
+	rows, err := h.db.Query(query, args...)
 	if err != nil {
 		return RespondError(c, ErrInternal("Database error"))
 	}
@@ -60,11 +104,12 @@ func (h *AuthHandler) ListUsers(c echo.Context) error {
 		var smbHash sql.NullString
 		var totpEnabled bool
 		var storageQuota sql.NullInt64
-		var storageUsed int64
+		var lockedUntil sql.NullTime
+		var lastFailedLogin sql.NullTime
 
 		err := rows.Scan(&user.ID, &user.Username, &email, &provider, &user.IsAdmin,
-			&user.IsActive, &smbHash, &totpEnabled, &storageQuota, &storageUsed,
-			&user.CreatedAt, &user.UpdatedAt)
+			&user.IsActive, &smbHash, &totpEnabled, &storageQuota, &user.StorageUsed,
+			&user.CreatedAt, &user.UpdatedAt, &lockedUntil, &user.FailedLoginCount, &lastFailedLogin)
 		if err != nil {
 			continue
 		}
@@ -82,14 +127,21 @@ func (h *AuthHandler) ListUsers(c echo.Context) error {
 		if storageQuota.Valid {
 			user.StorageQuota = storageQuota.Int64
 		}
-		user.StorageUsed = storageUsed
+		if lockedUntil.Valid {
+			user.LockedUntil = &lockedUntil.Time
+		}
+		if lastFailedLogin.Valid {
+			user.LastFailedLogin = &lastFailedLogin.Time
+		}
 
 		users = append(users, user)
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"users": users,
-		"total": len(users),
+		"total": total,
+		"page":  page,
+		"limit": limit,
 	})
 }
 
@@ -99,6 +151,7 @@ func (h *AuthHandler) CreateUser(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
+	req.Username = strings.TrimSpace(req.Username)
 
 	// The username becomes a path segment under /data/users, so it needs the
 	// character and reserved-word checks, not just a length check: a length
@@ -109,8 +162,8 @@ func (h *AuthHandler) CreateUser(c echo.Context) error {
 	}
 
 	// Validate password complexity
-	if err := ValidatePassword(req.Password); err != nil {
-		return RespondError(c, ErrBadRequest(err.Error()))
+	if err := h.validateWebPassword(c, req.Password); err != nil {
+		return RespondError(c, err)
 	}
 
 	// Validate email format
@@ -257,9 +310,24 @@ func (h *AuthHandler) UpdateUser(c echo.Context) error {
 	}
 
 	if req.Password != "" {
+		var provider string
+		err := h.db.QueryRow(
+			"SELECT COALESCE(provider, 'local') FROM users WHERE id = $1",
+			userID,
+		).Scan(&provider)
+		if err == sql.ErrNoRows {
+			return RespondError(c, ErrNotFound("User"))
+		}
+		if err != nil {
+			return RespondError(c, ErrInternal("Database error"))
+		}
+		if provider != "local" {
+			return RespondError(c, ErrForbidden("SSO accounts cannot set a local password"))
+		}
+
 		// Validate password complexity
-		if err := ValidatePassword(req.Password); err != nil {
-			return RespondError(c, ErrBadRequest(err.Error()))
+		if err := h.validateWebPassword(c, req.Password); err != nil {
+			return RespondError(c, err)
 		}
 		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
@@ -283,6 +351,9 @@ func (h *AuthHandler) UpdateUser(c echo.Context) error {
 
 	args = append(args, userID)
 	query := "UPDATE users SET " + strings.Join(updates, ", ") + fmt.Sprintf(" WHERE id = $%d", argCount)
+	if req.Password != "" {
+		query += " AND COALESCE(provider, 'local') = 'local'"
+	}
 
 	result, err := h.db.Exec(query, args...)
 	if err != nil {

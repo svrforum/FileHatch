@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { getSSOProviders, getSSOAuthURL, SSOProviderPublic } from '../api/auth'
 import InitialSetupModal from './InitialSetupModal'
+import PasswordField from './PasswordField'
 import './LoginPage.css'
 
 // Provider icons
@@ -274,12 +275,10 @@ function LoginPage() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="password">비밀번호</label>
-              <input
-                id="password"
-                type="password"
+              <PasswordField
+                label="비밀번호"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={setPassword}
                 placeholder="비밀번호를 입력하세요"
                 required
                 autoComplete="current-password"

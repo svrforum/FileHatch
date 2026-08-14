@@ -107,11 +107,12 @@ func CreateTestAuthHandler(db *sql.DB) *AuthHandler {
 	}
 
 	return &AuthHandler{
-		db:           db,
-		jwtSecret:    []byte("test-jwt-secret-for-testing-only-32chars"),
-		dataRoot:     "/tmp/test-data",
-		configPath:   "/tmp/test-config",
-		auditHandler: &AuditHandler{db: db, baseStoragePath: "/tmp/test-data"},
+		db:                     db,
+		jwtSecret:              []byte("test-jwt-secret-for-testing-only-32chars"),
+		dataRoot:               "/tmp/test-data",
+		configPath:             "/tmp/test-config",
+		auditHandler:           &AuditHandler{db: db, baseStoragePath: "/tmp/test-data"},
+		passwordPolicyProvider: staticPasswordPolicyProvider{policy: DefaultPasswordPolicy()},
 	}
 }
 

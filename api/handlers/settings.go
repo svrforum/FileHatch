@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -14,9 +17,29 @@ import (
 
 // SettingsHandler handles system settings operations
 type SettingsHandler struct {
-	db    *sql.DB
-	cache map[string]settingsCacheEntry
-	mu    sync.RWMutex
+	db             *sql.DB
+	cache          map[string]settingsCacheEntry
+	mu             sync.RWMutex
+	passwordPolicy atomic.Pointer[PasswordPolicy]
+	auditHandler   *AuditHandler
+}
+
+// SetAuditHandler enables password-policy change audit events.
+func (h *SettingsHandler) SetAuditHandler(auditHandler *AuditHandler) {
+	h.auditHandler = auditHandler
+}
+
+// GetPasswordPolicy returns the latest complete policy snapshot.
+func (h *SettingsHandler) GetPasswordPolicy(ctx context.Context) (PasswordPolicy, error) {
+	policy, err := loadPasswordPolicy(ctx, h.db)
+	if err != nil {
+		if cached := h.passwordPolicy.Load(); cached != nil {
+			return *cached, nil
+		}
+		return PasswordPolicy{}, err
+	}
+	h.passwordPolicy.Store(&policy)
+	return policy, nil
 }
 
 type settingsCacheEntry struct {
@@ -271,9 +294,37 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 		})
 	}
 
-	// Update each setting
+	policySettings, err := selectPasswordPolicySettings(req.Settings)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	var oldPolicy, newPolicy PasswordPolicy
+	if len(policySettings) > 0 {
+		oldPolicy, err = h.GetPasswordPolicy(c.Request().Context())
+		if err != nil {
+			return c.JSON(http.StatusServiceUnavailable, map[string]string{
+				"error": "Password policy is temporarily unavailable",
+			})
+		}
+		newPolicy = oldPolicy
+		if err := applyPasswordPolicyValues(&newPolicy, policySettings); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		if err := ValidatePasswordPolicy(newPolicy); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+	}
+
+	tx, err := h.db.BeginTx(c.Request().Context(), nil)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to update settings",
+		})
+	}
+	defer tx.Rollback()
+
 	for key, value := range req.Settings {
-		_, err := h.db.Exec(`
+		_, err := tx.ExecContext(c.Request().Context(), `
 			INSERT INTO system_settings (key, value, updated_by, updated_at)
 			VALUES ($1, $2, $3, NOW())
 			ON CONFLICT (key) DO UPDATE
@@ -285,11 +336,19 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 				"error": "Failed to update settings",
 			})
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to update settings",
+		})
+	}
 
-		// Invalidate cache
+	if len(policySettings) > 0 {
+		newPolicy.Revision = time.Now().UTC().Format(time.RFC3339Nano)
+		h.passwordPolicy.Store(&newPolicy)
+	}
+	for key, value := range req.Settings {
 		h.InvalidateCache(key)
-
-		// Handle SMB container control
 		if key == "smb_enabled" {
 			if err := controlSambaContainer(value == "true"); err != nil {
 				fmt.Printf("Warning: Failed to control Samba container: %v\n", err)
@@ -297,10 +356,59 @@ func (h *SettingsHandler) UpdateSettings(c echo.Context) error {
 		}
 	}
 
+	if h.auditHandler != nil && len(policySettings) > 0 && passwordPolicyChanged(oldPolicy, newPolicy) {
+		h.auditHandler.LogEventFromContext(
+			c,
+			"security.password_policy_updated",
+			"password_policy",
+			map[string]interface{}{
+				"before": passwordPolicyAuditDetails(oldPolicy),
+				"after":  passwordPolicyAuditDetails(newPolicy),
+			},
+		)
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
 		"updated": len(req.Settings),
 	})
+}
+
+func selectPasswordPolicySettings(settings map[string]string) (map[string]string, error) {
+	knownKeys := make(map[string]struct{}, len(passwordPolicyKeys))
+	for _, key := range passwordPolicyKeys {
+		knownKeys[key] = struct{}{}
+	}
+
+	selected := make(map[string]string, len(passwordPolicyKeys))
+	for key, value := range settings {
+		_, known := knownKeys[key]
+		if strings.HasPrefix(key, "password_") && !known {
+			return nil, fmt.Errorf("unsupported password policy setting: %s", key)
+		}
+		if known {
+			selected[key] = value
+		}
+	}
+	return selected, nil
+}
+
+func passwordPolicyChanged(before, after PasswordPolicy) bool {
+	before.Revision = ""
+	after.Revision = ""
+	return before != after
+}
+
+func passwordPolicyAuditDetails(policy PasswordPolicy) map[string]interface{} {
+	return map[string]interface{}{
+		"minLength":         policy.MinLength,
+		"maxLength":         policy.MaxLength,
+		"requireUppercase":  policy.RequireUppercase,
+		"requireLowercase":  policy.RequireLowercase,
+		"requireNumber":     policy.RequireNumber,
+		"requireSpecial":    policy.RequireSpecial,
+		"minCharacterTypes": policy.MinCharacterTypes,
+	}
 }
 
 // GetTrashSettings returns trash-related settings for the stats API

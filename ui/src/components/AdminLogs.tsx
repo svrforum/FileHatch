@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import './AdminLogs.css'
 
-type LogTab = 'file' | 'user' | 'admin' | 'system'
+type LogTab = 'file' | 'activity' | 'access' | 'admin' | 'system'
 type LogLevel = 'all' | 'info' | 'warn' | 'error' | 'fatal'
 type DatePreset = 'all' | 'today' | 'yesterday' | 'week' | 'month' | 'custom'
 
@@ -71,7 +71,8 @@ function AdminLogs() {
   const { user: currentUser, token } = useAuthStore()
   const [activeTab, setActiveTab] = useState<LogTab>(() => {
     const saved = localStorage.getItem('admin-logs-tab')
-    return (saved === 'file' || saved === 'user' || saved === 'admin' || saved === 'system') ? saved : 'file'
+    if (saved === 'user') return 'activity'
+    return (saved === 'file' || saved === 'activity' || saved === 'access' || saved === 'admin' || saved === 'system') ? saved : 'file'
   })
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([])
   const [systemLogs, setSystemLogs] = useState<SystemLogEntry[]>([])
@@ -146,6 +147,9 @@ function AdminLogs() {
       if (endDate) {
         url += `&endDate=${endDate}`
       }
+      if (searchQuery.trim()) {
+        url += `&search=${encodeURIComponent(searchQuery.trim())}`
+      }
 
       const response = await fetch(url, {
         headers: {
@@ -182,7 +186,7 @@ function AdminLogs() {
     } finally {
       setLoading(false)
     }
-  }, [activeTab, token, currentPage, eventTypeFilter, startDate, endDate])
+  }, [activeTab, token, currentPage, eventTypeFilter, startDate, endDate, searchQuery])
 
   const loadSystemLogs = useCallback(async () => {
     setLoading(true)
@@ -241,7 +245,13 @@ function AdminLogs() {
   )
 
   // Get unique event types for filter
-  const eventTypes = Array.from(new Set(auditLogs.map(log => log.eventType))).sort()
+  const accessEventTypes = [
+    'user.login', 'sso_login', 'security.login_failed', 'security.login_blocked',
+    'security.account_locked', 'security.account_unlocked', 'security.ip_locked',
+  ]
+  const eventTypes = activeTab === 'access'
+    ? accessEventTypes
+    : Array.from(new Set(auditLogs.map(log => log.eventType))).sort()
 
   const getEventTypeLabel = (eventType: string) => {
     const labels: Record<string, string> = {
@@ -265,6 +275,12 @@ function AdminLogs() {
       'smb_rename': 'SMB 이름변경',
       'smb_read': 'SMB 읽기',
       'user.login': '로그인',
+      'sso_login': 'SSO 로그인',
+      'security.login_failed': '로그인 실패',
+      'security.login_blocked': '잠긴 계정 로그인 차단',
+      'security.account_locked': '계정 잠금',
+      'security.account_unlocked': '관리자 잠금 해제',
+      'security.ip_locked': 'IP 잠금',
       'user.logout': '로그아웃',
       'share.create': '공유 생성',
       'share.access': '공유 접근',
@@ -283,6 +299,7 @@ function AdminLogs() {
 
   const getActionColor = (eventType: string) => {
     if (eventType.includes('login')) return 'action-login'
+    if (eventType.includes('locked') || eventType.includes('blocked')) return 'action-delete'
     if (eventType.includes('logout')) return 'action-logout'
     if (eventType.includes('upload') || eventType.includes('create')) return 'action-upload'
     if (eventType.includes('download') || eventType.includes('view')) return 'action-download'
@@ -308,6 +325,13 @@ function AdminLogs() {
     if (log.details?.source === 'smb') {
       return `${log.details.fileName || log.targetResource} (SMB)`
     }
+    const reasonLabels: Record<string, string> = {
+      user_not_found: '존재하지 않는 사용자',
+      invalid_password: '비밀번호 불일치',
+      max_attempts: '최대 시도 횟수 초과',
+    }
+    const reason = typeof log.details?.reason === 'string' ? reasonLabels[log.details.reason] : undefined
+    if (reason) return `${log.targetResource} · ${reason}`
     return log.targetResource
   }
 
@@ -452,12 +476,22 @@ function AdminLogs() {
           파일 감사 로그
         </button>
         <button
-          className={`tab-btn ${activeTab === 'user' ? 'active' : ''}`}
-          onClick={() => handleTabChange('user')}
+          className={`tab-btn ${activeTab === 'activity' ? 'active' : ''}`}
+          onClick={() => handleTabChange('activity')}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2"/>
+          </svg>
+          사용자·공유 활동
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'access' ? 'active' : ''}`}
+          onClick={() => handleTabChange('access')}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 2L20 6V12C20 17 16.5 20.5 12 22C7.5 20.5 4 17 4 12V6L12 2Z" stroke="currentColor" strokeWidth="2"/>
+            <path d="M9 12L11 14L15 10" stroke="currentColor" strokeWidth="2"/>
           </svg>
           접속 이력
         </button>
@@ -647,7 +681,8 @@ function AdminLogs() {
               </svg>
               <h3>
                 {activeTab === 'file' ? '파일 감사 로그가 없습니다' :
-                 activeTab === 'user' ? '접속 이력이 없습니다' : '관리자 로그가 없습니다'}
+                 activeTab === 'activity' ? '사용자·공유 활동이 없습니다' :
+                 activeTab === 'access' ? '접속 이력이 없습니다' : '관리자 로그가 없습니다'}
               </h3>
               <p>선택한 기간에 기록된 로그가 없습니다.</p>
             </div>

@@ -367,7 +367,7 @@ func TestSanitizeFilename_RemovesDangerousChars(t *testing.T) {
 
 func TestValidateEmail_ValidEmails(t *testing.T) {
 	validEmails := []string{
-		"",  // Empty is allowed (optional)
+		"", // Empty is allowed (optional)
 		"user@example.com",
 		"user.name@example.com",
 		"user+tag@example.com",
@@ -465,6 +465,104 @@ func TestValidatePassword_InsufficientComplexity(t *testing.T) {
 			err := ValidatePassword(tc.password)
 			if err == nil {
 				t.Errorf("ValidatePassword(%q) should reject insufficient complexity", tc.password)
+			}
+		})
+	}
+}
+
+func TestValidatePasswordWithPolicy_Boundaries(t *testing.T) {
+	tests := []struct {
+		name     string
+		password string
+		policy   PasswordPolicy
+		wantErr  bool
+	}{
+		{
+			name:     "72 ASCII bytes accepted",
+			password: "Aa1!" + strings.Repeat("x", 68),
+			policy:   DefaultPasswordPolicy(),
+		},
+		{
+			name:     "73 ASCII bytes rejected",
+			password: "Aa1!" + strings.Repeat("x", 69),
+			policy:   DefaultPasswordPolicy(),
+			wantErr:  true,
+		},
+		{
+			name:     "multibyte input exceeding bcrypt limit rejected",
+			password: "Aa1!" + strings.Repeat("가", 23),
+			policy:   DefaultPasswordPolicy(),
+			wantErr:  true,
+		},
+		{
+			name:     "control character rejected",
+			password: "Password1!\n",
+			policy:   DefaultPasswordPolicy(),
+			wantErr:  true,
+		},
+		{
+			name:     "individual requirements and type count accepted",
+			password: "abcdefgh1",
+			policy: PasswordPolicy{
+				MinLength:         8,
+				MaxLength:         72,
+				RequireLowercase:  true,
+				RequireNumber:     true,
+				MinCharacterTypes: 2,
+			},
+		},
+		{
+			name:     "individual requirement enforced above type count",
+			password: "abcdefgh1",
+			policy: PasswordPolicy{
+				MinLength:         8,
+				MaxLength:         72,
+				RequireUppercase:  true,
+				MinCharacterTypes: 2,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidatePasswordWithPolicy(tt.password, tt.policy)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ValidatePasswordWithPolicy() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidatePasswordPolicy(t *testing.T) {
+	tests := []struct {
+		name    string
+		policy  PasswordPolicy
+		wantErr bool
+	}{
+		{name: "default accepted", policy: DefaultPasswordPolicy()},
+		{
+			name:    "minimum below supported range",
+			policy:  PasswordPolicy{MinLength: 7, MaxLength: 72, MinCharacterTypes: 3},
+			wantErr: true,
+		},
+		{
+			name:    "maximum below minimum",
+			policy:  PasswordPolicy{MinLength: 12, MaxLength: 8, MinCharacterTypes: 3},
+			wantErr: true,
+		},
+		{
+			name:    "character types above four",
+			policy:  PasswordPolicy{MinLength: 8, MaxLength: 72, MinCharacterTypes: 5},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidatePasswordPolicy(tt.policy)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ValidatePasswordPolicy() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

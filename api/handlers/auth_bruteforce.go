@@ -202,8 +202,9 @@ func (g *BruteForceGuard) CheckAndRecordAttempt(ctx context.Context, ip, usernam
 	// 3. IP 시도 횟수 확인
 	ipAttempts := g.getAttemptCount(ctx, "ip:"+ip)
 	if ipAttempts >= g.config.IPMaxAttempts {
-		g.lockIP(ctx, ip)
-		g.logLockEvent(nil, ip, "ip", "max_attempts")
+		if g.lockIP(ctx, ip) {
+			g.logLockEvent(nil, ip, "ip", "max_attempts")
+		}
 		return false, "너무 많은 로그인 시도로 IP가 잠겼습니다", 0
 	}
 
@@ -212,8 +213,9 @@ func (g *BruteForceGuard) CheckAndRecordAttempt(ctx context.Context, ip, usernam
 		userAttempts := g.getAttemptCount(ctx, "user:"+username)
 		remaining := g.config.MaxAttempts - userAttempts
 		if userAttempts >= g.config.MaxAttempts {
-			g.lockUser(ctx, username)
-			g.logLockEvent(&username, ip, "user", "max_attempts")
+			if g.lockUser(ctx, username) {
+				g.logLockEvent(&username, ip, "user", "max_attempts")
+			}
 			return false, "로그인 시도 횟수 초과로 계정이 잠겼습니다", 0
 		}
 		return true, "", remaining
@@ -246,16 +248,18 @@ func (g *BruteForceGuard) RecordFailedAttempt(ctx context.Context, ip, username 
 		// 잠금 임계값 도달 여부 확인
 		count := g.getAttemptCount(ctx, "user:"+username)
 		if count >= g.config.MaxAttempts {
-			g.lockUser(ctx, username)
-			g.logLockEvent(&username, ip, "user", "max_attempts")
+			if g.lockUser(ctx, username) {
+				g.logLockEvent(&username, ip, "user", "max_attempts")
+			}
 		}
 	}
 
 	// IP 잠금 임계값 확인
 	ipCount := g.getAttemptCount(ctx, "ip:"+ip)
 	if ipCount >= g.config.IPMaxAttempts {
-		g.lockIP(ctx, ip)
-		g.logLockEvent(nil, ip, "ip", "max_attempts")
+		if g.lockIP(ctx, ip) {
+			g.logLockEvent(nil, ip, "ip", "max_attempts")
+		}
 	}
 }
 
@@ -337,45 +341,72 @@ func (g *BruteForceGuard) isUserLocked(ctx context.Context, username string) (bo
 	return false, time.Time{}
 }
 
-// lockIP locks an IP address
-func (g *BruteForceGuard) lockIP(ctx context.Context, ip string) {
+// lockIP locks an IP address and reports whether this call created the lock.
+func (g *BruteForceGuard) lockIP(ctx context.Context, ip string) bool {
 	key := g.keyPrefix + "locked:ip:" + ip
 	expiry := g.config.IPLockDuration
-
-	if g.redisEnabled {
-		g.redis.Set(ctx, key, "1", expiry)
-	}
-
-	// 로컬 캐시에도 저장
-	g.localCache.Store("locked:ip:"+ip, LocalCacheEntry{
+	entry := LocalCacheEntry{
 		Count:     1,
 		ExpiresAt: time.Now().Add(expiry),
-	})
+	}
+
+	if g.redisEnabled {
+		created, err := g.redis.SetNX(ctx, key, "1", expiry).Result()
+		if err == nil {
+			if created {
+				g.localCache.Store("locked:ip:"+ip, entry)
+			}
+			return created
+		}
+	}
+
+	return g.storeLocalLock("locked:ip:"+ip, entry)
 }
 
-// lockUser locks a user account
-func (g *BruteForceGuard) lockUser(ctx context.Context, username string) {
+// lockUser locks a user account and reports whether it transitioned to locked.
+func (g *BruteForceGuard) lockUser(ctx context.Context, username string) bool {
 	key := g.keyPrefix + "locked:user:" + username
 	expiry := g.config.LockDuration
 	lockedUntil := time.Now().Add(expiry)
 
-	// DB에 영구 기록
-	_, _ = g.db.ExecContext(ctx, `
+	var storedUntil time.Time
+	err := g.db.QueryRowContext(ctx, `
 		UPDATE users
 		SET locked_until = $1
 		WHERE username = $2
-	`, lockedUntil, username)
-
-	// Valkey에도 저장
-	if g.redisEnabled {
-		g.redis.Set(ctx, key, "1", expiry)
+		  AND (locked_until IS NULL OR locked_until <= NOW())
+		RETURNING locked_until
+	`, lockedUntil, username).Scan(&storedUntil)
+	if err != nil {
+		return false
 	}
 
-	// 로컬 캐시에도 저장
+	if g.redisEnabled {
+		_ = g.redis.Set(ctx, key, "1", expiry).Err()
+	}
+
 	g.localCache.Store("locked:user:"+username, LocalCacheEntry{
 		Count:     1,
-		ExpiresAt: lockedUntil,
+		ExpiresAt: storedUntil,
 	})
+	return true
+}
+
+func (g *BruteForceGuard) storeLocalLock(key string, entry LocalCacheEntry) bool {
+	for {
+		current, loaded := g.localCache.LoadOrStore(key, entry)
+		if !loaded {
+			return true
+		}
+
+		currentEntry, ok := current.(LocalCacheEntry)
+		if ok && time.Now().Before(currentEntry.ExpiresAt) {
+			return false
+		}
+		if g.localCache.CompareAndSwap(key, current, entry) {
+			return true
+		}
+	}
 }
 
 // getAttemptCount gets the current attempt count for a key
@@ -410,17 +441,31 @@ func (g *BruteForceGuard) incrementAttempt(ctx context.Context, keySuffix string
 		_, _ = pipe.Exec(ctx)
 	}
 
-	// 로컬 캐시 업데이트
-	count := 1
-	if entry, ok := g.localCache.Load(keySuffix); ok {
-		if e, ok := entry.(LocalCacheEntry); ok && time.Now().Before(e.ExpiresAt) {
-			count = e.Count + 1
+	g.incrementLocalAttempt(keySuffix, ttl)
+}
+
+func (g *BruteForceGuard) incrementLocalAttempt(key string, ttl time.Duration) {
+	for {
+		now := time.Now()
+		initial := LocalCacheEntry{Count: 1, ExpiresAt: now.Add(ttl)}
+		current, loaded := g.localCache.LoadOrStore(key, initial)
+		if !loaded {
+			return
+		}
+
+		currentEntry, ok := current.(LocalCacheEntry)
+		if !ok || !now.Before(currentEntry.ExpiresAt) {
+			if g.localCache.CompareAndSwap(key, current, initial) {
+				return
+			}
+			continue
+		}
+
+		next := LocalCacheEntry{Count: currentEntry.Count + 1, ExpiresAt: now.Add(ttl)}
+		if g.localCache.CompareAndSwap(key, current, next) {
+			return
 		}
 	}
-	g.localCache.Store(keySuffix, LocalCacheEntry{
-		Count:     count,
-		ExpiresAt: time.Now().Add(ttl),
-	})
 }
 
 // logLockEvent logs a lock event to audit log
@@ -445,34 +490,50 @@ func (g *BruteForceGuard) logLockEvent(username *string, ip, lockType, reason st
 		}
 	}
 
+	duration := g.config.IPLockDuration
+	if lockType == "user" {
+		duration = g.config.LockDuration
+	}
+
 	_ = g.audit.LogEvent(userID, ip, eventType, target, map[string]interface{}{
 		"lockType": lockType,
 		"reason":   reason,
-		"duration": g.config.LockDuration.String(),
+		"duration": duration.String(),
 	})
 }
 
 // AdminUnlockUser allows admin to manually unlock a user
-func (g *BruteForceGuard) AdminUnlockUser(ctx context.Context, username string) error {
-	// Valkey 잠금 해제
-	if g.redisEnabled {
-		g.redis.Del(ctx, g.keyPrefix+"locked:user:"+username)
-		g.redis.Del(ctx, g.keyPrefix+"user:"+username)
+func (g *BruteForceGuard) AdminUnlockUser(ctx context.Context, username string) (bool, error) {
+	var changed bool
+	err := g.db.QueryRowContext(ctx, `
+		WITH current_user AS (
+			SELECT locked_until
+			FROM users
+			WHERE username = $1
+			FOR UPDATE
+		), updated_user AS (
+			UPDATE users
+			SET locked_until = NULL,
+			    failed_login_count = 0
+			FROM current_user
+			WHERE users.username = $1
+			RETURNING current_user.locked_until
+		)
+		SELECT locked_until IS NOT NULL AND locked_until > NOW()
+		FROM updated_user
+	`, username).Scan(&changed)
+	if err != nil {
+		return false, err
 	}
 
-	// 로컬 캐시에서도 삭제
+	if g.redisEnabled {
+		_ = g.redis.Del(ctx, g.keyPrefix+"locked:user:"+username).Err()
+		_ = g.redis.Del(ctx, g.keyPrefix+"user:"+username).Err()
+	}
 	g.localCache.Delete("locked:user:" + username)
 	g.localCache.Delete("user:" + username)
 
-	// DB 잠금 해제
-	_, err := g.db.ExecContext(ctx, `
-		UPDATE users
-		SET locked_until = NULL,
-		    failed_login_count = 0
-		WHERE username = $1
-	`, username)
-
-	return err
+	return changed, nil
 }
 
 // AdminUnlockIP allows admin to manually unlock an IP
@@ -491,11 +552,11 @@ func (g *BruteForceGuard) AdminUnlockIP(ctx context.Context, ip string) error {
 
 // LockedUserInfo represents a locked user's information
 type LockedUserInfo struct {
-	Username       string     `json:"username"`
-	LockedUntil    time.Time  `json:"lockedUntil"`
-	FailedCount    int        `json:"failedCount"`
-	LastFailedAt   *time.Time `json:"lastFailedAt,omitempty"`
-	RemainingTime  string     `json:"remainingTime"`
+	Username      string     `json:"username"`
+	LockedUntil   time.Time  `json:"lockedUntil"`
+	FailedCount   int        `json:"failedCount"`
+	LastFailedAt  *time.Time `json:"lastFailedAt,omitempty"`
+	RemainingTime string     `json:"remainingTime"`
 }
 
 // GetLockedUsers returns list of currently locked users (admin only)
@@ -554,19 +615,26 @@ func (g *BruteForceGuard) UnlockUser(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	if err := g.AdminUnlockUser(ctx, username); err != nil {
+	changed, err := g.AdminUnlockUser(ctx, username)
+	if err == sql.ErrNoRows {
+		return RespondError(c, ErrNotFound("User"))
+	}
+	if err != nil {
 		return RespondError(c, ErrInternal("Failed to unlock user"))
 	}
 
-	// 감사 로그
-	if claims, ok := c.Get("user").(*JWTClaims); ok {
-		_ = g.audit.LogEvent(&claims.UserID, c.RealIP(), EventAccountUnlocked, username, map[string]interface{}{
-			"unlockedBy": claims.Username,
-		})
+	if changed && g.audit != nil {
+		claims, ok := c.Get("user").(*JWTClaims)
+		if ok && claims != nil {
+			_ = g.audit.LogEvent(&claims.UserID, c.RealIP(), EventAccountUnlocked, username, map[string]interface{}{
+				"unlockedBy": claims.Username,
+			})
+		}
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
+	return c.JSON(http.StatusOK, map[string]interface{}{
 		"message": fmt.Sprintf("사용자 %s의 잠금이 해제되었습니다", username),
+		"changed": changed,
 	})
 }
 
@@ -609,12 +677,12 @@ func (g *BruteForceGuard) GetStats(c echo.Context) error {
 		TrackedUsers: userCount,
 		LockedUsers:  dbLockedCount,
 		Config: map[string]interface{}{
-			"enabled":          g.config.Enabled,
-			"maxAttempts":      g.config.MaxAttempts,
-			"windowMinutes":    g.config.WindowDuration.Minutes(),
-			"lockMinutes":      g.config.LockDuration.Minutes(),
-			"ipMaxAttempts":    g.config.IPMaxAttempts,
-			"ipLockMinutes":    g.config.IPLockDuration.Minutes(),
+			"enabled":       g.config.Enabled,
+			"maxAttempts":   g.config.MaxAttempts,
+			"windowMinutes": g.config.WindowDuration.Minutes(),
+			"lockMinutes":   g.config.LockDuration.Minutes(),
+			"ipMaxAttempts": g.config.IPMaxAttempts,
+			"ipLockMinutes": g.config.IPLockDuration.Minutes(),
 		},
 	})
 }

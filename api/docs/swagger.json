@@ -1,21 +1,219 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "Enterprise-grade cloud file sharing and management API.\nFileHatch provides comprehensive file management, sharing, and collaboration features.",
-        "title": "FileHatch API",
-        "contact": {
-            "name": "GitHub Issues",
-            "url": "https://github.com/svrforum/FileHatch/issues"
-        },
-        "license": {
-            "name": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-        },
-        "version": "1.0"
+        "contact": {}
     },
-    "host": "localhost:3080",
-    "basePath": "/api",
     "paths": {
+        "/admin/users/import-jobs": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Start a bulk user import job",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Unique submission key",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Same CSV file submitted for validation",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Validated SHA-256 digest",
+                        "name": "digest",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Validated password policy revision",
+                        "name": "policyRevision",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/import-jobs/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Get the current administrator's bulk import job",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Import job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Cancel a pending bulk import job",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Import job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/admin/users/import-jobs/{id}/result": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Download a password-free bulk import result CSV",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Import job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/import-template": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Download the bulk user import CSV template",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/import/validate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Validate a bulk user import CSV",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "UTF-8 CSV file (maximum 5 MB)",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.userImportValidation"
+                        }
+                    }
+                }
+            }
+        },
         "/audit/logs": {
             "get": {
                 "security": [
@@ -23,7 +221,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get audit logs with pagination and filtering by event type, category, or resource",
+                "description": "Get audit logs with pagination and filtering by event type, category, date range, or resource",
                 "consumes": [
                     "application/json"
                 ],
@@ -43,14 +241,32 @@
                     },
                     {
                         "type": "string",
-                        "description": "Filter by category (file, admin, user)",
+                        "description": "Filter by category (file, admin, user, activity, access)",
                         "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search username, IP, event type, or target resource",
+                        "name": "search",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "Filter by target resource path",
                         "name": "resource",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter logs from this date (YYYY-MM-DD format)",
+                        "name": "startDate",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter logs until this date (YYYY-MM-DD format)",
+                        "name": "endDate",
                         "in": "query"
                     },
                     {
@@ -83,6 +299,12 @@
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid category",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
                         }
                     },
                     "401": {
@@ -597,6 +819,58 @@
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/files/compress-stream": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Compress files/folders into a zip archive with real-time progress updates via Server-Sent Events",
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "Files"
+                ],
+                "summary": "Compress files with progress",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Comma-separated list of paths to compress",
+                        "name": "paths",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Output zip file name (without .zip extension)",
+                        "name": "outputName",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SSE stream with progress updates",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CompressionProgress"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/docs.ErrorResponse"
                         }
                     }
                 }
@@ -1650,6 +1924,120 @@
                 }
             }
         },
+        "/s/{token}/file": {
+            "get": {
+                "description": "Download a specific file from inside a shared folder link",
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "Shares"
+                ],
+                "summary": "Download file from shared folder",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Share token",
+                        "name": "token",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "File path within the shared folder",
+                        "name": "filepath",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Share password if required",
+                        "name": "password",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/s/{token}/list": {
+            "get": {
+                "description": "List files and folders inside a shared folder link",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Shares"
+                ],
+                "summary": "List shared folder contents",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Share token",
+                        "name": "token",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Subpath within the shared folder",
+                        "name": "subpath",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/shared-folders/my": {
             "get": {
                 "security": [
@@ -2270,6 +2658,55 @@
                 }
             }
         },
+        "handlers.CompressionProgress": {
+            "type": "object",
+            "properties": {
+                "bytesPerSec": {
+                    "description": "Compression speed",
+                    "type": "integer"
+                },
+                "compressedBytes": {
+                    "description": "Bytes processed so far",
+                    "type": "integer"
+                },
+                "currentFile": {
+                    "description": "Current file being compressed",
+                    "type": "string"
+                },
+                "error": {
+                    "description": "Error message if any",
+                    "type": "string"
+                },
+                "outputName": {
+                    "description": "Output file name",
+                    "type": "string"
+                },
+                "outputPath": {
+                    "description": "Output file path",
+                    "type": "string"
+                },
+                "outputSize": {
+                    "description": "Final compressed file size",
+                    "type": "integer"
+                },
+                "processedFiles": {
+                    "description": "Number of files processed",
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "\"started\", \"progress\", \"completed\", \"error\"",
+                    "type": "string"
+                },
+                "totalBytes": {
+                    "description": "Total bytes to compress",
+                    "type": "integer"
+                },
+                "totalFiles": {
+                    "description": "Total number of files",
+                    "type": "integer"
+                }
+            }
+        },
         "handlers.CopyProgress": {
             "type": "object",
             "properties": {
@@ -2485,14 +2922,87 @@
                     "type": "integer"
                 }
             }
-        }
-    },
-    "securityDefinitions": {
-        "BearerAuth": {
-            "description": "JWT Bearer token. Format: \"Bearer {token}\"",
-            "type": "apiKey",
-            "name": "Authorization",
-            "in": "header"
+        },
+        "handlers.userImportRowResult": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "retryable": {
+                    "type": "boolean"
+                },
+                "row": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.userImportSummary": {
+            "type": "object",
+            "properties": {
+                "created": {
+                    "type": "integer"
+                },
+                "failed": {
+                    "type": "integer"
+                },
+                "skipped": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "warnings": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.userImportValidation": {
+            "type": "object",
+            "properties": {
+                "digest": {
+                    "type": "string"
+                },
+                "expiresAt": {
+                    "type": "string"
+                },
+                "invalidRows": {
+                    "type": "integer"
+                },
+                "policyRevision": {
+                    "type": "string"
+                },
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.userImportRowResult"
+                    }
+                },
+                "summary": {
+                    "$ref": "#/definitions/handlers.userImportSummary"
+                },
+                "totalRows": {
+                    "type": "integer"
+                },
+                "valid": {
+                    "type": "boolean"
+                },
+                "validRows": {
+                    "type": "integer"
+                }
+            }
         }
     }
 }

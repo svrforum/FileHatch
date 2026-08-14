@@ -40,10 +40,10 @@ test.describe('Admin User Management', () => {
     await expect(page.locator(':is(h1, h2):has-text("새 사용자 추가")')).toBeVisible({ timeout: 5000 });
 
     // Fill user form using placeholders since name attributes might not exist
-    await page.locator('input[placeholder*="영문, 숫자"]').fill(newUsername);
-    await page.locator('input[placeholder="선택 사항"]').fill(newEmail);
-    await page.locator('input[placeholder="8자 이상"]').fill(password);
-    await page.locator('input[placeholder="비밀번호 재입력"]').fill(password);
+    await page.getByLabel('사용자명 *').fill(newUsername);
+    await page.getByLabel('이메일').fill(newEmail);
+    await page.getByLabel('비밀번호 *', { exact: true }).fill(password);
+    await page.getByLabel('비밀번호 확인 *').fill(password);
 
     // Submit form
     await page.locator('button:has-text("사용자 생성")').click();
@@ -53,6 +53,24 @@ test.describe('Admin User Management', () => {
 
     // Verify user appears in list (card or list view)
     await expect(page.locator(`.user-card:has-text("${newUsername}")`).first()).toBeVisible({ timeout: 10000 });
+  });
+
+  test('should toggle password fields independently and reset them for continuous entry', async ({ page }) => {
+    await page.getByRole('button', { name: '사용자 추가' }).click();
+
+    const password = page.getByLabel('비밀번호 *', { exact: true });
+    const confirmation = page.getByLabel('비밀번호 확인 *');
+    await password.fill('TestPass123!');
+    await confirmation.fill('TestPass123!');
+
+    await page.getByRole('button', { name: '비밀번호 * 보기' }).click();
+    await expect(password).toHaveAttribute('type', 'text');
+    await expect(confirmation).toHaveAttribute('type', 'password');
+
+    await page.getByRole('button', { name: '비밀번호 확인 * 보기' }).click();
+    await expect(confirmation).toHaveAttribute('type', 'text');
+    await page.getByRole('button', { name: '비밀번호 * 숨기기' }).click();
+    await expect(password).toHaveAttribute('type', 'password');
   });
 
   test('should edit user', async ({ page }) => {

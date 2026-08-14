@@ -100,6 +100,40 @@ func TestLogin_InvalidPassword(t *testing.T) {
 	AssertJSONError(t, tc.Recorder, "Invalid username or password")
 }
 
+func TestLogin_SSOAccountCannotUseLocalPassword(t *testing.T) {
+	tc := SetupTest(t)
+	defer tc.Cleanup()
+
+	handler := CreateTestAuthHandler(tc.DB)
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("GenerateFromPassword() error = %v", err)
+	}
+
+	rows := sqlmock.NewRows([]string{
+		"id", "username", "email", "password_hash", "smb_hash", "provider",
+		"is_admin", "is_active", "totp_enabled", "setup_completed", "created_at", "updated_at",
+	}).AddRow(
+		"user-123", "sso-user", "sso@example.com", string(passwordHash), nil, "oidc",
+		false, true, false, true, time.Now(), time.Now(),
+	)
+	tc.Mock.ExpectQuery(regexp.QuoteMeta(
+		`SELECT id, username, email, password_hash, smb_hash, provider, is_admin, is_active`,
+	)).WithArgs("sso-user").WillReturnRows(rows)
+
+	req, _ := NewJSONRequest(http.MethodPost, "/api/auth/login", map[string]string{
+		"username": "sso-user",
+		"password": "password123",
+	})
+	c := tc.Echo.NewContext(req, tc.Recorder)
+
+	if err := handler.Login(c); err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	AssertStatus(t, tc.Recorder, http.StatusUnauthorized)
+	AssertJSONError(t, tc.Recorder, "Invalid username or password")
+}
+
 func TestLogin_UserNotFound(t *testing.T) {
 	tc := SetupTest(t)
 	defer tc.Cleanup()

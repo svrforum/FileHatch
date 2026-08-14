@@ -18,11 +18,12 @@ import (
 )
 
 type AuthHandler struct {
-	db           *sql.DB
-	jwtSecret    []byte
-	dataRoot     string
-	configPath   string
-	auditHandler *AuditHandler
+	db                     *sql.DB
+	jwtSecret              []byte
+	dataRoot               string
+	configPath             string
+	auditHandler           *AuditHandler
+	passwordPolicyProvider PasswordPolicyProvider
 }
 
 // Package-level JWT secret for shared access
@@ -84,25 +85,57 @@ func SharedJWTSecret() []byte {
 	return sharedJWTSecret
 }
 
-func NewAuthHandler(db *sql.DB) *AuthHandler {
+func NewAuthHandler(db *sql.DB, providers ...PasswordPolicyProvider) *AuthHandler {
 	configPath := defaultConfigPath
 	secret := resolveJWTSecret(configPath)
 
+	var provider PasswordPolicyProvider = staticPasswordPolicyProvider{
+		policy: DefaultPasswordPolicy(),
+	}
+	if len(providers) > 0 && providers[0] != nil {
+		provider = providers[0]
+	}
+
 	sharedJWTSecret = secret // Set the shared secret
 	return &AuthHandler{
-		db:           db,
-		jwtSecret:    secret,
-		dataRoot:     "/data",
-		configPath:   configPath,
-		auditHandler: NewAuditHandler(db, "/data"),
+		db:                     db,
+		jwtSecret:              secret,
+		dataRoot:               "/data",
+		configPath:             configPath,
+		auditHandler:           NewAuditHandler(db, "/data"),
+		passwordPolicyProvider: provider,
 	}
+}
+
+func (h *AuthHandler) validateWebPassword(c echo.Context, password string) *APIError {
+	policy, err := h.passwordPolicyProvider.GetPasswordPolicy(c.Request().Context())
+	if err != nil {
+		return NewAPIError(
+			ErrCodeServiceUnavailable,
+			"Password policy is temporarily unavailable",
+		)
+	}
+	if err := ValidatePasswordWithPolicy(password, policy); err != nil {
+		return ErrBadRequest(err.Error())
+	}
+	return nil
+}
+
+// GetPasswordPolicy returns the non-sensitive web login password policy.
+func (h *AuthHandler) GetPasswordPolicy(c echo.Context) error {
+	policy, err := h.passwordPolicyProvider.GetPasswordPolicy(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{
+			"error": "Password policy is temporarily unavailable",
+		})
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{"policy": policy})
 }
 
 // GenerateJWT generates a JWT token for a user (exported for use by other handlers)
 func GenerateJWT(userID, username string, isAdmin bool) (string, error) {
 	return GenerateJWTWithExpiration(userID, username, isAdmin, false, 24*time.Hour)
 }
-
 
 // GenerateJWTWithExpiration generates a JWT token with custom expiration duration
 func GenerateJWTWithExpiration(userID, username string, isAdmin, rememberMe bool, expiration time.Duration) (string, error) {
@@ -131,19 +164,22 @@ func ValidateJWTToken(tokenString string) (*jwt.Token, error) {
 
 // User represents a user account
 type User struct {
-	ID             string    `json:"id"`
-	Username       string    `json:"username"`
-	Email          string    `json:"email,omitempty"`
-	Provider       string    `json:"provider"`
-	IsAdmin        bool      `json:"isAdmin"`
-	IsActive       bool      `json:"isActive"`
-	HasSMB         bool      `json:"hasSmb"`
-	Has2FA         bool      `json:"has2fa"`
-	SetupCompleted bool      `json:"setupCompleted"`
-	StorageQuota   int64     `json:"storageQuota"` // 0 = unlimited
-	StorageUsed    int64     `json:"storageUsed"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	ID               string     `json:"id"`
+	Username         string     `json:"username"`
+	Email            string     `json:"email,omitempty"`
+	Provider         string     `json:"provider"`
+	IsAdmin          bool       `json:"isAdmin"`
+	IsActive         bool       `json:"isActive"`
+	HasSMB           bool       `json:"hasSmb"`
+	Has2FA           bool       `json:"has2fa"`
+	SetupCompleted   bool       `json:"setupCompleted"`
+	StorageQuota     int64      `json:"storageQuota"` // 0 = unlimited
+	StorageUsed      int64      `json:"storageUsed"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	UpdatedAt        time.Time  `json:"updatedAt"`
+	LockedUntil      *time.Time `json:"lockedUntil,omitempty"`
+	FailedLoginCount int        `json:"failedLoginCount"`
+	LastFailedLogin  *time.Time `json:"lastFailedLogin,omitempty"`
 }
 
 // JWTClaims represents JWT claims
@@ -195,8 +231,8 @@ func (h *AuthHandler) Register(c echo.Context) error {
 	}
 
 	// Validate password complexity
-	if err := ValidatePassword(req.Password); err != nil {
-		return RespondError(c, ErrBadRequest(err.Error()))
+	if err := h.validateWebPassword(c, req.Password); err != nil {
+		return RespondError(c, err)
 	}
 
 	// Validate email format
@@ -319,6 +355,9 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	// Check if user is active
 	if !user.IsActive {
 		return RespondError(c, ErrForbidden("Account is disabled"))
+	}
+	if provider.Valid && provider.String != "" && provider.String != "local" {
+		return RespondError(c, ErrUnauthorized("Invalid username or password"))
 	}
 
 	// Verify password
@@ -531,15 +570,22 @@ func (h *AuthHandler) UpdateProfile(c echo.Context) error {
 
 	if req.NewPassword != "" {
 		// Validate password complexity
-		if err := ValidatePassword(req.NewPassword); err != nil {
-			return RespondError(c, ErrBadRequest(err.Error()))
+		if err := h.validateWebPassword(c, req.NewPassword); err != nil {
+			return RespondError(c, err)
 		}
 
 		// Verify old password
 		var currentHash string
-		err := h.db.QueryRow("SELECT password_hash FROM users WHERE id = $1", claims.UserID).Scan(&currentHash)
+		var provider string
+		err := h.db.QueryRow(
+			"SELECT password_hash, COALESCE(provider, 'local') FROM users WHERE id = $1",
+			claims.UserID,
+		).Scan(&currentHash, &provider)
 		if err != nil {
 			return RespondError(c, ErrInternal("Database error"))
+		}
+		if provider != "local" {
+			return RespondError(c, ErrForbidden("SSO accounts cannot set a local password"))
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.OldPassword)); err != nil {
@@ -835,12 +881,19 @@ func (h *AuthHandler) InitialSetup(c echo.Context) error {
 
 	// Check if setup is still required
 	var setupCompleted bool
-	err := h.db.QueryRow("SELECT COALESCE(setup_completed, true) FROM users WHERE id = $1", claims.UserID).Scan(&setupCompleted)
+	var provider string
+	err := h.db.QueryRow(
+		"SELECT COALESCE(setup_completed, true), COALESCE(provider, 'local') FROM users WHERE id = $1",
+		claims.UserID,
+	).Scan(&setupCompleted, &provider)
 	if err != nil {
 		return RespondError(c, ErrInternal("Database error"))
 	}
 	if setupCompleted {
 		return RespondError(c, ErrBadRequest("Initial setup already completed"))
+	}
+	if provider != "local" {
+		return RespondError(c, ErrForbidden("SSO accounts cannot set a local password"))
 	}
 
 	var req InitialSetupRequest
@@ -866,8 +919,8 @@ func (h *AuthHandler) InitialSetup(c echo.Context) error {
 	}
 
 	// Validate password complexity
-	if err := ValidatePassword(req.NewPassword); err != nil {
-		return RespondError(c, ErrBadRequest(err.Error()))
+	if err := h.validateWebPassword(c, req.NewPassword); err != nil {
+		return RespondError(c, err)
 	}
 
 	// Validate email if provided
@@ -942,4 +995,3 @@ func (h *AuthHandler) InitialSetup(c echo.Context) error {
 		User:  user,
 	})
 }
-

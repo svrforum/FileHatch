@@ -39,6 +39,19 @@ test.describe('Admin Audit Logs @admin', () => {
     ).toBeVisible({ timeout: 10000 });
   });
 
+  test('should request the dedicated access history category', async ({ page }) => {
+    const accessRequest = page.waitForRequest((request) => {
+      const url = new URL(request.url());
+      return url.pathname.endsWith('/api/audit/logs') && url.searchParams.get('category') === 'access';
+    });
+
+    await page.getByRole('button', { name: '접속 이력', exact: true }).click();
+    await accessRequest;
+
+    await expect(page.getByRole('button', { name: '접속 이력', exact: true })).toHaveClass(/active/);
+    await expect(page.getByRole('option', { name: '로그인 실패' })).toBeAttached();
+  });
+
   test('should display audit log entries', async ({ page }) => {
     // Wait for logs to load
     await expect(

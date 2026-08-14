@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -141,7 +142,6 @@ func (h *AuditHandler) flushBatch(entries []auditEntry) {
 	}
 }
 
-
 // resolveDisplayPath converts a display path to a real filesystem path
 func (h *AuditHandler) resolveDisplayPath(displayPath, username string) string {
 	if strings.HasPrefix(displayPath, "/home/") {
@@ -188,17 +188,17 @@ type AuditLog struct {
 // EventTypes
 const (
 	// File events
-	EventFileView     = "file.view"
-	EventFileDownload = "file.download"
-	EventFileUpload   = "file.upload"
-	EventFileEdit     = "file.edit"
-	EventFileDelete   = "file.delete"
-	EventFileRename   = "file.rename"
-	EventFileCopy     = "file.copy"
+	EventFileView      = "file.view"
+	EventFileDownload  = "file.download"
+	EventFileUpload    = "file.upload"
+	EventFileEdit      = "file.edit"
+	EventFileDelete    = "file.delete"
+	EventFileRename    = "file.rename"
+	EventFileCopy      = "file.copy"
 	EventFileMove      = "file.move"
 	EventFileOverwrite = "file.overwrite"
-	EventFolderCreate = "folder.create"
-	EventFolderDelete = "folder.delete"
+	EventFolderCreate  = "folder.create"
+	EventFolderDelete  = "folder.delete"
 
 	// Trash events
 	EventTrashRestore = "trash.restore"
@@ -230,17 +230,17 @@ const (
 	EventAdminSettingsUpdate = "admin.settings.update"
 
 	// Security events
-	EventLoginFailed      = "security.login_failed"
-	EventLoginBlocked     = "security.login_blocked"
-	EventAccountLocked    = "security.account_locked"
-	EventAccountUnlocked  = "security.account_unlocked"
-	EventIPLocked         = "security.ip_locked"
-	EventIPUnlocked       = "security.ip_unlocked"
+	EventLoginFailed     = "security.login_failed"
+	EventLoginBlocked    = "security.login_blocked"
+	EventAccountLocked   = "security.account_locked"
+	EventAccountUnlocked = "security.account_unlocked"
+	EventIPLocked        = "security.ip_locked"
+	EventIPUnlocked      = "security.ip_unlocked"
 )
 
 // LogEvent records an audit event asynchronously via a buffered channel
 func (h *AuditHandler) LogEvent(actorID *string, ipAddr, eventType, targetResource string, details map[string]interface{}) error {
-	detailsJSON, _ := json.Marshal(details)
+	detailsJSON := marshalRedactedAuditDetails(details)
 
 	select {
 	case h.eventCh <- auditEntry{
@@ -258,6 +258,75 @@ func (h *AuditHandler) LogEvent(actorID *string, ipAddr, eventType, targetResour
 			VALUES ($1, $2::inet, $3, $4, $5)
 		`, actorID, ipAddr, eventType, targetResource, detailsJSON)
 		return err
+	}
+}
+
+func marshalRedactedAuditDetails(details map[string]interface{}) []byte {
+	raw, err := json.Marshal(details)
+	if err != nil {
+		return []byte("{}")
+	}
+
+	var value interface{}
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return []byte("{}")
+	}
+
+	redacted, err := json.Marshal(redactAuditValue(value))
+	if err != nil {
+		return []byte("{}")
+	}
+	return redacted
+}
+
+func redactAuditValue(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		redacted := make(map[string]interface{}, len(typed))
+		for key, nested := range typed {
+			if isSensitiveAuditKey(key) {
+				redacted[key] = "[REDACTED]"
+				continue
+			}
+			redacted[key] = redactAuditValue(nested)
+		}
+		return redacted
+	case []interface{}:
+		redacted := make([]interface{}, 0, len(typed))
+		for _, nested := range typed {
+			redacted = append(redacted, redactAuditValue(nested))
+		}
+		return redacted
+	default:
+		return value
+	}
+}
+
+func isSensitiveAuditKey(key string) bool {
+	normalized := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'A' && r <= 'Z':
+			return r + ('a' - 'A')
+		case r >= 'a' && r <= 'z':
+			return r
+		case r >= '0' && r <= '9':
+			return r
+		default:
+			return -1
+		}
+	}, key)
+
+	if strings.Contains(normalized, "password") {
+		return true
+	}
+
+	switch normalized {
+	case "csvraw", "rawcsv", "csvcontent", "csvdata", "csvrow", "csvrows",
+		"csvrowdata", "row", "rows", "rowdata", "rawrow", "rowobject",
+		"originalrow", "originalrowdata":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -319,7 +388,8 @@ func (h *AuditHandler) LogEventDeduped(actorID *string, ipAddr, eventType, targe
 // @Accept		json
 // @Produce		json
 // @Param		eventType	query		string	false	"Filter by specific event type"
-// @Param		category	query		string	false	"Filter by category (file, admin, user)"
+// @Param		category	query		string	false	"Filter by category (file, admin, user, activity, access)"
+// @Param		search		query		string	false	"Search username, IP, event type, or target resource"
 // @Param		resource	query		string	false	"Filter by target resource path"
 // @Param		startDate	query		string	false	"Filter logs from this date (YYYY-MM-DD format)"
 // @Param		endDate		query		string	false	"Filter logs until this date (YYYY-MM-DD format)"
@@ -327,14 +397,16 @@ func (h *AuditHandler) LogEventDeduped(actorID *string, ipAddr, eventType, targe
 // @Param		offset		query		int		false	"Pagination offset"
 // @Success		200		{object}	docs.SuccessResponse{data=docs.AuditLogListResponse}	"Audit logs"
 // @Failure		401		{object}	docs.ErrorResponse	"Unauthorized"
+// @Failure		400		{object}	docs.ErrorResponse	"Invalid category"
 // @Failure		500		{object}	docs.ErrorResponse	"Internal server error"
 // @Security	BearerAuth
 // @Router		/audit/logs [get]
 func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 	// Parse query parameters
 	eventType := c.QueryParam("eventType")
-	category := c.QueryParam("category") // file, admin
+	category := c.QueryParam("category")
 	targetResource := c.QueryParam("resource")
+	search := c.QueryParam("search")
 	startDateStr := c.QueryParam("startDate")
 	endDateStr := c.QueryParam("endDate")
 	limitStr := c.QueryParam("limit")
@@ -364,71 +436,33 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 		}
 	}
 
-	// Build query
+	whereClause, filterArgs, err := buildAuditLogFilter(
+		category,
+		eventType,
+		targetResource,
+		search,
+		startDate,
+		endDate,
+	)
+	if err != nil {
+		return RespondError(c, ErrBadRequest(err.Error()))
+	}
+
 	query := `
 		SELECT al.id, al.ts, al.actor_id, u.username, al.ip_addr,
 		       al.event_type, al.target_resource, al.details
 		FROM audit_logs al
 		LEFT JOIN users u ON al.actor_id = u.id
-		WHERE 1=1
-	`
-	countQuery := `SELECT COUNT(*) FROM audit_logs al WHERE 1=1`
-	args := []interface{}{}
-	countArgs := []interface{}{}
-	argCount := 1
-	countArgCount := 1
-
-	// Category filter
-	categoryFilter := ""
-	//nolint:staticcheck // 스타일 제안 무시 - switch 문 변환 불필요
-	if category == "file" {
-		// Include both smb.% (legacy watcher) and smb_% (vfs_full_audit)
-		categoryFilter = " AND (al.event_type LIKE 'file.%' OR al.event_type LIKE 'folder.%' OR al.event_type LIKE 'smb.%' OR al.event_type LIKE 'smb\\_%')"
-	} else if category == "admin" {
-		categoryFilter = " AND al.event_type LIKE 'admin.%'"
-	} else if category == "user" {
-		categoryFilter = " AND (al.event_type LIKE 'user.%' OR al.event_type LIKE 'share.%')"
-	}
-	query += categoryFilter
-	countQuery += categoryFilter
-
-	if eventType != "" {
-		query += " AND al.event_type = $" + strconv.Itoa(argCount)
-		countQuery += " AND al.event_type = $" + strconv.Itoa(countArgCount)
-		args = append(args, eventType)
-		countArgs = append(countArgs, eventType)
-		argCount++
-		countArgCount++
-	}
-
-	if targetResource != "" {
-		query += " AND al.target_resource LIKE $" + strconv.Itoa(argCount)
-		countQuery += " AND al.target_resource LIKE $" + strconv.Itoa(countArgCount)
-		args = append(args, "%"+targetResource+"%")
-		countArgs = append(countArgs, "%"+targetResource+"%")
-		argCount++
-		countArgCount++
-	}
-
-	// Date range filter
-	if startDate != nil {
-		query += " AND al.ts >= $" + strconv.Itoa(argCount)
-		countQuery += " AND al.ts >= $" + strconv.Itoa(countArgCount)
-		args = append(args, *startDate)
-		countArgs = append(countArgs, *startDate)
-		argCount++
-		countArgCount++
-	}
-	if endDate != nil {
-		query += " AND al.ts < $" + strconv.Itoa(argCount)
-		countQuery += " AND al.ts < $" + strconv.Itoa(countArgCount)
-		args = append(args, *endDate)
-		countArgs = append(countArgs, *endDate)
-		argCount++
-		_ = countArgCount // Suppress unused warning
-	}
-
-	query += " ORDER BY al.ts DESC LIMIT $" + strconv.Itoa(argCount) + " OFFSET $" + strconv.Itoa(argCount+1)
+		WHERE 1=1` + whereClause
+	countQuery := `
+		SELECT COUNT(*)
+		FROM audit_logs al
+		LEFT JOIN users u ON al.actor_id = u.id
+		WHERE 1=1` + whereClause
+	args := append([]interface{}{}, filterArgs...)
+	argCount := len(args) + 1
+	query += " ORDER BY al.ts DESC, al.id DESC LIMIT $" + strconv.Itoa(argCount) +
+		" OFFSET $" + strconv.Itoa(argCount+1)
 	args = append(args, limit, offset)
 
 	rows, err := h.db.Query(query, args...)
@@ -475,12 +509,9 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 		logs = append(logs, log)
 	}
 
-	// Get total count with same filters
 	var total int
-	if len(countArgs) > 0 {
-		_ = h.db.QueryRow(countQuery, countArgs...).Scan(&total)
-	} else {
-		_ = h.db.QueryRow(countQuery).Scan(&total)
+	if err := h.db.QueryRow(countQuery, filterArgs...).Scan(&total); err != nil {
+		return RespondError(c, ErrInternal("Failed to count audit logs"))
 	}
 
 	return RespondSuccess(c, map[string]interface{}{
@@ -489,6 +520,67 @@ func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 		"limit":  limit,
 		"offset": offset,
 	})
+}
+
+func buildAuditLogFilter(
+	category string,
+	eventType string,
+	targetResource string,
+	search string,
+	startDate *time.Time,
+	endDate *time.Time,
+) (string, []interface{}, error) {
+	var filter strings.Builder
+	args := []interface{}{}
+
+	switch category {
+	case "":
+	case "file":
+		filter.WriteString(" AND (al.event_type LIKE 'file.%' OR al.event_type LIKE 'folder.%' OR " +
+			"al.event_type LIKE 'smb.%' OR al.event_type LIKE 'smb\\_%')")
+	case "admin":
+		filter.WriteString(" AND al.event_type LIKE 'admin.%'")
+	case "user":
+		filter.WriteString(" AND (al.event_type LIKE 'user.%' OR al.event_type LIKE 'share.%')")
+	case "activity":
+		filter.WriteString(" AND (al.event_type LIKE 'share.%' OR " +
+			"(al.event_type LIKE 'user.%' AND al.event_type <> 'user.login'))")
+	case "access":
+		filter.WriteString(" AND al.event_type IN ('user.login', 'sso_login', " +
+			"'security.login_failed', 'security.login_blocked', 'security.account_locked', " +
+			"'security.account_unlocked', 'security.ip_locked')")
+	default:
+		return "", nil, fmt.Errorf("invalid category %q", category)
+	}
+
+	appendArgument := func(condition string, value interface{}) {
+		args = append(args, value)
+		filter.WriteString(" AND ")
+		filter.WriteString(fmt.Sprintf(condition, len(args)))
+	}
+
+	if eventType != "" {
+		appendArgument("al.event_type = $%d", eventType)
+	}
+	if targetResource != "" {
+		appendArgument("al.target_resource LIKE $%d", "%"+targetResource+"%")
+	}
+	if search != "" {
+		args = append(args, "%"+search+"%")
+		placeholder := "$" + strconv.Itoa(len(args))
+		filter.WriteString(" AND (COALESCE(u.username, '') ILIKE " + placeholder +
+			" OR COALESCE(al.ip_addr::text, '') ILIKE " + placeholder +
+			" OR al.event_type ILIKE " + placeholder +
+			" OR COALESCE(al.target_resource, '') ILIKE " + placeholder + ")")
+	}
+	if startDate != nil {
+		appendArgument("al.ts >= $%d", *startDate)
+	}
+	if endDate != nil {
+		appendArgument("al.ts < $%d", *endDate)
+	}
+
+	return filter.String(), args, nil
 }
 
 // GetResourceHistory returns audit history for a specific resource
@@ -720,12 +812,12 @@ type HideRecentItemRequest struct {
 }
 
 type RecentFile struct {
-	Path       string    `json:"path"`
-	Name       string    `json:"name"`
-	EventType  string    `json:"eventType"`
-	Timestamp  time.Time `json:"timestamp"`
-	IsDir      bool      `json:"isDir"`
-	Size       int64     `json:"size"`
+	Path      string    `json:"path"`
+	Name      string    `json:"name"`
+	EventType string    `json:"eventType"`
+	Timestamp time.Time `json:"timestamp"`
+	IsDir     bool      `json:"isDir"`
+	Size      int64     `json:"size"`
 }
 
 // GetRecentFiles returns recently accessed files for the current user

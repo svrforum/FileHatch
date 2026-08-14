@@ -1159,3 +1159,21 @@
     padding: 10px 12px;
   }
 }
+.badge.locked,
+.status-badge.locked {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.btn-action.unlock,
+.list-action-btn.unlock {
+  color: #92400e;
+  border-color: #f59e0b;
+}
+.user-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}

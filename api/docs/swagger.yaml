@@ -1,4 +1,3 @@
-basePath: /api
 definitions:
   docs.AuditLog:
     properties:
@@ -164,6 +163,42 @@ definitions:
         example: 5
         type: integer
     type: object
+  handlers.CompressionProgress:
+    properties:
+      bytesPerSec:
+        description: Compression speed
+        type: integer
+      compressedBytes:
+        description: Bytes processed so far
+        type: integer
+      currentFile:
+        description: Current file being compressed
+        type: string
+      error:
+        description: Error message if any
+        type: string
+      outputName:
+        description: Output file name
+        type: string
+      outputPath:
+        description: Output file path
+        type: string
+      outputSize:
+        description: Final compressed file size
+        type: integer
+      processedFiles:
+        description: Number of files processed
+        type: integer
+      status:
+        description: '"started", "progress", "completed", "error"'
+        type: string
+      totalBytes:
+        description: Total bytes to compress
+        type: integer
+      totalFiles:
+        description: Total number of files
+        type: integer
+    type: object
   handlers.CopyProgress:
     properties:
       bytesPerSec:
@@ -306,38 +341,222 @@ definitions:
       usedStorage:
         type: integer
     type: object
-host: localhost:3080
+  handlers.userImportRowResult:
+    properties:
+      code:
+        type: string
+      email:
+        type: string
+      message:
+        type: string
+      retryable:
+        type: boolean
+      row:
+        type: integer
+      status:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.userImportSummary:
+    properties:
+      created:
+        type: integer
+      failed:
+        type: integer
+      skipped:
+        type: integer
+      total:
+        type: integer
+      warnings:
+        type: integer
+    type: object
+  handlers.userImportValidation:
+    properties:
+      digest:
+        type: string
+      expiresAt:
+        type: string
+      invalidRows:
+        type: integer
+      policyRevision:
+        type: string
+      rows:
+        items:
+          $ref: '#/definitions/handlers.userImportRowResult'
+        type: array
+      summary:
+        $ref: '#/definitions/handlers.userImportSummary'
+      totalRows:
+        type: integer
+      valid:
+        type: boolean
+      validRows:
+        type: integer
+    type: object
 info:
-  contact:
-    name: GitHub Issues
-    url: https://github.com/svrforum/FileHatch/issues
-  description: |-
-    Enterprise-grade cloud file sharing and management API.
-    FileHatch provides comprehensive file management, sharing, and collaboration features.
-  license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
-  title: FileHatch API
-  version: "1.0"
+  contact: {}
 paths:
+  /admin/users/import-jobs:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Unique submission key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Same CSV file submitted for validation
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: Validated SHA-256 digest
+        in: formData
+        name: digest
+        required: true
+        type: string
+      - description: Validated password policy revision
+        in: formData
+        name: policyRevision
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Start a bulk user import job
+      tags:
+      - Admin
+  /admin/users/import-jobs/{id}:
+    delete:
+      parameters:
+      - description: Import job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Cancel a pending bulk import job
+      tags:
+      - Admin
+    get:
+      parameters:
+      - description: Import job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get the current administrator's bulk import job
+      tags:
+      - Admin
+  /admin/users/import-jobs/{id}/result:
+    get:
+      parameters:
+      - description: Import job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - BearerAuth: []
+      summary: Download a password-free bulk import result CSV
+      tags:
+      - Admin
+  /admin/users/import-template:
+    get:
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - BearerAuth: []
+      summary: Download the bulk user import CSV template
+      tags:
+      - Admin
+  /admin/users/import/validate:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: UTF-8 CSV file (maximum 5 MB)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.userImportValidation'
+      security:
+      - BearerAuth: []
+      summary: Validate a bulk user import CSV
+      tags:
+      - Admin
   /audit/logs:
     get:
       consumes:
       - application/json
       description: Get audit logs with pagination and filtering by event type, category,
-        or resource
+        date range, or resource
       parameters:
       - description: Filter by specific event type
         in: query
         name: eventType
         type: string
-      - description: Filter by category (file, admin, user)
+      - description: Filter by category (file, admin, user, activity, access)
         in: query
         name: category
+        type: string
+      - description: Search username, IP, event type, or target resource
+        in: query
+        name: search
         type: string
       - description: Filter by target resource path
         in: query
         name: resource
+        type: string
+      - description: Filter logs from this date (YYYY-MM-DD format)
+        in: query
+        name: startDate
+        type: string
+      - description: Filter logs until this date (YYYY-MM-DD format)
+        in: query
+        name: endDate
         type: string
       - description: Maximum results (default 100, max 500)
         in: query
@@ -359,6 +578,10 @@ paths:
                 data:
                   $ref: '#/definitions/docs.AuditLogListResponse'
               type: object
+        "400":
+          description: Invalid category
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
@@ -749,6 +972,40 @@ paths:
       summary: Download file
       tags:
       - Download
+  /files/compress-stream:
+    get:
+      description: Compress files/folders into a zip archive with real-time progress
+        updates via Server-Sent Events
+      parameters:
+      - description: Comma-separated list of paths to compress
+        in: query
+        name: paths
+        required: true
+        type: string
+      - description: Output zip file name (without .zip extension)
+        in: query
+        name: outputName
+        type: string
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE stream with progress updates
+          schema:
+            $ref: '#/definitions/handlers.CompressionProgress'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/docs.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Compress files with progress
+      tags:
+      - Files
   /files/exists:
     get:
       consumes:
@@ -1359,6 +1616,82 @@ paths:
       summary: Rename item
       tags:
       - Files
+  /s/{token}/file:
+    get:
+      description: Download a specific file from inside a shared folder link
+      parameters:
+      - description: Share token
+        in: path
+        name: token
+        required: true
+        type: string
+      - description: File path within the shared folder
+        in: query
+        name: filepath
+        required: true
+        type: string
+      - description: Share password if required
+        in: query
+        name: password
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Download file from shared folder
+      tags:
+      - Shares
+  /s/{token}/list:
+    get:
+      description: List files and folders inside a shared folder link
+      parameters:
+      - description: Share token
+        in: path
+        name: token
+        required: true
+        type: string
+      - description: Subpath within the shared folder
+        in: query
+        name: subpath
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List shared folder contents
+      tags:
+      - Shares
   /shared-folders/my:
     get:
       consumes:
@@ -1599,10 +1932,4 @@ paths:
       summary: Get trash statistics
       tags:
       - Trash
-securityDefinitions:
-  BearerAuth:
-    description: 'JWT Bearer token. Format: "Bearer {token}"'
-    in: header
-    name: Authorization
-    type: apiKey
 swagger: "2.0"

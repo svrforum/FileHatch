@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { createUser } from '../api/auth'
+import { createUser, getPasswordPolicy, PasswordPolicy } from '../api/auth'
 import {
   getAllSharedFolders,
   addSharedFolderMember,
@@ -9,6 +9,7 @@ import {
   PERMISSION_READ_WRITE,
 } from '../api/sharedFolders'
 import './CreateUserModal.css'
+import PasswordField from './PasswordField'
 
 interface CreateUserModalProps {
   isOpen: boolean
@@ -33,6 +34,9 @@ function CreateUserModal({ isOpen, onClose, onCreated }: CreateUserModalProps) {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [continueCreating, setContinueCreating] = useState(false)
+  const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicy | null>(null)
+  const usernameRef = useRef<HTMLInputElement>(null)
 
   // Shared folders state
   const [sharedFolders, setSharedFolders] = useState<SharedFolder[]>([])
@@ -44,6 +48,7 @@ function CreateUserModal({ isOpen, onClose, onCreated }: CreateUserModalProps) {
   useEffect(() => {
     if (isOpen) {
       loadSharedFolders()
+      void getPasswordPolicy().then(setPasswordPolicy).catch(() => setPasswordPolicy(null))
       resetForm()
     }
   }, [isOpen])
@@ -65,6 +70,7 @@ function CreateUserModal({ isOpen, onClose, onCreated }: CreateUserModalProps) {
     setPassword('')
     setConfirmPassword('')
     setIsAdmin(false)
+    setContinueCreating(false)
     setError(null)
     setFolderSearch('')
   }
@@ -129,16 +135,32 @@ function CreateUserModal({ isOpen, onClose, onCreated }: CreateUserModalProps) {
 
       // Add permissions to shared folders
       const permissionsToAdd = folderPermissions.filter(fp => fp.permission > 0)
+      const permissionWarnings: string[] = []
       for (const fp of permissionsToAdd) {
         try {
           await addSharedFolderMember(fp.folderId, result.id, fp.permission)
         } catch (err) {
           console.error(`Failed to add permission for folder ${fp.folderName}:`, err)
+          permissionWarnings.push(fp.folderName)
         }
       }
 
       onCreated()
-      onClose()
+      if (continueCreating) {
+        setUsername('')
+        setEmail('')
+        setPassword('')
+        setConfirmPassword('')
+        setIsAdmin(false)
+        setFolderPermissions((current) => current.map((item) => ({ ...item, permission: 0 })))
+        setFolderSearch('')
+        setError(permissionWarnings.length > 0
+          ? `사용자는 생성됐지만 다음 공유 드라이브 권한을 적용하지 못했습니다: ${permissionWarnings.join(', ')}`
+          : null)
+        requestAnimationFrame(() => usernameRef.current?.focus())
+      } else {
+        onClose()
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '사용자 생성에 실패했습니다')
     } finally {
@@ -170,6 +192,7 @@ function CreateUserModal({ isOpen, onClose, onCreated }: CreateUserModalProps) {
                 <div className="form-group">
                   <label>사용자명 *</label>
                   <input
+                    ref={usernameRef}
                     type="text"
                     value={username}
                     onChange={e => setUsername(e.target.value)}
@@ -193,28 +216,33 @@ function CreateUserModal({ isOpen, onClose, onCreated }: CreateUserModalProps) {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>비밀번호 *</label>
-                  <input
-                    type="password"
+                  <PasswordField
+                    label="비밀번호 *"
                     value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="8자 이상"
+                    onChange={setPassword}
+                    placeholder={passwordPolicy ? `${passwordPolicy.minLength}~${passwordPolicy.maxLength}자` : '정책에 맞는 비밀번호'}
                     required
-                    minLength={8}
+                    minLength={passwordPolicy?.minLength}
+                    maxLength={passwordPolicy?.maxLength}
                   />
                 </div>
                 <div className="form-group">
-                  <label>비밀번호 확인 *</label>
-                  <input
-                    type="password"
+                  <PasswordField
+                    label="비밀번호 확인 *"
                     value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
+                    onChange={setConfirmPassword}
                     placeholder="비밀번호 재입력"
                     required
-                    minLength={8}
+                    minLength={passwordPolicy?.minLength}
+                    maxLength={passwordPolicy?.maxLength}
                   />
                 </div>
               </div>
+              {passwordPolicy && (
+                <p className="form-hint">
+                  {passwordPolicy.minLength}~{passwordPolicy.maxLength}자, 문자 종류 {passwordPolicy.minCharacterTypes}종 이상
+                </p>
+              )}
 
               <div className="form-group checkbox-group">
                 <label className="checkbox-label">
@@ -227,6 +255,18 @@ function CreateUserModal({ isOpen, onClose, onCreated }: CreateUserModalProps) {
                   <span>관리자 권한 부여</span>
                 </label>
                 <p className="form-hint">관리자는 모든 시스템 설정과 사용자를 관리할 수 있습니다.</p>
+              </div>
+              <div className="form-group checkbox-group">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={continueCreating}
+                    onChange={(event) => setContinueCreating(event.target.checked)}
+                  />
+                  <span className="checkmark"></span>
+                  <span>생성 후 계속 입력</span>
+                </label>
+                <p className="form-hint">성공하면 개인정보, 비밀번호, 권한을 모두 비우고 다음 사용자명으로 이동합니다.</p>
               </div>
             </div>
 

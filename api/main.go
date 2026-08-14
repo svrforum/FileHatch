@@ -164,10 +164,10 @@ func main() {
 
 	// Middleware
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-		LogURI:       true,
-		LogStatus:    true,
-		LogMethod:    true,
-		LogLatency:   true,
+		LogURI:     true,
+		LogStatus:  true,
+		LogMethod:  true,
+		LogLatency: true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
 			log.Printf("%s %s %d %v\n", v.Method, v.URI, v.Status, v.Latency)
 			return nil
@@ -235,10 +235,18 @@ func main() {
 	smbAuditHandler.StartBackgroundSync(30*time.Second, shutdownCtx)
 
 	// Create Auth handler
-	authHandler := handlers.NewAuthHandler(db)
+	authHandler := handlers.NewAuthHandler(db, settingsHandler)
 
 	// Create Audit handler
 	auditHandler := handlers.NewAuditHandler(db, dataRoot)
+	settingsHandler.SetAuditHandler(auditHandler)
+
+	userImportHandler := handlers.NewUserImportHandler(db, handlers.UserImportOptions{
+		DataRoot:         dataRoot,
+		PasswordPolicies: settingsHandler,
+		AuditHandler:     auditHandler,
+	})
+	defer userImportHandler.Close()
 
 	// Initialize Brute Force Guard for login protection
 	bruteForceGuard := handlers.InitBruteForceGuard(db, auditHandler)
@@ -302,6 +310,7 @@ func main() {
 
 	// Auth routes (public)
 	api.POST("/auth/login", authHandler.Login)
+	api.GET("/auth/password-policy", authHandler.GetPasswordPolicy)
 	api.POST("/auth/2fa/verify", totpHandler.Verify2FA)
 
 	// Initial setup route (requires auth token from login)
@@ -336,6 +345,7 @@ func main() {
 	adminApi.PUT("/admin/users/:id", authHandler.UpdateUser)
 	adminApi.DELETE("/admin/users/:id", authHandler.DeleteUser)
 	adminApi.DELETE("/admin/users/:id/2fa", totpHandler.AdminReset2FA)
+	userImportHandler.RegisterAdminRoutes(adminApi.Group("/admin"))
 
 	// File API routes (with optional auth for virtual path resolution)
 	api.GET("/files", h.ListFiles, authHandler.OptionalJWTMiddleware)
