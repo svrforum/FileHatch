@@ -1158,21 +1158,6 @@ func getShareOnlyOfficeDocumentType(ext string) string {
 	}
 }
 
-func convertShareURL(externalURL string) string {
-	// Similar to convertToInternalURL in onlyoffice.go
-	internalURL := "http://onlyoffice"
-	if url := os.Getenv("ONLYOFFICE_INTERNAL_URL"); url != "" {
-		internalURL = strings.TrimSuffix(url, "/")
-	}
-
-	publicURL := os.Getenv("ONLYOFFICE_PUBLIC_URL")
-	if publicURL != "" && strings.HasPrefix(externalURL, publicURL) {
-		return strings.Replace(externalURL, publicURL, internalURL, 1)
-	}
-
-	return externalURL
-}
-
 func writeShareFile(path string, content []byte, perm os.FileMode) error {
 	// Write to temp file first for atomic write
 	tmpPath := path + ".tmp"

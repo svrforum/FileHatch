@@ -367,33 +367,3 @@ func getOnlyOfficeDocumentType(ext string) string {
 func IsOnlyOfficeSupported(ext string) bool {
 	return getOnlyOfficeDocumentType(strings.ToLower(ext)) != ""
 }
-
-// convertToInternalURL converts an external OnlyOffice URL to internal Docker network URL
-// This is needed because OnlyOffice sends callback URLs with its public address,
-// but the API server needs to access them via the internal Docker network
-func convertToInternalURL(externalURL string) string {
-	internalURL := getOnlyOfficeInternalURL()
-	publicURL := getOnlyOfficePublicURL()
-
-	// If public URL is configured, replace it with internal URL
-	if publicURL != "" && strings.HasPrefix(externalURL, publicURL) {
-		return strings.Replace(externalURL, publicURL, internalURL, 1)
-	}
-
-	// Fallback: try common localhost patterns
-	parsed, err := url.Parse(externalURL)
-	if err != nil {
-		return externalURL
-	}
-
-	// Check for localhost or 127.0.0.1 patterns (common in development)
-	host := parsed.Hostname()
-	if host == "localhost" || host == "127.0.0.1" {
-		// Replace the host:port with internal URL
-		parsed.Host = strings.TrimPrefix(internalURL, "http://")
-		parsed.Host = strings.TrimPrefix(parsed.Host, "https://")
-		return parsed.String()
-	}
-
-	return externalURL
-}
