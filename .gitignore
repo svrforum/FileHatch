@@ -41,9 +41,23 @@ Thumbs.db
 *:Zone.Identifier
 
 # Environment
+# .env.backup.* is produced by scripts/setup.sh and contains the generated
+# JWT_SECRET and DB password, so it must never be committable.
 .env
 .env.local
 .env.*.local
+.env.backup*
+!.env.example
+
+# Test artifacts.
+# Playwright's storageState holds a signed session token, and the failure
+# artifacts contain screenshots and DOM dumps of real accounts and filenames.
+# None of it belongs in a public repository.
+tests/e2e/playwright/.auth/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/e2e/blob-report/
+playwright/.cache/
 
 # Docker Override (production settings)
 docker-compose.override.yml

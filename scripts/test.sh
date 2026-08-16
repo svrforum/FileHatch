@@ -2,7 +2,11 @@
 # FileHatch - Test Runner Script
 # 모든 기능 개선/추가 후 반드시 실행
 
-set -e
+# pipefail matters here: every check below is of the form
+#   if <command> 2>&1 | tail -N; then
+# and without it the pipeline reports tail's exit status, so a failing test
+# suite was announced as PASS. `set -e` alone does not cover this.
+set -eo pipefail
 
 # Colors
 RED='\033[0;31m'

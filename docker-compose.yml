@@ -19,6 +19,11 @@ services:
       - "localhost:host-gateway"
     environment:
       - TZ=${TZ:-Asia/Seoul}
+      # The API gates its production hardening on FH_ENV: without it the JWT
+      # secret silently falls back to a public development string, WebSocket
+      # origin checks are skipped and the SMB encryption key is optional.
+      # Nothing set this, so every documented deployment ran in dev mode.
+      - FH_ENV=${FH_ENV:-production}
       - DB_HOST=${DB_HOST:-db}
       - DB_PORT=${DB_PORT:-5432}
       - DB_USER=${DB_USER:-fh_user}
@@ -27,7 +32,12 @@ services:
       - VALKEY_HOST=${VALKEY_HOST:-valkey}
       - VALKEY_PORT=${VALKEY_PORT:-6379}
       - JWT_SECRET=${JWT_SECRET:-}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      # ENCRYPTION_KEY was documented but never read by the API; the code
+      # looks for these three names and otherwise falls back to keys that are
+      # hardcoded in the source.
+      - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:-}
+      - SMB_ENCRYPTION_KEY=${SMB_ENCRYPTION_KEY:-}
+      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:-}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-*}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
       - ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_URL:-http://onlyoffice}

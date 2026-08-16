@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"bytes"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base32"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image/png"
 	"net/http"
 	"os"
 	"strings"
@@ -53,12 +56,31 @@ func NewTOTPHandler(db *sql.DB, auditHandler *AuditHandler) *TOTPHandler {
 	}
 }
 
-// Setup2FAResponse represents the response for 2FA setup
+// Setup2FAResponse represents the response for 2FA setup.
+//
+// QRCodeImage is a self-contained data: URI. The response deliberately no
+// longer carries the otpauth:// URI — the UI used to hand that URI to
+// api.qrserver.com to have the QR rendered, which sent the TOTP secret and the
+// account name to a third party in a URL query string.
 type Setup2FAResponse struct {
 	Secret      string `json:"secret"`
-	QRCodeURL   string `json:"qrCodeUrl"`
+	QRCodeImage string `json:"qrCodeImage"`
 	AccountName string `json:"accountName"`
 	Issuer      string `json:"issuer"`
+}
+
+// renderTOTPQRCode renders the provisioning QR as a PNG data URI so the browser
+// never has to fetch it from anywhere.
+func renderTOTPQRCode(key *otp.Key) (string, error) {
+	img, err := key.Image(220, 220)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return "", err
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 
 // Setup2FA generates a new TOTP secret for the user
@@ -113,9 +135,16 @@ func (h *TOTPHandler) Setup2FA(c echo.Context) error {
 		})
 	}
 
+	qrImage, err := renderTOTPQRCode(key)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "Failed to render 2FA QR code",
+		})
+	}
+
 	return c.JSON(http.StatusOK, Setup2FAResponse{
 		Secret:      key.Secret(),
-		QRCodeURL:   key.URL(),
+		QRCodeImage: qrImage,
 		AccountName: claims.Username,
 		Issuer:      "FileHatch",
 	})

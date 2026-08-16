@@ -729,10 +729,7 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
                   <h4>1. 인증 앱으로 QR 코드 스캔</h4>
                   <p>Google Authenticator, Microsoft Authenticator 등의 앱에서 아래 QR 코드를 스캔하세요.</p>
                   <div className="qr-code-container">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setupData.qrCodeUrl)}`}
-                      alt="2FA QR Code"
-                    />
+                    <img src={setupData.qrCodeImage} alt="2FA QR Code" />
                   </div>
                   <div className="manual-entry">
                     <p>QR 코드를 스캔할 수 없는 경우, 수동으로 입력하세요:</p>

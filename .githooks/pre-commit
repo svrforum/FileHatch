@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+#
+# FileHatch pre-commit hook.
+#
+# CLAUDE.md has described this hook as "자동 설치됨" for a long time, but
+# .git/hooks/ only ever contained the stock .sample files — nothing was
+# installed, so nothing was checked. Committing it to the repository and
+# pointing core.hooksPath here is what actually makes it run:
+#
+#   git config core.hooksPath .githooks
+#
+# Bypass with `git commit --no-verify` when you genuinely need to.
+
+set -uo pipefail
+
+fail=0
+note() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
+ok()   { printf '\033[32m%s\033[0m\n' "$*"; }
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+# ---------------------------------------------------------------------------
+# 1. Paths that must never be committed
+# ---------------------------------------------------------------------------
+# tests/e2e/playwright/.auth/*.json is Playwright's storageState: it holds a
+# signed session token. Two of them were committed to this public repository
+# and stayed there for seven months.
+blocked=$(printf '%s\n' "$staged" | grep -E \
+  '(^|/)\.env$|(^|/)\.env\.backup|tests/e2e/playwright/\.auth/|tests/e2e/test-results/|tests/e2e/playwright-report/|\.tsbuildinfo$|\.pem$|\.p12$|(^|/)id_rsa' \
+  || true)
+if [ -n "$blocked" ]; then
+  note "커밋할 수 없는 파일이 스테이징되어 있습니다:"
+  printf '  %s\n' $blocked >&2
+  note "이 파일들은 인증 상태·시크릿·빌드 산출물입니다. 'git restore --staged <경로>' 후 다시 시도하세요."
+  fail=1
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Secret patterns in the staged content
+# ---------------------------------------------------------------------------
+# Scans the diff rather than the worktree so only newly added lines matter.
+secret_hits=$(git diff --cached -U0 -- $staged 2>/dev/null | grep -E '^\+' | grep -nE \
+  'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36}|-----BEGIN [A-Z ]*PRIVATE KEY-----|sk-[A-Za-z0-9]{32,}' \
+  || true)
+if [ -n "$secret_hits" ]; then
+  note "스테이징된 변경에서 시크릿으로 보이는 값이 발견되었습니다:"
+  printf '%s\n' "$secret_hits" | head -10 >&2
+  note "값을 제거하거나, 오탐이면 --no-verify 로 우회하세요."
+  fail=1
+fi
+
+[ "$fail" -ne 0 ] && exit 1
+
+# ---------------------------------------------------------------------------
+# 3. Tests for whichever layer changed
+# ---------------------------------------------------------------------------
+repo_root=$(git rev-parse --show-toplevel)
+
+if printf '%s\n' "$staged" | grep -q '^api/.*\.go$'; then
+  echo "Go 변경 감지 — go build + go test 실행"
+  ( cd "$repo_root/api" && go build ./... ) || { note "go build 실패"; exit 1; }
+  ( cd "$repo_root/api" && go test ./... >/dev/null ) || { note "go test 실패"; exit 1; }
+  ok "Go 검사 통과"
+fi
+
+if printf '%s\n' "$staged" | grep -qE '^ui/src/.*\.(ts|tsx)$'; then
+  if [ -d "$repo_root/ui/node_modules" ]; then
+    echo "TS 변경 감지 — tsc + vitest 실행"
+    ( cd "$repo_root/ui" && npx tsc --noEmit ) || { note "타입 체크 실패"; exit 1; }
+    ( cd "$repo_root/ui" && npm run test:run --silent >/dev/null ) || { note "프론트 테스트 실패"; exit 1; }
+    ok "TypeScript 검사 통과"
+  else
+    note "ui/node_modules 가 없어 프론트 검사를 건너뜁니다 (npm ci 후 다시 시도하세요)"
+  fi
+fi
+
+exit 0

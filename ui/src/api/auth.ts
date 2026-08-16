@@ -68,7 +68,10 @@ export interface SetSMBPasswordRequest {
 
 export interface TwoFASetupResponse {
   secret: string
-  qrCodeUrl: string
+  /** PNG data: URI rendered by the API. The otpauth:// URI is no longer sent to
+   *  the browser — it embeds the TOTP secret, and the previous QR rendering put
+   *  it in a query string to a third-party image service. */
+  qrCodeImage: string
   accountName: string
   issuer: string
 }
