@@ -69,8 +69,12 @@ function AdminUserList() {
     setLoading(true)
     setError(null)
     try {
+      // isAdmin is sent explicitly even though it is unchanged: an API server
+      // still on <=0.15.1 binds omitted booleans to false and would clear the
+      // target's admin flag (Issue #40).
       await updateUser(token, user.id, {
         isActive: !user.isActive,
+        isAdmin: user.isAdmin,
       })
       loadUsers()
     } catch (err) {

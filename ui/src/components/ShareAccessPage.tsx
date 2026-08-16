@@ -165,6 +165,16 @@ function ShareAccessPage() {
     return url
   }
 
+  // Get the ZIP URL for whichever folder is currently open. At the share root
+  // that is the share download endpoint; deeper in, the per-path endpoint —
+  // otherwise browsing three levels down and pressing "download" handed back
+  // the entire share (Issue #39).
+  const getFolderDownloadUrl = () => {
+    if (!token) return ''
+    if (!currentSubpath) return getDownloadUrl()
+    return getShareFileDownloadUrl(token, currentSubpath, password || undefined)
+  }
+
   // Get media streaming URL (same as download but for inline viewing)
   const getStreamUrl = () => {
     return getDownloadUrl()
@@ -773,15 +783,15 @@ function ShareAccessPage() {
                 {/* Download entire folder */}
                 <div className="share-folder-download-all">
                   <a
-                    href={getDownloadUrl()}
+                    href={getFolderDownloadUrl()}
                     className="share-btn-secondary share-download-all-btn"
-                    download={`${shareInfo.name}.zip`}
+                    download={`${currentSubpath ? currentSubpath.split('/').filter(Boolean).pop() : shareInfo.name}.zip`}
                   >
                     <svg viewBox="0 0 24 24" fill="none" className="share-btn-icon">
                       <path d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                       <path d="M12 3V15M12 15L7 10M12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
-                    전체 폴더 다운로드 (ZIP)
+                    {currentSubpath ? '이 폴더 다운로드 (ZIP)' : '전체 폴더 다운로드 (ZIP)'}
                   </a>
                 </div>
               </div>

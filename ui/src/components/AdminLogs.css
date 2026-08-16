@@ -410,6 +410,18 @@
   margin-top: 2px;
 }
 
+/*
+ * Issue #38: AdminUserList.css declares a global `.user-cell { display: flex }`
+ * for its own card layout. Stylesheets here are global (no CSS Modules), and
+ * Vite keeps a lazy route's CSS injected after navigation, so visiting
+ * "사용자 관리" before "감사 로그" turned these <td>s into flex boxes. The cell
+ * then stopped participating in border-collapse and its bottom border rode up
+ * above the row's. Raising specificity to (0,2,1) wins regardless of load order.
+ */
+.logs-table td.user-cell {
+  display: table-cell;
+}
+
 .user-cell .username {
   font-weight: 600;
   color: var(--text-primary);

@@ -3,9 +3,11 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
-	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,6 +25,16 @@ type ShareHandler struct {
 	auditHandler        *AuditHandler
 	notificationService *NotificationService
 	storageRouter       *StorageRouter
+
+	// permissions supplies the shared-drive ACL check used when a share is
+	// created. Optional so tests can build a ShareHandler on its own.
+	permissions *Handler
+}
+
+// SetPermissionSource wires the shared-drive permission checks used by
+// CreateShare.
+func (h *ShareHandler) SetPermissionSource(source *Handler) {
+	h.permissions = source
 }
 
 func NewShareHandler(db *sql.DB, dataRoot string, auditHandler *AuditHandler, notificationService *NotificationService, storageRouter *StorageRouter) *ShareHandler {
@@ -132,6 +144,49 @@ func (h *ShareHandler) resolvePath(virtualPath string, username string) (realPat
 	return realPath, storedPath, nil
 }
 
+// requireShareSourceAccess verifies the caller may share the given virtual
+// path.
+//
+//   - /home/...     already scoped to the caller by resolvePath.
+//   - /shared/...   requires shared-folder membership: read to publish a
+//     download link, write for an upload or edit link.
+//   - /external/... requires an external_storage_access grant, which
+//     StorageRouter.Resolve checks; resolvePath does not.
+func (h *ShareHandler) requireShareSourceAccess(c echo.Context, claims *JWTClaims, virtualPath, shareType string) error {
+	cleanPath := "/" + strings.TrimPrefix(filepath.Clean(virtualPath), "/")
+	root := strings.Split(strings.TrimPrefix(cleanPath, "/"), "/")[0]
+
+	switch root {
+	case "shared":
+		if h.permissions == nil {
+			_ = RespondError(c, ErrInternal("Permission checks are unavailable"))
+			return ErrResponseWritten
+		}
+		allowed := h.permissions.CanReadSharedDrive(claims.UserID, cleanPath)
+		if shareType == "upload" || shareType == "edit" {
+			allowed = h.permissions.CanWriteSharedDrive(claims.UserID, cleanPath)
+		}
+		if !allowed {
+			_ = RespondError(c, ErrForbidden("No permission to share this folder"))
+			return ErrResponseWritten
+		}
+	case "external":
+		if h.storageRouter == nil {
+			_ = RespondError(c, ErrInternal("Storage routing is unavailable"))
+			return ErrResponseWritten
+		}
+		// Resolve with the caller's claims so the mount's access grant is
+		// enforced; the anonymous resolveExternalShareBackend used later
+		// deliberately skips that check.
+		if _, err := h.storageRouter.Resolve(cleanPath, claims); err != nil {
+			_ = RespondError(c, ErrForbidden("No permission to share this storage"))
+			return ErrResponseWritten
+		}
+	}
+
+	return nil
+}
+
 // CreateShare creates a new share link
 // CreateShare godoc
 // @Summary Create a share link
@@ -175,6 +230,14 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 	fullPath, storedPath, err := h.resolvePath(req.Path, claims.Username)
 	if err != nil {
 		return RespondError(c, ErrBadRequest(err.Error()))
+	}
+
+	// A share link makes the target readable to anyone holding the URL, so
+	// creating one requires at least the access the link grants. This resolver
+	// (unlike StorageRouter) performs no ACL check of its own, which let a
+	// non-member publish another team's shared drive.
+	if err := h.requireShareSourceAccess(c, claims, req.Path, shareType); err != nil {
+		return err
 	}
 
 	var isDir bool
@@ -582,17 +645,27 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 	var isActive bool
 	var requireLogin bool
 	var createdBy string
+	var shareType string
 
 	err := h.db.QueryRow(`
-		SELECT path, password_hash, expires_at, access_count, max_access, is_active, require_login, created_by
+		SELECT path, password_hash, expires_at, access_count, max_access, is_active, require_login, created_by,
+		       COALESCE(share_type, 'download')
 		FROM shares WHERE token = $1
-	`, token).Scan(&path, &passwordHash, &expiresAt, &accessCount, &maxAccess, &isActive, &requireLogin, &createdBy)
+	`, token).Scan(&path, &passwordHash, &expiresAt, &accessCount, &maxAccess, &isActive, &requireLogin, &createdBy, &shareType)
 
 	if err == sql.ErrNoRows {
 		return RespondError(c, ErrNotFound("Share not found"))
 	}
 	if err != nil {
 		return RespondError(c, ErrInternal("Database error"))
+	}
+
+	// An upload share is a drop box: visitors put files in, they do not take
+	// the folder out. This mattered less while directories were refused
+	// outright; now that they stream as a ZIP it is the only thing separating
+	// "upload here" from "here is everything anyone ever uploaded".
+	if shareType == "upload" {
+		return RespondError(c, ErrForbidden("This link does not allow downloads"))
 	}
 
 	// Validate share
@@ -635,7 +708,7 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 		}
 		_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventShareAccess, path, map[string]interface{}{
 			"action":   "download",
-			"token":    token,
+			"shareRef": shareTokenFingerprint(token),
 			"filename": filename,
 			"size":     size,
 		})
@@ -670,13 +743,30 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 		if resolveErr != nil {
 			return RespondError(c, ErrNotFound("File not found"))
 		}
-		ctx := context.Background()
+		ctx := c.Request().Context()
 		info, statErr := backend.Stat(ctx, relPath)
 		if statErr != nil {
 			return RespondError(c, ErrNotFound("File not found"))
 		}
 		if info.IsDirectory {
-			return RespondError(c, ErrBadRequest("Cannot download a directory"))
+			// A local-mount external backend hands back a real path, so the
+			// same symlink-escape check the local branch runs applies here.
+			if realPath, pathErr := backend.GetRealPath(relPath); pathErr == nil {
+				backendRoot, rootErr := backend.GetRealPath("")
+				if rootErr != nil {
+					return RespondError(c, ErrForbidden("Access denied"))
+				}
+				if err := validateSharedDirectoryPath(backendRoot, realPath); err != nil {
+					return RespondError(c, ErrForbidden("Access denied"))
+				}
+				result, zipErr := streamLocalShareDirectory(c, realPath, info.FileName)
+				logDownloadEvent(info.FileName+".zip", result.Bytes)
+				return zipErr
+			}
+
+			result, zipErr := streamBackendShareDirectory(c, ctx, backend, relPath, info.FileName)
+			logDownloadEvent(info.FileName+".zip", result.Bytes)
+			return zipErr
 		}
 
 		logDownloadEvent(info.FileName, info.FileSize)
@@ -705,7 +795,13 @@ func (h *ShareHandler) DownloadShare(c echo.Context) error {
 	}
 
 	if info.IsDir() {
-		return RespondError(c, ErrBadRequest("Cannot download a directory"))
+		if err := validateSharedDirectoryPath(h.dataRoot, fullPath); err != nil {
+			return RespondError(c, ErrForbidden("Access denied"))
+		}
+
+		result, zipErr := streamLocalShareDirectory(c, fullPath, info.Name())
+		logDownloadEvent(info.Name()+".zip", result.Bytes)
+		return zipErr
 	}
 
 	logDownloadEvent(info.Name(), info.Size())
@@ -990,24 +1086,13 @@ func (h *ShareHandler) ShareOnlyOfficeCallback(c echo.Context) error {
 			return c.JSON(http.StatusBadRequest, map[string]int{"error": 1})
 		}
 
-		// Convert external URL to internal Docker network URL
-		downloadURL := convertShareURL(req.URL)
-
-		// Download the document from OnlyOffice
-		resp, err := http.Get(downloadURL)
+		// Same rule as the authenticated callback: only the configured
+		// OnlyOffice host may be fetched (see onlyoffice_fetch.go). This
+		// endpoint is reachable with nothing but a share token.
+		content, err := onlyOfficeFetch(req.URL)
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]int{"error": 1})
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return c.JSON(http.StatusInternalServerError, map[string]int{"error": 1})
-		}
-
-		// Read document content
-		content, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]int{"error": 1})
+			log.Printf("[OnlyOffice-Share] Download rejected or failed: %v", err)
+			return c.JSON(http.StatusBadRequest, map[string]int{"error": 1})
 		}
 
 		// Write to file
@@ -1391,17 +1476,24 @@ func (h *ShareHandler) DownloadShareFile(c echo.Context) error {
 
 	err := h.db.QueryRow(`
 		SELECT id, token, path, created_by, expires_at,
-		       password_hash, access_count, max_access, is_active, require_login
+		       password_hash, access_count, max_access, is_active, require_login,
+		       COALESCE(share_type, 'download')
 		FROM shares
 		WHERE token = $1
 	`, token).Scan(&share.ID, &share.Token, &share.Path, &share.CreatedBy,
-		&expiresAt, &passwordHash, &share.AccessCount, &maxAccess, &share.IsActive, &share.RequireLogin)
+		&expiresAt, &passwordHash, &share.AccessCount, &maxAccess, &share.IsActive, &share.RequireLogin,
+		&share.ShareType)
 
 	if err == sql.ErrNoRows {
 		return RespondError(c, ErrNotFound("Share not found"))
 	}
 	if err != nil {
 		return RespondError(c, ErrInternal("Database error"))
+	}
+
+	// See DownloadShare: an upload link must not serve content back out.
+	if share.ShareType == "upload" {
+		return RespondError(c, ErrForbidden("This link does not allow downloads"))
 	}
 
 	// Validate share
@@ -1450,7 +1542,7 @@ func (h *ShareHandler) DownloadShareFile(c echo.Context) error {
 		}
 		_ = h.auditHandler.LogEvent(userID, c.RealIP(), EventShareAccess, share.Path, map[string]interface{}{
 			"action":   "download_file",
-			"token":    token,
+			"shareRef": shareTokenFingerprint(token),
 			"filename": filename,
 			"filepath": filePath,
 			"size":     filesize,
@@ -1487,13 +1579,28 @@ func (h *ShareHandler) DownloadShareFile(c echo.Context) error {
 			return RespondError(c, ErrNotFound("File not found"))
 		}
 		fileRelPath := filepath.Join(relPath, cleanPath)
-		ctx := context.Background()
+		ctx := c.Request().Context()
 		info, statErr := backend.Stat(ctx, fileRelPath)
 		if statErr != nil {
 			return RespondError(c, ErrNotFound("File not found"))
 		}
 		if info.IsDirectory {
-			return RespondError(c, ErrBadRequest("Cannot download a directory"))
+			if realDirPath, pathErr := backend.GetRealPath(fileRelPath); pathErr == nil {
+				backendRoot, rootErr := backend.GetRealPath(relPath)
+				if rootErr != nil {
+					return RespondError(c, ErrForbidden("Access denied"))
+				}
+				if err := validateSharedDirectoryPath(backendRoot, realDirPath); err != nil {
+					return RespondError(c, ErrForbidden("Access denied"))
+				}
+				result, zipErr := streamLocalShareDirectory(c, realDirPath, info.FileName)
+				logFileDownload(info.FileName+".zip", result.Bytes)
+				return zipErr
+			}
+
+			result, zipErr := streamBackendShareDirectory(c, ctx, backend, fileRelPath, info.FileName)
+			logFileDownload(info.FileName+".zip", result.Bytes)
+			return zipErr
 		}
 
 		logFileDownload(info.FileName, info.FileSize)
@@ -1518,9 +1625,11 @@ func (h *ShareHandler) DownloadShareFile(c echo.Context) error {
 	// Build full path
 	fullPath := filepath.Join(h.dataRoot, share.Path, cleanPath)
 
-	// Security check: ensure path is within share root
+	// Security check: ensure path is within share root.
+	// A bare prefix compare also accepts "<shareRoot>-evil", so the boundary is
+	// checked on a path separator.
 	shareRoot := filepath.Join(h.dataRoot, share.Path)
-	if !strings.HasPrefix(fullPath, shareRoot) {
+	if fullPath != shareRoot && !strings.HasPrefix(fullPath, shareRoot+string(os.PathSeparator)) {
 		return RespondError(c, ErrForbidden("Access denied"))
 	}
 
@@ -1530,11 +1639,29 @@ func (h *ShareHandler) DownloadShareFile(c echo.Context) error {
 		return RespondError(c, ErrNotFound("File not found"))
 	}
 	if info.IsDir() {
-		return RespondError(c, ErrBadRequest("Cannot download a directory"))
+		if err := validateSharedDirectoryPath(shareRoot, fullPath); err != nil {
+			return RespondError(c, ErrForbidden("Access denied"))
+		}
+
+		result, zipErr := streamLocalShareDirectory(c, fullPath, info.Name())
+		logFileDownload(info.Name()+".zip", result.Bytes)
+		return zipErr
 	}
 
 	logFileDownload(info.Name(), info.Size())
 
 	setContentDisposition(c, info.Name())
 	return c.File(fullPath)
+}
+
+// shareTokenFingerprint turns a share link token into a short, non-reversible
+// reference for audit records.
+//
+// The token is the link's only secret: anyone holding it can open the share.
+// Writing it verbatim into audit_logs meant that reading the audit trail was
+// enough to reconstruct working URLs for other people's shares. The
+// fingerprint still lets an operator correlate events for one link.
+func shareTokenFingerprint(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:6])
 }
