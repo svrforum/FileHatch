@@ -228,7 +228,50 @@ func TestRegister_ShortUsername(t *testing.T) {
 	_ = handler.Register(c)
 
 	AssertStatus(t, tc.Recorder, http.StatusBadRequest)
-	AssertJSONError(t, tc.Recorder, "Username must be between 3 and 50 characters")
+	// Register now defers to ValidateUsername, which also rejects path
+	// characters and reserved names; its wording differs from the old inline
+	// length check.
+	AssertJSONError(t, tc.Recorder, "username must be at least 3 characters")
+}
+
+func TestRegister_UsernameWithPathTraversal(t *testing.T) {
+	tc := SetupTest(t)
+	defer tc.Cleanup()
+
+	handler := CreateTestAuthHandler(tc.DB)
+
+	req, _ := NewJSONRequest(http.MethodPost, "/api/auth/register", map[string]string{
+		"username": "../../../../etc",
+		"email":    "test@example.com",
+		"password": "Password123!",
+	})
+
+	c := tc.Echo.NewContext(req, tc.Recorder)
+
+	_ = handler.Register(c)
+
+	// The username becomes a path segment under /data/users; a length-only
+	// check accepted this and filepath.Join then normalised it to /etc.
+	AssertStatus(t, tc.Recorder, http.StatusBadRequest)
+}
+
+func TestRegister_ReservedUsername(t *testing.T) {
+	tc := SetupTest(t)
+	defer tc.Cleanup()
+
+	handler := CreateTestAuthHandler(tc.DB)
+
+	req, _ := NewJSONRequest(http.MethodPost, "/api/auth/register", map[string]string{
+		"username": "admin",
+		"email":    "test@example.com",
+		"password": "Password123!",
+	})
+
+	c := tc.Echo.NewContext(req, tc.Recorder)
+
+	_ = handler.Register(c)
+
+	AssertStatus(t, tc.Recorder, http.StatusBadRequest)
 }
 
 func TestRegister_ShortPassword(t *testing.T) {

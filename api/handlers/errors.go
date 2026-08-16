@@ -1,11 +1,23 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
 )
+
+// ErrResponseWritten is a sentinel returned by the Require* helpers after they
+// have already written the error response to the client. Handlers propagate it
+// with `return err`; Echo's DefaultHTTPErrorHandler short-circuits on
+// c.Response().Committed, so no second response is emitted.
+//
+// It exists because RespondError delegates to c.JSON, which returns nil on
+// success. Returning that nil made `claims, err := RequireClaims(c)` yield
+// (nil, nil) on an unauthenticated request, so the caller's `if err != nil`
+// guard never fired and the following claims.UserID dereference panicked.
+var ErrResponseWritten = errors.New("handlers: error response already written")
 
 // ErrorCode represents a standardized error code
 type ErrorCode string
@@ -227,7 +239,8 @@ func GetClaims(c echo.Context) *JWTClaims {
 func RequireClaims(c echo.Context) (*JWTClaims, error) {
 	claims := GetClaims(c)
 	if claims == nil {
-		return nil, RespondError(c, ErrUnauthorized(""))
+		_ = RespondError(c, ErrUnauthorized(""))
+		return nil, ErrResponseWritten
 	}
 	return claims, nil
 }
@@ -236,10 +249,12 @@ func RequireClaims(c echo.Context) (*JWTClaims, error) {
 func RequireAdmin(c echo.Context) (*JWTClaims, error) {
 	claims := GetClaims(c)
 	if claims == nil {
-		return nil, RespondError(c, ErrUnauthorized(""))
+		_ = RespondError(c, ErrUnauthorized(""))
+		return nil, ErrResponseWritten
 	}
 	if !claims.IsAdmin {
-		return nil, RespondError(c, ErrForbidden("Admin access required"))
+		_ = RespondError(c, ErrForbidden("Admin access required"))
+		return nil, ErrResponseWritten
 	}
 	return claims, nil
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 	"time"
@@ -13,6 +14,18 @@ import (
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// smbConfigValuePattern is what may appear on the right-hand side of an
+// smb.conf directive: no newlines, no section brackets, no '=' that could start
+// another directive.
+var smbConfigValuePattern = regexp.MustCompile(`^[A-Za-z0-9 ._-]{1,64}$`)
+
+func validateSMBConfigValue(field, value string) error {
+	if !smbConfigValuePattern.MatchString(value) {
+		return fmt.Errorf("%s must be 1-64 characters of letters, digits, space, dot, underscore or hyphen", field)
+	}
+	return nil
+}
 
 type SMBHandler struct {
 	db         *sql.DB
@@ -89,6 +102,9 @@ type SetPasswordRequest struct {
 
 // ListSMBUsers returns list of users with SMB info
 func (h *SMBHandler) ListSMBUsers(c echo.Context) error {
+	if _, err := RequireAdmin(c); err != nil {
+		return err
+	}
 	if err := h.checkSMBEnabled(c); err != nil {
 		return err
 	}
@@ -124,6 +140,9 @@ func (h *SMBHandler) ListSMBUsers(c echo.Context) error {
 
 // CreateSMBUser creates a new user with SMB access
 func (h *SMBHandler) CreateSMBUser(c echo.Context) error {
+	if _, err := RequireAdmin(c); err != nil {
+		return err
+	}
 	if err := h.checkSMBEnabled(c); err != nil {
 		return err
 	}
@@ -141,17 +160,17 @@ func (h *SMBHandler) CreateSMBUser(c echo.Context) error {
 		})
 	}
 
-	// Validate username (alphanumeric only, 3-50 chars)
-	if len(req.Username) < 3 || len(req.Username) > 50 {
+	// Username becomes a filesystem path segment (/data/users/<username>), so
+	// a length check alone is not enough — "../../etc" passes it.
+	if err := ValidateUsername(req.Username); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Username must be between 3 and 50 characters",
+			"error": err.Error(),
 		})
 	}
 
-	// Validate password (at least 8 chars)
-	if len(req.Password) < 8 {
+	if err := ValidatePassword(req.Password); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "Password must be at least 8 characters",
+			"error": err.Error(),
 		})
 	}
 
@@ -166,16 +185,23 @@ func (h *SMBHandler) CreateSMBUser(c echo.Context) error {
 	// Generate SMB hash (we'll store a marker, actual SMB password is set in samba container)
 	smbHash := generateSMBMarker()
 
-	// Insert or update user
+	// Create only. The previous ON CONFLICT DO UPDATE meant that "creating" an
+	// SMB user named after an existing account silently replaced that
+	// account's web password_hash — a create endpoint must not be a password
+	// reset for someone else. Use SetSMBPassword to change an existing user.
 	var userID string
 	err = h.db.QueryRow(`
 		INSERT INTO users (username, password_hash, smb_hash, is_active)
 		VALUES ($1, $2, $3, true)
-		ON CONFLICT (username) DO UPDATE
-		SET password_hash = $2, smb_hash = $3, updated_at = NOW()
+		ON CONFLICT (username) DO NOTHING
 		RETURNING id
 	`, req.Username, string(passwordHash), smbHash).Scan(&userID)
 
+	if err == sql.ErrNoRows {
+		return c.JSON(http.StatusConflict, map[string]string{
+			"error": "User already exists",
+		})
+	}
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Failed to create user",
@@ -198,6 +224,9 @@ func (h *SMBHandler) CreateSMBUser(c echo.Context) error {
 
 // SetSMBPassword sets SMB password for an existing user
 func (h *SMBHandler) SetSMBPassword(c echo.Context) error {
+	if _, err := RequireAdmin(c); err != nil {
+		return err
+	}
 	if err := h.checkSMBEnabled(c); err != nil {
 		return err
 	}
@@ -259,6 +288,9 @@ func (h *SMBHandler) SetSMBPassword(c echo.Context) error {
 
 // DeleteSMBUser removes SMB access for a user
 func (h *SMBHandler) DeleteSMBUser(c echo.Context) error {
+	if _, err := RequireAdmin(c); err != nil {
+		return err
+	}
 	if err := h.checkSMBEnabled(c); err != nil {
 		return err
 	}
@@ -300,6 +332,9 @@ func (h *SMBHandler) DeleteSMBUser(c echo.Context) error {
 
 // GetSMBConfig returns current SMB configuration
 func (h *SMBHandler) GetSMBConfig(c echo.Context) error {
+	if _, err := RequireAdmin(c); err != nil {
+		return err
+	}
 	if err := h.checkSMBEnabled(c); err != nil {
 		return err
 	}
@@ -336,6 +371,9 @@ func (h *SMBHandler) GetSMBConfig(c echo.Context) error {
 
 // UpdateSMBConfig updates SMB configuration
 func (h *SMBHandler) UpdateSMBConfig(c echo.Context) error {
+	if _, err := RequireAdmin(c); err != nil {
+		return err
+	}
 	if err := h.checkSMBEnabled(c); err != nil {
 		return err
 	}
@@ -352,6 +390,17 @@ func (h *SMBHandler) UpdateSMBConfig(c echo.Context) error {
 	}
 	if config.ServerName == "" {
 		config.ServerName = "FileHatch SMB Server"
+	}
+
+	// These values are interpolated straight into smb.conf, which the samba
+	// container adopts as-is. text/template does no escaping for an INI file,
+	// so a newline in either field would let the caller append their own share
+	// section — e.g. a guest-writable share rooted at "/".
+	if err := validateSMBConfigValue("workgroup", config.Workgroup); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	if err := validateSMBConfigValue("serverName", config.ServerName); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
 	// Generate new smb.conf

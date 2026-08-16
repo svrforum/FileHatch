@@ -82,6 +82,10 @@ func (h *Handler) CreateFile(c echo.Context) error {
 		})
 	}
 
+	if err := h.RequireSharedDriveWrite(c, claims, result, "create files"); err != nil {
+		return err
+	}
+
 	// Get template content based on file type
 	content := getTemplateContent(req.FileType)
 
@@ -252,6 +256,10 @@ func (h *Handler) SimpleUpload(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
 			"error": "Authentication required",
 		})
+	}
+
+	if err := h.RequireSharedDriveWrite(c, claims, result, "upload files"); err != nil {
+		return err
 	}
 
 	// Open the uploaded file

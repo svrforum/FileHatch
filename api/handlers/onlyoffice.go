@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -121,29 +120,12 @@ func (h *Handler) OnlyOfficeCallback(c echo.Context) error {
 			}
 		}
 
-		// Convert external URL to internal Docker network URL
-		// OnlyOffice sends URLs with its public address, but API needs internal Docker network address
-		downloadURL := convertToInternalURL(req.URL)
-		log.Printf("[OnlyOffice] Downloading from: %s (original: %s)", downloadURL, req.URL)
-
-		// Download the document from OnlyOffice
-		resp, err := http.Get(downloadURL)
+		// Fetch the saved document. The URL is only followed if it points at the
+		// configured OnlyOffice service — see onlyoffice_fetch.go.
+		content, err := onlyOfficeFetch(req.URL)
 		if err != nil {
-			log.Printf("[OnlyOffice] Download failed: %v", err)
-			return c.JSON(http.StatusInternalServerError, map[string]int{"error": 1})
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			log.Printf("[OnlyOffice] Download returned status: %d", resp.StatusCode)
-			return c.JSON(http.StatusInternalServerError, map[string]int{"error": 1})
-		}
-
-		// Read document content
-		content, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.Printf("[OnlyOffice] Failed to read response body: %v", err)
-			return c.JSON(http.StatusInternalServerError, map[string]int{"error": 1})
+			log.Printf("[OnlyOffice] Download rejected or failed: %v", err)
+			return c.JSON(http.StatusBadRequest, map[string]int{"error": 1})
 		}
 
 		// Write to file

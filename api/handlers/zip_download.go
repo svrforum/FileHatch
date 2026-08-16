@@ -50,6 +50,10 @@ func (h *Handler) DownloadAsZip(c echo.Context) error {
 			return RespondError(c, ErrInvalidPath(fmt.Sprintf("Invalid path: %s", path)))
 		}
 
+		if err := h.RequireSharedDriveRead(c, claims, result); err != nil {
+			return err
+		}
+
 		isNonLocal := result.StorageType == StorageExternal && realPath == ""
 		var isDir bool
 
@@ -307,6 +311,10 @@ func (h *Handler) DownloadFolderAsZip(c echo.Context) error {
 	result, realPath, err := h.resolveStorageForOperation("/"+requestPath, claims)
 	if err != nil {
 		return RespondError(c, ErrInvalidPath(err.Error()))
+	}
+
+	if err := h.RequireSharedDriveRead(c, claims, result); err != nil {
+		return err
 	}
 
 	displayPath := result.DisplayPath

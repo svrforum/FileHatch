@@ -37,6 +37,10 @@ func (h *Handler) GetPreview(c echo.Context) error {
 		})
 	}
 
+	if err := h.RequireSharedDriveRead(c, claims, result); err != nil {
+		return err
+	}
+
 	displayPath := result.DisplayPath
 	isNonLocal := result.StorageType == StorageExternal && realPath == ""
 

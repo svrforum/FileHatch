@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -25,27 +28,72 @@ type AuthHandler struct {
 // Package-level JWT secret for shared access
 var sharedJWTSecret []byte
 
-func NewAuthHandler(db *sql.DB) *AuthHandler {
-	secret := os.Getenv("JWT_SECRET")
-	env := os.Getenv("FH_ENV")
+const defaultConfigPath = "/etc/filehatch"
 
-	if secret == "" {
-		if env == "production" {
-			log.Fatal("FATAL: JWT_SECRET environment variable is required in production mode")
+// jwtSecretFile holds a secret generated on the operator's behalf when
+// JWT_SECRET was never set. It lives on the config volume so restarts keep
+// issuing tokens the previous run would accept.
+const jwtSecretFile = "jwt_secret"
+
+// resolveJWTSecret returns the signing secret, generating and persisting one if
+// the operator has not supplied it.
+//
+// This used to fall back to a fixed string, "fh-dev-secret-not-for-production-use",
+// whenever FH_ENV was not "production" — and nothing ever set FH_ENV, so the
+// published compose files ran with a signing key that is in the source tree.
+// Anyone could mint an isAdmin token. Refusing to boot instead would strand
+// every existing install that never set the variable, so an unset secret is
+// now generated once and kept.
+func resolveJWTSecret(configPath string) []byte {
+	if secret := os.Getenv("JWT_SECRET"); secret != "" {
+		if len(secret) < 32 {
+			log.Println("WARNING: JWT_SECRET should be at least 32 characters for security")
 		}
-		// Development fallback with warning
-		log.Println("WARNING: JWT_SECRET not set. Using default secret. Set JWT_SECRET in production!")
-		secret = "fh-dev-secret-not-for-production-use"
-	} else if len(secret) < 32 {
-		log.Println("WARNING: JWT_SECRET should be at least 32 characters for security")
+		return []byte(secret)
 	}
 
-	sharedJWTSecret = []byte(secret) // Set the shared secret
+	secretPath := filepath.Join(configPath, jwtSecretFile)
+	if stored, err := os.ReadFile(secretPath); err == nil {
+		if trimmed := strings.TrimSpace(string(stored)); len(trimmed) >= 32 {
+			log.Printf("JWT_SECRET not set; using the generated secret at %s", secretPath)
+			return []byte(trimmed)
+		}
+	}
+
+	generated := make([]byte, 48)
+	if _, err := rand.Read(generated); err != nil {
+		log.Fatalf("FATAL: JWT_SECRET is not set and no secret could be generated: %v", err)
+	}
+	encoded := base64.RawURLEncoding.EncodeToString(generated)
+
+	if err := os.MkdirAll(configPath, 0o750); err != nil {
+		log.Fatalf("FATAL: JWT_SECRET is not set and %s is not writable: %v", configPath, err)
+	}
+	if err := os.WriteFile(secretPath, []byte(encoded), 0o600); err != nil {
+		log.Fatalf("FATAL: JWT_SECRET is not set and the generated secret could not be saved to %s: %v", secretPath, err)
+	}
+
+	log.Printf("WARNING: JWT_SECRET was not set. A random secret was generated and saved to %s. "+
+		"Existing sessions are invalidated once. Set JWT_SECRET explicitly to control it.", secretPath)
+	return []byte(encoded)
+}
+
+// SharedJWTSecret returns the signing secret in use, so other components sign
+// and verify with the same key instead of re-deriving one of their own.
+func SharedJWTSecret() []byte {
+	return sharedJWTSecret
+}
+
+func NewAuthHandler(db *sql.DB) *AuthHandler {
+	configPath := defaultConfigPath
+	secret := resolveJWTSecret(configPath)
+
+	sharedJWTSecret = secret // Set the shared secret
 	return &AuthHandler{
 		db:           db,
-		jwtSecret:    []byte(secret),
+		jwtSecret:    secret,
 		dataRoot:     "/data",
-		configPath:   "/etc/filehatch",
+		configPath:   configPath,
 		auditHandler: NewAuditHandler(db, "/data"),
 	}
 }
@@ -137,9 +185,10 @@ func (h *AuthHandler) Register(c echo.Context) error {
 		return RespondError(c, ErrBadRequest("Invalid request"))
 	}
 
-	// Validate input
-	if len(req.Username) < 3 || len(req.Username) > 50 {
-		return RespondError(c, ErrBadRequest("Username must be between 3 and 50 characters"))
+	// See CreateUser: the username lands in a filesystem path, so it needs the
+	// full character/reserved-word validation.
+	if err := ValidateUsername(req.Username); err != nil {
+		return RespondError(c, ErrBadRequest(err.Error()))
 	}
 
 	// Validate password complexity

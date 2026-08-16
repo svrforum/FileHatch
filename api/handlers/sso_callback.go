@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -337,7 +336,7 @@ func (h *SSOHandler) HandleCallback(c echo.Context) error {
 	_, _ = h.db.Exec(`
 		INSERT INTO audit_logs (actor_id, ip_addr, event_type, target_resource, details)
 		VALUES ($1, $2, 'sso_login', $3, $4)
-	`, user.ID, c.RealIP(), provider.Name, fmt.Sprintf(`{"provider": "%s", "email": "%s"}`, provider.Name, userInfo.Email))
+	`, user.ID, c.RealIP(), provider.Name, ssoLoginAuditDetails(provider.Name, userInfo.Email))
 
 	// Redirect to frontend with token
 	return c.Redirect(http.StatusFound, fmt.Sprintf("/login?sso_token=%s", tokenString))
@@ -380,15 +379,9 @@ func (h *SSOHandler) exchangeCodeForToken(tokenURL, code, clientID, clientSecret
 		return nil, err
 	}
 
-	// Debug: log token issuer
-	if tokenResp.AccessToken != "" {
-		parts := strings.Split(tokenResp.AccessToken, ".")
-		if len(parts) >= 2 {
-			if payload, err := base64.RawURLEncoding.DecodeString(parts[1]); err == nil {
-				fmt.Printf("[SSO DEBUG] Token payload: %s\n", string(payload))
-			}
-		}
-	}
+	// The access token payload was printed here in full. It carries the
+	// end user's email and subject identifier, and container logs are readable
+	// by anyone who can reach the system-log endpoint.
 
 	return &tokenResp, nil
 }
@@ -565,10 +558,11 @@ func (h *SSOHandler) generateUsername(email, name string) string {
 		base = base[:20]
 	}
 
-	// Check if username exists
+	// Check if username exists. A reserved name is treated as taken so that an
+	// IdP account whose email local part is "admin" or "root" cannot claim it.
 	var exists bool
 	_ = h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", base).Scan(&exists)
-	if !exists {
+	if !exists && ValidateUsername(base) == nil {
 		return base
 	}
 
@@ -576,10 +570,31 @@ func (h *SSOHandler) generateUsername(email, name string) string {
 	for i := 1; i < 1000; i++ {
 		candidate := fmt.Sprintf("%s%d", base, i)
 		_ = h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", candidate).Scan(&exists)
-		if !exists {
+		if !exists && ValidateUsername(candidate) == nil {
 			return candidate
 		}
 	}
 
 	return fmt.Sprintf("%s_%d", base, time.Now().Unix())
+}
+
+// ssoLoginAuditDetails builds the audit details for an SSO login.
+//
+// The address itself is not recorded: the row already identifies the account
+// via actor_id, so storing the email only adds a directory of user addresses to
+// a table that is retained indefinitely. The domain is kept because it is what
+// makes the entry useful when several identity providers are configured.
+func ssoLoginAuditDetails(providerName, email string) string {
+	domain := ""
+	if at := strings.LastIndex(email, "@"); at >= 0 && at+1 < len(email) {
+		domain = email[at+1:]
+	}
+	details, err := json.Marshal(map[string]string{
+		"provider":    providerName,
+		"emailDomain": domain,
+	})
+	if err != nil {
+		return `{"provider":"unknown"}`
+	}
+	return string(details)
 }

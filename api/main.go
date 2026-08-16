@@ -97,6 +97,12 @@ func main() {
 	e := echo.New()
 	e.HideBanner = true
 
+	// Initialise structured logging before anything can log. Without this the
+	// package-level zerolog logger stays a zero value whose writer is nil, so
+	// every LogInfo/LogWarn/LogError call — including upload rejections and
+	// permission denials — was discarded.
+	handlers.InitLogger(os.Getenv("FH_ENV") != "production")
+
 	// Database connection (needed for settings before middleware)
 	db, err := database.Connect()
 	if err != nil {
@@ -214,6 +220,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create upload handler: %v", err)
 	}
+	uploadHandler.SetPermissionSource(h)
 
 	// Create SMB handler
 	smbHandler := handlers.NewSMBHandler(db, "/etc/filehatch")
@@ -253,6 +260,7 @@ func main() {
 
 	// Create Share handler
 	shareHandler := handlers.NewShareHandler(db, dataRoot, auditHandler, notificationService, h.GetStorageRouter())
+	shareHandler.SetPermissionSource(h)
 
 	// Create Upload Share handler
 	uploadShareHandler, err := handlers.NewUploadShareHandler(db, dataRoot, auditHandler, notificationService)
@@ -269,15 +277,11 @@ func main() {
 	// Create File Metadata handler (descriptions and tags)
 	fileMetadataHandler := handlers.NewFileMetadataHandler(db)
 
-	// Create SSO handler
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		jwtSecret = "fh-dev-secret-not-for-production-use"
-		log.Println("WARNING: JWT_SECRET not set, using insecure default. Set JWT_SECRET environment variable for production!")
-	} else if len(jwtSecret) < 32 {
-		log.Println("WARNING: JWT_SECRET is too short. Use at least 32 characters for security.")
-	}
-	ssoHandler := handlers.NewSSOHandler(db, jwtSecret, dataRoot)
+	// Create SSO handler. It reuses the secret NewAuthHandler already resolved
+	// — this block used to re-read JWT_SECRET and fall back to the public
+	// development string on its own, so SSO-issued tokens could be signed with
+	// a different (and forgeable) key than the rest of the API.
+	ssoHandler := handlers.NewSSOHandler(db, string(handlers.SharedJWTSecret()), dataRoot)
 
 	// Note: settingsHandler is already created earlier for middleware configuration
 
@@ -336,7 +340,9 @@ func main() {
 	// File API routes (with optional auth for virtual path resolution)
 	api.GET("/files", h.ListFiles, authHandler.OptionalJWTMiddleware)
 	api.GET("/files/check", h.CheckFileExists, authHandler.OptionalJWTMiddleware)
-	api.GET("/files/search", h.SearchFiles, authHandler.OptionalJWTMiddleware)
+	// Search reaches into home and shared drives; there is nothing for an
+	// anonymous caller to search.
+	api.GET("/files/search", h.SearchFiles, authHandler.JWTMiddleware)
 	api.Match([]string{http.MethodGet, http.MethodHead}, "/subtitle/*", h.GetSubtitle, authHandler.OptionalJWTMiddleware)
 	api.GET("/files/*", h.GetFile, authHandler.OptionalJWTMiddleware)
 	api.PUT("/files/content/*", h.SaveFileContent, authHandler.OptionalJWTMiddleware)
@@ -399,19 +405,27 @@ func main() {
 	api.GET("/rhwp/settings", h.GetRhwpSettings)
 
 	// SMB Management API (protected)
-	authApi.GET("/smb/users", smbHandler.ListSMBUsers)
-	authApi.POST("/smb/users", smbHandler.CreateSMBUser)
-	authApi.PUT("/smb/users/password", smbHandler.SetSMBPassword)
-	authApi.DELETE("/smb/users/:username", smbHandler.DeleteSMBUser)
-	authApi.GET("/smb/config", smbHandler.GetSMBConfig)
-	authApi.PUT("/smb/config", smbHandler.UpdateSMBConfig)
+	// SMB account and server configuration is administration, not a user
+	// setting. On authApi, CreateSMBUser's UPSERT let any authenticated user
+	// overwrite another account's password_hash — including an admin's.
+	// Users change their own SMB password through PUT /auth/smb-password.
+	adminApi.GET("/smb/users", smbHandler.ListSMBUsers)
+	adminApi.POST("/smb/users", smbHandler.CreateSMBUser)
+	adminApi.PUT("/smb/users/password", smbHandler.SetSMBPassword)
+	adminApi.DELETE("/smb/users/:username", smbHandler.DeleteSMBUser)
+	adminApi.GET("/smb/config", smbHandler.GetSMBConfig)
+	adminApi.PUT("/smb/config", smbHandler.UpdateSMBConfig)
 	adminApi.GET("/smb/audit", smbAuditHandler.GetSMBAuditLogs)
 	adminApi.POST("/smb/audit/sync", smbAuditHandler.SyncSMBAuditLogs)
 
-	// Audit logs API (protected)
-	authApi.GET("/audit/logs", auditHandler.ListAuditLogs)
-	authApi.GET("/audit/resource/*", auditHandler.GetResourceHistory)
-	authApi.GET("/audit/system", auditHandler.GetSystemLogs)
+	// Audit logs API (admin only).
+	// ListAuditLogs returns every user's file paths, IP addresses and share
+	// tokens; GetSystemLogs shells out to `docker logs`, and the request logger
+	// records URIs that carry JWTs in query strings. On authApi any account
+	// could read both. The only UI consumer is the admin log page.
+	adminApi.GET("/audit/logs", auditHandler.ListAuditLogs)
+	adminApi.GET("/audit/resource/*", auditHandler.GetResourceHistory)
+	adminApi.GET("/audit/system", auditHandler.GetSystemLogs)
 
 	// Recent files API (protected)
 	authApi.GET("/files/recent", auditHandler.GetRecentFiles)
@@ -554,6 +568,19 @@ func main() {
 		req := c.Request()
 		res := c.Response()
 
+		// tus metadata is client-controlled, so the username it carries cannot
+		// be trusted. JWTMiddleware has already verified the caller; stamp that
+		// verified identity onto the request under headers the pre-create hook
+		// reads, after clearing whatever the client may have sent under them.
+		claims := handlers.GetClaims(c)
+		if claims == nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Authentication required"})
+		}
+		req.Header.Del(handlers.TrustedUploadUsernameHeader)
+		req.Header.Del(handlers.TrustedUploadUserIDHeader)
+		req.Header.Set(handlers.TrustedUploadUsernameHeader, claims.Username)
+		req.Header.Set(handlers.TrustedUploadUserIDHeader, claims.UserID)
+
 		// Extract the upload ID from the path
 		// Original path: /api/upload/ or /api/upload/{id}
 		originalPath := req.URL.Path
@@ -569,34 +596,21 @@ func main() {
 
 		switch req.Method {
 		case http.MethodPost:
-			// Check quota before allowing upload (only for /home/ uploads)
-			uploadPath := req.Header.Get("Upload-Metadata")
-			uploadLengthStr := req.Header.Get("Upload-Length")
-			if uploadLengthStr != "" && strings.Contains(uploadPath, "cGF0aA") { // base64 of "path"
+			// Check quota before allowing upload. The quota belongs to the
+			// authenticated user; it used to be looked up under whichever
+			// username the client base64'd into the Upload-Metadata header.
+			if uploadLengthStr := req.Header.Get("Upload-Length"); uploadLengthStr != "" {
 				uploadLength, _ := strconv.ParseInt(uploadLengthStr, 10, 64)
-				// Extract username from metadata (base64 encoded as "username <base64value>")
-				if strings.Contains(uploadPath, "dXNlcm5hbWU") { // base64 of "username"
-					// Parse metadata to get username
-					parts := strings.Split(uploadPath, ",")
-					for _, part := range parts {
-						part = strings.TrimSpace(part)
-						if strings.HasPrefix(part, "username ") {
-							// Decode base64 username
-							usernameB64 := strings.TrimPrefix(part, "username ")
-							if decoded, err := handlers.DecodeBase64(usernameB64); err == nil {
-								username := string(decoded)
-								allowed, quota, used := authHandler.CheckQuota(username, uploadLength)
-								if !allowed {
-									log.Printf("[TUS] Quota exceeded for user %s: used=%d, quota=%d, upload=%d", username, used, quota, uploadLength)
-									return c.JSON(http.StatusForbidden, map[string]interface{}{
-										"error":     "Storage quota exceeded",
-										"quota":     quota,
-										"used":      used,
-										"requested": uploadLength,
-									})
-								}
-							}
-						}
+				if uploadLength > 0 {
+					allowed, quota, used := authHandler.CheckQuota(claims.Username, uploadLength)
+					if !allowed {
+						log.Printf("[TUS] Quota exceeded for user %s: used=%d, quota=%d, upload=%d", claims.Username, used, quota, uploadLength)
+						return c.JSON(http.StatusForbidden, map[string]interface{}{
+							"error":     "Storage quota exceeded",
+							"quota":     quota,
+							"used":      used,
+							"requested": uploadLength,
+						})
 					}
 				}
 			}
@@ -643,9 +657,10 @@ func main() {
 		return nil
 	}
 
-	// Register routes on Echo
-	e.Any("/api/upload/", tusRoutes)
-	e.Any("/api/upload/*", tusRoutes)
+	// Register routes on Echo. These were previously mounted with no middleware
+	// at all, which left resumable upload as an unauthenticated write endpoint.
+	e.Any("/api/upload/", tusRoutes, authHandler.JWTMiddleware)
+	e.Any("/api/upload/*", tusRoutes, authHandler.JWTMiddleware)
 
 	// WebSocket route for file change notifications (auth handled in handler via query param)
 	api.GET("/ws", h.HandleWebSocket)

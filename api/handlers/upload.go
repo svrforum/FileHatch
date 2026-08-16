@@ -26,12 +26,31 @@ func (e UploadError) Error() string {
 	return e.Message
 }
 
+// Headers the Echo layer stamps onto a tus request once the JWT has been
+// verified. tus metadata travels in a client-controlled header, so the username
+// it carries is a claim, not an identity — these are what the pre-create hook
+// trusts. Any inbound value is stripped before they are set.
+const (
+	TrustedUploadUsernameHeader = "X-FH-Auth-Username"
+	TrustedUploadUserIDHeader   = "X-FH-Auth-User-Id"
+)
+
 type UploadHandler struct {
-	tusHandler     *tusd.UnroutedHandler
-	dataRoot       string
-	db             *sql.DB
-	auditHandler   *AuditHandler
-	storageRouter  *StorageRouter
+	tusHandler    *tusd.UnroutedHandler
+	dataRoot      string
+	db            *sql.DB
+	auditHandler  *AuditHandler
+	storageRouter *StorageRouter
+
+	// permissions supplies the shared-drive ACL check. Optional so tests can
+	// construct an UploadHandler without the whole handler graph.
+	permissions *Handler
+}
+
+// SetPermissionSource wires the shared-drive permission checks used by the
+// pre-create hook.
+func (h *UploadHandler) SetPermissionSource(source *Handler) {
+	h.permissions = source
 }
 
 func NewUploadHandler(dataRoot string, db *sql.DB, storageRouter *StorageRouter) (*UploadHandler, error) {
@@ -84,8 +103,18 @@ func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPR
 	// Get metadata
 	destPath := hook.Upload.MetaData["path"]
 	filename := hook.Upload.MetaData["filename"]
-	username := hook.Upload.MetaData["username"]
 	uploadSize := hook.Upload.Size
+
+	// The identity comes from the verified JWT, never from tus metadata: the
+	// metadata username is whatever the client typed into a header.
+	username := hook.HTTPRequest.Header.Get(TrustedUploadUsernameHeader)
+	userID := hook.HTTPRequest.Header.Get(TrustedUploadUserIDHeader)
+	if username == "" || userID == "" {
+		LogWarn("[TUS-PreUpload] REJECTED: request reached the upload handler without a verified identity")
+		resp.StatusCode = 401
+		resp.Body = `{"error":"Authentication required"}`
+		return resp, changes, tusd.ErrUploadRejectedByServer
+	}
 
 	// Debug logging
 	LogInfo("[TUS-PreUpload] Received metadata", "path", destPath, "filename", filename, "username", username, "size", uploadSize)
@@ -134,6 +163,21 @@ func (h *UploadHandler) preUploadCreateCallback(hook tusd.HookEvent) (tusd.HTTPR
 
 	// Check for shared drive quota if uploading to shared drive
 	if strings.HasPrefix(destPath, "/shared/") {
+		// Issue #32 class: read-only members could still upload here, because
+		// this endpoint never consulted the shared-folder ACL at all.
+		if h.permissions == nil {
+			LogError("[TUS-PreUpload] REJECTED: no permission source configured", nil, "path", destPath)
+			resp.StatusCode = 500
+			resp.Body = `{"error":"Server misconfiguration"}`
+			return resp, changes, tusd.ErrUploadRejectedByServer
+		}
+		if !h.permissions.CanWriteSharedDrive(userID, destPath) {
+			LogWarn("[TUS-PreUpload] REJECTED: no write permission", "user", username, "path", destPath)
+			resp.StatusCode = 403
+			resp.Body = `{"error":"이 공유 폴더에 파일을 업로드할 권한이 없습니다"}`
+			return resp, changes, tusd.ErrUploadRejectedByServer
+		}
+
 		allowed, quota, used := h.checkSharedDriveQuota(destPath, uploadSize)
 		if !allowed && quota > 0 { // quota > 0 means quota is set (not unlimited)
 			resp.StatusCode = 413

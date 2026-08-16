@@ -754,6 +754,63 @@ func (h *Handler) CanWriteSharedDrive(userID, path string) bool {
 	return h.CheckSharedDrivePermission(userID, path, 2) // 2 = read-write
 }
 
+// RequireSharedDriveRead is the read gate every handler that returns shared
+// drive content must pass — previews, thumbnails, ZIP downloads, search hits.
+// Membership in a shared folder is what makes its contents visible; without
+// this check the folder ACL only governed the file listing, and a direct
+// request for a path inside it was answered for anyone.
+func (h *Handler) RequireSharedDriveRead(c echo.Context, claims *JWTClaims, result *ResolveResult) error {
+	if result == nil || result.StorageType != StorageShared {
+		return nil
+	}
+	if claims == nil {
+		_ = RespondError(c, ErrUnauthorized(""))
+		return ErrResponseWritten
+	}
+
+	path := result.DisplayPath
+	if path == "" {
+		path = "/shared/" + result.RelPath
+	}
+	if !h.CanReadSharedDrive(claims.UserID, path) {
+		_ = RespondError(c, ErrForbidden("No permission to access this shared folder"))
+		return ErrResponseWritten
+	}
+	return nil
+}
+
+// RequireSharedDriveWrite is the write gate every mutating handler must pass
+// before touching a shared drive. It writes the error response itself and
+// returns a non-nil error, so callers only need:
+//
+//	if err := h.RequireSharedDriveWrite(c, claims, result, "upload files"); err != nil {
+//		return err
+//	}
+//
+// Issue #32 was fixed by adding CanWriteSharedDrive calls to each handler one
+// at a time, which left the endpoints added afterwards (tus uploads, new-file,
+// simple upload, compress, extract) with no check at all. Routing every caller
+// through one function is what stops the next new endpoint from repeating it.
+func (h *Handler) RequireSharedDriveWrite(c echo.Context, claims *JWTClaims, result *ResolveResult, action string) error {
+	if result == nil || result.StorageType != StorageShared {
+		return nil
+	}
+	if claims == nil {
+		_ = RespondError(c, ErrUnauthorized(""))
+		return ErrResponseWritten
+	}
+
+	path := result.DisplayPath
+	if path == "" {
+		path = "/shared/" + result.RelPath
+	}
+	if !h.CanWriteSharedDrive(claims.UserID, path) {
+		_ = RespondError(c, ErrForbidden("No permission to "+action+" in this shared folder"))
+		return ErrResponseWritten
+	}
+	return nil
+}
+
 // CheckSharedDriveQuota checks if upload would exceed storage quota
 // Uses the DB-tracked storage_used column instead of walking the filesystem
 func (h *Handler) CheckSharedDriveQuota(path string, uploadSize int64) (allowed bool, quota int64, used int64) {

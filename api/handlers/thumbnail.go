@@ -197,6 +197,10 @@ func (h *Handler) GetThumbnail(c echo.Context) error {
 		})
 	}
 
+	if err := h.RequireSharedDriveRead(c, claims, result); err != nil {
+		return err
+	}
+
 	isNonLocal := result.StorageType == StorageExternal && realPath == ""
 
 	var fileName string
@@ -572,6 +576,10 @@ func (h *Handler) PreloadThumbnails(c echo.Context) error {
 		})
 	}
 
+	if err := h.RequireSharedDriveRead(c, claims, result); err != nil {
+		return err
+	}
+
 	isNonLocal := result.StorageType == StorageExternal && realPath == ""
 
 	// Get limit (default 50)
@@ -838,6 +846,10 @@ func (h *Handler) GetResponsiveThumbnail(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 		})
+	}
+
+	if err := h.RequireSharedDriveRead(c, claims, result); err != nil {
+		return err
 	}
 
 	displayPath := result.DisplayPath

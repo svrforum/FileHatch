@@ -57,6 +57,11 @@ func (h *Handler) CompressFiles(c echo.Context) error {
 	}
 	parentDisplayPath := parentResult.DisplayPath
 
+	// The archive is written into the parent directory, so this is a write.
+	if err := h.RequireSharedDriveWrite(c, claims, parentResult, "create archives"); err != nil {
+		return err
+	}
+
 	// Generate output filename
 	outputName := req.OutputName
 	if outputName == "" {
@@ -455,6 +460,15 @@ func (h *Handler) ExtractZip(c echo.Context) error {
 	// Check readonly on output
 	if err := checkReadonly(outputResult); err != nil {
 		return RespondError(c, ErrForbidden("Storage is read-only"))
+	}
+
+	// Extraction writes into the output directory, and reads the archive out of
+	// the source directory, so both ends need to be authorized.
+	if err := h.RequireSharedDriveWrite(c, claims, outputResult, "extract archives"); err != nil {
+		return err
+	}
+	if srcResult.StorageType == StorageShared && !h.CanReadSharedDrive(claims.UserID, displayPath) {
+		return RespondError(c, ErrForbidden("No permission to read this archive"))
 	}
 
 	outputIsNonLocal := outputResult.StorageType == StorageExternal && outputRealPath == ""

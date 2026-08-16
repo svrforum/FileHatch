@@ -289,22 +289,51 @@ type searchTarget struct {
 	DisplayPath string
 }
 
-// parallelSearch searches in multiple directories in parallel
-func (h *Handler) parallelSearch(query string, isGlob bool, claims *JWTClaims, maxResults int) []SearchResult {
-	// Collect search targets
-	targets := []searchTarget{
-		{
-			RealPath:    filepath.Join(h.dataRoot, "shared"),
-			DisplayPath: "/shared",
-		},
+// readableSharedTargets lists the shared drives the caller may read, one
+// search target per drive.
+func (h *Handler) readableSharedTargets(claims *JWTClaims) []searchTarget {
+	sharedRoot := filepath.Join(h.dataRoot, "shared")
+	entries, err := os.ReadDir(sharedRoot)
+	if err != nil {
+		return nil
 	}
 
-	if claims != nil {
+	targets := make([]searchTarget, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		displayPath := "/shared/" + entry.Name()
+		if !h.CanReadSharedDrive(claims.UserID, displayPath) {
+			continue
+		}
 		targets = append(targets, searchTarget{
-			RealPath:    filepath.Join(h.dataRoot, "users", claims.Username),
-			DisplayPath: "/home",
+			RealPath:    filepath.Join(sharedRoot, entry.Name()),
+			DisplayPath: displayPath,
 		})
 	}
+	return targets
+}
+
+// parallelSearch searches in multiple directories in parallel
+func (h *Handler) parallelSearch(query string, isGlob bool, claims *JWTClaims, maxResults int) []SearchResult {
+	targets := []searchTarget{}
+
+	if claims == nil {
+		// Nothing is searchable anonymously. Previously /shared was scanned
+		// unconditionally, so an unauthenticated query returned every team's
+		// filenames.
+		return []SearchResult{}
+	}
+
+	targets = append(targets, searchTarget{
+		RealPath:    filepath.Join(h.dataRoot, "users", claims.Username),
+		DisplayPath: "/home",
+	})
+
+	// Search each shared folder the caller is actually a member of, rather
+	// than /shared as a whole.
+	targets = append(targets, h.readableSharedTargets(claims)...)
 
 	// Search all targets in parallel
 	allResults := lop.Map(targets, func(target searchTarget, _ int) []SearchResult {
