@@ -49,6 +49,16 @@ Thumbs.db
 .env.backup*
 !.env.example
 
+# Internal working documents.
+# AI planning notes and improvement drafts are working material: they carry
+# developer machine paths and add exposure surface without helping anyone who
+# clones this repository. Published specs live in docs/specs/.
+docs/plans/
+docs/superpowers/
+docs/active/
+docs/complete/
+IMPROVEMENT_PLAN.md
+
 # Test artifacts.
 # Playwright's storageState holds a signed session token, and the failure
 # artifacts contain screenshots and DOM dumps of real accounts and filenames.
