@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"path"
 	"sync"
@@ -212,4 +213,15 @@ func (c *CachedBackend) ClearCache() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.cache = make(map[string]cacheEntry)
+}
+
+// ReadFileRange forwards to the wrapped backend when it supports ranges.
+// Range responses are not cached: they are partial by nature and the cache
+// holds directory metadata, not file bodies.
+func (c *CachedBackend) ReadFileRange(ctx context.Context, relPath string, offset, length int64) (io.ReadCloser, *StorageFileInfo, error) {
+	rr, ok := c.backend.(RangeReader)
+	if !ok {
+		return nil, nil, fmt.Errorf("backend does not support range reads")
+	}
+	return rr.ReadFileRange(ctx, relPath, offset, length)
 }

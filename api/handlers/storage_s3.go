@@ -21,13 +21,13 @@ import (
 
 // S3Config holds configuration for S3-compatible storage
 type S3Config struct {
-	Endpoint       string `json:"endpoint"`
-	Region         string `json:"region"`
-	Bucket         string `json:"bucket"`
-	AccessKeyID    string `json:"access_key_id"`
+	Endpoint        string `json:"endpoint"`
+	Region          string `json:"region"`
+	Bucket          string `json:"bucket"`
+	AccessKeyID     string `json:"access_key_id"`
 	SecretAccessKey string `json:"secret_access_key"`
-	PathStyle      bool   `json:"path_style"` // MinIO/Ceph: true, AWS: false
-	Prefix         string `json:"prefix"`     // Key prefix within bucket
+	PathStyle       bool   `json:"path_style"` // MinIO/Ceph: true, AWS: false
+	Prefix          string `json:"prefix"`     // Key prefix within bucket
 }
 
 // S3Backend implements StorageBackend for S3-compatible storage
@@ -744,4 +744,44 @@ func (b *S3Backend) TestConnection(ctx context.Context) error {
 		return fmt.Errorf("S3 connection test failed: %w", err)
 	}
 	return nil
+}
+
+// ReadFileRange asks S3 for a byte range instead of the whole object, so a
+// seek in a large file transfers only what the client asked for.
+func (b *S3Backend) ReadFileRange(ctx context.Context, relPath string, offset, length int64) (io.ReadCloser, *StorageFileInfo, error) {
+	key := b.key(relPath)
+
+	rangeHeader := fmt.Sprintf("bytes=%d-", offset)
+	if length >= 0 {
+		rangeHeader = fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)
+	}
+
+	out, err := b.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(b.bucket),
+		Key:    aws.String(key),
+		Range:  aws.String(rangeHeader),
+	})
+	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NoSuchKey" {
+			return nil, nil, fmt.Errorf("%w: %s", ErrStorageNotFound, relPath)
+		}
+		return nil, nil, fmt.Errorf("failed to get object range: %w", err)
+	}
+
+	modTime := time.Time{}
+	if out.LastModified != nil {
+		modTime = *out.LastModified
+	}
+	// ContentLength here is the length of the returned range, not the object.
+	size := int64(0)
+	if out.ContentLength != nil {
+		size = *out.ContentLength
+	}
+
+	return out.Body, &StorageFileInfo{
+		FileName:    path.Base(relPath),
+		FileSize:    size,
+		FileModTime: modTime,
+	}, nil
 }

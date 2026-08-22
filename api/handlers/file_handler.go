@@ -113,8 +113,43 @@ func (h *Handler) GetFile(c echo.Context) error {
 			})
 		}
 
-		// For Range request support: buffer to temp file, then use http.ServeContent.
-		// This enables video seeking, download resume, and partial content (206) responses.
+		// Prefer asking the backend for the byte range the client wants. This
+		// is what keeps a seek in a large file from transferring (and spooling
+		// to disk) the entire object — see storage_range.go.
+		if rr, ok := result.Backend.(RangeReader); ok {
+			byteRange, hasRange := parseSingleRange(c.Request().Header.Get("Range"), info.FileSize)
+
+			offset, length := int64(0), int64(-1)
+			if hasRange {
+				offset, length = byteRange.start, byteRange.length
+			}
+
+			rangeReader, _, rangeErr := rr.ReadFileRange(c.Request().Context(), result.RelPath, offset, length)
+			if rangeErr == nil {
+				defer rangeReader.Close()
+
+				hdr := c.Response().Header()
+				hdr.Set("Content-Type", contentType)
+				hdr.Set("Accept-Ranges", "bytes")
+				if isDownload {
+					setContentDisposition(c, fileName)
+				}
+				if hasRange {
+					hdr.Set("Content-Range", byteRange.contentRange(info.FileSize))
+					hdr.Set("Content-Length", strconv.FormatInt(byteRange.length, 10))
+				} else if info.FileSize > 0 {
+					hdr.Set("Content-Length", strconv.FormatInt(info.FileSize, 10))
+				}
+
+				c.Response().WriteHeader(rangeStatus(hasRange))
+				_, copyErr := io.Copy(c.Response().Writer, rangeReader)
+				return copyErr
+			}
+			// Range read failed; fall through to the spooling path below.
+		}
+
+		// Fallback for backends without range support: buffer to temp file,
+		// then use http.ServeContent.
 		tmpDir := filepath.Join(h.dataRoot, ".tmp")
 		if err := os.MkdirAll(tmpDir, 0755); err != nil {
 			log.Printf("[Download] Failed to create temp dir: %v", err)
