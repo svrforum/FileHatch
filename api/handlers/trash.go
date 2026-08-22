@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -84,7 +85,29 @@ func (h *Handler) getTrashMetaPath(username string) string {
 	return filepath.Join(h.dataRoot, "trash", username, ".trash_meta.json")
 }
 
-// loadTrashMeta loads the trash metadata
+// The trash index is a single JSON file per user that is rewritten in full on
+// every change. Two problems followed from that:
+//
+//   - os.WriteFile truncates before writing, so a crash or a full disk left a
+//     truncated file and the user's entire trash listing disappeared, even
+//     though the files themselves were still there.
+//   - Concurrent deletes read-modify-wrote the same file with no lock, so one
+//     could silently drop the other's entry (a file sitting in trash that the
+//     UI never shows and the user cannot restore).
+//
+// Writes now go through a temp file plus rename, and each user's index is
+// guarded by its own mutex.
+var trashMetaLocks sync.Map // username -> *sync.Mutex
+
+func trashMetaLock(username string) *sync.Mutex {
+	actual, _ := trashMetaLocks.LoadOrStore(username, &sync.Mutex{})
+	return actual.(*sync.Mutex)
+}
+
+// loadTrashMeta loads the trash metadata.
+//
+// It never returns a nil map alongside a nil error: several callers use the
+// `meta, _ :=` form, and assigning into a nil map panics.
 func (h *Handler) loadTrashMeta(username string) (map[string]TrashItem, error) {
 	metaPath := h.getTrashMetaPath(username)
 	data, err := os.ReadFile(metaPath)
@@ -92,24 +115,91 @@ func (h *Handler) loadTrashMeta(username string) (map[string]TrashItem, error) {
 		if os.IsNotExist(err) {
 			return make(map[string]TrashItem), nil
 		}
-		return nil, err
+		return make(map[string]TrashItem), err
 	}
 
 	var items map[string]TrashItem
 	if err := json.Unmarshal(data, &items); err != nil {
 		return make(map[string]TrashItem), nil
 	}
+	if items == nil {
+		items = make(map[string]TrashItem)
+	}
 	return items, nil
 }
 
-// saveTrashMeta saves the trash metadata
+// saveTrashMeta writes the trash metadata atomically.
 func (h *Handler) saveTrashMeta(username string, items map[string]TrashItem) error {
-	metaPath := h.getTrashMetaPath(username)
+	lock := trashMetaLock(username)
+	lock.Lock()
+	defer lock.Unlock()
+
+	return h.saveTrashMetaLocked(username, items)
+}
+
+// saveTrashMetaLocked is saveTrashMeta without taking the lock, for callers
+// that already hold it across a read-modify-write.
+func (h *Handler) saveTrashMetaLocked(username string, items map[string]TrashItem) error {
+	if items == nil {
+		items = make(map[string]TrashItem)
+	}
+
 	data, err := json.MarshalIndent(items, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(metaPath, data, 0644)
+
+	metaPath := h.getTrashMetaPath(username)
+	if err := os.MkdirAll(filepath.Dir(metaPath), 0755); err != nil {
+		return err
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(metaPath), ".trash-meta-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op once the rename succeeds
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	// fsync before rename: without it a crash can leave the renamed file
+	// present but empty.
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, 0644); err != nil {
+		return err
+	}
+
+	return os.Rename(tmpName, metaPath)
+}
+
+// updateTrashMeta runs mutate against the user's trash index under that user's
+// lock and saves the result, so a read-modify-write cannot interleave with
+// another one.
+func (h *Handler) updateTrashMeta(username string, mutate func(map[string]TrashItem)) error {
+	lock := trashMetaLock(username)
+	lock.Lock()
+	defer lock.Unlock()
+
+	// Load, mutate and save all happen under one hold of the lock. Releasing
+	// between the read and the write would let two callers each save a copy
+	// based on the same starting state, and the later save would drop the
+	// earlier one's entry.
+	meta, err := h.loadTrashMeta(username)
+	if err != nil && len(meta) == 0 {
+		return err
+	}
+	mutate(meta)
+
+	return h.saveTrashMetaLocked(username, meta)
 }
 
 // syncSMBTrash synchronizes SMB-deleted files (via vfs_recycle) with web UI trash metadata
@@ -217,7 +307,7 @@ func (h *Handler) syncSMBTrash(username string) {
 
 	// Save updated metadata
 	if modified {
-		_ = h.saveTrashMeta(username, meta)
+		logTrashMetaError(h.saveTrashMeta(username, meta), username)
 	}
 }
 
@@ -364,7 +454,11 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 			StorageType:  StorageExternal,
 			MountID:      result.MountID,
 		}
-		_ = h.saveTrashMeta(claims.Username, meta)
+		// The file is already in trash. If the index cannot record it the user
+		// can neither see nor restore it, so this must not report success.
+		if err := h.saveTrashMeta(claims.Username, meta); err != nil {
+			return RespondError(c, ErrOperationFailed("record the item in trash", err))
+		}
 	} else {
 		// Local storage (home, shared, local-mount external)
 		info, err := os.Stat(realPath)
@@ -408,7 +502,9 @@ func (h *Handler) MoveToTrash(c echo.Context) error {
 			trashItem.MountID = result.MountID
 		}
 		meta[trashID] = trashItem
-		_ = h.saveTrashMeta(claims.Username, meta)
+		if err := h.saveTrashMeta(claims.Username, meta); err != nil {
+			return RespondError(c, ErrOperationFailed("record the item in trash", err))
+		}
 	}
 
 	// Clean up locks after successful move to trash
@@ -554,7 +650,7 @@ func (h *Handler) BatchMoveToTrash(c echo.Context) error {
 				StorageType:  StorageExternal,
 				MountID:      result.MountID,
 			}
-			_ = h.saveTrashMeta(claims.Username, meta)
+			logTrashMetaError(h.saveTrashMeta(claims.Username, meta), claims.Username)
 		} else {
 			// Local storage
 			info, err := os.Stat(realPath)
@@ -597,7 +693,7 @@ func (h *Handler) BatchMoveToTrash(c echo.Context) error {
 				trashItem.MountID = result.MountID
 			}
 			meta[trashID] = trashItem
-			_ = h.saveTrashMeta(claims.Username, meta)
+			logTrashMetaError(h.saveTrashMeta(claims.Username, meta), claims.Username)
 
 			// Update storage tracking for non-external items
 			if storageType != StorageExternal {
@@ -747,7 +843,7 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 
 			// Update metadata
 			delete(meta, trashID)
-			_ = h.saveTrashMeta(claims.Username, meta)
+			logTrashMetaError(h.saveTrashMeta(claims.Username, meta), claims.Username)
 
 			_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventTrashRestore, restorePath, map[string]interface{}{
 				"trashId": trashID,
@@ -781,7 +877,7 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 		}
 
 		delete(meta, trashID)
-		_ = h.saveTrashMeta(claims.Username, meta)
+		logTrashMetaError(h.saveTrashMeta(claims.Username, meta), claims.Username)
 
 		_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventTrashRestore, restorePath, map[string]interface{}{
 			"trashId": trashID,
@@ -839,7 +935,7 @@ func (h *Handler) RestoreFromTrash(c echo.Context) error {
 
 	// Update metadata
 	delete(meta, trashID)
-	_ = h.saveTrashMeta(claims.Username, meta)
+	logTrashMetaError(h.saveTrashMeta(claims.Username, meta), claims.Username)
 
 	// Log restore event for recent files tracking
 	_ = h.auditHandler.LogEvent(&claims.UserID, c.RealIP(), EventTrashRestore, restorePath, map[string]interface{}{
@@ -902,7 +998,7 @@ func (h *Handler) DeleteFromTrash(c echo.Context) error {
 
 	// Update metadata
 	delete(meta, trashID)
-	_ = h.saveTrashMeta(claims.Username, meta)
+	logTrashMetaError(h.saveTrashMeta(claims.Username, meta), claims.Username)
 
 	// Update storage tracking: decrease trash used
 	if err := h.UpdateUserTrashStorage(claims.UserID, -item.Size); err != nil {
@@ -1077,7 +1173,7 @@ func (h *Handler) BatchRestoreFromTrash(c echo.Context) error {
 
 	// Save metadata once
 	if len(restored) > 0 {
-		_ = h.saveTrashMeta(claims.Username, meta)
+		logTrashMetaError(h.saveTrashMeta(claims.Username, meta), claims.Username)
 	}
 
 	// Update storage tracking once for all non-external items
@@ -1141,7 +1237,7 @@ func (h *Handler) BatchDeleteFromTrash(c echo.Context) error {
 
 	// Save metadata once
 	if len(deleted) > 0 {
-		_ = h.saveTrashMeta(claims.Username, meta)
+		logTrashMetaError(h.saveTrashMeta(claims.Username, meta), claims.Username)
 	}
 
 	// Update storage tracking once
@@ -1322,7 +1418,7 @@ func (h *Handler) runTrashCleanup(retentionDays int) {
 
 		// Save updated metadata
 		if len(toDelete) > 0 {
-			_ = h.saveTrashMeta(username, meta)
+			logTrashMetaError(h.saveTrashMeta(username, meta), username)
 		}
 	}
 
@@ -1373,7 +1469,7 @@ func (h *Handler) MoveToTrashInternal(username, userID, virtualPath, realPath st
 		IsDir:        info.IsDir(),
 		DeletedAt:    time.Now(),
 	}
-	_ = h.saveTrashMeta(username, meta)
+	logTrashMetaError(h.saveTrashMeta(username, meta), username)
 
 	// 6. Update storage tracking
 	_ = h.UpdateStorageForMove(userID, size, true)
@@ -1546,4 +1642,14 @@ func uploadDirToBackend(ctx context.Context, localPath string, backend StorageBa
 		}
 	}
 	return nil
+}
+
+// logTrashMetaError surfaces a trash-index write failure. Callers that reach
+// here have already completed the filesystem half of their work, so the
+// operation still succeeds — but a silent discard is what made "the file is
+// gone from trash" impossible to diagnose.
+func logTrashMetaError(err error, username string) {
+	if err != nil {
+		LogError("[Trash] Failed to persist trash metadata", err, "user", username)
+	}
 }
