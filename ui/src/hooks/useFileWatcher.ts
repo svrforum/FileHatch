@@ -66,10 +66,15 @@ const INITIAL_RETRY_DELAY = 1000  // 1 second
 const MAX_RETRY_DELAY = 30000     // 30 seconds
 const MAX_RETRY_ATTEMPTS = 10
 
+// How long to wait for a burst of file-change events to settle before asking
+// the server to recompute storage usage.
+const STORAGE_USAGE_INVALIDATE_DEBOUNCE_MS = 5000
+
 export function useFileWatcher(options: UseFileWatcherOptions = {}) {
   const { watchPaths = ['/home', '/shared'], onFileChange, onNotification, onConnectionStateChange } = options
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const storageUsageInvalidateTimer = useRef<NodeJS.Timeout | null>(null)
   const isConnectingRef = useRef(false)
   const retryCountRef = useRef(0)
   const retryDelayRef = useRef(INITIAL_RETRY_DELAY)
@@ -225,9 +230,19 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
               })
             }
 
-            // Also invalidate storage usage on file changes
+            // Also invalidate storage usage on file changes.
+            // Debounced: a bulk copy emits one event per file, and each
+            // invalidation makes an admin session re-request a figure the
+            // server computes by walking the data volume. Coalescing bursts
+            // keeps a 10k-file copy to one refresh instead of 10k.
             if (data.type === 'create' || data.type === 'remove' || data.type === 'write') {
-              queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
+              if (storageUsageInvalidateTimer.current !== null) {
+                clearTimeout(storageUsageInvalidateTimer.current)
+              }
+              storageUsageInvalidateTimer.current = setTimeout(() => {
+                storageUsageInvalidateTimer.current = null
+                queryClient.invalidateQueries({ queryKey: ['storage-usage'] })
+              }, STORAGE_USAGE_INVALIDATE_DEBOUNCE_MS)
             }
           } catch (err) {
             console.error('[WebSocket] Failed to parse message:', err)
@@ -310,6 +325,10 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
         reconnectTimeoutRef.current = null
+      }
+      if (storageUsageInvalidateTimer.current) {
+        clearTimeout(storageUsageInvalidateTimer.current)
+        storageUsageInvalidateTimer.current = null
       }
       if (wsRef.current) {
         wsRef.current.close(1000, 'Component unmounted')

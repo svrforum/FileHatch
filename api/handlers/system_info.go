@@ -100,11 +100,13 @@ func (h *Handler) GetSystemInfo(c echo.Context) error {
 	// Calculate uptime (process start time)
 	uptime := time.Since(startTime)
 
-	// Get project statistics
-	projectInfo := h.getProjectInfo()
-
-	// Get folder tree (limited depth for performance)
-	folderTree := h.getFolderTree(h.dataRoot, 2)
+	// Both of these walk the data volume. They are served from a short-lived
+	// cache so a polling dashboard cannot keep a walk permanently running —
+	// see system_info_cache.go.
+	projectInfo := projectInfoCache.Get(systemInfoTTL, h.getProjectInfo)
+	folderTree := folderTreeCache.Get(systemInfoTTL, func() []FolderStat {
+		return h.getFolderTree(h.dataRoot, 2)
+	})
 
 	info := SystemInfo{
 		Hostname:    hostname,

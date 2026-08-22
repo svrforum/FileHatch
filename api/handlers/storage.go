@@ -79,8 +79,15 @@ func (h *Handler) GetStorageUsage(c echo.Context) error {
 	// For admin users, include disk info and total data usage
 	if claims.IsAdmin {
 		diskInfo := getDiskInfo(h.dataRoot)
-		// Calculate total data directory usage
-		dataUsed, _ := h.calculateDirSize(h.dataRoot)
+		// Walking the whole data volume here made file activity amplify its own
+		// cost: every WebSocket change event invalidates the storage-usage
+		// query, so copying ten thousand files over SMB triggered ten thousand
+		// full walks in any open admin session. Served from a TTL cache with
+		// concurrent callers collapsed (see system_info_cache.go).
+		dataUsed := adminDataUsageCache.Get(adminDataUsageTTL, func() int64 {
+			size, _ := h.calculateDirSize(h.dataRoot)
+			return size
+		})
 
 		return c.JSON(http.StatusOK, map[string]any{
 			"homeUsed":   homeUsed,
