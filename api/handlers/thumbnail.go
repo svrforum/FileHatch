@@ -341,6 +341,12 @@ func (h *Handler) GetThumbnail(c echo.Context) error {
 
 // generateImageThumbnail creates a thumbnail from an image file
 func generateImageThumbnail(filePath string, size ThumbnailSize) ([]byte, error) {
+	// Check the header before decoding: a small file can still describe a
+	// hundred-megapixel image, which would allocate hundreds of megabytes.
+	if err := checkDecodableImageSize(filePath); err != nil {
+		return nil, err
+	}
+
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
@@ -404,18 +410,31 @@ func generateVideoThumbnail(filePath string, size ThumbnailSize) ([]byte, error)
 		tmpPath,
 	}
 
-	cmd := exec.Command("ffmpeg", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("[Thumbnail] FFmpeg first attempt failed for %s: %v, stderr: %s\n", filePath, err, stderr.String())
+	// One conversion slot, and a deadline so an unreadable file cannot leave
+	// ffmpeg running forever (see thumbnail_limits.go).
+	release, err := acquireThumbnailSlot(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	runFFmpeg := func(args []string) (string, error) {
+		ctx, cancel := withThumbnailCommandContext()
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		runErr := cmd.Run()
+		return stderr.String(), runErr
+	}
+
+	if stderr, err := runFFmpeg(args); err != nil {
+		fmt.Printf("[Thumbnail] FFmpeg first attempt failed for %s: %v, stderr: %s\n", filePath, err, stderr)
 		// Try at beginning of video if seek fails
 		args[3] = "00:00:01"
-		cmd = exec.Command("ffmpeg", args...)
-		stderr.Reset()
-		cmd.Stderr = &stderr
-		if err := cmd.Run(); err != nil {
-			fmt.Printf("[Thumbnail] FFmpeg second attempt failed for %s: %v, stderr: %s\n", filePath, err, stderr.String())
+		if stderr, err := runFFmpeg(args); err != nil {
+			fmt.Printf("[Thumbnail] FFmpeg second attempt failed for %s: %v, stderr: %s\n", filePath, err, stderr)
 			return nil, fmt.Errorf("ffmpeg failed: %w", err)
 		}
 	}
@@ -547,7 +566,16 @@ func convertToWebP(jpegData []byte) ([]byte, error) {
 	inputFile.Close()
 
 	// Convert
-	cmd := exec.Command("cwebp", "-q", "80", inputFile.Name(), "-o", outputPath)
+	release, err := acquireThumbnailSlot(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	ctx, cancel := withThumbnailCommandContext()
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "cwebp", "-q", "80", inputFile.Name(), "-o", outputPath)
 	if err := cmd.Run(); err != nil {
 		return nil, err
 	}
