@@ -10,7 +10,8 @@ interface AuthState {
   error: string | null
   // 2FA state
   requires2FA: boolean
-  pending2FAUserId: string | null
+  /** Short-lived token from login proving the password was accepted. */
+  pending2FAToken: string | null
   pendingRememberMe: boolean  // Store rememberMe during 2FA flow
   // Initial setup state
   requiresSetup: boolean
@@ -35,7 +36,7 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
       error: null,
       requires2FA: false,
-      pending2FAUserId: null,
+      pending2FAToken: null,
       pendingRememberMe: false,
       requiresSetup: false,
       pendingSetupToken: null,
@@ -45,7 +46,7 @@ export const useAuthStore = create<AuthState>()(
           isLoading: true,
           error: null,
           requires2FA: false,
-          pending2FAUserId: null,
+          pending2FAToken: null,
           pendingRememberMe: false,
           requiresSetup: false,
           pendingSetupToken: null
@@ -64,11 +65,11 @@ export const useAuthStore = create<AuthState>()(
           }
 
           // Check if 2FA is required
-          if (result.requires2fa && result.userId) {
+          if (result.requires2fa && result.preAuthToken) {
             set({
               isLoading: false,
               requires2FA: true,
-              pending2FAUserId: result.userId,
+              pending2FAToken: result.preAuthToken,
               pendingRememberMe: data.rememberMe || false  // Store for 2FA verification
             })
             return '2fa'
@@ -86,22 +87,22 @@ export const useAuthStore = create<AuthState>()(
       },
 
       verify2FACode: async (code: string) => {
-        const { pending2FAUserId, pendingRememberMe } = get()
-        if (!pending2FAUserId) {
+        const { pending2FAToken, pendingRememberMe } = get()
+        if (!pending2FAToken) {
           set({ error: 'No pending 2FA verification' })
           return
         }
 
         set({ isLoading: true, error: null })
         try {
-          const result = await verify2FA(pending2FAUserId, code, pendingRememberMe)
+          const result = await verify2FA(pending2FAToken, code, pendingRememberMe)
           if (result.token && result.user) {
             set({
               token: result.token,
               user: result.user,
               isLoading: false,
               requires2FA: false,
-              pending2FAUserId: null,
+              pending2FAToken: null,
               pendingRememberMe: false
             })
           }
@@ -117,7 +118,7 @@ export const useAuthStore = create<AuthState>()(
       cancel2FA: () => {
         set({
           requires2FA: false,
-          pending2FAUserId: null,
+          pending2FAToken: null,
           pendingRememberMe: false,
           error: null
         })
@@ -165,7 +166,7 @@ export const useAuthStore = create<AuthState>()(
           user: null,
           error: null,
           requires2FA: false,
-          pending2FAUserId: null,
+          pending2FAToken: null,
           pendingRememberMe: false,
           requiresSetup: false,
           pendingSetupToken: null

@@ -304,9 +304,12 @@ func (h *TOTPHandler) Disable2FA(c echo.Context) error {
 
 // Verify2FARequest represents the request to verify 2FA during login
 type Verify2FARequest struct {
-	UserID     string `json:"userId"`
-	Code       string `json:"code"`
-	RememberMe bool   `json:"rememberMe"`
+	// PreAuthToken is issued by Login once the password has been accepted.
+	// It replaces UserID as the way this endpoint learns who is logging in —
+	// a user ID is not a secret and proves nothing.
+	PreAuthToken string `json:"preAuthToken"`
+	Code         string `json:"code"`
+	RememberMe   bool   `json:"rememberMe"`
 }
 
 // Verify2FA verifies the 2FA code during login and returns JWT token
@@ -318,10 +321,34 @@ func (h *TOTPHandler) Verify2FA(c echo.Context) error {
 		})
 	}
 
-	if req.UserID == "" || req.Code == "" {
+	if req.PreAuthToken == "" || req.Code == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "User ID and code are required",
+			"error": "Login session and code are required",
 		})
+	}
+
+	preAuth, err := ParsePreAuthToken(req.PreAuthToken)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{
+			"error": "Login session expired. Please sign in again.",
+		})
+	}
+	userID := preAuth.UserID
+	// rememberMe is taken from the login request that produced the token so it
+	// cannot be widened at the second step.
+	rememberMe := preAuth.RememberMe
+
+	// Code guessing gets the same lockout treatment as password guessing;
+	// without it the OTP step was an unlimited oracle.
+	guard := GetBruteForceGuard()
+	ip := c.RealIP()
+	if guard != nil {
+		allowed, reason, _ := guard.CheckAndRecordAttempt(c.Request().Context(), ip, userID)
+		if !allowed {
+			return c.JSON(http.StatusTooManyRequests, map[string]string{
+				"error": reason,
+			})
+		}
 	}
 
 	// Get user info
@@ -332,10 +359,10 @@ func (h *TOTPHandler) Verify2FA(c echo.Context) error {
 	var smbHash sql.NullString
 	var provider sql.NullString
 
-	err := h.db.QueryRow(`
+	err = h.db.QueryRow(`
 		SELECT id, username, email, smb_hash, provider, is_admin, is_active, totp_secret, totp_backup_codes, created_at, updated_at
 		FROM users WHERE id = $1 AND COALESCE(totp_enabled, false) = true
-	`, req.UserID).Scan(&user.ID, &user.Username, &email, &smbHash, &provider, &user.IsAdmin, &user.IsActive, &encryptedSecret, &backupCodesJSON, &user.CreatedAt, &user.UpdatedAt)
+	`, userID).Scan(&user.ID, &user.Username, &email, &smbHash, &provider, &user.IsAdmin, &user.IsActive, &encryptedSecret, &backupCodesJSON, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return c.JSON(http.StatusUnauthorized, map[string]string{
@@ -385,6 +412,9 @@ func (h *TOTPHandler) Verify2FA(c echo.Context) error {
 		}
 
 		if !codeFound {
+			if guard != nil {
+				guard.RecordFailedAttempt(c.Request().Context(), ip, userID)
+			}
 			return c.JSON(http.StatusUnauthorized, map[string]string{
 				"error": "Invalid backup code",
 			})
@@ -415,10 +445,17 @@ func (h *TOTPHandler) Verify2FA(c echo.Context) error {
 
 		valid := totp.Validate(req.Code, string(secretBytes))
 		if !valid {
+			if guard != nil {
+				guard.RecordFailedAttempt(c.Request().Context(), ip, userID)
+			}
 			return c.JSON(http.StatusUnauthorized, map[string]string{
 				"error": "Invalid verification code",
 			})
 		}
+	}
+
+	if guard != nil {
+		guard.RecordSuccessfulLogin(c.Request().Context(), ip, userID)
 	}
 
 	// Set optional fields
@@ -435,12 +472,12 @@ func (h *TOTPHandler) Verify2FA(c echo.Context) error {
 	// Determine token expiration based on rememberMe
 	// Default: 1 day, RememberMe: 30 days
 	expiration := 24 * time.Hour
-	if req.RememberMe {
+	if rememberMe {
 		expiration = 30 * 24 * time.Hour
 	}
 
 	// Generate JWT token with appropriate expiration
-	token, err := GenerateJWTWithExpiration(user.ID, user.Username, user.IsAdmin, req.RememberMe, expiration)
+	token, err := GenerateJWTWithExpiration(user.ID, user.Username, user.IsAdmin, rememberMe, expiration)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Failed to generate token",
@@ -452,7 +489,7 @@ func (h *TOTPHandler) Verify2FA(c echo.Context) error {
 		"username":   user.Username,
 		"isAdmin":    user.IsAdmin,
 		"via_2fa":    true,
-		"rememberMe": req.RememberMe,
+		"rememberMe": rememberMe,
 	})
 
 	return c.JSON(http.StatusOK, LoginResponse{

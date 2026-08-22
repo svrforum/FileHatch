@@ -44,6 +44,8 @@ export interface AuthResponse {
   requires2fa?: boolean
   requiresSetup?: boolean
   userId?: string
+  /** Proof that the password step succeeded; required by /auth/2fa/verify. */
+  preAuthToken?: string
 }
 
 export interface InitialSetupRequest {
@@ -238,8 +240,8 @@ export async function disable2FA(_tokenOrPassword: string, password?: string): P
 /**
  * Verify 2FA code during login (no auth required)
  */
-export async function verify2FA(userId: string, code: string, rememberMe?: boolean): Promise<AuthResponse> {
-  return api.post<AuthResponse>('/auth/2fa/verify', { userId, code, rememberMe }, { noAuth: true })
+export async function verify2FA(preAuthToken: string, code: string, rememberMe?: boolean): Promise<AuthResponse> {
+  return api.post<AuthResponse>('/auth/2fa/verify', { preAuthToken, code, rememberMe }, { noAuth: true })
 }
 
 /**

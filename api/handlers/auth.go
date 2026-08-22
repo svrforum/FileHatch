@@ -176,6 +176,9 @@ type LoginResponse struct {
 	Requires2FA   bool   `json:"requires2fa,omitempty"`
 	RequiresSetup bool   `json:"requiresSetup,omitempty"` // For initial admin setup
 	UserID        string `json:"userId,omitempty"`        // Sent when 2FA or setup is required
+	// PreAuthToken proves the password step succeeded. /auth/2fa/verify
+	// requires it; UserID alone is not accepted.
+	PreAuthToken string `json:"preAuthToken,omitempty"`
 }
 
 // Register creates a new user account
@@ -362,10 +365,18 @@ func (h *AuthHandler) Login(c echo.Context) error {
 
 	// Check if 2FA is enabled
 	if user.Has2FA {
-		// Return requires_2fa response - user needs to verify OTP
+		// Hand back proof that the password was accepted rather than a bare
+		// user ID. /auth/2fa/verify requires this, so the OTP step can no
+		// longer be attacked on its own (see auth_preauth.go).
+		preAuthToken, err := GeneratePreAuthToken(user.ID, req.RememberMe)
+		if err != nil {
+			return RespondError(c, ErrInternal("Failed to generate token"))
+		}
+
 		return c.JSON(http.StatusOK, LoginResponse{
-			Requires2FA: true,
-			UserID:      user.ID,
+			Requires2FA:  true,
+			UserID:       user.ID,
+			PreAuthToken: preAuthToken,
 		})
 	}
 
