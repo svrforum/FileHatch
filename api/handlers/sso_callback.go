@@ -160,13 +160,15 @@ func (h *SSOHandler) GetAuthURL(c echo.Context) error {
 		})
 	}
 
-	// Generate state
+	// Generate state and remember it so the callback can prove it belongs to
+	// an authorization request this server started.
 	state, err := generateState()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Failed to generate state",
 		})
 	}
+	globalSSOStates.Issue(state, providerID)
 
 	// Build redirect URI using external URL configuration
 	scheme := getExternalScheme(c)
@@ -197,7 +199,14 @@ func (h *SSOHandler) GetAuthURL(c echo.Context) error {
 func (h *SSOHandler) HandleCallback(c echo.Context) error {
 	providerID := c.Param("providerId")
 	code := c.QueryParam("code")
-	// state := c.QueryParam("state") // Could verify state here
+	state := c.QueryParam("state")
+
+	// Without this check any callback carrying a usable code was accepted,
+	// which is login CSRF: an attacker completes authorization as themselves
+	// and replays the code into a victim's browser.
+	if !globalSSOStates.Redeem(state, providerID) {
+		return c.Redirect(http.StatusFound, "/login?error=sso_state_invalid")
+	}
 
 	if code == "" {
 		errorMsg := c.QueryParam("error")
@@ -494,18 +503,39 @@ func (h *SSOHandler) findOrCreateUser(userInfo *OIDCUserInfo, provider SSOProvid
 		}
 	}
 
-	// Try to find by email first
-	err = h.db.QueryRow(`
-		SELECT id, username, email, is_admin, is_active
-		FROM users WHERE email = $1
-	`, userInfo.Email).Scan(&user.ID, &user.Username, &user.Email, &user.IsAdmin, &user.IsActive)
+	// Linking to an existing local account by email address takes over that
+	// account, so the address has to be one the provider actually vouches for.
+	// Some providers let a user set any address they like; without this check,
+	// claiming the administrator's address was enough to log in as them.
+	//
+	// email_verified is absent from a few provider responses. Treating absent
+	// as verified is what made this exploitable, so absent means no automatic
+	// linking — the operator can still link accounts by hand.
+	if userInfo.Email != "" && userInfo.EmailVerified {
+		err = h.db.QueryRow(`
+			SELECT id, username, email, is_admin, is_active
+			FROM users WHERE email = $1
+		`, userInfo.Email).Scan(&user.ID, &user.Username, &user.Email, &user.IsAdmin, &user.IsActive)
 
-	if err == nil {
-		// User exists with this email, link the SSO account
-		_, _ = h.db.Exec(`
-			UPDATE users SET provider = $1, provider_id = $2, updated_at = NOW() WHERE id = $3
-		`, provider.ProviderType, userInfo.Sub, user.ID)
-		return &user, nil
+		if err == nil {
+			if !user.IsActive {
+				return nil, fmt.Errorf("user account is disabled")
+			}
+			// User exists with this verified email, link the SSO account
+			_, _ = h.db.Exec(`
+				UPDATE users SET provider = $1, provider_id = $2, updated_at = NOW() WHERE id = $3
+			`, provider.ProviderType, userInfo.Sub, user.ID)
+			return &user, nil
+		}
+	} else if userInfo.Email != "" {
+		// Refuse rather than silently creating a second account that shadows
+		// an existing one.
+		var exists bool
+		if qErr := h.db.QueryRow(
+			"SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)", userInfo.Email,
+		).Scan(&exists); qErr == nil && exists {
+			return nil, fmt.Errorf("an account already uses this email address and the provider did not verify it")
+		}
 	}
 
 	// Create new user
