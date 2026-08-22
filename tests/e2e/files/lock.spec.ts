@@ -32,7 +32,6 @@ test.describe('File Locking @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open context menu
@@ -74,7 +73,6 @@ test.describe('File Locking @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Lock file
@@ -113,7 +111,6 @@ test.describe('File Locking @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Lock file
@@ -161,7 +158,6 @@ test.describe('File Locking @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Lock file
@@ -183,7 +179,7 @@ test.describe('File Locking @files', () => {
         if (!isDisabled) {
           await deleteOption.click();
           // Should show lock error or file should still exist
-          await page.locator('button:has-text("확인"), button:has-text("삭제")').click().catch(() => {});
+          await page.locator(Selectors.confirmModal.confirmBtn).click().catch(() => {});
 
           // File should still exist if locked properly
           await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 5000 });
@@ -209,7 +205,6 @@ test.describe('File Locking @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     await page.locator(`text=${testFile.name}`).click({ button: 'right' });

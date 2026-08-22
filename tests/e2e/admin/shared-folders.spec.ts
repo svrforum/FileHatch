@@ -117,7 +117,7 @@ test.describe('Admin Shared Folders @admin @sharing', () => {
       await deleteBtn.click();
 
       // Confirm deletion
-      const confirmBtn = page.locator('button:has-text("확인"), button:has-text("Confirm")');
+      const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
       if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await confirmBtn.click();
       }

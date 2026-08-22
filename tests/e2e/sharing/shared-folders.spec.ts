@@ -117,7 +117,6 @@ test.describe('Shared Drive Operations @sharing', () => {
           buffer: testFile.buffer,
         });
 
-        await page.locator(Selectors.uploadModal.startUploadBtn).click();
 
         // Wait for result - success or permission error
         await expect(

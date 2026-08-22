@@ -33,7 +33,6 @@ test.describe('User Sharing @sharing', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
     await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 30000 });
 
@@ -67,7 +66,6 @@ test.describe('User Sharing @sharing', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open user share modal
@@ -110,7 +108,6 @@ test.describe('User Sharing @sharing', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open user share modal
@@ -150,7 +147,6 @@ test.describe('User Sharing @sharing', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open user share modal
@@ -253,7 +249,6 @@ test.describe('Shared Views @sharing', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Create a link share
@@ -329,7 +324,7 @@ test.describe('Share Management @sharing', () => {
           await removeBtn.click();
 
           // Confirm removal
-          const confirmBtn = page.locator('button:has-text("확인"), button:has-text("Confirm")');
+          const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
           if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
             await confirmBtn.click();
           }

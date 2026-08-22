@@ -137,7 +137,7 @@ test.describe('Notification Actions @notifications', () => {
       await clearAllBtn.click();
 
       // Confirm if needed
-      const confirmBtn = page.locator('button:has-text("확인"), button:has-text("Confirm")');
+      const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
       if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
         await confirmBtn.click();
       }

@@ -76,6 +76,30 @@ export const Selectors = {
     transferStatus: '.transfer-status, :text("전송 현황")',
   },
 
+  /*
+   * Upload modal. Verified against the running app: the modal exposes only
+   * "파일 선택" / "폴더 선택" - there is no start-upload control, because the
+   * transfer begins as soon as files are chosen and the modal closes itself.
+   */
+  uploadModal: {
+    overlay: '.modal-overlay',
+    container: '.upload-modal',
+    selectFileBtn: 'button.upload-select-btn:has-text("파일 선택")',
+    selectFolderBtn: 'button.upload-select-btn:has-text("폴더 선택")',
+  },
+
+  /*
+   * Confirmation dialog (ConfirmModal.tsx). Scope every lookup to the dialog:
+   * unscoped `button:has-text("삭제")` also matches the delete button sitting
+   * in the detail panel behind the overlay, and Playwright then waits out the
+   * full timeout on a click the overlay keeps intercepting.
+   */
+  confirmModal: {
+    container: '.confirm-modal',
+    confirmBtn: '.confirm-modal .confirm-actions button.btn-danger, .confirm-modal .confirm-actions button.btn-primary',
+    cancelBtn: '.confirm-modal .confirm-actions button.btn-secondary',
+  },
+
   // Share Modal
   shareModal: {
     container: '[data-testid="share-modal"], .share-modal, .modal',

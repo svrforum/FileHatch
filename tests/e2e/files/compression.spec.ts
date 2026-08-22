@@ -34,7 +34,6 @@ test.describe('File Compression @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
     await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 30000 });
 
@@ -70,7 +69,6 @@ test.describe('File Compression @files', () => {
       buffer: file1.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
     await expect(page.locator(`text=${file1.name}`)).toBeVisible({ timeout: 30000 });
 
@@ -86,7 +84,6 @@ test.describe('File Compression @files', () => {
       buffer: file2.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
     await expect(page.locator(`text=${file2.name}`)).toBeVisible({ timeout: 30000 });
 
@@ -137,7 +134,6 @@ test.describe('File Compression @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Go back to parent
@@ -184,7 +180,6 @@ test.describe('Archive Extraction @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
     await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 30000 });
 
@@ -205,7 +200,7 @@ test.describe('Archive Extraction @files', () => {
     await page.locator(`text=${testFile.name}`).click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
     await page.locator(Selectors.contextMenu.delete).click();
-    await page.locator('button:has-text("확인"), button:has-text("삭제")').click();
+    await page.locator(Selectors.confirmModal.confirmBtn).click();
     await expect(page.locator(`text=${testFile.name}`)).not.toBeVisible({ timeout: 5000 });
 
     // Extract the archive
@@ -237,7 +232,6 @@ test.describe('Archive Extraction @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Compress
@@ -287,7 +281,6 @@ test.describe('ZIP Preview @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Compress
@@ -330,7 +323,6 @@ test.describe('ZIP Preview @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Compress

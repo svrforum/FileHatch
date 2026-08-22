@@ -49,7 +49,6 @@ test.describe('Recent Files @activity', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Navigate to recent files
@@ -124,7 +123,6 @@ test.describe('Favorites @activity', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Right-click and add to favorites
@@ -163,7 +161,6 @@ test.describe('Favorites @activity', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Add to favorites
@@ -211,7 +208,6 @@ test.describe('Favorites @activity', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     await page.locator(`text=${testFile.name}`).click({ button: 'right' });
@@ -286,7 +282,6 @@ test.describe('Activity Feed @activity', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Navigate to activity

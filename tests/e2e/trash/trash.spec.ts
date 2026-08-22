@@ -33,7 +33,6 @@ test.describe('Trash Operations @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
     await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 30000 });
 
@@ -41,7 +40,7 @@ test.describe('Trash Operations @files', () => {
     await page.locator(`text=${testFile.name}`).click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
     await page.locator(Selectors.contextMenu.delete).click();
-    await page.locator('button:has-text("확인"), button:has-text("삭제")').click();
+    await page.locator(Selectors.confirmModal.confirmBtn).click();
 
     // File should be gone from main view
     await expect(page.locator(`text=${testFile.name}`)).not.toBeVisible({ timeout: 5000 });
@@ -62,13 +61,12 @@ test.describe('Trash Operations @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Delete file
     await page.locator(`text=${testFile.name}`).click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
-    await page.locator('button:has-text("확인"), button:has-text("삭제")').click();
+    await page.locator(Selectors.confirmModal.confirmBtn).click();
     await expect(page.locator(`text=${testFile.name}`)).not.toBeVisible({ timeout: 5000 });
 
     // Navigate to trash
@@ -94,13 +92,12 @@ test.describe('Trash Operations @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Delete file
     await page.locator(`text=${testFile.name}`).click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
-    await page.locator('button:has-text("확인"), button:has-text("삭제")').click();
+    await page.locator(Selectors.confirmModal.confirmBtn).click();
     await expect(page.locator(`text=${testFile.name}`)).not.toBeVisible({ timeout: 5000 });
 
     // Navigate to trash
@@ -122,7 +119,7 @@ test.describe('Trash Operations @files', () => {
     }
 
     // Confirm restoration if needed
-    const confirmBtn = page.locator('button:has-text("확인"), button:has-text("Confirm")');
+    const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
     if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await confirmBtn.click();
     }
@@ -151,13 +148,12 @@ test.describe('Trash Operations @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Delete file
     await page.locator(`text=${testFile.name}`).click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
-    await page.locator('button:has-text("확인"), button:has-text("삭제")').click();
+    await page.locator(Selectors.confirmModal.confirmBtn).click();
     await expect(page.locator(`text=${testFile.name}`)).not.toBeVisible({ timeout: 5000 });
 
     // Navigate to trash
@@ -205,7 +201,6 @@ test.describe('Trash Operations @files', () => {
       buffer: file1.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Upload second file
@@ -220,18 +215,17 @@ test.describe('Trash Operations @files', () => {
       buffer: file2.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Delete both files
     await page.locator(`text=${file1.name}`).click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
-    await page.locator('button:has-text("확인"), button:has-text("삭제")').click();
+    await page.locator(Selectors.confirmModal.confirmBtn).click();
     await expect(page.locator(`text=${file1.name}`)).not.toBeVisible({ timeout: 5000 });
 
     await page.locator(`text=${file2.name}`).click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
-    await page.locator('button:has-text("확인"), button:has-text("삭제")').click();
+    await page.locator(Selectors.confirmModal.confirmBtn).click();
     await expect(page.locator(`text=${file2.name}`)).not.toBeVisible({ timeout: 5000 });
 
     // Navigate to trash
@@ -268,7 +262,7 @@ test.describe('Trash Operations @files', () => {
     // Delete folder
     await page.locator(`text=${folderName}`).click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
-    await page.locator('button:has-text("확인"), button:has-text("삭제")').click();
+    await page.locator(Selectors.confirmModal.confirmBtn).click();
 
     // Folder should be gone
     await expect(page.locator(`text=${folderName}`)).not.toBeVisible({ timeout: 5000 });
@@ -306,7 +300,6 @@ test.describe('Trash Operations @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Go back and delete folder
@@ -315,7 +308,7 @@ test.describe('Trash Operations @files', () => {
 
     await page.locator(`text=${folderName}`).click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
-    await page.locator('button:has-text("확인"), button:has-text("삭제")').click();
+    await page.locator(Selectors.confirmModal.confirmBtn).click();
     await expect(page.locator(`text=${folderName}`)).not.toBeVisible({ timeout: 5000 });
 
     // Navigate to trash
@@ -334,7 +327,7 @@ test.describe('Trash Operations @files', () => {
       await page.locator(Selectors.trash.restoreBtn).click();
     }
 
-    const confirmBtn = page.locator('button:has-text("확인"), button:has-text("Confirm")');
+    const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
     if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await confirmBtn.click();
     }
@@ -371,7 +364,6 @@ test.describe('Trash Edge Cases @files', () => {
       mimeType: file1.mimeType,
       buffer: file1.buffer,
     });
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     await page.locator(Selectors.fileList.uploadBtn).click();
@@ -383,7 +375,6 @@ test.describe('Trash Edge Cases @files', () => {
       mimeType: file2.mimeType,
       buffer: file2.buffer,
     });
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Select both files
@@ -403,7 +394,7 @@ test.describe('Trash Edge Cases @files', () => {
     }
 
     // Confirm deletion
-    await page.locator('button:has-text("확인"), button:has-text("삭제")').click();
+    await page.locator(Selectors.confirmModal.confirmBtn).click();
 
     // Both files should be gone
     await expect(page.locator(`text=${file1.name}`)).not.toBeVisible({ timeout: 5000 });
@@ -418,7 +409,7 @@ test.describe('Trash Edge Cases @files', () => {
     const emptyTrashBtn = page.locator(Selectors.trash.emptyTrashBtn);
     if (await emptyTrashBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await emptyTrashBtn.click();
-      const confirmBtn = page.locator('button:has-text("확인"), button:has-text("Confirm")');
+      const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
       if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
         await confirmBtn.click();
       }

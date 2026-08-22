@@ -32,7 +32,6 @@ test.describe('File Tags @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open context menu and click tags
@@ -66,7 +65,6 @@ test.describe('File Tags @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open tags
@@ -108,7 +106,6 @@ test.describe('File Tags @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     await page.locator(`text=${testFile.name}`).click({ button: 'right' });
@@ -153,7 +150,6 @@ test.describe('File Tags @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Add tag
@@ -203,7 +199,6 @@ test.describe('File Properties @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     await page.locator(`text=${testFile.name}`).click({ button: 'right' });
@@ -237,7 +232,6 @@ test.describe('File Properties @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     await page.locator(`text=${testFile.name}`).click({ button: 'right' });
@@ -269,7 +263,6 @@ test.describe('File Properties @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     await page.locator(`text=${testFile.name}`).click({ button: 'right' });
@@ -301,7 +294,6 @@ test.describe('File Properties @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     await page.locator(`text=${testFile.name}`).click({ button: 'right' });

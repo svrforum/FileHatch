@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { Selectors } from '../helpers/selectors';
 
 test.describe('Share Links', () => {
   test.beforeEach(async ({ page }) => {
@@ -177,7 +178,7 @@ test.describe('Share Links', () => {
     await page.locator('button:has-text("삭제"), button:has-text("Delete"), button[aria-label="Delete"]').click();
 
     // Confirm deletion if needed
-    const confirmButton = page.locator('button:has-text("확인"), button:has-text("Confirm")');
+    const confirmButton = page.locator(Selectors.confirmModal.confirmBtn);
     if (await confirmButton.isVisible()) {
       await confirmButton.click();
     }
