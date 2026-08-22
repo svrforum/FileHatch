@@ -62,7 +62,7 @@ test.describe('Admin Shared Folders @admin @sharing', () => {
     await page.locator('button[type="submit"], button:has-text("생성")').click();
 
     // Folder should appear in list
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 10000 });
   });
 
   test('should edit shared folder', async ({ page }) => {
@@ -107,7 +107,7 @@ test.describe('Admin Shared Folders @admin @sharing', () => {
     await page.locator('input[name="name"], input[placeholder*="이름"]').fill(folderName);
     await page.locator('button[type="submit"], button:has-text("생성")').click();
 
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 10000 });
 
     // Find and delete the folder
     const folderRow = page.locator(`.shared-folder-row:has-text("${folderName}"), tr:has-text("${folderName}")`);
@@ -123,7 +123,7 @@ test.describe('Admin Shared Folders @admin @sharing', () => {
       }
 
       // Folder should be removed
-      await expect(page.locator(`text=${folderName}`)).not.toBeVisible({ timeout: 10000 });
+      await expect(page.locator(`text=${folderName}`).first()).not.toBeVisible({ timeout: 10000 });
     } else {
       test.skip();
     }

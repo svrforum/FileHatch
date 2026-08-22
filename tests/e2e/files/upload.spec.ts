@@ -40,7 +40,7 @@ test.describe('File Upload @smoke @files', () => {
 
     // Wait for modal to close and file to appear in list
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 30000 });
   });
 
   test('should upload multiple files at once', async ({ page }) => {
@@ -63,8 +63,8 @@ test.describe('File Upload @smoke @files', () => {
 
     // Wait for all files to appear
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${file1.name}`)).toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${file2.name}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${file1.name}`).first()).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${file2.name}`).first()).toBeVisible({ timeout: 30000 });
   });
 
   test('should upload file via drag and drop', async ({ page }) => {
@@ -89,7 +89,7 @@ test.describe('File Upload @smoke @files', () => {
     await dropZone.dispatchEvent('drop', { dataTransfer });
 
     // Verify file appears
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
   });
 
   test('should upload different file types', async ({ page }) => {
@@ -115,7 +115,7 @@ test.describe('File Upload @smoke @files', () => {
     });
 
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${htmlFile.name}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${htmlFile.name}`).first()).toBeVisible({ timeout: 30000 });
   });
 
   test('should handle file with Unicode name', async ({ page }) => {
@@ -136,7 +136,7 @@ test.describe('File Upload @smoke @files', () => {
     });
 
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
   });
 });
 
@@ -163,6 +163,6 @@ test.describe('Upload Edge Cases @files', () => {
     });
 
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
   });
 });

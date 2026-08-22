@@ -120,7 +120,7 @@ test.describe('Shared Drive Operations @sharing', () => {
 
         // Wait for result - success or permission error
         await expect(
-          page.locator(`text=${testFile.name}`)
+          page.locator(`text=${testFile.name}`).first()
             .or(page.locator(':text("권한"), :text("permission"), :text("허용")').first())
         ).toBeVisible({ timeout: 30000 });
       } else {
@@ -150,7 +150,7 @@ test.describe('Shared Drive Operations @sharing', () => {
 
         // Wait for result
         await expect(
-          page.locator(`text=${folderName}`)
+          page.locator(`text=${folderName}`).first()
             .or(page.locator(':text("권한"), :text("permission")').first())
         ).toBeVisible({ timeout: 15000 });
       } else {

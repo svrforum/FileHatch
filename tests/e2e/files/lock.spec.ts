@@ -35,7 +35,7 @@ test.describe('File Locking @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open context menu
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
 
     // Click lock option
@@ -45,7 +45,7 @@ test.describe('File Locking @files', () => {
 
       // File should show locked indicator
       await page.waitForTimeout(1000);
-      const fileRow = page.locator(`text=${testFile.name}`).locator('..');
+      const fileRow = page.locator(`text=${testFile.name}`).first().locator('..');
       const lockIndicator = fileRow.locator('.lock-icon, .locked, svg[data-icon="lock"]');
 
       await expect(
@@ -76,14 +76,14 @@ test.describe('File Locking @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Lock file
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const lockOption = page.locator(Selectors.contextMenu.lock);
     if (await lockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await lockOption.click();
       await page.waitForTimeout(500);
 
       // Unlock file
-      await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+      await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
       const unlockOption = page.locator(Selectors.contextMenu.unlock);
       if (await unlockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
         await unlockOption.click();
@@ -114,14 +114,14 @@ test.describe('File Locking @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Lock file
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const lockOption = page.locator(Selectors.contextMenu.lock);
     if (await lockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await lockOption.click();
       await page.waitForTimeout(500);
 
       // Try to rename
-      await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+      await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
       const renameOption = page.locator(Selectors.contextMenu.rename);
 
       // Rename should be disabled or show error when clicked
@@ -161,14 +161,14 @@ test.describe('File Locking @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Lock file
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const lockOption = page.locator(Selectors.contextMenu.lock);
     if (await lockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await lockOption.click();
       await page.waitForTimeout(500);
 
       // Try to delete
-      await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+      await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
       const deleteOption = page.locator(Selectors.contextMenu.delete);
 
       if (await deleteOption.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -182,7 +182,7 @@ test.describe('File Locking @files', () => {
           await page.locator(Selectors.confirmModal.confirmBtn).click().catch(() => {});
 
           // File should still exist if locked properly
-          await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 5000 });
+          await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 5000 });
         }
       }
     } else {
@@ -207,14 +207,14 @@ test.describe('File Locking @files', () => {
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const lockOption = page.locator(Selectors.contextMenu.lock);
     if (await lockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await lockOption.click();
       await page.waitForTimeout(500);
 
       // Open properties to see lock info
-      await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+      await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
       const propertiesOption = page.locator(Selectors.contextMenu.properties);
       if (await propertiesOption.isVisible({ timeout: 2000 }).catch(() => false)) {
         await propertiesOption.click();

@@ -58,7 +58,7 @@ test.describe('Recent Files @activity', () => {
       await page.waitForTimeout(1000);
 
       // File should appear in recent
-      await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 10000 });
+      await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 10000 });
     } else {
       test.skip();
     }
@@ -126,7 +126,7 @@ test.describe('Favorites @activity', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Right-click and add to favorites
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
 
     const favoriteOption = page.locator(Selectors.contextMenu.favorite);
@@ -139,7 +139,7 @@ test.describe('Favorites @activity', () => {
         await favoritesLink.click();
         await page.waitForTimeout(1000);
 
-        await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 10000 });
+        await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 10000 });
       }
     } else {
       test.skip();
@@ -164,7 +164,7 @@ test.describe('Favorites @activity', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Add to favorites
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const favoriteOption = page.locator(Selectors.contextMenu.favorite);
     if (await favoriteOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await favoriteOption.click();
@@ -177,7 +177,7 @@ test.describe('Favorites @activity', () => {
         await page.waitForTimeout(1000);
 
         // Remove from favorites
-        await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+        await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
         const removeFavoriteOption = page.locator(
           '.context-menu >> text=즐겨찾기 제거, .context-menu >> text=Remove favorite'
         );
@@ -185,7 +185,7 @@ test.describe('Favorites @activity', () => {
           await removeFavoriteOption.click();
 
           // File should be gone from favorites
-          await expect(page.locator(`text=${testFile.name}`)).not.toBeVisible({ timeout: 5000 });
+          await expect(page.locator(`text=${testFile.name}`).first()).not.toBeVisible({ timeout: 5000 });
         }
       }
     } else {
@@ -210,7 +210,7 @@ test.describe('Favorites @activity', () => {
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const favoriteOption = page.locator(Selectors.contextMenu.favorite);
     if (await favoriteOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await favoriteOption.click();
@@ -220,7 +220,7 @@ test.describe('Favorites @activity', () => {
       await page.keyboard.press('Escape');
 
       // Look for favorite indicator (star icon, etc.)
-      const fileRow = page.locator(`text=${testFile.name}`).locator('..');
+      const fileRow = page.locator(`text=${testFile.name}`).first().locator('..');
       const favoriteIndicator = fileRow.locator('.favorite-icon, .star-icon, svg[data-icon="star"]');
 
       // Indicator may or may not be visible depending on UI design
@@ -292,7 +292,7 @@ test.describe('Activity Feed @activity', () => {
 
       // Should show upload activity
       await expect(
-        page.locator(`text=${testFile.name}`)
+        page.locator(`text=${testFile.name}`).first()
           .or(page.locator(':text("업로드"), :text("Upload")').first())
       ).toBeVisible({ timeout: 10000 });
     } else {

@@ -28,7 +28,7 @@ test.describe('File Operations', () => {
     await page.locator('button:has-text("생성")').click();
 
     // Verify folder appears in list (give time for creation)
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 15000 });
+    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
   });
 
   test('should navigate into folder', async ({ page }) => {
@@ -40,10 +40,10 @@ test.describe('File Operations', () => {
     await page.locator('button:has-text("생성")').click();
 
     // Wait for folder to appear
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 15000 });
+    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
 
     // Double-click to enter folder
-    await page.locator(`text=${folderName}`).dblclick();
+    await page.locator(`text=${folderName}`).first().dblclick();
 
     // Verify navigation (breadcrumb should show folder name or URL should change)
     await expect(page.locator(`[data-testid="breadcrumb"]:has-text("${folderName}"), .breadcrumb:has-text("${folderName}")`)).toBeVisible({ timeout: 5000 }).catch(() => expect(page).toHaveURL(new RegExp(folderName)));
@@ -76,7 +76,7 @@ test.describe('File Operations', () => {
     await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
 
     // Wait for upload to complete
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
   });
 
   test('should rename file', async ({ page }) => {
@@ -145,10 +145,10 @@ test.describe('File Operations', () => {
     await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
 
     // Wait for file to appear
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
 
     // Right-click to open context menu
-    await page.locator(`text=${fileName}`).click({ button: 'right' });
+    await page.locator(`text=${fileName}`).first().click({ button: 'right' });
 
     // Wait for context menu to appear
     await expect(page.locator('.context-menu')).toBeVisible({ timeout: 5000 });
@@ -160,7 +160,7 @@ test.describe('File Operations', () => {
     await page.locator('button:has-text("확인"), button:has-text("삭제"), button:has-text("Delete")').click();
 
     // Verify file is gone
-    await expect(page.locator(`text=${fileName}`)).not.toBeVisible({ timeout: 5000 });
+    await expect(page.locator(`text=${fileName}`).first()).not.toBeVisible({ timeout: 5000 });
   });
 
   test('should select multiple files', async ({ page }) => {
@@ -181,7 +181,7 @@ test.describe('File Operations', () => {
     await page.locator('button:has-text("업로드 시작")').click();
     // Wait for upload modal to close
     await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${file1}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${file1}`).first()).toBeVisible({ timeout: 30000 });
 
     // Upload second file
     await page.locator('.upload-btn').click();
@@ -196,11 +196,11 @@ test.describe('File Operations', () => {
     await page.locator('button:has-text("업로드 시작")').click();
     // Wait for upload modal to close
     await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${file2}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${file2}`).first()).toBeVisible({ timeout: 30000 });
 
     // Ctrl+click to select multiple
-    await page.locator(`text=${file1}`).click();
-    await page.locator(`text=${file2}`).click({ modifiers: ['Control'] });
+    await page.locator(`text=${file1}`).first().click();
+    await page.locator(`text=${file2}`).first().click({ modifiers: ['Control'] });
 
     // Verify multi-select bar appears
     await expect(page.locator('[data-testid="multi-select-bar"], .multi-select-bar, .selection-bar')).toBeVisible({
@@ -229,10 +229,10 @@ test.describe('File Operations', () => {
     await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
 
     // Wait for file to appear
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
 
     // Right-click to open context menu
-    await page.locator(`text=${fileName}`).click({ button: 'right' });
+    await page.locator(`text=${fileName}`).first().click({ button: 'right' });
 
     // Wait for context menu to appear
     await expect(page.locator('.context-menu')).toBeVisible({ timeout: 5000 });
@@ -280,7 +280,7 @@ test.describe('Drag and Drop', () => {
     await dropZone.dispatchEvent('drop', { dataTransfer });
 
     // Verify file appears (may take time for upload)
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
   });
 });
 
@@ -311,7 +311,7 @@ test.describe('File Search', () => {
     // Wait for upload modal to close
     await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
 
-    await expect(page.locator(`text=${uniqueName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${uniqueName}`).first()).toBeVisible({ timeout: 30000 });
 
     // Open search
     await page.locator('.search-expand-btn').click();
@@ -320,6 +320,6 @@ test.describe('File Search', () => {
     await page.locator('input[placeholder*="검색"], input[placeholder*="search"], input[type="search"]').fill('searchable');
 
     // Wait for results
-    await expect(page.locator(`text=${uniqueName}`)).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(`text=${uniqueName}`).first()).toBeVisible({ timeout: 5000 });
   });
 });

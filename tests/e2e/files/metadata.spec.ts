@@ -35,7 +35,7 @@ test.describe('File Tags @files @metadata', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open context menu and click tags
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
 
     const tagsOption = page.locator(Selectors.contextMenu.tags);
@@ -68,7 +68,7 @@ test.describe('File Tags @files @metadata', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open tags
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const tagsOption = page.locator(Selectors.contextMenu.tags);
     if (await tagsOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await tagsOption.click();
@@ -80,7 +80,7 @@ test.describe('File Tags @files @metadata', () => {
         await page.keyboard.press('Enter');
 
         // Tag should appear
-        await expect(page.locator(`text=${tagName}`)).toBeVisible({ timeout: 5000 });
+        await expect(page.locator(`text=${tagName}`).first()).toBeVisible({ timeout: 5000 });
 
         // Save
         await page.locator('button:has-text("저장"), button:has-text("Save")').click();
@@ -108,7 +108,7 @@ test.describe('File Tags @files @metadata', () => {
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const tagsOption = page.locator(Selectors.contextMenu.tags);
     if (await tagsOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await tagsOption.click();
@@ -118,7 +118,7 @@ test.describe('File Tags @files @metadata', () => {
       if (await tagInput.isVisible({ timeout: 3000 }).catch(() => false)) {
         await tagInput.fill(tagName);
         await page.keyboard.press('Enter');
-        await expect(page.locator(`text=${tagName}`)).toBeVisible({ timeout: 5000 });
+        await expect(page.locator(`text=${tagName}`).first()).toBeVisible({ timeout: 5000 });
 
         // Remove tag
         const removeTagBtn = page.locator(`.tag:has-text("${tagName}") button, .tag-remove`);
@@ -153,7 +153,7 @@ test.describe('File Tags @files @metadata', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Add tag
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const tagsOption = page.locator(Selectors.contextMenu.tags);
     if (await tagsOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await tagsOption.click();
@@ -171,7 +171,7 @@ test.describe('File Tags @files @metadata', () => {
         await page.waitForTimeout(1000);
 
         // File should appear in results
-        await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 5000 });
+        await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 5000 });
       }
     } else {
       test.skip();
@@ -201,7 +201,7 @@ test.describe('File Properties @files @metadata', () => {
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const propertiesOption = page.locator(Selectors.contextMenu.properties);
     if (await propertiesOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await propertiesOption.click();
@@ -234,7 +234,7 @@ test.describe('File Properties @files @metadata', () => {
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const propertiesOption = page.locator(Selectors.contextMenu.properties);
     if (await propertiesOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await propertiesOption.click();
@@ -265,7 +265,7 @@ test.describe('File Properties @files @metadata', () => {
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const propertiesOption = page.locator(Selectors.contextMenu.properties);
     if (await propertiesOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await propertiesOption.click();
@@ -296,7 +296,7 @@ test.describe('File Properties @files @metadata', () => {
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const propertiesOption = page.locator(Selectors.contextMenu.properties);
     if (await propertiesOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await propertiesOption.click();

@@ -25,10 +25,10 @@ test.describe('Upload Share Creation @sharing', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 15000 });
+    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
 
     // Right-click and create upload link
-    await page.locator(`text=${folderName}`).click({ button: 'right' });
+    await page.locator(`text=${folderName}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
 
     const uploadLinkOption = page.locator(Selectors.contextMenu.uploadLink);
@@ -59,10 +59,10 @@ test.describe('Upload Share Creation @sharing', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 15000 });
+    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
 
     // Create upload link with password
-    await page.locator(`text=${folderName}`).click({ button: 'right' });
+    await page.locator(`text=${folderName}`).first().click({ button: 'right' });
     const uploadLinkOption = page.locator(Selectors.contextMenu.uploadLink);
     if (await uploadLinkOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await uploadLinkOption.click();
@@ -99,10 +99,10 @@ test.describe('Upload Share Creation @sharing', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 15000 });
+    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
 
     // Create upload link with expiration
-    await page.locator(`text=${folderName}`).click({ button: 'right' });
+    await page.locator(`text=${folderName}`).first().click({ button: 'right' });
     const uploadLinkOption = page.locator(Selectors.contextMenu.uploadLink);
     if (await uploadLinkOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await uploadLinkOption.click();
@@ -139,10 +139,10 @@ test.describe('Upload Share Creation @sharing', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 15000 });
+    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
 
     // Create upload link
-    await page.locator(`text=${folderName}`).click({ button: 'right' });
+    await page.locator(`text=${folderName}`).first().click({ button: 'right' });
     const uploadLinkOption = page.locator(Selectors.contextMenu.uploadLink);
     if (await uploadLinkOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await uploadLinkOption.click();
@@ -171,10 +171,10 @@ test.describe('Upload Share Creation @sharing', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 15000 });
+    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
 
     // Create upload link
-    await page.locator(`text=${folderName}`).click({ button: 'right' });
+    await page.locator(`text=${folderName}`).first().click({ button: 'right' });
     const uploadLinkOption = page.locator(Selectors.contextMenu.uploadLink);
     if (await uploadLinkOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await uploadLinkOption.click();

@@ -24,17 +24,24 @@ export const Selectors = {
   },
 
   // Sidebar Navigation - Updated to match FileHatch actual UI
+  /*
+   * Scope every entry to the nav list. Bare `:text("휴지통")` also matched
+   * the footer's storage breakdown ("휴지통: 23 B"), so navigation clicks
+   * died on a strict-mode violation.
+   */
   sidebar: {
     container: '.sidebar, .nav-sidebar',
-    myFiles: ':text("내 파일")',
-    myTasks: ':text("내 작업")',
-    sharingSection: ':text("공유")',
-    sharedWithMe: ':text("나에게 공유된 파일")',
-    sharedByMe: ':text("다른사용자에 공유된 파일")',
-    sharedViaLink: ':text("링크로 공유된 파일")',
-    trash: ':text("휴지통")',
-    adminMode: ':text("관리자 모드")',
-    transferStatus: ':text("전송 현황")',
+    myFiles: '.nav-menu .nav-item:has-text("내 파일")',
+    myTasks: '.nav-menu .nav-item:has-text("내 작업")',
+    // ":has-text" is substring-based and "공유" appears in three sibling
+    // entries, so this one has to match the label exactly.
+    sharingSection: '.nav-menu .nav-item:text-is("공유")',
+    sharedWithMe: '.nav-menu .nav-item:has-text("나에게 공유된 파일")',
+    sharedByMe: '.nav-menu .nav-item:has-text("다른사용자에 공유된 파일")',
+    sharedViaLink: '.nav-menu .nav-item:has-text("링크로 공유된 파일")',
+    trash: '.nav-menu .nav-item:has-text("휴지통")',
+    adminMode: '.nav-menu .nav-item:has-text("관리자 모드")',
+    transferStatus: '.nav-menu .nav-item:has-text("전송 현황")',
   },
 
   // File List

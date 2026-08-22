@@ -329,7 +329,7 @@ test.describe('Admin Shared Folders', () => {
     await page.locator('button[type="submit"]').click();
 
     // Verify folder appears
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 10000 });
   });
 
   test('should add member to shared folder', async ({ page }) => {

@@ -101,8 +101,8 @@ test.describe('Issue #36 — duplicate dialog and queue handling @files @regress
     // and confirm by listing the folder.
     await page.goto('/')
     await expect(page.locator('.file-list-container, .file-list')).toBeVisible({ timeout: 10_000 })
-    await expect(page.locator(`text=${fresh1.name}`)).toHaveCount(0)
-    await expect(page.locator(`text=${fresh2.name}`)).toHaveCount(0)
+    await expect(page.locator(`text=${fresh1.name}`).first()).toHaveCount(0)
+    await expect(page.locator(`text=${fresh2.name}`).first()).toHaveCount(0)
   })
 
   test('(symptom 3) selecting the same file four times in one batch enqueues it only once', async ({ page }) => {
@@ -143,7 +143,7 @@ test.describe('Issue #36 — duplicate dialog and queue handling @files @regress
     // Strip the extension and match plain "<base>[" — we don't need a regex,
     // any DOM text containing that prefix is a numbered duplicate.
     const baseNoExt = same.name.replace(/\.[^.]+$/, '')
-    const numbered = page.locator(`text=${baseNoExt}[`)
+    const numbered = page.locator(`text=${baseNoExt}[`).first()
     await expect(numbered).toHaveCount(0)
   })
 })

@@ -27,10 +27,10 @@ test.describe('Share Links', () => {
     await page.locator('button:has-text("업로드 시작")').click();
 
     // Wait for file to appear
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
 
     // Right-click to open context menu
-    await page.locator(`text=${fileName}`).click({ button: 'right' });
+    await page.locator(`text=${fileName}`).first().click({ button: 'right' });
 
     // Click share option
     await page.locator('text=링크로 공유').first().click();
@@ -64,10 +64,10 @@ test.describe('Share Links', () => {
     });
 
     await page.locator('button:has-text("업로드 시작")').click();
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
 
     // Open share modal
-    await page.locator(`text=${fileName}`).click({ button: 'right' });
+    await page.locator(`text=${fileName}`).first().click({ button: 'right' });
     await page.locator('text=링크로 공유').first().click();
 
     // Enable password protection
@@ -98,10 +98,10 @@ test.describe('Share Links', () => {
     });
 
     await page.locator('button:has-text("업로드 시작")').click();
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
 
     // Open share modal
-    await page.locator(`text=${fileName}`).click({ button: 'right' });
+    await page.locator(`text=${fileName}`).first().click({ button: 'right' });
     await page.locator('text=링크로 공유').first().click();
 
     // Set expiration (select 1 day or similar option)
@@ -132,10 +132,10 @@ test.describe('Share Links', () => {
     });
 
     await page.locator('button:has-text("업로드 시작")').click();
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
 
     // Open share modal
-    await page.locator(`text=${fileName}`).click({ button: 'right' });
+    await page.locator(`text=${fileName}`).first().click({ button: 'right' });
     await page.locator('text=링크로 공유').first().click();
 
     // Create share
@@ -164,10 +164,10 @@ test.describe('Share Links', () => {
     });
 
     await page.locator('button:has-text("업로드 시작")').click();
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
 
     // Open share modal
-    await page.locator(`text=${fileName}`).click({ button: 'right' });
+    await page.locator(`text=${fileName}`).first().click({ button: 'right' });
     await page.locator('text=링크로 공유').first().click();
 
     // Create share
