@@ -24,28 +24,22 @@ type SMBUsersFile struct {
 // SMBCrypto handles encryption/decryption of SMB user passwords
 type SMBCrypto struct {
 	key        []byte
+	ring       *Keyring
 	configPath string
 	mu         sync.RWMutex
 }
 
 // NewSMBCrypto creates a new SMB crypto handler
 func NewSMBCrypto(configPath string) (*SMBCrypto, error) {
-	keyStr := os.Getenv("SMB_ENCRYPTION_KEY")
-	if keyStr == "" {
-		env := os.Getenv("FH_ENV")
-		if env == "production" {
-			return nil, fmt.Errorf("SMB_ENCRYPTION_KEY environment variable is required in production mode")
-		}
-		// Development default key - NOT FOR PRODUCTION
-		keyStr = "fh-dev-smb-key-not-for-prod-32"
-	}
-
-	// Ensure key is exactly 32 bytes for AES-256
-	key := make([]byte, 32)
-	copy(key, []byte(keyStr))
+	// The key comes from the keyring: SMB_ENCRYPTION_KEY when set, otherwise a
+	// generated key persisted on the config volume. The literal this used to
+	// fall back to is published in this repository, so it is now accepted for
+	// reading only (crypto_keyring.go).
+	ring := GetKeyring(purposeSMB)
 
 	return &SMBCrypto{
-		key:        key,
+		key:        ring.Primary(),
+		ring:       ring,
 		configPath: configPath,
 	}, nil
 }
@@ -81,7 +75,7 @@ func (sc *SMBCrypto) LoadUsers() (map[string]string, error) {
 
 	users := make(map[string]string)
 	for _, entry := range usersFile.Users {
-		password, err := DecryptAESGCM(entry.EncryptedPassword, sc.key)
+		password, err := sc.decrypt(entry.EncryptedPassword)
 		if err != nil {
 			// Skip entries that can't be decrypted (may have been encrypted with different key)
 			continue
@@ -152,7 +146,7 @@ func (sc *SMBCrypto) loadUsersInternal() (map[string]string, error) {
 
 	users := make(map[string]string)
 	for _, entry := range usersFile.Users {
-		password, err := DecryptAESGCM(entry.EncryptedPassword, sc.key)
+		password, err := sc.decrypt(entry.EncryptedPassword)
 		if err != nil {
 			continue
 		}
@@ -236,4 +230,14 @@ func (sc *SMBCrypto) MigrateFromPlaintext() error {
 	}
 
 	return sc.saveUsersInternal(users)
+}
+
+// decrypt opens an SMB password, accepting ciphertext written under any key on
+// the ring so an upgrade does not lock existing users out of their shares.
+func (sc *SMBCrypto) decrypt(ciphertext string) ([]byte, error) {
+	if sc.ring == nil {
+		return DecryptAESGCM(ciphertext, sc.key)
+	}
+	plaintext, _, err := sc.ring.Decrypt(ciphertext)
+	return plaintext, err
 }

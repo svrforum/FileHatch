@@ -5,17 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/labstack/echo/v4"
 )
-
-var encryptionKeyWarningOnce sync.Once
 
 // ExternalStorage represents an external storage mount
 type ExternalStorage struct {
@@ -66,27 +62,18 @@ var reservedMountPaths = map[string]bool{
 	"external": true, "root": true,
 }
 
-// getEncryptionKey returns the encryption key for config storage
+// getStorageEncryptionKey returns the key new external-storage config is
+// written with. Reading goes through the keyring so config encrypted under an
+// older key still opens — see crypto_keyring.go.
 func getStorageEncryptionKey() []byte {
-	key := os.Getenv("STORAGE_ENCRYPTION_KEY")
-	if key == "" {
-		key = os.Getenv("SMB_ENCRYPTION_KEY")
-	}
-	if key == "" {
-		encryptionKeyWarningOnce.Do(func() {
-			log.Println("WARNING: STORAGE_ENCRYPTION_KEY not set. Using default key. Set STORAGE_ENCRYPTION_KEY in production!")
-		})
-		key = "filehatch-default-key-change-me!!" // 32 bytes
-	}
-	// Ensure key is 32 bytes
-	keyBytes := []byte(key)
-	if len(keyBytes) > 32 {
-		keyBytes = keyBytes[:32]
-	}
-	for len(keyBytes) < 32 {
-		keyBytes = append(keyBytes, '0')
-	}
-	return keyBytes
+	return GetKeyring(purposeStorage).Primary()
+}
+
+// decryptStorageConfig opens an external-storage config blob, accepting
+// ciphertext written under any key on the ring.
+func decryptStorageConfig(ciphertext string) ([]byte, error) {
+	plaintext, _, err := GetKeyring(purposeStorage).Decrypt(ciphertext)
+	return plaintext, err
 }
 
 // CreateExternalStorage creates a new external storage
@@ -389,7 +376,7 @@ func (h *ExternalStorageHandler) TestExternalStorage(c echo.Context) error {
 	}
 
 	// Decrypt config
-	configJSON, err := DecryptAESGCM(configEncrypted, getStorageEncryptionKey())
+	configJSON, err := decryptStorageConfig(configEncrypted)
 	if err != nil {
 		return RespondError(c, ErrInternal("Failed to decrypt configuration"))
 	}
@@ -686,7 +673,7 @@ func validateExternalStorageConfig(backendType string, config json.RawMessage) e
 func maskConfig(configEncrypted, backendType string) map[string]interface{} {
 	result := make(map[string]interface{})
 
-	configJSON, err := DecryptAESGCM(configEncrypted, getStorageEncryptionKey())
+	configJSON, err := decryptStorageConfig(configEncrypted)
 	if err != nil {
 		result["error"] = "Failed to decrypt"
 		return result

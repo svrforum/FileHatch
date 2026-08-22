@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"image/png"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -24,34 +23,23 @@ import (
 type TOTPHandler struct {
 	db           *sql.DB
 	encryptKey   []byte
+	keyring      *Keyring
 	auditHandler *AuditHandler
 }
 
 // NewTOTPHandler creates a new TOTP handler
 func NewTOTPHandler(db *sql.DB, auditHandler *AuditHandler) *TOTPHandler {
-	keyStr := os.Getenv("TOTP_ENCRYPTION_KEY")
-	if keyStr == "" {
-		keyStr = os.Getenv("SMB_ENCRYPTION_KEY")
-	}
-	if keyStr == "" {
-		env := os.Getenv("FH_ENV")
-		if env == "production" {
-			// In production, fall back to JWT secret if no specific key
-			keyStr = os.Getenv("JWT_SECRET")
-		}
-		if keyStr == "" {
-			// Development fallback
-			keyStr = "fh-dev-totp-key-not-for-prod-32"
-		}
-	}
-
-	// Ensure key is exactly 32 bytes for AES-256
-	key := make([]byte, 32)
-	copy(key, []byte(keyStr))
+	// TOTP seeds are the strongest secret in the database: with one, 2FA is
+	// bypassed permanently. The key now comes from the keyring, which prefers
+	// TOTP_ENCRYPTION_KEY and otherwise uses a generated key kept on the config
+	// volume. The literal previous versions fell back to is published in this
+	// repository and is accepted for reading only (crypto_keyring.go).
+	ring := GetKeyring(purposeTOTP)
 
 	return &TOTPHandler{
 		db:           db,
-		encryptKey:   key,
+		encryptKey:   ring.Primary(),
+		keyring:      ring,
 		auditHandler: auditHandler,
 	}
 }
@@ -198,7 +186,7 @@ func (h *TOTPHandler) Enable2FA(c echo.Context) error {
 	}
 
 	// Decrypt the secret
-	secretBytes, err := DecryptAESGCM(encryptedSecret.String, h.encryptKey)
+	secretBytes, err := h.decryptSecret(encryptedSecret.String)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Failed to decrypt 2FA secret",
@@ -436,7 +424,7 @@ func (h *TOTPHandler) Verify2FA(c echo.Context) error {
 			})
 		}
 
-		secretBytes, err := DecryptAESGCM(encryptedSecret.String, h.encryptKey)
+		secretBytes, err := h.decryptSecret(encryptedSecret.String)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{
 				"error": "Failed to decrypt 2FA secret",
@@ -657,4 +645,14 @@ func (h *TOTPHandler) Check2FARequired(userID string) bool {
 		return false
 	}
 	return totpEnabled
+}
+
+// decryptSecret opens a stored TOTP seed, accepting ciphertext written under
+// any key on the ring.
+func (h *TOTPHandler) decryptSecret(ciphertext string) ([]byte, error) {
+	if h.keyring == nil {
+		return DecryptAESGCM(ciphertext, h.encryptKey)
+	}
+	plaintext, _, err := h.keyring.Decrypt(ciphertext)
+	return plaintext, err
 }

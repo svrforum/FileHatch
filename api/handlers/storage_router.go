@@ -47,7 +47,7 @@ type externalBackendEntry struct {
 type StorageRouter struct {
 	dataRoot         string
 	db               *sql.DB
-	homeBackends     map[string]*LocalBackend        // username -> backend (cached)
+	homeBackends     map[string]*LocalBackend // username -> backend (cached)
 	homeMu           sync.RWMutex
 	sharedBackend    *LocalBackend
 	externalBackends map[string]*externalBackendEntry // storageID -> cached backend
@@ -275,7 +275,7 @@ func (r *StorageRouter) getOrCreateExternalBackend(storageID, backendType, confi
 	}
 
 	// Decrypt config
-	configJSON, err := DecryptAESGCM(configEncrypted, getStorageEncryptionKey())
+	configJSON, err := decryptStorageConfig(configEncrypted)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt config: %w", err)
 	}
