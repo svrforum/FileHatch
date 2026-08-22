@@ -118,6 +118,27 @@ func TestStatusCapturingWriter_CacheHeaders(t *testing.T) {
 			if !tt.expectNoCache && cc != "" {
 				t.Errorf("Expected no Cache-Control header for %s, got %q", tt.method, cc)
 			}
+
+			// Issue #38: Windows' WebDAV redirector goes through WinINET, which
+			// only honours the HTTP/1.0 directives. Cache-Control alone left
+			// Explorer showing stale listings, so all three must travel together.
+			pragma := rec.Header().Get("Pragma")
+			expires := rec.Header().Get("Expires")
+			if tt.expectNoCache {
+				if pragma != "no-cache" {
+					t.Errorf("Expected Pragma: no-cache for %s, got %q", tt.method, pragma)
+				}
+				if expires != "0" {
+					t.Errorf("Expected Expires: 0 for %s, got %q", tt.method, expires)
+				}
+			} else {
+				if pragma != "" {
+					t.Errorf("Expected no Pragma header for %s, got %q", tt.method, pragma)
+				}
+				if expires != "" {
+					t.Errorf("Expected no Expires header for %s, got %q", tt.method, expires)
+				}
+			}
 		})
 	}
 }

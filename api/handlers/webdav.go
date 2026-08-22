@@ -244,7 +244,15 @@ func (w *statusCapturingWriter) WriteHeader(code int) {
 	w.wroteHeader = true
 	w.statusCode = code
 	if w.noCacheHeaders {
-		w.ResponseWriter.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		h := w.ResponseWriter.Header()
+		h.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		// Windows' WebDAV redirector (WebClient) fetches through WinINET, an
+		// HTTP/1.0-era stack that only drops a cached response when the
+		// HTTP/1.0 directives are present too. Sending Cache-Control alone
+		// leaves Explorer showing a stale directory listing for minutes after
+		// a file appears on the server. See Issue #38.
+		h.Set("Pragma", "no-cache")
+		h.Set("Expires", "0")
 	}
 	w.ResponseWriter.WriteHeader(code)
 }
