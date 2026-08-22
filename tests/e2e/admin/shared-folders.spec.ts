@@ -34,7 +34,7 @@ test.describe('Admin Shared Folders @admin @sharing', () => {
   test('should display shared folders list', async ({ page }) => {
     // Check for list or empty state
     const folderList = page.locator('.shared-folder-list, .folder-list, table');
-    const emptyState = page.locator('text=공유 폴더가 없습니다, text=No shared folders');
+    const emptyState = page.locator(':text("공유 폴더가 없습니다"), :text("No shared folders")').first();
 
     await expect(folderList.or(emptyState)).toBeVisible({ timeout: 10000 });
   });

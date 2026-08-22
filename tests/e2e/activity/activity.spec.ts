@@ -24,7 +24,7 @@ test.describe('Recent Files @activity', () => {
 
       // Should show recent files view
       await expect(
-        page.locator('text=최근 파일, text=Recent, text=최근')
+        page.locator(':text("최근 파일"), :text("Recent"), :text("최근")').first()
       ).toBeVisible({ timeout: 10000 }).catch(() => {
         // May show file list directly
         expect(page.locator(Selectors.fileList.wrapper)).toBeVisible();
@@ -99,7 +99,7 @@ test.describe('Favorites @activity', () => {
 
       // Should show favorites view
       await expect(
-        page.locator('text=즐겨찾기, text=Favorites, text=별표')
+        page.locator(':text("즐겨찾기"), :text("Favorites"), :text("별표")').first()
       ).toBeVisible({ timeout: 10000 }).catch(() => {
         expect(page.locator(Selectors.fileList.wrapper)).toBeVisible();
       });
@@ -244,7 +244,7 @@ test.describe('Activity Feed @activity', () => {
 
       // Should show activity view
       await expect(
-        page.locator('text=활동, text=Activity, text=내 활동')
+        page.locator(':text("활동"), :text("Activity"), :text("내 활동")').first()
       ).toBeVisible({ timeout: 10000 });
     } else {
       test.skip();
@@ -259,7 +259,7 @@ test.describe('Activity Feed @activity', () => {
 
       // Check for activity items or empty state
       const activityItem = page.locator('.activity-item, .activity-entry');
-      const emptyState = page.locator('text=활동 없음, text=No activity');
+      const emptyState = page.locator(':text("활동 없음"), :text("No activity")').first();
 
       await expect(activityItem.first().or(emptyState)).toBeVisible({ timeout: 10000 });
     } else {
@@ -293,7 +293,7 @@ test.describe('Activity Feed @activity', () => {
       // Should show upload activity
       await expect(
         page.locator(`text=${testFile.name}`)
-          .or(page.locator('text=업로드, text=Upload'))
+          .or(page.locator(':text("업로드"), :text("Upload")').first())
       ).toBeVisible({ timeout: 10000 });
     } else {
       test.skip();

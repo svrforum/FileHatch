@@ -121,7 +121,7 @@ export class ShareFixture {
    */
   async shareWithUser(fileName: string, options: UserShareOptions): Promise<void> {
     await this.page.locator(`text=${fileName}`).click({ button: 'right' });
-    await this.page.locator('text=사용자와 공유, text=사용자에게 공유').first().click();
+    await this.page.locator(':text("사용자와 공유"), :text("사용자에게 공유")').first().click();
 
     await expect(this.page.locator('.modal, [role="dialog"]')).toBeVisible({ timeout: 5000 });
 
@@ -144,7 +144,7 @@ export class ShareFixture {
 
     // Wait for confirmation
     await expect(
-      this.page.locator('text=공유됨, text=Shared, text=완료')
+      this.page.locator(':text("공유됨"), :text("Shared"), :text("완료")')
     ).toBeVisible({ timeout: 5000 }).catch(() => {});
   }
 
@@ -223,7 +223,7 @@ export class ShareFixture {
       buffer: Buffer.from(content),
     });
 
-    await expect(this.page.locator('text=완료, text=Success, text=업로드 완료')).toBeVisible({
+    await expect(this.page.locator(':text("완료"), :text("Success"), :text("업로드 완료")')).toBeVisible({
       timeout: 30000,
     });
   }

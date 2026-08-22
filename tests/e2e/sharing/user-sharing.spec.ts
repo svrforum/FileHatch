@@ -122,7 +122,7 @@ test.describe('User Sharing @sharing', () => {
       await expect(modal).toBeVisible({ timeout: 5000 });
 
       // Verify permission options exist
-      const permissionSelect = page.locator('select[name="permission"], select:near(:text("권한"))');
+      const permissionSelect = page.locator('select[name="permission"], select:near(:text("권한"))').first();
       if (await permissionSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
         // Select read permission
         await permissionSelect.selectOption('read');
@@ -158,7 +158,7 @@ test.describe('User Sharing @sharing', () => {
       const modal = page.locator(Selectors.modal.container);
       await expect(modal).toBeVisible({ timeout: 5000 });
 
-      const permissionSelect = page.locator('select[name="permission"], select:near(:text("권한"))');
+      const permissionSelect = page.locator('select[name="permission"], select:near(:text("권한"))').first();
       if (await permissionSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
         // Select write permission
         await permissionSelect.selectOption('write');
@@ -208,8 +208,8 @@ test.describe('Shared Views @sharing', () => {
 
       // Should show shared with me view or empty state
       await expect(
-        page.locator('text=나와 공유된, text=Shared with me, text=공유된 파일')
-          .or(page.locator('text=공유된 항목이 없습니다, text=No items shared'))
+        page.locator(':text("나와 공유된"), :text("Shared with me"), :text("공유된 파일")').first()
+          .or(page.locator(':text("공유된 항목이 없습니다"), :text("No items shared")').first())
       ).toBeVisible({ timeout: 10000 });
     } else {
       test.skip();
@@ -225,8 +225,8 @@ test.describe('Shared Views @sharing', () => {
 
       // Should show my shares view or empty state
       await expect(
-        page.locator('text=내가 공유한, text=My shares')
-          .or(page.locator('text=공유한 항목이 없습니다, text=No shared items'))
+        page.locator(':text("내가 공유한"), :text("My shares")').first()
+          .or(page.locator(':text("공유한 항목이 없습니다"), :text("No shared items")').first())
       ).toBeVisible({ timeout: 10000 });
     } else {
       test.skip();

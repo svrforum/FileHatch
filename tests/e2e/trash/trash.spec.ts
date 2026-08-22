@@ -418,7 +418,7 @@ test.describe('Trash Edge Cases @files', () => {
 
     // Verify empty state message
     await expect(
-      page.locator('text=휴지통이 비어 있습니다, text=Trash is empty, text=비어 있')
+      page.locator(':text("휴지통이 비어 있습니다"), :text("Trash is empty"), :text("비어 있")').first()
     ).toBeVisible({ timeout: 5000 }).catch(() => {
       // If no explicit empty state message, check that no items exist
       // This is acceptable behavior

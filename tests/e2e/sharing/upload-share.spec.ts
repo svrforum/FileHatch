@@ -110,7 +110,7 @@ test.describe('Upload Share Creation @sharing', () => {
       await expect(page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
 
       // Set expiration
-      const expirationSelect = page.locator('select:near(:text("만료")), select[name*="expir"]');
+      const expirationSelect = page.locator('select:near(:text("만료")), select[name*="expir"]').first();
       if (await expirationSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
         await expirationSelect.selectOption({ index: 1 }); // Usually "1 day"
       }
@@ -216,7 +216,7 @@ test.describe('Upload Share Access (Unauthenticated) @sharing', () => {
 
     // Should show upload interface
     await expect(
-      page.locator('text=업로드, text=Upload, button:has-text("업로드"), .upload-zone')
+      page.locator(':text("업로드"), :text("Upload"), button:has-text("업로드"), .upload-zone').first()
     ).toBeVisible({ timeout: 10000 });
   });
 
@@ -245,7 +245,7 @@ test.describe('Upload Share Access (Unauthenticated) @sharing', () => {
     });
 
     // Verify upload success
-    await expect(page.locator('text=완료, text=Success, text=업로드 완료')).toBeVisible({
+    await expect(page.locator(':text("완료"), :text("Success"), :text("업로드 완료")').first()).toBeVisible({
       timeout: 30000,
     });
   });
@@ -277,7 +277,7 @@ test.describe('Upload Share Access (Unauthenticated) @sharing', () => {
 
     // Should show expired message
     await expect(
-      page.locator('text=만료, text=expired, text=유효하지 않')
+      page.locator(':text("만료"), :text("expired"), :text("유효하지 않")').first()
     ).toBeVisible({ timeout: 10000 });
   });
 
@@ -286,7 +286,7 @@ test.describe('Upload Share Access (Unauthenticated) @sharing', () => {
 
     // Should show not found or error
     await expect(
-      page.locator('text=찾을 수 없, text=Not Found, text=존재하지 않, text=유효하지 않')
+      page.locator(':text("찾을 수 없"), :text("Not Found"), :text("존재하지 않"), :text("유효하지 않")').first()
     ).toBeVisible({ timeout: 10000 });
   });
 
@@ -316,7 +316,7 @@ test.describe('Upload Share Access (Unauthenticated) @sharing', () => {
 
     // Verify upload success (may show count or individual success)
     await expect(
-      page.locator('text=완료, text=Success, text=업로드 완료')
+      page.locator(':text("완료"), :text("Success"), :text("업로드 완료")').first()
     ).toBeVisible({ timeout: 60000 });
   });
 });
@@ -355,7 +355,7 @@ test.describe('Upload Share Drag and Drop @sharing', () => {
 
     // Verify upload
     await expect(
-      page.locator('text=완료, text=Success, text=업로드')
+      page.locator(':text("완료"), :text("Success"), :text("업로드")').first()
     ).toBeVisible({ timeout: 30000 });
   });
 });

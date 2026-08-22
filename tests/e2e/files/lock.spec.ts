@@ -49,7 +49,7 @@ test.describe('File Locking @files', () => {
       const lockIndicator = fileRow.locator('.lock-icon, .locked, svg[data-icon="lock"]');
 
       await expect(
-        lockIndicator.or(page.locator('text=잠금됨, text=Locked'))
+        lockIndicator.or(page.locator(':text("잠금됨"), :text("Locked")').first())
       ).toBeVisible({ timeout: 5000 }).catch(() => {
         // Lock may be indicated differently
       });
@@ -134,7 +134,7 @@ test.describe('File Locking @files', () => {
           await renameOption.click();
           // Should show lock error
           await expect(
-            page.locator('text=잠금, text=locked, text=편집 불가')
+            page.locator(':text("잠금"), :text("locked"), :text("편집 불가")').first()
           ).toBeVisible({ timeout: 5000 }).catch(() => {});
         }
       }
@@ -221,7 +221,7 @@ test.describe('File Locking @files', () => {
 
         // Should show who locked the file
         await expect(
-          page.locator('text=잠금 정보, text=Locked by')
+          page.locator(':text("잠금 정보"), :text("Locked by")').first()
         ).toBeVisible({ timeout: 5000 }).catch(() => {});
       }
     } else {
@@ -248,8 +248,8 @@ test.describe('Lock List @files', () => {
 
       // Should show locked files or empty state
       await expect(
-        page.locator('text=잠긴 파일, text=Locked files')
-          .or(page.locator('text=잠긴 파일 없음, text=No locked files'))
+        page.locator(':text("잠긴 파일"), :text("Locked files")').first()
+          .or(page.locator(':text("잠긴 파일 없음"), :text("No locked files")').first())
       ).toBeVisible({ timeout: 10000 });
     } else {
       // Locked files view may not be a separate page

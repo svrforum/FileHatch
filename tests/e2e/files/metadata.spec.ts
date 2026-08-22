@@ -208,7 +208,7 @@ test.describe('File Properties @files @metadata', () => {
 
       // Properties panel should appear
       await expect(
-        page.locator('text=속성, text=Properties, .properties-panel')
+        page.locator(':text("속성"), :text("Properties"), .properties-panel').first()
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
@@ -241,8 +241,8 @@ test.describe('File Properties @files @metadata', () => {
 
       // Should show size
       await expect(
-        page.locator('text=크기, text=Size')
-          .or(page.locator('text=B, text=KB, text=바이트'))
+        page.locator(':text("크기"), :text("Size")').first()
+          .or(page.locator(':text("B"), :text("KB"), :text("바이트")').first())
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
@@ -272,7 +272,7 @@ test.describe('File Properties @files @metadata', () => {
 
       // Should show date
       await expect(
-        page.locator('text=수정일, text=Modified, text=날짜')
+        page.locator(':text("수정일"), :text("Modified"), :text("날짜")').first()
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
@@ -311,7 +311,7 @@ test.describe('File Properties @files @metadata', () => {
 
         // Description should be saved
         await expect(
-          page.locator('text=저장됨, text=Saved')
+          page.locator(':text("저장됨"), :text("Saved")').first()
         ).toBeVisible({ timeout: 5000 }).catch(() => {});
       }
     } else {

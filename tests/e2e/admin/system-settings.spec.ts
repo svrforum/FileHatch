@@ -31,7 +31,7 @@ test.describe('Admin System Settings @admin', () => {
 
   test('should display general settings section', async ({ page }) => {
     await expect(
-      page.locator('text=일반, text=General, .settings-section')
+      page.locator(':text("일반"), :text("General"), .settings-section').first()
     ).toBeVisible({ timeout: 10000 }).catch(() => {
       // Settings may be organized differently
     });
@@ -51,7 +51,7 @@ test.describe('Admin System Settings @admin', () => {
       if (await saveBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
         await saveBtn.click();
         await expect(
-          page.locator('text=저장됨, text=Saved')
+          page.locator(':text("저장됨"), :text("Saved")').first()
         ).toBeVisible({ timeout: 5000 }).catch(() => {});
       }
 
@@ -79,7 +79,7 @@ test.describe('Admin System Settings @admin', () => {
       if (await saveBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
         await saveBtn.click();
         await expect(
-          page.locator('text=저장됨, text=Saved')
+          page.locator(':text("저장됨"), :text("Saved")').first()
         ).toBeVisible({ timeout: 5000 }).catch(() => {});
       }
     } else {
@@ -183,7 +183,7 @@ test.describe('Admin SSO Settings @admin', () => {
 
   test('should configure OIDC settings', async ({ page }) => {
     // Look for OIDC configuration section
-    const oidcSection = page.locator('text=OIDC, text=OpenID');
+    const oidcSection = page.locator(':text("OIDC"), :text("OpenID")').first();
 
     if (await oidcSection.isVisible({ timeout: 3000 }).catch(() => false)) {
       // Check for OIDC configuration inputs
@@ -227,13 +227,13 @@ test.describe('Admin Storage Settings @admin', () => {
   test('should display storage statistics', async ({ page }) => {
     // Look for storage statistics
     const storageStats = page.locator(
-      'text=저장 공간, text=Storage, .storage-stats'
+      ':text("저장 공간"), :text("Storage"), .storage-stats'
     );
 
     if (await storageStats.isVisible({ timeout: 5000 }).catch(() => false)) {
       // Should show used/total storage
       await expect(
-        page.locator('text=GB, text=TB, text=사용량')
+        page.locator(':text("GB"), :text("TB"), :text("사용량")').first()
       ).toBeVisible({ timeout: 5000 });
     }
   });
@@ -241,7 +241,7 @@ test.describe('Admin Storage Settings @admin', () => {
   test('should display storage backend configuration', async ({ page }) => {
     // Look for storage backend settings
     const backendConfig = page.locator(
-      'text=스토리지 백엔드, text=Storage Backend, select[name="storageBackend"]'
+      ':text("스토리지 백엔드"), :text("Storage Backend"), select[name="storageBackend"]'
     );
 
     if (await backendConfig.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -263,7 +263,7 @@ test.describe('Admin Email Settings @admin', () => {
 
   test('should display email configuration', async ({ page }) => {
     const emailSection = page.locator(
-      'text=이메일, text=Email, .email-settings'
+      ':text("이메일"), :text("Email"), .email-settings'
     );
 
     if (await emailSection.isVisible({ timeout: 3000 }).catch(() => false)) {

@@ -25,11 +25,11 @@ test.describe('Shared Drives Access @sharing', () => {
 
       // Should show shared drives view
       await expect(
-        page.locator('text=공유 드라이브, text=Shared drives, text=공유 폴더')
+        page.locator(':text("공유 드라이브"), :text("Shared drives"), :text("공유 폴더")').first()
       ).toBeVisible({ timeout: 10000 }).catch(() => {
         // May show empty state
         expect(
-          page.locator('text=공유 드라이브가 없습니다, text=No shared drives')
+          page.locator(':text("공유 드라이브가 없습니다"), :text("No shared drives")').first()
         ).toBeVisible({ timeout: 5000 }).catch(() => {
           // Or a list of drives - any visible content is acceptable
         });
@@ -47,7 +47,7 @@ test.describe('Shared Drives Access @sharing', () => {
 
       // Check for shared drive items or empty state
       const driveList = page.locator('.shared-drive-list, .drive-list, .folder-list');
-      const emptyState = page.locator('text=공유 드라이브가 없습니다, text=No shared drives');
+      const emptyState = page.locator(':text("공유 드라이브가 없습니다"), :text("No shared drives")').first();
 
       // Either should be visible
       await expect(driveList.or(emptyState)).toBeVisible({ timeout: 10000 });
@@ -121,7 +121,7 @@ test.describe('Shared Drive Operations @sharing', () => {
         // Wait for result - success or permission error
         await expect(
           page.locator(`text=${testFile.name}`)
-            .or(page.locator('text=권한, text=permission, text=허용'))
+            .or(page.locator(':text("권한"), :text("permission"), :text("허용")').first())
         ).toBeVisible({ timeout: 30000 });
       } else {
         // No upload button - read-only access
@@ -151,7 +151,7 @@ test.describe('Shared Drive Operations @sharing', () => {
         // Wait for result
         await expect(
           page.locator(`text=${folderName}`)
-            .or(page.locator('text=권한, text=permission'))
+            .or(page.locator(':text("권한"), :text("permission")').first())
         ).toBeVisible({ timeout: 15000 });
       } else {
         test.skip();
@@ -267,7 +267,7 @@ test.describe('Shared Drive Permissions @sharing', () => {
             await deleteOption.click().catch(() => {});
 
             // May show permission error
-            const permissionError = page.locator('text=권한, text=permission, text=허용되지 않');
+            const permissionError = page.locator(':text("권한"), :text("permission"), :text("허용되지 않")').first();
             // No assertion here as behavior may vary
           }
         }

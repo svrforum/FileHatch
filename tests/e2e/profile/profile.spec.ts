@@ -20,25 +20,24 @@ test.describe('Profile Settings @profile', () => {
   test('should navigate to profile page', async ({ page }) => {
     // Click avatar to open dropdown
     await page.locator(Selectors.header.avatarBtn).click();
-    await expect(page.locator(Selectors.header.userDropdown)).toBeVisible({ timeout: 5000 });
 
     // Click profile link
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
 
     // Should be on profile page
     await expect(
-      page.locator('text=프로필, text=Profile, h2:has-text("프로필")')
+      page.locator(':text("프로필"), :text("Profile"), h2:has-text("프로필")').first()
     ).toBeVisible({ timeout: 10000 });
   });
 
   test('should display current user info', async ({ page }) => {
     // Navigate to profile
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
 
     // Wait for profile page
     await expect(
-      page.locator('text=프로필, text=Profile')
+      page.locator(':text("프로필"), :text("Profile")').first()
     ).toBeVisible({ timeout: 10000 });
 
     // Should show username
@@ -52,10 +51,10 @@ test.describe('Profile Settings @profile', () => {
   test('should update email address', async ({ page }) => {
     // Navigate to profile
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
 
     await expect(
-      page.locator('text=프로필, text=Profile')
+      page.locator(':text("프로필"), :text("Profile")').first()
     ).toBeVisible({ timeout: 10000 });
 
     // Find email input
@@ -71,7 +70,7 @@ test.describe('Profile Settings @profile', () => {
 
       // Wait for success indication
       await expect(
-        page.locator('text=저장됨, text=Saved, text=완료, text=success')
+        page.locator(':text("저장됨"), :text("Saved"), :text("완료"), :text("success")').first()
       ).toBeVisible({ timeout: 5000 }).catch(() => {
         // May show in toast instead
       });
@@ -83,10 +82,10 @@ test.describe('Profile Settings @profile', () => {
   test('should change display theme', async ({ page }) => {
     // Navigate to profile
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
 
     await expect(
-      page.locator('text=프로필, text=Profile')
+      page.locator(':text("프로필"), :text("Profile")').first()
     ).toBeVisible({ timeout: 10000 });
 
     // Find theme selector
@@ -124,14 +123,14 @@ test.describe('Profile Settings @profile', () => {
   test('should set SMB password', async ({ page }) => {
     // Navigate to profile
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
 
     await expect(
-      page.locator('text=프로필, text=Profile')
+      page.locator(':text("프로필"), :text("Profile")').first()
     ).toBeVisible({ timeout: 10000 });
 
     // Find SMB password section
-    const smbSection = page.locator('text=SMB, text=Samba');
+    const smbSection = page.locator(':text("SMB"), :text("Samba")').first();
     if (await smbSection.isVisible({ timeout: 3000 }).catch(() => false)) {
       // Find SMB password input
       const smbPasswordInput = page.locator('input[name="smbPassword"], input[placeholder*="SMB"]');
@@ -143,7 +142,7 @@ test.describe('Profile Settings @profile', () => {
 
         // Wait for success
         await expect(
-          page.locator('text=저장됨, text=Saved, text=완료')
+          page.locator(':text("저장됨"), :text("Saved"), :text("완료")').first()
         ).toBeVisible({ timeout: 5000 }).catch(() => {});
       }
     } else {
@@ -154,10 +153,10 @@ test.describe('Profile Settings @profile', () => {
   test('should display storage usage', async ({ page }) => {
     // Navigate to profile
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
 
     await expect(
-      page.locator('text=프로필, text=Profile')
+      page.locator(':text("프로필"), :text("Profile")').first()
     ).toBeVisible({ timeout: 10000 });
 
     // Look for storage usage display
@@ -167,7 +166,7 @@ test.describe('Profile Settings @profile', () => {
     if (await storageDisplay.isVisible({ timeout: 3000 }).catch(() => false)) {
       // Should show some storage info
       await expect(
-        page.locator('text=GB, text=MB, text=KB, text=바이트')
+        page.locator(':text("GB"), :text("MB"), :text("KB"), :text("바이트")').first()
       ).toBeVisible({ timeout: 5000 });
     }
   });
@@ -175,10 +174,10 @@ test.describe('Profile Settings @profile', () => {
   test('should validate email format', async ({ page }) => {
     // Navigate to profile
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
 
     await expect(
-      page.locator('text=프로필, text=Profile')
+      page.locator(':text("프로필"), :text("Profile")').first()
     ).toBeVisible({ timeout: 10000 });
 
     const emailInput = page.locator(Selectors.profile.emailInput);
@@ -192,7 +191,7 @@ test.describe('Profile Settings @profile', () => {
 
       // Should show validation error
       await expect(
-        page.locator('text=유효한 이메일, text=invalid email, text=올바른 이메일')
+        page.locator(':text("유효한 이메일"), :text("invalid email"), :text("올바른 이메일")').first()
       ).toBeVisible({ timeout: 5000 }).catch(() => {
         // HTML5 validation may prevent submission
       });
@@ -209,7 +208,7 @@ test.describe('Profile Language Settings @profile', () => {
 
     // Navigate to profile
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
   });
 
   test('should display language selector if available', async ({ page }) => {

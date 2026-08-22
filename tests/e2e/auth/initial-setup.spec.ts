@@ -92,7 +92,7 @@ test.describe('Initial Setup @auth', () => {
 
       // Should show validation error
       await expect(
-        page.locator('text=3자 이상, text=too short, text=최소')
+        page.locator(':text("3자 이상"), :text("too short"), :text("최소")').first()
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
@@ -118,7 +118,7 @@ test.describe('Initial Setup @auth', () => {
 
       // Should show validation error
       await expect(
-        page.locator('text=8자 이상, text=too short, text=최소')
+        page.locator(':text("8자 이상"), :text("too short"), :text("최소")').first()
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
@@ -144,7 +144,7 @@ test.describe('Initial Setup @auth', () => {
 
       // Should show validation error
       await expect(
-        page.locator('text=일치하지 않, text=do not match, text=비밀번호가 같지')
+        page.locator(':text("일치하지 않"), :text("do not match"), :text("비밀번호가 같지")').first()
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();

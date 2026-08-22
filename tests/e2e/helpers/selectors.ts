@@ -11,9 +11,14 @@ export const Selectors = {
     avatarBtn: '.avatar-btn',
     adminBtn: '.admin-btn:has-text("관리자 모드")',
     notificationBtn: '.notification-btn, [data-testid="notification-btn"]',
-    userDropdown: '.user-dropdown',
-    logoutBtn: '.logout-btn',
-    profileBtn: '.profile-btn, a:has-text("프로필")',
+    /*
+     * The avatar button opens the profile modal directly - Header.tsx wires it
+     * straight to onProfileClick. There is no intermediate dropdown, so the
+     * old userDropdown/profileBtn pair matched nothing and every profile test
+     * timed out on the second click.
+     */
+    profileModalTrigger: '.avatar-btn',
+    logoutBtn: '.user-profile-modal button:has-text("로그아웃")',
     searchExpandBtn: '.search-expand-btn',
     searchInput: 'input[placeholder*="검색"], input[placeholder*="search"], input[type="search"]',
   },
@@ -52,7 +57,7 @@ export const Selectors = {
     download: '.context-menu >> text=다운로드',
     rename: '.context-menu >> text=이름 변경',
     share: 'text=링크로 공유',
-    userShare: 'text=사용자와 공유, text=사용자에게 공유',
+    userShare: ':text("사용자와 공유"), :text("사용자에게 공유")',
     uploadLink: 'text=업로드 링크',
     compress: '.context-menu >> text=압축',
     extract: '.context-menu >> text=압축 해제',
@@ -166,14 +171,26 @@ export const Selectors = {
   },
 
   // Profile & Settings
+  /*
+   * "내 프로필" is a modal (UserProfile.tsx), not a page, and its sections are
+   * tabs inside it. Scope lookups to the modal so they cannot match the file
+   * list rendered behind the overlay.
+   */
   profile: {
-    container: '.profile-page',
-    emailInput: 'input[name="email"], input[type="email"]',
-    saveBtn: 'button:has-text("저장"), button:has-text("Save")',
-    themeSelect: 'select[name="theme"]',
-    changePasswordBtn: 'button:has-text("비밀번호 변경")',
-    enable2FABtn: 'button:has-text("2FA 활성화"), button:has-text("Enable 2FA")',
-    disable2FABtn: 'button:has-text("2FA 비활성화"), button:has-text("Disable 2FA")',
+    container: '.user-profile-modal',
+    closeBtn: '.user-profile-modal .close-btn',
+    tabs: {
+      profile: '.profile-tabs button:has-text("프로필")',
+      password: '.profile-tabs button:has-text("비밀번호")',
+      appPassword: '.profile-tabs button:has-text("애플리케이션 암호")',
+      twoFactor: '.profile-tabs button:has-text("2FA 보안")',
+      sidebar: '.profile-tabs button:has-text("사이드바")',
+    },
+    usernameInput: '.user-profile-modal input[name="username"]',
+    emailInput: '.user-profile-modal input[type="email"]',
+    saveBtn: '.user-profile-modal button.primary-btn',
+    themeToggle: '.user-profile-modal .theme-toggle-btn',
+    message: '.user-profile-modal .message, .user-profile-modal .field-error',
   },
 
   // Trash

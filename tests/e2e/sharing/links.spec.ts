@@ -71,7 +71,7 @@ test.describe('Share Links', () => {
     await page.locator('text=링크로 공유').first().click();
 
     // Enable password protection
-    await page.locator('input[type="checkbox"]:near(:text("비밀번호")), label:has-text("비밀번호") input').click();
+    await page.locator('input[type="checkbox"]:near(:text("비밀번호")), label:has-text("비밀번호") input').first().click();
 
     // Set password
     await page.locator('input[type="password"], input[placeholder*="비밀번호"]').fill('sharepassword123');
@@ -105,7 +105,7 @@ test.describe('Share Links', () => {
     await page.locator('text=링크로 공유').first().click();
 
     // Set expiration (select 1 day or similar option)
-    await page.locator('select:near(:text("만료")), select[name*="expir"]').selectOption({ index: 1 });
+    await page.locator('select:near(:text("만료")), select[name*="expir"]').first().selectOption({ index: 1 });
 
     // Create share
     await page.locator('button:has-text("링크 생성"), button:has-text("Create")').click();
@@ -142,7 +142,7 @@ test.describe('Share Links', () => {
     await page.locator('button:has-text("링크 생성"), button:has-text("Create")').click();
 
     // Click copy button
-    await page.locator('button:has-text("복사"), button[aria-label="Copy"], button:has(:text("copy"))').click();
+    await page.locator('button:has-text("복사"), button[aria-label="Copy"], button:has(:text("copy"))').first().click();
 
     // Verify clipboard contains URL
     const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
@@ -204,7 +204,7 @@ test.describe('Share Access (Unauthenticated)', () => {
     await page.goto(`/s/${shareToken}`);
 
     // Should show share access page or download prompt
-    await expect(page.locator('text=다운로드, text=Download, button:has-text("다운로드")')).toBeVisible({
+    await expect(page.locator(':text("다운로드"), :text("Download"), button:has-text("다운로드")').first()).toBeVisible({
       timeout: 10000,
     });
   });
@@ -236,7 +236,7 @@ test.describe('Share Access (Unauthenticated)', () => {
     await page.goto(`/s/${expiredShareToken}`);
 
     // Should show expired message
-    await expect(page.locator('text=만료, text=expired, text=유효하지 않')).toBeVisible({
+    await expect(page.locator(':text("만료"), :text("expired"), :text("유효하지 않")').first()).toBeVisible({
       timeout: 10000,
     });
   });
@@ -245,7 +245,7 @@ test.describe('Share Access (Unauthenticated)', () => {
     await page.goto('/s/invalid-token-12345');
 
     // Should show not found or error
-    await expect(page.locator('text=찾을 수 없, text=Not Found, text=존재하지 않')).toBeVisible({
+    await expect(page.locator(':text("찾을 수 없"), :text("Not Found"), :text("존재하지 않")').first()).toBeVisible({
       timeout: 10000,
     });
   });
@@ -277,7 +277,7 @@ test.describe('Upload Share', () => {
     });
 
     // Verify upload success
-    await expect(page.locator('text=완료, text=Success, text=업로드 완료')).toBeVisible({
+    await expect(page.locator(':text("완료"), :text("Success"), :text("업로드 완료")').first()).toBeVisible({
       timeout: 30000,
     });
   });
