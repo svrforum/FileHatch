@@ -197,11 +197,21 @@ function RhwpEditor({
         // 비표준 hwp/hwpx (예: linseg array empty 같은 spec 이탈) 파싱은 wasm 에서
         // 수십 초 걸릴 수 있다. 15s 는 너무 짧아 정상 처리 가능 파일에서도
         // 타임아웃이 발생했다 (Issue #37 ②). 기본 60s 로 완화.
+        //
+        // suppressDialogs / skipUnsavedGuard 는 반드시 보내야 한다.
+        // rhwp 의 loadFile 은 문서를 다 읽은 뒤 initDoc 7단계에서
+        //   `n.suppressDialogs || await YC(e, t)`
+        // 로 글꼴 대체 확인 다이얼로그를 **기다린다**. 임베드된 스튜디오에서는
+        // 그 다이얼로그를 사용자가 누를 수 없으므로 loadFile 응답이 영영 오지
+        // 않고, 우리 오버레이는 '한글 문서 로드 중...' 에 머문 채 멈춘다.
+        // (27페이지짜리 문서가 정상 렌더링된 뒤에도 멈추는 것이 이 증상이다.)
+        // skipUnsavedGuard 도 같은 이유 — 이전 문서의 저장 확인 프롬프트가
+        // 뜨면 동일하게 멈춘다.
         setStatusMsg('한글 문서 로드 중...')
         const bytes = Array.from(new Uint8Array(buffer))
         const result = await sendRequest<{ pageCount: number }>(
           'loadFile',
-          { data: bytes, fileName },
+          { data: bytes, fileName, suppressDialogs: true, skipUnsavedGuard: true },
           loadFileTimeoutMs,
         )
         if (!isMountedRef.current) return
