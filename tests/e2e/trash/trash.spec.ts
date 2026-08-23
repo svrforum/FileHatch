@@ -11,7 +11,7 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
-import { revealFile, expectFileGone } from '../helpers/file-list';
+import { revealFile, expectFileGone, restoreFromTrash, purgeFromTrash } from '../helpers/file-list';
 
 test.describe('Trash Operations @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -107,29 +107,8 @@ test.describe('Trash Operations @files', () => {
     await page.locator(Selectors.sidebar.trash).click();
     await page.waitForTimeout(1000);
 
-    // Find and restore the file
-    await revealFile(page, testFile.name);
-
-    // Right-click to restore or use restore button
-    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
-    const restoreOption = page.locator('.context-menu >> text=복원, .context-menu >> text=Restore');
-    if (await restoreOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await restoreOption.click();
-    } else {
-      // Try restore button
-      await revealFile(page, testFile.name);
-      await page.locator(`text=${testFile.name}`).first().click();
-      await page.locator(Selectors.trash.restoreBtn).click();
-    }
-
-    // Confirm restoration if needed
-    const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
-    if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await confirmBtn.click();
-    }
-
-    // File should be gone from trash
-    await expectFileGone(page, testFile.name);
+    // Restore is the row's own icon button; the trash view has no context menu.
+    await restoreFromTrash(page, testFile.name);
 
     // Navigate back to home and verify file is restored
     await page.locator(Selectors.sidebar.homeBtn).click();
@@ -175,9 +154,7 @@ test.describe('Trash Operations @files', () => {
     if (await permanentDeleteOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await permanentDeleteOption.click();
     } else {
-      await revealFile(page, testFile.name);
-      await page.locator(`text=${testFile.name}`).first().click();
-      await page.locator(Selectors.trash.permanentDeleteBtn).click();
+    await purgeFromTrash(page, testFile.name);
     }
 
     // Confirm permanent deletion
@@ -324,22 +301,7 @@ test.describe('Trash Operations @files', () => {
     await page.waitForTimeout(1000);
 
     // Restore folder
-    await revealFile(page, folderName);
-    await page.locator(`text=${folderName}`).first().click({ button: 'right' });
-
-    const restoreOption = page.locator('.context-menu >> text=복원, .context-menu >> text=Restore');
-    if (await restoreOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await restoreOption.click();
-    } else {
-      await revealFile(page, folderName);
-      await page.locator(`text=${folderName}`).first().click();
-      await page.locator(Selectors.trash.restoreBtn).click();
-    }
-
-    const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
-    if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await confirmBtn.click();
-    }
+    await restoreFromTrash(page, folderName);
 
     // Navigate home and verify folder is restored
     await page.locator(Selectors.sidebar.homeBtn).click();

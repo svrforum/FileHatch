@@ -47,6 +47,15 @@ export const Selectors = {
     trash: '.nav-menu .nav-item:has-text("휴지통")',
     adminMode: '.nav-menu .nav-item:has-text("관리자 모드")',
     transferStatus: '.nav-menu .nav-item:has-text("전송 현황")',
+    // Aliases used by the specs. There is no dedicated "recent files",
+    // "favorites" or "shared drives" entry - those live inside 내 작업 and the
+    // 공유 section, so they point at the closest real destination.
+    homeBtn: 'a.nav-item[href="/files"]',
+    activity: 'a.nav-item[href="/my-activity"]',
+    recentFiles: 'a.nav-item[href="/my-activity"]',
+    favorites: 'a.nav-item[href="/my-activity"]',
+    myShares: 'a.nav-item[href="/shared-by-me"]',
+    sharedDrives: 'a.nav-item[href="/shared-with-me"]',
   },
 
   // File List
@@ -312,17 +321,28 @@ export const Selectors = {
     emailInput: '.user-profile-modal input[type="email"]',
     saveBtn: '.user-profile-modal button.primary-btn',
     themeToggle: '.user-profile-modal .theme-toggle-btn',
+    changePasswordBtn: '.user-profile-modal button:has-text("비밀번호 변경")',
+    // The 2FA tab shows one control whose label flips with the current state.
+    enable: '.user-profile-modal button:has-text("2FA 설정하기")',
+    disable: '.user-profile-modal button:has-text("2FA 해제")',
+    // No <select> for theme - the profile tab carries a toggle button.
+    themeSelect: '.user-profile-modal .theme-toggle-btn',
     message: '.user-profile-modal .message, .user-profile-modal .field-error',
   },
 
   // Trash
+  /*
+   * Trash actions are icon-only buttons inside each row (title="복원" /
+   * "영구 삭제"); there is no page-level restore control to click.
+   */
   trash: {
     container: '.trash-container',
     searchInput: '.trash-search input',
     item: '.trash-item',
-    restoreBtn: 'button:has-text("복원"), button:has-text("Restore")',
-    permanentDeleteBtn: 'button:has-text("영구 삭제"), button:has-text("Permanent Delete")',
-    emptyTrashBtn: 'button:has-text("휴지통 비우기"), button:has-text("Empty Trash")',
+    restoreBtn: '.trash-item button.restore-btn',
+    permanentDeleteBtn: '.trash-item button.delete-btn',
+    emptyTrashBtn: '.trash-container button:has-text("휴지통 비우기")',
+    emptyState: '.empty-state',
   },
 
   // Login Page

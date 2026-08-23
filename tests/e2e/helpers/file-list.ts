@@ -32,13 +32,18 @@ async function filterBox(page: Page): Promise<Locator | null> {
   return null;
 }
 
+/** The list currently on screen - trash view or the file browser. */
+function listScope(page: Page): Locator {
+  return page.locator(`${Selectors.trash.container}, ${Selectors.fileList.wrapper}`).first();
+}
+
 /** Brings `name` into the DOM and returns once it is visible. */
 export async function revealFile(page: Page, name: string): Promise<void> {
   const filter = await filterBox(page);
   if (filter) {
     await filter.fill(name);
   }
-  await expect(page.locator(`text=${name}`).first()).toBeVisible({ timeout: 15000 });
+  await expect(listScope(page).locator(`text=${name}`).first()).toBeVisible({ timeout: 15000 });
 }
 
 /**
@@ -58,7 +63,12 @@ export async function expectFileGone(page: Page, name: string): Promise<void> {
     } else {
       await page.locator(Selectors.fileList.refreshBtn).click().catch(() => undefined);
     }
-    await expect(page.locator(`text=${name}`)).toHaveCount(0, { timeout: 3000 });
+    /*
+     * Scope to the list: the sidebar's transfer panel and toast both echo the
+     * file name after a delete or restore, so a page-wide count never reaches
+     * zero even when the row itself is gone.
+     */
+    await expect(listScope(page).locator(`text=${name}`)).toHaveCount(0, { timeout: 3000 });
   }).toPass({ timeout: 30000 });
 }
 
@@ -68,4 +78,50 @@ export async function clearFileFilter(page: Page): Promise<void> {
   if (filter) {
     await filter.fill('');
   }
+}
+
+/** The trash row for `name`, revealed first so it exists in the DOM. */
+export async function trashRow(page: Page, name: string): Promise<Locator> {
+  await revealFile(page, name);
+
+  /*
+   * Let the filtered list settle before handing the row back. Typing into the
+   * filter re-renders the list, and a click dispatched into the old node in
+   * that window is simply lost - the button reports no error and no request
+   * ever reaches the server.
+   */
+  const rows = page.locator(Selectors.trash.item, { hasText: name });
+  await expect(rows).toHaveCount(1, { timeout: 10000 });
+  await page.waitForTimeout(300);
+
+  return rows.first();
+}
+
+/**
+ * Restores `name` from the trash.
+ *
+ * Targets the row that holds the name rather than the first row on screen -
+ * with the filter not yet applied, `.first()` restores whatever unrelated
+ * entry happens to be at the top and the test's own file stays put.
+ */
+export async function restoreFromTrash(page: Page, name: string): Promise<void> {
+  const row = await trashRow(page, name);
+  const button = row.locator('button.restore-btn');
+  await expect(button, `restore button for ${name}`).toBeVisible({ timeout: 5000 });
+  await button.click();
+  await expect(page.locator(Selectors.trash.item, { hasText: name }),
+    `${name} should leave the trash after restore`).toHaveCount(0, { timeout: 20000 });
+}
+
+/** Permanently deletes `name` from the trash, accepting the confirmation. */
+export async function purgeFromTrash(page: Page, name: string): Promise<void> {
+  const row = await trashRow(page, name);
+  await row.locator('button.delete-btn').click();
+
+  const confirm = page.locator(Selectors.confirmModal.confirmBtn);
+  if (await confirm.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await confirm.click();
+  }
+  await expect(page.locator(Selectors.trash.item, { hasText: name }),
+    `${name} should leave the trash after a permanent delete`).toHaveCount(0, { timeout: 20000 });
 }
