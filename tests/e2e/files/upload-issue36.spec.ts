@@ -168,3 +168,10 @@ test.describe('Issue #36 — file list scroll @files @regression', () => {
     expect(box!.height).toBeGreaterThan(120)
   })
 })
+
+  /*
+   * The upload modal closes itself once the transfer finishes. Without
+   * waiting for it, the next click lands on .modal-overlay instead of the
+   * file row and the context menu never opens.
+   */
+  await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });

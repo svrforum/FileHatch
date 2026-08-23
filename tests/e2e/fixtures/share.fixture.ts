@@ -97,7 +97,7 @@ export class ShareFixture {
       .click();
 
     // Confirm deletion if needed
-    const confirmButton = this.page.locator('button:has-text("확인"), button:has-text("Confirm")');
+    const confirmButton = this.page.locator(Selectors.confirmModal.confirmBtn);
     if (await confirmButton.isVisible()) {
       await confirmButton.click();
     }
@@ -223,6 +223,12 @@ export class ShareFixture {
       mimeType: 'text/plain',
       buffer: Buffer.from(content),
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     await expect(this.page.locator(':text("완료"), :text("Success"), :text("업로드 완료")')).toBeVisible({
       timeout: 30000,

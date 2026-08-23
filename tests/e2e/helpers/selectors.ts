@@ -19,8 +19,13 @@ export const Selectors = {
      */
     profileModalTrigger: '.avatar-btn',
     logoutBtn: '.user-profile-modal button:has-text("로그아웃")',
+    /*
+     * The "전체 검색" button is only rendered once the inline box has a query,
+     * so a test has to type before it can reach for it.
+     */
     searchExpandBtn: '.search-expand-btn',
-    searchInput: 'input[placeholder*="검색"], input[placeholder*="search"], input[type="search"]',
+    searchInput: 'input[placeholder*="파일 검색"]',
+    searchResults: '.search-results',
   },
 
   // Sidebar Navigation - Updated to match FileHatch actual UI
@@ -59,21 +64,28 @@ export const Selectors = {
   },
 
   // Context Menu
+  /*
+   * Every entry is a <button class="context-menu-item"> holding an icon plus
+   * its label, so :has-text on the button is what matches; a bare text engine
+   * lookup does not. Scoping to .context-menu also keeps these from hitting
+   * same-named controls in the page behind the menu.
+   */
   contextMenu: {
     container: '.context-menu',
-    download: '.context-menu >> text=다운로드',
-    rename: '.context-menu >> text=이름 변경',
-    share: 'text=링크로 공유',
-    userShare: ':text("사용자와 공유"), :text("사용자에게 공유")',
-    uploadLink: 'text=업로드 링크',
-    compress: '.context-menu >> text=압축',
-    extract: '.context-menu >> text=압축 해제',
-    delete: '.context-menu >> .context-menu-item.danger',
-    favorite: '.context-menu >> text=즐겨찾기',
-    properties: '.context-menu >> text=속성',
-    lock: '.context-menu >> text=잠금',
-    unlock: '.context-menu >> text=잠금 해제',
-    tags: '.context-menu >> text=태그',
+    item: '.context-menu button.context-menu-item',
+    download: '.context-menu button:has-text("다운로드")',
+    rename: '.context-menu button:has-text("이름 변경")',
+    share: '.context-menu button:has-text("링크로 공유")',
+    userShare: '.context-menu button:has-text("사용자에게 공유")',
+    uploadLink: '.context-menu button:has-text("업로드 링크")',
+    compress: '.context-menu button:has-text("압축"):not(:has-text("해제"))',
+    extract: '.context-menu button:has-text("압축 해제")',
+    delete: '.context-menu button.context-menu-item.danger, .context-menu button:has-text("삭제")',
+    favorite: '.context-menu button:has-text("즐겨찾기")',
+    properties: '.context-menu button:has-text("속성")',
+    lock: '.context-menu button:has-text("잠금"):not(:has-text("해제"))',
+    unlock: '.context-menu button:has-text("잠금 해제")',
+    tags: '.context-menu button:has-text("태그")',
   },
 
   // Upload - FileHatch opens modal with file/folder selection
@@ -112,6 +124,28 @@ export const Selectors = {
     cancelBtn: '.confirm-modal .confirm-actions button.btn-secondary',
   },
 
+  /*
+   * LinkShareModal.tsx. Options are checkbox labels that reveal their own
+   * input when ticked, and the create button stays disabled until a ticked
+   * option is filled in. Created links land in "기존 공유 링크" below.
+   */
+  linkShareModal: {
+    container: '.link-share-modal',
+    createBtn: '.link-share-modal button.create-link-btn',
+    option: {
+      password: '.link-share-modal label:has-text("암호 설정")',
+      expiry: '.link-share-modal label:has-text("만료 시간")',
+      accessLimit: '.link-share-modal label:has-text("접근 횟수 제한")',
+      requireLogin: '.link-share-modal label:has-text("로그인 필요")',
+    },
+    passwordInput: '.link-share-modal input[type="password"]',
+    createdUrl: '.link-share-modal input[readonly]',
+    copyBtn: '.link-share-modal button.copy-btn',
+    existingSection: '.link-share-modal .existing-links-section',
+    existingCopyBtn: '.link-share-modal button.link-copy-btn',
+    existingDeleteBtn: '.link-share-modal button.link-delete-btn',
+  },
+
   // Share Modal
   shareModal: {
     container: '[data-testid="share-modal"], .share-modal, .modal',
@@ -134,7 +168,7 @@ export const Selectors = {
     container: '.modal-overlay',
     title: '.modal-title, h2',
     closeBtn: '.modal-close, button:has-text("닫기")',
-    confirmBtn: 'button:has-text("확인"), button:has-text("Confirm")',
+    confirmBtn: '.confirm-modal .confirm-actions button.btn-danger, .confirm-modal .confirm-actions button.btn-primary',
     cancelBtn: 'button:has-text("취소"), button:has-text("Cancel")',
     submitBtn: 'button[type="submit"]',
   },

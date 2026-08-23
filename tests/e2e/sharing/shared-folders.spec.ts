@@ -116,6 +116,12 @@ test.describe('Shared Drive Operations @sharing', () => {
           mimeType: testFile.mimeType,
           buffer: testFile.buffer,
         });
+        /*
+         * The upload modal closes itself once the transfer finishes. Without
+         * waiting for it, the next click lands on .modal-overlay instead of the
+         * file row and the context menu never opens.
+         */
+        await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
 
         // Wait for result - success or permission error

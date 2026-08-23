@@ -225,7 +225,7 @@ test.describe('Admin Shared Folder Members @admin @sharing', () => {
           await removeBtn.first().click();
 
           // Confirm if needed
-          const confirmBtn = page.locator('button:has-text("확인")');
+          const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
           if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
             await confirmBtn.click();
           }

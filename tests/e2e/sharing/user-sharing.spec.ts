@@ -253,8 +253,8 @@ test.describe('Shared Views @sharing', () => {
 
     // Create a link share
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
-    await page.locator('text=링크로 공유').first().click();
-    await page.locator(Selectors.shareModal.createLinkBtn).click();
+    await page.locator(Selectors.contextMenu.share).click();
+    await page.locator(Selectors.linkShareModal.createBtn).click();
     await expect(page.locator(Selectors.shareModal.shareLink)).toBeVisible({ timeout: 5000 });
 
     // Close modal

@@ -37,6 +37,12 @@ test.describe('File Upload @smoke @files', () => {
       mimeType: testFile.mimeType,
       buffer: testFile.buffer,
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     // Wait for modal to close and file to appear in list
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
@@ -60,6 +66,12 @@ test.describe('File Upload @smoke @files', () => {
       { name: file1.name, mimeType: file1.mimeType, buffer: file1.buffer },
       { name: file2.name, mimeType: file2.mimeType, buffer: file2.buffer },
     ]);
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     // Wait for all files to appear
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
@@ -113,6 +125,12 @@ test.describe('File Upload @smoke @files', () => {
       mimeType: htmlFile.mimeType,
       buffer: htmlFile.buffer,
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
     await expect(page.locator(`text=${htmlFile.name}`).first()).toBeVisible({ timeout: 30000 });
@@ -134,6 +152,12 @@ test.describe('File Upload @smoke @files', () => {
       mimeType: 'text/plain',
       buffer: Buffer.from(content),
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
     await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
@@ -161,6 +185,12 @@ test.describe('Upload Edge Cases @files', () => {
       mimeType: 'text/plain',
       buffer: Buffer.from(''),
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
     await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });

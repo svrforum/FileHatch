@@ -243,6 +243,12 @@ test.describe('Upload Share Access (Unauthenticated) @sharing', () => {
       mimeType: 'text/plain',
       buffer: Buffer.from('Upload share test content'),
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     // Verify upload success
     await expect(page.locator(':text("완료"), :text("Success"), :text("업로드 완료")').first()).toBeVisible({
@@ -313,6 +319,12 @@ test.describe('Upload Share Access (Unauthenticated) @sharing', () => {
       { name: file1Name, mimeType: 'text/plain', buffer: Buffer.from('File 1 content') },
       { name: file2Name, mimeType: 'text/plain', buffer: Buffer.from('File 2 content') },
     ]);
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     // Verify upload success (may show count or individual success)
     await expect(

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
+import { Selectors } from '../helpers/selectors';
 
 test.describe('File Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -53,11 +54,11 @@ test.describe('File Operations', () => {
     const fileName = `test-file-${Date.now()}.txt`;
 
     // Click upload button to open upload modal
-    await page.locator('.upload-btn').click();
+    await page.locator(Selectors.fileList.uploadBtn).click();
 
     // Click "파일 선택" button and handle file chooser
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('text=파일 선택').click();
+    await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
 
     // Create a test file buffer
@@ -69,11 +70,13 @@ test.describe('File Operations', () => {
       mimeType: 'text/plain',
       buffer,
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
-    // Click start upload button
-    await page.locator('button:has-text("업로드 시작")').click();
-    // Wait for upload modal to close
-    await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
 
     // Wait for upload to complete
     await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
@@ -84,20 +87,22 @@ test.describe('File Operations', () => {
     const newName = `renamed-${Date.now()}.txt`;
 
     // First upload a file
-    await page.locator('.upload-btn').click();
+    await page.locator(Selectors.fileList.uploadBtn).click();
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('text=파일 선택').click();
+    await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: originalName,
       mimeType: 'text/plain',
       buffer: Buffer.from('Rename test content'),
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
-    // Click start upload button
-    await page.locator('button:has-text("업로드 시작")').click();
-    // Wait for upload modal to close
-    await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
 
     // Wait for file to appear in file list (use specific selector for file row)
     const fileRow = page.locator(`.file-list-container >> text=${originalName}`);
@@ -129,20 +134,22 @@ test.describe('File Operations', () => {
     const fileName = `delete-test-${Date.now()}.txt`;
 
     // Upload a file first
-    await page.locator('.upload-btn').click();
+    await page.locator(Selectors.fileList.uploadBtn).click();
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('text=파일 선택').click();
+    await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: fileName,
       mimeType: 'text/plain',
       buffer: Buffer.from('Delete test content'),
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
-    // Click start upload button
-    await page.locator('button:has-text("업로드 시작")').click();
-    // Wait for upload modal to close
-    await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
 
     // Wait for file to appear
     await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
@@ -157,7 +164,7 @@ test.describe('File Operations', () => {
     await page.locator('.context-menu >> .context-menu-item.danger').click();
 
     // Confirm deletion
-    await page.locator('button:has-text("확인"), button:has-text("삭제"), button:has-text("Delete")').click();
+    await page.locator(Selectors.confirmModal.confirmBtn).click();
 
     // Verify file is gone
     await expect(page.locator(`text=${fileName}`).first()).not.toBeVisible({ timeout: 5000 });
@@ -169,31 +176,41 @@ test.describe('File Operations', () => {
     const file2 = `multi-select-2-${Date.now()}.txt`;
 
     // Upload first file
-    await page.locator('.upload-btn').click();
+    await page.locator(Selectors.fileList.uploadBtn).click();
     let fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('text=파일 선택').click();
+    await page.locator(Selectors.uploadModal.selectFileBtn).click();
     let fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: file1,
       mimeType: 'text/plain',
       buffer: Buffer.from('Multi-select test 1'),
     });
-    await page.locator('button:has-text("업로드 시작")').click();
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
     // Wait for upload modal to close
     await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
     await expect(page.locator(`text=${file1}`).first()).toBeVisible({ timeout: 30000 });
 
     // Upload second file
-    await page.locator('.upload-btn').click();
+    await page.locator(Selectors.fileList.uploadBtn).click();
     fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('text=파일 선택').click();
+    await page.locator(Selectors.uploadModal.selectFileBtn).click();
     fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: file2,
       mimeType: 'text/plain',
       buffer: Buffer.from('Multi-select test 2'),
     });
-    await page.locator('button:has-text("업로드 시작")').click();
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
     // Wait for upload modal to close
     await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
     await expect(page.locator(`text=${file2}`).first()).toBeVisible({ timeout: 30000 });
@@ -213,20 +230,22 @@ test.describe('File Operations', () => {
     const fileContent = 'Download test content';
 
     // Upload a file first
-    await page.locator('.upload-btn').click();
+    await page.locator(Selectors.fileList.uploadBtn).click();
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('text=파일 선택').click();
+    await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: fileName,
       mimeType: 'text/plain',
       buffer: Buffer.from(fileContent),
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
-    // Click start upload button
-    await page.locator('button:has-text("업로드 시작")').click();
-    // Wait for upload modal to close
-    await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
 
     // Wait for file to appear
     await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
@@ -296,30 +315,32 @@ test.describe('File Search', () => {
     // Create a file with unique name
     const uniqueName = `searchable-${Date.now()}.txt`;
 
-    await page.locator('.upload-btn').click();
+    await page.locator(Selectors.fileList.uploadBtn).click();
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.locator('text=파일 선택').click();
+    await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: uniqueName,
       mimeType: 'text/plain',
       buffer: Buffer.from('Searchable content'),
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
-    // Click start upload button
-    await page.locator('button:has-text("업로드 시작")').click();
-    // Wait for upload modal to close
-    await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
 
     await expect(page.locator(`text=${uniqueName}`).first()).toBeVisible({ timeout: 30000 });
 
-    // Open search
-    await page.locator('.search-expand-btn').click();
+    // Type first: the inline box is always present, and results appear in its
+    // dropdown as soon as there is a query.
+    await page.locator(Selectors.header.searchInput).fill('searchable');
+    await expect(page.locator(Selectors.header.searchResults)).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(Selectors.header.searchResults)).toContainText(uniqueName, { timeout: 5000 });
 
-    // Enter search term
-    await page.locator('input[placeholder*="검색"], input[placeholder*="search"], input[type="search"]').fill('searchable');
-
-    // Wait for results
-    await expect(page.locator(`text=${uniqueName}`).first()).toBeVisible({ timeout: 5000 });
+    // The "전체 검색" control only renders once a query is present.
+    await expect(page.locator(Selectors.header.searchExpandBtn)).toBeVisible({ timeout: 5000 });
   });
 });

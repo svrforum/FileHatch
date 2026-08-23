@@ -175,7 +175,7 @@ test.describe('Trash Operations @files', () => {
     }
 
     // Confirm permanent deletion
-    const confirmBtn = page.locator('button:has-text("확인"), button:has-text("Confirm"), button:has-text("삭제")');
+    const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
     if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await confirmBtn.click();
     }
@@ -240,7 +240,7 @@ test.describe('Trash Operations @files', () => {
     await page.locator(Selectors.trash.emptyTrashBtn).click();
 
     // Confirm
-    const confirmBtn = page.locator('button:has-text("확인"), button:has-text("Confirm"), button:has-text("비우기")');
+    const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
     await confirmBtn.click();
 
     // Both files should be gone
