@@ -41,8 +41,14 @@ export default defineConfig({
     timezoneId: 'Asia/Seoul',
   },
 
-  /* Global timeout for each test - reduced for faster feedback */
-  timeout: 30000,
+  /*
+   * A single test here often chains an upload, a delete that runs as a
+   * background transfer job, a navigation and a restore. 30s covered the
+   * happy path only when the server was idle; the heavier flows spent their
+   * whole budget on setup and failed on the last assertion for lack of time
+   * rather than a real defect.
+   */
+  timeout: 60000,
 
   /* Expect timeout */
   expect: {

@@ -10,35 +10,44 @@
 import { test, expect } from '@playwright/test';
 import { DateUtils } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { navigateVia } from '../helpers/navigate';
 
 test.describe('Admin Audit Logs @admin', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
     // Enter admin mode
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
     // Navigate to audit logs
-    await page.locator(Selectors.admin.auditLogs).click();
+    await navigateVia(page, Selectors.admin.auditLogs);
     await page.waitForTimeout(1000);
+
+    /*
+     * The screen opens on "파일 감사 로그", which is empty on a fresh install
+     * and made every row assertion below fail for lack of data rather than a
+     * real defect. "접속 이력" always holds the sign-in this suite just made.
+     */
+    await page.locator(Selectors.admin.logsTab.user).click();
+    await page.waitForTimeout(1500);
   });
 
   test('should display audit logs page', async ({ page }) => {
     await expect(
-      page.locator('h2:has-text("감사 로그"), h2:has-text("로그"), h2:has-text("Audit")')
+      page.locator(':is(h1, h2):has-text("감사 로그"), :is(h1, h2):has-text("로그"), :is(h1, h2):has-text("Audit")')
     ).toBeVisible({ timeout: 10000 });
   });
 
   test('should display audit log entries', async ({ page }) => {
     // Wait for logs to load
     await expect(
-      page.locator('.log-entry, .audit-log-row, table tbody tr, .log-card').first()
+      page.locator('.logs-table tbody tr').first()
     ).toBeVisible({ timeout: 10000 });
   });
 
   test('should show log entry details', async ({ page }) => {
-    const logEntry = page.locator('.log-entry, .audit-log-row, table tbody tr').first();
+    const logEntry = page.locator('.logs-table tbody tr').first();
 
     if (await logEntry.isVisible({ timeout: 3000 }).catch(() => false)) {
       // Log entry should contain:
@@ -60,7 +69,7 @@ test.describe('Admin Audit Logs @admin', () => {
   test('should filter logs by action type', async ({ page }) => {
     // Wait for logs to load
     await expect(
-      page.locator('.log-entry, .audit-log-row, table tbody tr').first()
+      page.locator('.logs-table tbody tr').first()
     ).toBeVisible({ timeout: 10000 });
 
     // Find action type filter
@@ -86,7 +95,7 @@ test.describe('Admin Audit Logs @admin', () => {
 
   test('should filter logs by user', async ({ page }) => {
     await expect(
-      page.locator('.log-entry, .audit-log-row, table tbody tr').first()
+      page.locator('.logs-table tbody tr').first()
     ).toBeVisible({ timeout: 10000 });
 
     // Find user filter
@@ -111,7 +120,7 @@ test.describe('Admin Audit Logs @admin', () => {
 
   test('should filter logs by date range', async ({ page }) => {
     await expect(
-      page.locator('.log-entry, .audit-log-row, table tbody tr').first()
+      page.locator('.logs-table tbody tr').first()
     ).toBeVisible({ timeout: 10000 });
 
     // Find date inputs
@@ -135,7 +144,7 @@ test.describe('Admin Audit Logs @admin', () => {
 
   test('should paginate logs', async ({ page }) => {
     await expect(
-      page.locator('.log-entry, .audit-log-row, table tbody tr').first()
+      page.locator('.logs-table tbody tr').first()
     ).toBeVisible({ timeout: 10000 });
 
     // Find pagination controls
@@ -165,7 +174,7 @@ test.describe('Admin Audit Logs @admin', () => {
 
   test('should expand log entry for details', async ({ page }) => {
     await expect(
-      page.locator('.log-entry, .audit-log-row, table tbody tr').first()
+      page.locator('.logs-table tbody tr').first()
     ).toBeVisible({ timeout: 10000 });
 
     const logEntry = page.locator('.log-entry, .audit-log-row').first();
@@ -195,11 +204,19 @@ test.describe('Admin Audit Log Export @admin', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
-    await page.locator(Selectors.admin.auditLogs).click();
+    await navigateVia(page, Selectors.admin.auditLogs);
     await page.waitForTimeout(1000);
+    /*
+     * Default tab "파일 감사 로그" is empty on a fresh install; "접속 이력"
+     * always holds this suite's own sign-in, so assertions test the table
+     * rather than the seed data.
+     */
+    await page.locator(Selectors.admin.logsTab.user).click();
+    await page.waitForTimeout(1500);
+
   });
 
   test('should display export option', async ({ page }) => {
@@ -249,16 +266,24 @@ test.describe('Admin Audit Log Actions @admin', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
-    await page.locator(Selectors.admin.auditLogs).click();
+    await navigateVia(page, Selectors.admin.auditLogs);
     await page.waitForTimeout(1000);
+    /*
+     * Default tab "파일 감사 로그" is empty on a fresh install; "접속 이력"
+     * always holds this suite's own sign-in, so assertions test the table
+     * rather than the seed data.
+     */
+    await page.locator(Selectors.admin.logsTab.user).click();
+    await page.waitForTimeout(1500);
+
   });
 
   test('should show different action types', async ({ page }) => {
     await expect(
-      page.locator('.log-entry, .audit-log-row, table tbody tr').first()
+      page.locator('.logs-table tbody tr').first()
     ).toBeVisible({ timeout: 10000 });
 
     // Look for various action types
@@ -290,7 +315,7 @@ test.describe('Admin Audit Log Actions @admin', () => {
 
   test('should show IP address in logs', async ({ page }) => {
     await expect(
-      page.locator('.log-entry, .audit-log-row, table tbody tr').first()
+      page.locator('.logs-table tbody tr').first()
     ).toBeVisible({ timeout: 10000 });
 
     // Look for IP address pattern
@@ -305,7 +330,7 @@ test.describe('Admin Audit Log Actions @admin', () => {
 
   test('should refresh logs', async ({ page }) => {
     await expect(
-      page.locator('.log-entry, .audit-log-row, table tbody tr').first()
+      page.locator('.logs-table tbody tr').first()
     ).toBeVisible({ timeout: 10000 });
 
     const refreshBtn = page.locator(
@@ -318,7 +343,7 @@ test.describe('Admin Audit Log Actions @admin', () => {
 
       // Logs should still be visible after refresh
       await expect(
-        page.locator('.log-entry, .audit-log-row, table tbody tr').first()
+        page.locator('.logs-table tbody tr').first()
       ).toBeVisible({ timeout: 10000 });
     }
   });

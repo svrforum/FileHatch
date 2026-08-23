@@ -6,9 +6,15 @@
  * - Two-factor authentication setup
  * - Session management
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { TestPasswords } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+
+/** The dialog opens on 프로필; password and 2FA live behind their own tabs. */
+async function openTab(page: Page, tab: string) {
+  await page.locator(tab).click();
+  await page.waitForTimeout(500);
+}
 
 test.describe('Password Change @profile @auth', () => {
   test.beforeEach(async ({ page }) => {
@@ -17,15 +23,13 @@ test.describe('Password Change @profile @auth', () => {
 
     // Navigate to profile
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
   });
 
+
   test('should display password change option', async ({ page }) => {
-    // Look for password change button or section
-    await expect(
-      page.locator(Selectors.profile.changePasswordBtn)
-        .or(page.locator('text=비밀번호 변경'))
-    ).toBeVisible({ timeout: 10000 });
+    await openTab(page, Selectors.profile.tabs.password);
+    await expect(page.locator(Selectors.profile.changePasswordBtn)).toBeVisible({ timeout: 10000 });
   });
 
   test('should open password change form', async ({ page }) => {
@@ -67,7 +71,7 @@ test.describe('Password Change @profile @auth', () => {
 
       // Should show error
       await expect(
-        page.locator('text=틀린, text=incorrect, text=일치하지 않, text=wrong')
+        page.locator(':text("틀린"), :text("incorrect"), :text("일치하지 않"), :text("wrong")').first()
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
@@ -95,7 +99,7 @@ test.describe('Password Change @profile @auth', () => {
 
       // Should show validation error for weak password
       await expect(
-        page.locator('text=8자 이상, text=too short, text=강도, text=복잡')
+        page.locator(':text("8자 이상"), :text("too short"), :text("강도"), :text("복잡")').first()
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
@@ -123,7 +127,7 @@ test.describe('Password Change @profile @auth', () => {
 
       // Should show mismatch error
       await expect(
-        page.locator('text=일치하지 않, text=do not match, text=같지 않')
+        page.locator(':text("일치하지 않"), :text("do not match"), :text("같지 않")').first()
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
@@ -138,38 +142,41 @@ test.describe('Two-Factor Authentication @profile @auth', () => {
 
     // Navigate to profile
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
   });
 
   test('should display 2FA section', async ({ page }) => {
+    await openTab(page, Selectors.profile.tabs.twoFactor);
     // Look for 2FA section
     await expect(
-      page.locator('text=2FA, text=이중 인증, text=Two-Factor, text=2단계 인증')
+      page.locator(':text("2FA"), :text("이중 인증"), :text("Two-Factor"), :text("2단계 인증")').first()
     ).toBeVisible({ timeout: 10000 });
   });
 
   test('should show enable 2FA button when disabled', async ({ page }) => {
+    await openTab(page, Selectors.profile.tabs.twoFactor);
     // Look for enable 2FA button
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
-    const disable2FABtn = page.locator(Selectors.profile.disable2FABtn);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
+    const disable2FABtn = page.locator(Selectors.profile.disable);
 
     // One of them should be visible
     await expect(enable2FABtn.or(disable2FABtn)).toBeVisible({ timeout: 5000 });
   });
 
   test('should start 2FA setup process', async ({ page }) => {
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    await openTab(page, Selectors.profile.tabs.twoFactor);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
       // Should show QR code or setup instructions
       await expect(
-        page.locator('img[src*="qr"], .qr-code, canvas, text=QR, text=인증 앱')
+        page.locator(Selectors.profile.twoFactor.qrImage)
       ).toBeVisible({ timeout: 10000 });
 
       // Should show secret key backup
       await expect(
-        page.locator('text=시크릿, text=Secret, text=키, code, .secret-key')
+        page.locator(':text("시크릿"), :text("Secret"), :text("키"), code, .secret-key').first()
       ).toBeVisible({ timeout: 5000 }).catch(() => {
         // Secret may be hidden by default
       });
@@ -180,7 +187,8 @@ test.describe('Two-Factor Authentication @profile @auth', () => {
   });
 
   test('should require verification code to enable 2FA', async ({ page }) => {
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    await openTab(page, Selectors.profile.tabs.twoFactor);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
@@ -189,7 +197,7 @@ test.describe('Two-Factor Authentication @profile @auth', () => {
 
       // Should have verification code input
       await expect(
-        page.locator('input[placeholder*="코드"], input[placeholder*="code"], input[name="code"]')
+        page.locator(Selectors.profile.twoFactor.codeInput)
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
@@ -197,7 +205,8 @@ test.describe('Two-Factor Authentication @profile @auth', () => {
   });
 
   test('should show disable 2FA option when enabled', async ({ page }) => {
-    const disable2FABtn = page.locator(Selectors.profile.disable2FABtn);
+    await openTab(page, Selectors.profile.tabs.twoFactor);
+    const disable2FABtn = page.locator(Selectors.profile.disable);
     if (await disable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       // 2FA is currently enabled
       expect(await disable2FABtn.isVisible()).toBe(true);
@@ -208,7 +217,8 @@ test.describe('Two-Factor Authentication @profile @auth', () => {
   });
 
   test('should require verification to disable 2FA', async ({ page }) => {
-    const disable2FABtn = page.locator(Selectors.profile.disable2FABtn);
+    await openTab(page, Selectors.profile.tabs.twoFactor);
+    const disable2FABtn = page.locator(Selectors.profile.disable);
     if (await disable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await disable2FABtn.click();
 
@@ -229,13 +239,13 @@ test.describe('Session Management @profile @auth', () => {
 
     // Navigate to profile
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
   });
 
   test('should display active sessions if available', async ({ page }) => {
     // Look for sessions section
     const sessionsSection = page.locator(
-      'text=세션, text=Sessions, text=활성 기기, text=Active devices'
+      ':text("세션"), :text("Sessions"), :text("활성 기기"), :text("Active devices")'
     );
 
     if (await sessionsSection.isVisible({ timeout: 5000 }).catch(() => false)) {
@@ -250,7 +260,7 @@ test.describe('Session Management @profile @auth', () => {
   });
 
   test('should allow terminating other sessions', async ({ page }) => {
-    const sessionsSection = page.locator('text=세션, text=Sessions');
+    const sessionsSection = page.locator(':text("세션"), :text("Sessions")').first();
 
     if (await sessionsSection.isVisible({ timeout: 5000 }).catch(() => false)) {
       // Look for terminate button on non-current sessions
@@ -268,7 +278,7 @@ test.describe('Session Management @profile @auth', () => {
   });
 
   test('should show session details', async ({ page }) => {
-    const sessionsSection = page.locator('text=세션, text=Sessions');
+    const sessionsSection = page.locator(':text("세션"), :text("Sessions")').first();
 
     if (await sessionsSection.isVisible({ timeout: 5000 }).catch(() => false)) {
       // Look for session details like browser/device info
@@ -276,7 +286,7 @@ test.describe('Session Management @profile @auth', () => {
       if (await sessionItem.isVisible({ timeout: 3000 }).catch(() => false)) {
         // Should show some device/browser info
         await expect(
-          sessionItem.locator('text=Chrome, text=Firefox, text=Safari, text=브라우저, text=IP')
+          sessionItem.locator(':text("Chrome"), :text("Firefox"), :text("Safari"), :text("브라우저"), :text("IP")')
         ).toBeVisible({ timeout: 5000 }).catch(() => {
           // May just show minimal info
         });

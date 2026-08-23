@@ -11,6 +11,8 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { revealFile } from '../helpers/file-list';
+import { navigateVia, openNewFolderDialog, openUploadDialog } from '../helpers/navigate';
 
 test.describe('User Sharing @sharing', () => {
   test.beforeEach(async ({ page }) => {
@@ -22,7 +24,7 @@ test.describe('User Sharing @sharing', () => {
     const testFile = generateTestFile({ name: generateFileName('user-share-modal') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -33,12 +35,11 @@ test.describe('User Sharing @sharing', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 30000 });
+    await revealFile(page, testFile.name);
 
     // Open context menu and click user share option
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
 
     const userShareOption = page.locator(Selectors.contextMenu.userShare);
@@ -56,7 +57,7 @@ test.describe('User Sharing @sharing', () => {
     const testFile = generateTestFile({ name: generateFileName('user-search-share') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -67,11 +68,11 @@ test.describe('User Sharing @sharing', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open user share modal
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const userShareOption = page.locator(Selectors.contextMenu.userShare);
     if (await userShareOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await userShareOption.click();
@@ -99,7 +100,7 @@ test.describe('User Sharing @sharing', () => {
     const testFile = generateTestFile({ name: generateFileName('read-permission-share') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -110,11 +111,11 @@ test.describe('User Sharing @sharing', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open user share modal
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const userShareOption = page.locator(Selectors.contextMenu.userShare);
     if (await userShareOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await userShareOption.click();
@@ -125,7 +126,7 @@ test.describe('User Sharing @sharing', () => {
       await expect(modal).toBeVisible({ timeout: 5000 });
 
       // Verify permission options exist
-      const permissionSelect = page.locator('select[name="permission"], select:near(:text("권한"))');
+      const permissionSelect = page.locator('select[name="permission"], select:near(:text("권한"))').first();
       if (await permissionSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
         // Select read permission
         await permissionSelect.selectOption('read');
@@ -139,7 +140,7 @@ test.describe('User Sharing @sharing', () => {
     const testFile = generateTestFile({ name: generateFileName('write-permission-share') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -150,11 +151,11 @@ test.describe('User Sharing @sharing', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open user share modal
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const userShareOption = page.locator(Selectors.contextMenu.userShare);
     if (await userShareOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await userShareOption.click();
@@ -162,7 +163,7 @@ test.describe('User Sharing @sharing', () => {
       const modal = page.locator(Selectors.modal.container);
       await expect(modal).toBeVisible({ timeout: 5000 });
 
-      const permissionSelect = page.locator('select[name="permission"], select:near(:text("권한"))');
+      const permissionSelect = page.locator('select[name="permission"], select:near(:text("권한"))').first();
       if (await permissionSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
         // Select write permission
         await permissionSelect.selectOption('write');
@@ -176,15 +177,15 @@ test.describe('User Sharing @sharing', () => {
     const folderName = generateFolderName('user-share-folder');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Open user share modal
-    await page.locator(`text=${folderName}`).click({ button: 'right' });
+    await page.locator(`text=${folderName}`).first().click({ button: 'right' });
     const userShareOption = page.locator(Selectors.contextMenu.userShare);
     if (await userShareOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await userShareOption.click();
@@ -206,14 +207,13 @@ test.describe('Shared Views @sharing', () => {
   test('should navigate to shared with me view', async ({ page }) => {
     // Click on "Shared with me" in sidebar
     const sharedWithMeLink = page.locator(Selectors.sidebar.sharedWithMe);
-    if (await sharedWithMeLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedWithMeLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedWithMeLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedWithMe);
 
       // Should show shared with me view or empty state
       await expect(
-        page.locator('text=나와 공유된, text=Shared with me, text=공유된 파일')
-          .or(page.locator('text=공유된 항목이 없습니다, text=No items shared'))
+        page.locator(':text("나와 공유된"), :text("Shared with me"), :text("공유된 파일")').first()
+          .or(page.locator(Selectors.sharedViews.emptyState).first())
       ).toBeVisible({ timeout: 10000 });
     } else {
       test.skip();
@@ -223,14 +223,13 @@ test.describe('Shared Views @sharing', () => {
   test('should navigate to my shares view', async ({ page }) => {
     // Click on "My shares" in sidebar
     const mySharesLink = page.locator(Selectors.sidebar.myShares);
-    if (await mySharesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await mySharesLink.click();
-      await page.waitForTimeout(1000);
+    if (await mySharesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.myShares);
 
       // Should show my shares view or empty state
       await expect(
-        page.locator('text=내가 공유한, text=My shares')
-          .or(page.locator('text=공유한 항목이 없습니다, text=No shared items'))
+        page.locator(':text("내가 공유한"), :text("My shares")').first()
+          .or(page.locator(':text("공유한 항목이 없습니다"), :text("No shared items")').first())
       ).toBeVisible({ timeout: 10000 });
     } else {
       test.skip();
@@ -242,7 +241,7 @@ test.describe('Shared Views @sharing', () => {
     const testFile = generateTestFile({ name: generateFileName('my-shares-test') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -253,14 +252,16 @@ test.describe('Shared Views @sharing', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Create a link share
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
-    await page.locator('text=링크로 공유').first().click();
-    await page.locator(Selectors.shareModal.createLinkBtn).click();
-    await expect(page.locator(Selectors.shareModal.shareLink)).toBeVisible({ timeout: 5000 });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
+    await page.locator(Selectors.contextMenu.share).click();
+    await page.locator(Selectors.linkShareModal.createBtn).click();
+    await expect(page.locator(Selectors.linkShareModal.createdUrl).first()).toHaveValue(/^https?:\/\//, {
+      timeout: 5000,
+    });
 
     // Close modal
     await page.locator(Selectors.modal.closeBtn).click().catch(() => {
@@ -269,9 +270,8 @@ test.describe('Shared Views @sharing', () => {
 
     // Navigate to my shares
     const mySharesLink = page.locator(Selectors.sidebar.myShares);
-    if (await mySharesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await mySharesLink.click();
-      await page.waitForTimeout(1000);
+    if (await mySharesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.myShares);
 
       // Should show the shared file
       // Note: UI may vary - might show file name or share details
@@ -289,9 +289,8 @@ test.describe('Share Management @sharing', () => {
     // This test requires an existing share to modify
     // Navigate to my shares first
     const mySharesLink = page.locator(Selectors.sidebar.myShares);
-    if (await mySharesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await mySharesLink.click();
-      await page.waitForTimeout(1000);
+    if (await mySharesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.myShares);
 
       // Find a share to modify
       const shareItem = page.locator('.share-item, .shared-file-row, .share-card').first();
@@ -317,9 +316,8 @@ test.describe('Share Management @sharing', () => {
   test('should remove user from share', async ({ page }) => {
     // This test requires an existing user share
     const mySharesLink = page.locator(Selectors.sidebar.myShares);
-    if (await mySharesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await mySharesLink.click();
-      await page.waitForTimeout(1000);
+    if (await mySharesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.myShares);
 
       const shareItem = page.locator('.share-item, .shared-file-row').first();
       if (await shareItem.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -329,7 +327,7 @@ test.describe('Share Management @sharing', () => {
           await removeBtn.click();
 
           // Confirm removal
-          const confirmBtn = page.locator('button:has-text("확인"), button:has-text("Confirm")');
+          const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
           if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
             await confirmBtn.click();
           }

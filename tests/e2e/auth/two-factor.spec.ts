@@ -21,18 +21,18 @@ test.describe('2FA Setup @auth', () => {
 
     // Navigate to profile
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
   });
 
   test('should display 2FA setup option', async ({ page }) => {
     // Look for 2FA section
     await expect(
-      page.locator('text=2FA, text=이중 인증, text=Two-Factor')
+      page.locator(':text("2FA"), :text("이중 인증"), :text("Two-Factor")').first()
     ).toBeVisible({ timeout: 10000 });
   });
 
   test('should show QR code during 2FA setup', async ({ page }) => {
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
@@ -47,7 +47,7 @@ test.describe('2FA Setup @auth', () => {
   });
 
   test('should display secret key during 2FA setup', async ({ page }) => {
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
@@ -69,7 +69,7 @@ test.describe('2FA Setup @auth', () => {
   });
 
   test('should require verification code to complete setup', async ({ page }) => {
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
@@ -86,7 +86,7 @@ test.describe('2FA Setup @auth', () => {
   });
 
   test('should reject invalid verification code', async ({ page }) => {
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
@@ -100,7 +100,7 @@ test.describe('2FA Setup @auth', () => {
 
         // Should show error
         await expect(
-          page.locator('text=유효하지 않, text=Invalid, text=잘못된')
+          page.locator(':text("유효하지 않"), :text("Invalid"), :text("잘못된")').first()
         ).toBeVisible({ timeout: 5000 });
       }
     } else {
@@ -112,13 +112,13 @@ test.describe('2FA Setup @auth', () => {
     // This test assumes 2FA is being enabled for the first time
     // It requires actual TOTP code which we can't generate in tests
 
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
       // Look for backup codes section (may be shown after verification)
       await expect(
-        page.locator('text=백업 코드, text=Backup codes, text=복구 코드')
+        page.locator(':text("백업 코드"), :text("Backup codes"), :text("복구 코드")').first()
       ).toBeVisible({ timeout: 10000 }).catch(() => {
         // Backup codes may only be shown after successful verification
       });
@@ -166,7 +166,7 @@ test.describe('2FA Login @auth', () => {
 
       // Should show error
       await expect(
-        page.locator('text=유효하지 않, text=Invalid, text=잘못된')
+        page.locator(':text("유효하지 않"), :text("Invalid"), :text("잘못된")').first()
       ).toBeVisible({ timeout: 5000 });
     }
   });
@@ -188,7 +188,7 @@ test.describe('2FA Login @auth', () => {
     await page.locator(Selectors.login.submitBtn).click();
 
     // Click "Use backup code" link
-    const backupCodeLink = page.locator('text=백업 코드 사용, text=Use backup code');
+    const backupCodeLink = page.locator(':text("백업 코드 사용"), :text("Use backup code")').first();
     if (await backupCodeLink.isVisible({ timeout: 3000 }).catch(() => false)) {
       await backupCodeLink.click();
 
@@ -208,11 +208,11 @@ test.describe('2FA Disable @auth', () => {
     await expect(page.locator(Selectors.fileList.wrapper)).toBeVisible({ timeout: 10000 });
 
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
   });
 
   test('should show disable 2FA option when enabled', async ({ page }) => {
-    const disable2FABtn = page.locator(Selectors.profile.disable2FABtn);
+    const disable2FABtn = page.locator(Selectors.profile.disable);
     if (await disable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       expect(await disable2FABtn.isVisible()).toBe(true);
     } else {
@@ -222,7 +222,7 @@ test.describe('2FA Disable @auth', () => {
   });
 
   test('should require verification to disable 2FA', async ({ page }) => {
-    const disable2FABtn = page.locator(Selectors.profile.disable2FABtn);
+    const disable2FABtn = page.locator(Selectors.profile.disable);
     if (await disable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await disable2FABtn.click();
 
@@ -236,13 +236,13 @@ test.describe('2FA Disable @auth', () => {
   });
 
   test('should show warning before disabling 2FA', async ({ page }) => {
-    const disable2FABtn = page.locator(Selectors.profile.disable2FABtn);
+    const disable2FABtn = page.locator(Selectors.profile.disable);
     if (await disable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await disable2FABtn.click();
 
       // Should show warning
       await expect(
-        page.locator('text=경고, text=Warning, text=주의, text=보안')
+        page.locator(':text("경고"), :text("Warning"), :text("주의"), :text("보안")').first()
       ).toBeVisible({ timeout: 5000 }).catch(() => {
         // Warning may be inline or in different format
       });
@@ -258,7 +258,7 @@ test.describe('2FA Backup Codes @auth', () => {
     await expect(page.locator(Selectors.fileList.wrapper)).toBeVisible({ timeout: 10000 });
 
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
   });
 
   test('should allow regenerating backup codes', async ({ page }) => {
@@ -282,7 +282,7 @@ test.describe('2FA Backup Codes @auth', () => {
   test('should show remaining backup codes count', async ({ page }) => {
     // Look for backup codes count indicator
     const backupCodesCount = page.locator(
-      'text=/\\d+개 남음/, text=/\\d+ remaining/, .backup-codes-count'
+      ':text("/\\d+개 남음/"), :text("/\\d+ remaining/"), .backup-codes-count'
     );
 
     if (await backupCodesCount.isVisible({ timeout: 3000 }).catch(() => false)) {

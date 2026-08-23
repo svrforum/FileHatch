@@ -9,6 +9,7 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { navigateVia } from '../helpers/navigate';
 
 test.describe('Shared Drives Access @sharing', () => {
   test.beforeEach(async ({ page }) => {
@@ -19,17 +20,16 @@ test.describe('Shared Drives Access @sharing', () => {
   test('should navigate to shared drives', async ({ page }) => {
     // Click on "Shared drives" in sidebar
     const sharedDrivesLink = page.locator(Selectors.sidebar.sharedDrives);
-    if (await sharedDrivesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedDrivesLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedDrivesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedDrives);
 
       // Should show shared drives view
       await expect(
-        page.locator('text=공유 드라이브, text=Shared drives, text=공유 폴더')
+        page.locator(':text("공유 드라이브"), :text("Shared drives"), :text("공유 폴더")').first()
       ).toBeVisible({ timeout: 10000 }).catch(() => {
         // May show empty state
         expect(
-          page.locator('text=공유 드라이브가 없습니다, text=No shared drives')
+          page.locator(Selectors.sharedViews.emptyState).first()
         ).toBeVisible({ timeout: 5000 }).catch(() => {
           // Or a list of drives - any visible content is acceptable
         });
@@ -41,13 +41,14 @@ test.describe('Shared Drives Access @sharing', () => {
 
   test('should display shared drive list', async ({ page }) => {
     const sharedDrivesLink = page.locator(Selectors.sidebar.sharedDrives);
-    if (await sharedDrivesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedDrivesLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedDrivesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedDrives);
 
       // Check for shared drive items or empty state
-      const driveList = page.locator('.shared-drive-list, .drive-list, .folder-list');
-      const emptyState = page.locator('text=공유 드라이브가 없습니다, text=No shared drives');
+      // The wrapper is always present; what varies is whether it holds rows
+      // or the empty-state placeholder.
+      const driveList = page.locator(Selectors.sharedViews.row).first();
+      const emptyState = page.locator(Selectors.sharedViews.emptyState).first();
 
       // Either should be visible
       await expect(driveList.or(emptyState)).toBeVisible({ timeout: 10000 });
@@ -58,12 +59,11 @@ test.describe('Shared Drives Access @sharing', () => {
 
   test('should enter shared drive', async ({ page }) => {
     const sharedDrivesLink = page.locator(Selectors.sidebar.sharedDrives);
-    if (await sharedDrivesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedDrivesLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedDrivesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedDrives);
 
       // Find a shared drive to enter
-      const sharedDrive = page.locator('.shared-drive-item, .drive-card, .folder-item').first();
+      const sharedDrive = page.locator(Selectors.sharedViews.row).first();
       if (await sharedDrive.isVisible({ timeout: 3000 }).catch(() => false)) {
         await sharedDrive.dblclick();
         await page.waitForTimeout(1000);
@@ -88,15 +88,14 @@ test.describe('Shared Drive Operations @sharing', () => {
 
     // Navigate to shared drives
     const sharedDrivesLink = page.locator(Selectors.sidebar.sharedDrives);
-    if (await sharedDrivesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedDrivesLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedDrivesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedDrives);
     }
   });
 
   test('should upload file to shared drive (if write access)', async ({ page }) => {
     // Find and enter a shared drive
-    const sharedDrive = page.locator('.shared-drive-item, .drive-card, .folder-item').first();
+    const sharedDrive = page.locator(Selectors.sharedViews.row).first();
     if (await sharedDrive.isVisible({ timeout: 3000 }).catch(() => false)) {
       await sharedDrive.dblclick();
       await page.waitForTimeout(1000);
@@ -116,13 +115,18 @@ test.describe('Shared Drive Operations @sharing', () => {
           mimeType: testFile.mimeType,
           buffer: testFile.buffer,
         });
+        /*
+         * The upload modal closes itself once the transfer finishes. Without
+         * waiting for it, the next click lands on .modal-overlay instead of the
+         * file row and the context menu never opens.
+         */
+        await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
-        await page.locator(Selectors.uploadModal.startUploadBtn).click();
 
         // Wait for result - success or permission error
         await expect(
-          page.locator(`text=${testFile.name}`)
-            .or(page.locator('text=권한, text=permission, text=허용'))
+          page.locator(`text=${testFile.name}`).first()
+            .or(page.locator(':text("권한"), :text("permission"), :text("허용")').first())
         ).toBeVisible({ timeout: 30000 });
       } else {
         // No upload button - read-only access
@@ -134,7 +138,7 @@ test.describe('Shared Drive Operations @sharing', () => {
   });
 
   test('should create folder in shared drive (if write access)', async ({ page }) => {
-    const sharedDrive = page.locator('.shared-drive-item, .drive-card, .folder-item').first();
+    const sharedDrive = page.locator(Selectors.sharedViews.row).first();
     if (await sharedDrive.isVisible({ timeout: 3000 }).catch(() => false)) {
       await sharedDrive.dblclick();
       await page.waitForTimeout(1000);
@@ -144,15 +148,17 @@ test.describe('Shared Drive Operations @sharing', () => {
       const newFolderBtn = page.locator(Selectors.fileList.newFolderBtn);
       if (await newFolderBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await newFolderBtn.click();
-        await page
-          .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
-          .fill(folderName);
-        await page.locator('button:has-text("생성")').click();
+        await page.locator(Selectors.createFolderModal.nameInput).fill(folderName);
+        await page.locator(Selectors.modal.container).locator('button:has-text("생성")').click();
 
-        // Wait for result
+        /*
+         * Read-only members get a permission error instead of a new folder, so
+         * either outcome is a pass - but the toast is what carries the refusal,
+         * not a bare ":text(권한)" anywhere on the page.
+         */
         await expect(
-          page.locator(`text=${folderName}`)
-            .or(page.locator('text=권한, text=permission'))
+          page.locator(`text=${folderName}`).first()
+            .or(page.locator(Selectors.toast.container).first())
         ).toBeVisible({ timeout: 15000 });
       } else {
         test.skip();
@@ -163,7 +169,7 @@ test.describe('Shared Drive Operations @sharing', () => {
   });
 
   test('should download file from shared drive (if read access)', async ({ page }) => {
-    const sharedDrive = page.locator('.shared-drive-item, .drive-card, .folder-item').first();
+    const sharedDrive = page.locator(Selectors.sharedViews.row).first();
     if (await sharedDrive.isVisible({ timeout: 3000 }).catch(() => false)) {
       await sharedDrive.dblclick();
       await page.waitForTimeout(1000);
@@ -220,9 +226,8 @@ test.describe('Shared Drive Permissions @sharing', () => {
 
   test('should show permission level in shared drive list', async ({ page }) => {
     const sharedDrivesLink = page.locator(Selectors.sidebar.sharedDrives);
-    if (await sharedDrivesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedDrivesLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedDrivesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedDrives);
 
       // Check for permission indicators
       const permissionBadge = page.locator(
@@ -239,9 +244,8 @@ test.describe('Shared Drive Permissions @sharing', () => {
 
   test('should prevent delete operation with read-only access', async ({ page }) => {
     const sharedDrivesLink = page.locator(Selectors.sidebar.sharedDrives);
-    if (await sharedDrivesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedDrivesLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedDrivesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedDrives);
 
       // Find read-only drive
       const readOnlyDrive = page.locator(
@@ -268,7 +272,7 @@ test.describe('Shared Drive Permissions @sharing', () => {
             await deleteOption.click().catch(() => {});
 
             // May show permission error
-            const permissionError = page.locator('text=권한, text=permission, text=허용되지 않');
+            const permissionError = page.locator(':text("권한"), :text("permission"), :text("허용되지 않")').first();
             // No assertion here as behavior may vary
           }
         }

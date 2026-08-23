@@ -13,11 +13,13 @@
 import { test, expect } from '@playwright/test'
 import { generateFileName, generateTestFile } from '../helpers/test-data'
 import { Selectors } from '../helpers/selectors'
+import { revealFile } from '../helpers/file-list'
+import { openUploadDialog } from '../helpers/navigate';
 
 const UPLOAD_TIMEOUT = 30_000
 
 async function openUploadModal(page: import('@playwright/test').Page) {
-  await page.locator(Selectors.upload.mainBtn).click()
+  await openUploadDialog(page)
   await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5_000 })
 }
 
@@ -38,7 +40,7 @@ async function uploadSingleFile(
   await openUploadModal(page)
   await pickAndSetFiles(page, [file])
   await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: UPLOAD_TIMEOUT })
-  await expect(page.locator(`text=${file.name}`).first()).toBeVisible({ timeout: UPLOAD_TIMEOUT })
+  await revealFile(page, file.name)
 }
 
 test.describe('Issue #36 — duplicate dialog and queue handling @files @regression', () => {
@@ -101,8 +103,8 @@ test.describe('Issue #36 — duplicate dialog and queue handling @files @regress
     // and confirm by listing the folder.
     await page.goto('/')
     await expect(page.locator('.file-list-container, .file-list')).toBeVisible({ timeout: 10_000 })
-    await expect(page.locator(`text=${fresh1.name}`)).toHaveCount(0)
-    await expect(page.locator(`text=${fresh2.name}`)).toHaveCount(0)
+    await expect(page.locator(`text=${fresh1.name}`).first()).toHaveCount(0)
+    await expect(page.locator(`text=${fresh2.name}`).first()).toHaveCount(0)
   })
 
   test('(symptom 3) selecting the same file four times in one batch enqueues it only once', async ({ page }) => {
@@ -143,7 +145,7 @@ test.describe('Issue #36 — duplicate dialog and queue handling @files @regress
     // Strip the extension and match plain "<base>[" — we don't need a regex,
     // any DOM text containing that prefix is a numbered duplicate.
     const baseNoExt = same.name.replace(/\.[^.]+$/, '')
-    const numbered = page.locator(`text=${baseNoExt}[`)
+    const numbered = page.locator(`text=${baseNoExt}[`).first()
     await expect(numbered).toHaveCount(0)
   })
 })
@@ -168,3 +170,4 @@ test.describe('Issue #36 — file list scroll @files @regression', () => {
     expect(box!.height).toBeGreaterThan(120)
   })
 })
+

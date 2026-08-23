@@ -11,30 +11,31 @@
 import { test, expect } from '@playwright/test';
 import { generateFolderName } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { navigateVia } from '../helpers/navigate';
 
 test.describe('Admin Shared Folders @admin @sharing', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
     // Enter admin mode
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
     // Navigate to shared folders
-    await page.locator(Selectors.admin.sharedFolders).click();
+    await navigateVia(page, Selectors.admin.sharedFolders);
     await page.waitForTimeout(1000);
   });
 
   test('should display shared folders page', async ({ page }) => {
     await expect(
-      page.locator('h2:has-text("공유 드라이브"), h2:has-text("공유 폴더"), h2:has-text("Shared")')
+      page.locator(':is(h1, h2):has-text("공유 드라이브"), :is(h1, h2):has-text("공유 폴더"), :is(h1, h2):has-text("Shared")')
     ).toBeVisible({ timeout: 10000 });
   });
 
   test('should display shared folders list', async ({ page }) => {
     // Check for list or empty state
-    const folderList = page.locator('.shared-folder-list, .folder-list, table');
-    const emptyState = page.locator('text=공유 폴더가 없습니다, text=No shared folders');
+    const folderList = page.locator(Selectors.adminSharedFolders.list);
+    const emptyState = page.locator(Selectors.adminSharedFolders.emptyState);
 
     await expect(folderList.or(emptyState)).toBeVisible({ timeout: 10000 });
   });
@@ -43,31 +44,30 @@ test.describe('Admin Shared Folders @admin @sharing', () => {
     const folderName = generateFolderName('admin-shared');
 
     // Click create button
-    const createBtn = page.locator('button:has-text("추가"), button:has-text("생성"), .btn-primary');
-    await createBtn.click();
+    await page.locator(Selectors.adminSharedFolders.createBtn).first().click();
 
     // Modal should appear
     await expect(page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
 
     // Fill form
-    await page.locator('input[name="name"], input[placeholder*="이름"]').fill(folderName);
+    await page.locator(Selectors.adminSharedFolders.dialog.name).fill(folderName);
 
     // Add description if available
-    const descInput = page.locator('textarea[name="description"], input[name="description"]');
+    const descInput = page.locator(Selectors.adminSharedFolders.dialog.description);
     if (await descInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await descInput.fill(`Test shared folder created at ${Date.now()}`);
     }
 
     // Submit
-    await page.locator('button[type="submit"], button:has-text("생성")').click();
+    await page.locator(Selectors.adminSharedFolders.dialog.submit).click();
 
     // Folder should appear in list
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 10000 });
   });
 
   test('should edit shared folder', async ({ page }) => {
     // Find a shared folder
-    const folderRow = page.locator('.shared-folder-row, .folder-card, table tbody tr').first();
+    const folderRow = page.locator(Selectors.adminSharedFolders.card).first();
 
     if (await folderRow.isVisible({ timeout: 3000 }).catch(() => false)) {
       // Click edit button
@@ -101,13 +101,12 @@ test.describe('Admin Shared Folders @admin @sharing', () => {
     // First create a folder to delete
     const folderName = generateFolderName('delete-shared');
 
-    const createBtn = page.locator('button:has-text("추가"), button:has-text("생성"), .btn-primary');
-    await createBtn.click();
+    await page.locator(Selectors.adminSharedFolders.createBtn).first().click();
 
-    await page.locator('input[name="name"], input[placeholder*="이름"]').fill(folderName);
-    await page.locator('button[type="submit"], button:has-text("생성")').click();
+    await page.locator(Selectors.adminSharedFolders.dialog.name).fill(folderName);
+    await page.locator(Selectors.adminSharedFolders.dialog.submit).click();
 
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 10000 });
 
     // Find and delete the folder
     const folderRow = page.locator(`.shared-folder-row:has-text("${folderName}"), tr:has-text("${folderName}")`);
@@ -117,13 +116,13 @@ test.describe('Admin Shared Folders @admin @sharing', () => {
       await deleteBtn.click();
 
       // Confirm deletion
-      const confirmBtn = page.locator('button:has-text("확인"), button:has-text("Confirm")');
+      const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
       if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await confirmBtn.click();
       }
 
       // Folder should be removed
-      await expect(page.locator(`text=${folderName}`)).not.toBeVisible({ timeout: 10000 });
+      await expect(page.locator(`text=${folderName}`).first()).not.toBeVisible({ timeout: 10000 });
     } else {
       test.skip();
     }
@@ -134,10 +133,10 @@ test.describe('Admin Shared Folder Members @admin @sharing', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
-    await page.locator(Selectors.admin.sharedFolders).click();
+    await navigateVia(page, Selectors.admin.sharedFolders);
     await page.waitForTimeout(1000);
   });
 
@@ -227,7 +226,7 @@ test.describe('Admin Shared Folder Members @admin @sharing', () => {
           await removeBtn.first().click();
 
           // Confirm if needed
-          const confirmBtn = page.locator('button:has-text("확인")');
+          const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
           if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
             await confirmBtn.click();
           }

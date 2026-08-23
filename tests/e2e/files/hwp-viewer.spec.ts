@@ -17,6 +17,8 @@ import { test, expect } from '@playwright/test'
 import path from 'path'
 import { readFileSync } from 'fs'
 import { Selectors } from '../helpers/selectors'
+import { revealFile } from '../helpers/file-list'
+import { openUploadDialog } from '../helpers/navigate';
 
 const FIXTURE_PATH = path.join(__dirname, '../fixtures/sample.hwp')
 const CORRUPTED_FIXTURE_PATH = path.join(__dirname, '../fixtures/corrupted.hwp')
@@ -36,7 +38,7 @@ test.describe('HWP Viewer @hwp @files', () => {
     const fileName = `e2e-rhwp-sample-${Date.now()}.hwp`
 
     // 1) 업로드
-    await page.locator(Selectors.upload.mainBtn).click()
+    await openUploadDialog(page)
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 })
 
     const fileChooserPromise = page.waitForEvent('filechooser')
@@ -49,8 +51,8 @@ test.describe('HWP Viewer @hwp @files', () => {
     })
 
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 })
-    const fileRow = page.locator('.file-row').filter({ hasText: fileName }).first()
-    await expect(fileRow).toBeVisible({ timeout: 30000 })
+    await revealFile(page, fileName)
+    const fileRow = page.locator(Selectors.fileList.row).filter({ hasText: fileName }).first()
 
     // 2) 더블클릭 → 모달
     await fileRow.dblclick()
@@ -94,7 +96,7 @@ test.describe('HWP Viewer @hwp @files', () => {
     const fileName = `e2e-rhwp-corrupted-${Date.now()}.hwp`
 
     // 업로드
-    await page.locator(Selectors.upload.mainBtn).click()
+    await openUploadDialog(page)
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 })
     const fileChooserPromise = page.waitForEvent('filechooser')
     await page.locator(Selectors.upload.selectFileBtn).click()
@@ -105,8 +107,8 @@ test.describe('HWP Viewer @hwp @files', () => {
       buffer,
     })
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 })
-    const fileRow = page.locator('.file-row').filter({ hasText: fileName }).first()
-    await expect(fileRow).toBeVisible({ timeout: 30000 })
+    await revealFile(page, fileName)
+    const fileRow = page.locator(Selectors.fileList.row).filter({ hasText: fileName }).first()
 
     // 더블클릭 → 모달
     await fileRow.dblclick()
@@ -152,7 +154,7 @@ test.describe('HWP Viewer @hwp @files', () => {
     const fileName = `e2e-rhwp-save-${Date.now()}.hwp`
 
     // 업로드
-    await page.locator(Selectors.upload.mainBtn).click()
+    await openUploadDialog(page)
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 })
     const fileChooserPromise = page.waitForEvent('filechooser')
     await page.locator(Selectors.upload.selectFileBtn).click()
@@ -163,8 +165,8 @@ test.describe('HWP Viewer @hwp @files', () => {
       buffer,
     })
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 })
-    const fileRow = page.locator('.file-row').filter({ hasText: fileName }).first()
-    await expect(fileRow).toBeVisible({ timeout: 30000 })
+    await revealFile(page, fileName)
+    const fileRow = page.locator(Selectors.fileList.row).filter({ hasText: fileName }).first()
 
     // 더블클릭 → 모달 + iframe 준비 대기
     await fileRow.dblclick()
@@ -199,3 +201,4 @@ test.describe('HWP Viewer @hwp @files', () => {
     }
   })
 })
+

@@ -5,6 +5,7 @@
  * including link shares, user shares, and upload shares.
  */
 import { Page, expect } from '@playwright/test';
+import { Selectors } from '../helpers/selectors';
 
 export interface ShareOptions {
   password?: string;
@@ -96,7 +97,7 @@ export class ShareFixture {
       .click();
 
     // Confirm deletion if needed
-    const confirmButton = this.page.locator('button:has-text("확인"), button:has-text("Confirm")');
+    const confirmButton = this.page.locator(Selectors.confirmModal.confirmBtn);
     if (await confirmButton.isVisible()) {
       await confirmButton.click();
     }
@@ -121,9 +122,9 @@ export class ShareFixture {
    */
   async shareWithUser(fileName: string, options: UserShareOptions): Promise<void> {
     await this.page.locator(`text=${fileName}`).click({ button: 'right' });
-    await this.page.locator('text=사용자와 공유, text=사용자에게 공유').first().click();
+    await this.page.locator(':text("사용자와 공유"), :text("사용자에게 공유")').first().click();
 
-    await expect(this.page.locator('.modal, [role="dialog"]')).toBeVisible({ timeout: 5000 });
+    await expect(this.page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
 
     // Search for user
     await this.page
@@ -144,7 +145,7 @@ export class ShareFixture {
 
     // Wait for confirmation
     await expect(
-      this.page.locator('text=공유됨, text=Shared, text=완료')
+      this.page.locator(':text("공유됨"), :text("Shared"), :text("완료")')
     ).toBeVisible({ timeout: 5000 }).catch(() => {});
   }
 
@@ -155,7 +156,7 @@ export class ShareFixture {
     await this.page.locator(`text=${folderName}`).click({ button: 'right' });
     await this.page.locator('text=업로드 링크').first().click();
 
-    await expect(this.page.locator('.modal, [role="dialog"]')).toBeVisible({ timeout: 5000 });
+    await expect(this.page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
 
     // Set password if provided
     if (options.password) {
@@ -222,8 +223,14 @@ export class ShareFixture {
       mimeType: 'text/plain',
       buffer: Buffer.from(content),
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
-    await expect(this.page.locator('text=완료, text=Success, text=업로드 완료')).toBeVisible({
+    await expect(this.page.locator(':text("완료"), :text("Success"), :text("업로드 완료")')).toBeVisible({
       timeout: 30000,
     });
   }

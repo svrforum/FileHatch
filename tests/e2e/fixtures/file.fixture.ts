@@ -5,6 +5,7 @@
  * including upload, download, create folder, and cleanup.
  */
 import { Page, expect } from '@playwright/test';
+import { Selectors } from '../helpers/selectors';
 
 export interface FileInfo {
   name: string;
@@ -79,8 +80,13 @@ export class FileFixture {
       mimeType,
       buffer: Buffer.from(content),
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
-    await this.page.locator('button:has-text("업로드 시작")').click();
     await expect(this.page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
     await expect(this.page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
 
@@ -154,7 +160,7 @@ export class FileFixture {
   async deleteFile(fileName: string): Promise<void> {
     await this.openContextMenu(fileName);
     await this.page.locator('.context-menu >> .context-menu-item.danger').click();
-    await this.page.locator('button:has-text("확인"), button:has-text("삭제"), button:has-text("Delete")').click();
+    await this.page.locator(Selectors.confirmModal.confirmBtn).click();
     await expect(this.page.locator(`text=${fileName}`)).not.toBeVisible({ timeout: 5000 });
 
     const index = this.createdFiles.indexOf(fileName);
@@ -278,7 +284,7 @@ export class FileFixture {
           await this.openContextMenu(folder);
           await this.page.locator('.context-menu >> .context-menu-item.danger').click();
           await this.page
-            .locator('button:has-text("확인"), button:has-text("삭제")')
+            .locator(Selectors.confirmModal.confirmBtn)
             .click()
             .catch(() => {});
         }

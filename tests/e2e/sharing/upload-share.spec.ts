@@ -9,6 +9,8 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile, TestShareTokens } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { revealFile } from '../helpers/file-list';
+import { openNewFolderDialog } from '../helpers/navigate';
 
 test.describe('Upload Share Creation @sharing', () => {
   test.beforeEach(async ({ page }) => {
@@ -20,15 +22,15 @@ test.describe('Upload Share Creation @sharing', () => {
     const folderName = generateFolderName('upload-share-folder');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Right-click and create upload link
-    await page.locator(`text=${folderName}`).click({ button: 'right' });
+    await page.locator(`text=${folderName}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
 
     const uploadLinkOption = page.locator(Selectors.contextMenu.uploadLink);
@@ -54,15 +56,15 @@ test.describe('Upload Share Creation @sharing', () => {
     const folderName = generateFolderName('protected-upload-share');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Create upload link with password
-    await page.locator(`text=${folderName}`).click({ button: 'right' });
+    await page.locator(`text=${folderName}`).first().click({ button: 'right' });
     const uploadLinkOption = page.locator(Selectors.contextMenu.uploadLink);
     if (await uploadLinkOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await uploadLinkOption.click();
@@ -94,15 +96,15 @@ test.describe('Upload Share Creation @sharing', () => {
     const folderName = generateFolderName('expiring-upload-share');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Create upload link with expiration
-    await page.locator(`text=${folderName}`).click({ button: 'right' });
+    await page.locator(`text=${folderName}`).first().click({ button: 'right' });
     const uploadLinkOption = page.locator(Selectors.contextMenu.uploadLink);
     if (await uploadLinkOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await uploadLinkOption.click();
@@ -110,7 +112,7 @@ test.describe('Upload Share Creation @sharing', () => {
       await expect(page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
 
       // Set expiration
-      const expirationSelect = page.locator('select:near(:text("만료")), select[name*="expir"]');
+      const expirationSelect = page.locator('select:near(:text("만료")), select[name*="expir"]').first();
       if (await expirationSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
         await expirationSelect.selectOption({ index: 1 }); // Usually "1 day"
       }
@@ -134,15 +136,15 @@ test.describe('Upload Share Creation @sharing', () => {
     const folderName = generateFolderName('copy-upload-link');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Create upload link
-    await page.locator(`text=${folderName}`).click({ button: 'right' });
+    await page.locator(`text=${folderName}`).first().click({ button: 'right' });
     const uploadLinkOption = page.locator(Selectors.contextMenu.uploadLink);
     if (await uploadLinkOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await uploadLinkOption.click();
@@ -166,15 +168,15 @@ test.describe('Upload Share Creation @sharing', () => {
     const folderName = generateFolderName('delete-upload-share');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`)).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Create upload link
-    await page.locator(`text=${folderName}`).click({ button: 'right' });
+    await page.locator(`text=${folderName}`).first().click({ button: 'right' });
     const uploadLinkOption = page.locator(Selectors.contextMenu.uploadLink);
     if (await uploadLinkOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await uploadLinkOption.click();
@@ -188,7 +190,7 @@ test.describe('Upload Share Creation @sharing', () => {
         .click();
 
       // Confirm if needed
-      const confirmBtn = page.locator('button:has-text("확인"), button:has-text("Confirm")');
+      const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
       if (await confirmBtn.isVisible()) {
         await confirmBtn.click();
       }
@@ -216,7 +218,7 @@ test.describe('Upload Share Access (Unauthenticated) @sharing', () => {
 
     // Should show upload interface
     await expect(
-      page.locator('text=업로드, text=Upload, button:has-text("업로드"), .upload-zone')
+      page.locator(':text("업로드"), :text("Upload"), button:has-text("업로드"), .upload-zone').first()
     ).toBeVisible({ timeout: 10000 });
   });
 
@@ -243,9 +245,15 @@ test.describe('Upload Share Access (Unauthenticated) @sharing', () => {
       mimeType: 'text/plain',
       buffer: Buffer.from('Upload share test content'),
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     // Verify upload success
-    await expect(page.locator('text=완료, text=Success, text=업로드 완료')).toBeVisible({
+    await expect(page.locator(':text("완료"), :text("Success"), :text("업로드 완료")').first()).toBeVisible({
       timeout: 30000,
     });
   });
@@ -277,7 +285,7 @@ test.describe('Upload Share Access (Unauthenticated) @sharing', () => {
 
     // Should show expired message
     await expect(
-      page.locator('text=만료, text=expired, text=유효하지 않')
+      page.locator(':text("만료"), :text("expired"), :text("유효하지 않")').first()
     ).toBeVisible({ timeout: 10000 });
   });
 
@@ -286,7 +294,7 @@ test.describe('Upload Share Access (Unauthenticated) @sharing', () => {
 
     // Should show not found or error
     await expect(
-      page.locator('text=찾을 수 없, text=Not Found, text=존재하지 않, text=유효하지 않')
+      page.locator(':text("찾을 수 없"), :text("Not Found"), :text("존재하지 않"), :text("유효하지 않")').first()
     ).toBeVisible({ timeout: 10000 });
   });
 
@@ -313,10 +321,16 @@ test.describe('Upload Share Access (Unauthenticated) @sharing', () => {
       { name: file1Name, mimeType: 'text/plain', buffer: Buffer.from('File 1 content') },
       { name: file2Name, mimeType: 'text/plain', buffer: Buffer.from('File 2 content') },
     ]);
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     // Verify upload success (may show count or individual success)
     await expect(
-      page.locator('text=완료, text=Success, text=업로드 완료')
+      page.locator(':text("완료"), :text("Success"), :text("업로드 완료")').first()
     ).toBeVisible({ timeout: 60000 });
   });
 });
@@ -355,7 +369,7 @@ test.describe('Upload Share Drag and Drop @sharing', () => {
 
     // Verify upload
     await expect(
-      page.locator('text=완료, text=Success, text=업로드')
+      page.locator(':text("완료"), :text("Success"), :text("업로드")').first()
     ).toBeVisible({ timeout: 30000 });
   });
 });

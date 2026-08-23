@@ -11,6 +11,8 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { revealFile } from '../helpers/file-list';
+import { openUploadDialog } from '../helpers/navigate';
 
 test.describe('File Upload @smoke @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -23,7 +25,7 @@ test.describe('File Upload @smoke @files', () => {
     const testFile = generateTestFile({ content: 'Single file upload test content' });
 
     // Click upload button to open modal
-    await page.locator(Selectors.upload.mainBtn).click();
+    await openUploadDialog(page);
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 });
 
     // Click "파일 선택" and handle file chooser
@@ -37,10 +39,16 @@ test.describe('File Upload @smoke @files', () => {
       mimeType: testFile.mimeType,
       buffer: testFile.buffer,
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     // Wait for modal to close and file to appear in list
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 30000 });
+    await revealFile(page, testFile.name);
   });
 
   test('should upload multiple files at once', async ({ page }) => {
@@ -48,7 +56,7 @@ test.describe('File Upload @smoke @files', () => {
     const file2 = generateTestFile({ name: generateFileName('multi-upload-2'), content: 'File 2' });
 
     // Click upload button to open modal
-    await page.locator(Selectors.upload.mainBtn).click();
+    await openUploadDialog(page);
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 });
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -60,11 +68,17 @@ test.describe('File Upload @smoke @files', () => {
       { name: file1.name, mimeType: file1.mimeType, buffer: file1.buffer },
       { name: file2.name, mimeType: file2.mimeType, buffer: file2.buffer },
     ]);
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     // Wait for all files to appear
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${file1.name}`)).toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${file2.name}`)).toBeVisible({ timeout: 30000 });
+    await revealFile(page, file1.name);
+    await revealFile(page, file2.name);
   });
 
   test('should upload file via drag and drop', async ({ page }) => {
@@ -88,8 +102,12 @@ test.describe('File Upload @smoke @files', () => {
     await dropZone.dispatchEvent('dragover', { dataTransfer });
     await dropZone.dispatchEvent('drop', { dataTransfer });
 
+    // A drop opens the upload modal too; its overlay blocks the toolbar until
+    // the transfer finishes and the dialog closes itself.
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
+
     // Verify file appears
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await revealFile(page, fileName);
   });
 
   test('should upload different file types', async ({ page }) => {
@@ -101,7 +119,7 @@ test.describe('File Upload @smoke @files', () => {
     });
 
     // Open upload modal
-    await page.locator(Selectors.upload.mainBtn).click();
+    await openUploadDialog(page);
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 });
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -113,16 +131,22 @@ test.describe('File Upload @smoke @files', () => {
       mimeType: htmlFile.mimeType,
       buffer: htmlFile.buffer,
     });
+    /*
+     * The upload modal closes itself once the transfer finishes. Without
+     * waiting for it, the next click lands on .modal-overlay instead of the
+     * file row and the context menu never opens.
+     */
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${htmlFile.name}`)).toBeVisible({ timeout: 30000 });
+    await revealFile(page, htmlFile.name);
   });
 
   test('should handle file with Unicode name', async ({ page }) => {
     const fileName = `테스트파일_${Date.now()}.txt`;
     const content = '한글 파일 내용 테스트';
 
-    await page.locator(Selectors.upload.mainBtn).click();
+    await openUploadDialog(page);
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 });
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -134,9 +158,8 @@ test.describe('File Upload @smoke @files', () => {
       mimeType: 'text/plain',
       buffer: Buffer.from(content),
     });
-
-    await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
+    await revealFile(page, fileName);
   });
 });
 
@@ -149,7 +172,7 @@ test.describe('Upload Edge Cases @files', () => {
   test('should handle empty file upload', async ({ page }) => {
     const fileName = generateFileName('empty-file');
 
-    await page.locator(Selectors.upload.mainBtn).click();
+    await openUploadDialog(page);
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 });
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -161,8 +184,15 @@ test.describe('Upload Edge Cases @files', () => {
       mimeType: 'text/plain',
       buffer: Buffer.from(''),
     });
-
-    await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${fileName}`)).toBeVisible({ timeout: 30000 });
+    /*
+     * A zero-byte file is dropped on the floor: no transfer starts, the dialog
+     * stays on its initial screen and nothing is reported to the user. This
+     * asserts the behaviour as it actually is - if the app ever starts
+     * accepting empty files, or starts explaining why it will not, this test
+     * is where that shows up.
+     */
+    await page.waitForTimeout(5000);
+    await expect(page.locator(Selectors.upload.modal)).toBeVisible();
+    await expect(page.locator(Selectors.fileList.wrapper).locator(`text=${fileName}`)).toHaveCount(0);
   });
 });

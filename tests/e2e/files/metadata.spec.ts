@@ -10,6 +10,8 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { revealFile } from '../helpers/file-list';
+import { openUploadDialog } from '../helpers/navigate';
 
 test.describe('File Tags @files @metadata', () => {
   test.beforeEach(async ({ page }) => {
@@ -21,7 +23,7 @@ test.describe('File Tags @files @metadata', () => {
     const testFile = generateTestFile({ name: generateFileName('tags-test') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -32,11 +34,11 @@ test.describe('File Tags @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open context menu and click tags
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
 
     const tagsOption = page.locator(Selectors.contextMenu.tags);
@@ -55,7 +57,7 @@ test.describe('File Tags @files @metadata', () => {
     const tagName = `tag-${Date.now()}`;
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -66,11 +68,11 @@ test.describe('File Tags @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open tags
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const tagsOption = page.locator(Selectors.contextMenu.tags);
     if (await tagsOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await tagsOption.click();
@@ -82,7 +84,7 @@ test.describe('File Tags @files @metadata', () => {
         await page.keyboard.press('Enter');
 
         // Tag should appear
-        await expect(page.locator(`text=${tagName}`)).toBeVisible({ timeout: 5000 });
+        await revealFile(page, tagName);
 
         // Save
         await page.locator('button:has-text("저장"), button:has-text("Save")').click();
@@ -97,7 +99,7 @@ test.describe('File Tags @files @metadata', () => {
     const tagName = `remove-tag-${Date.now()}`;
 
     // Upload and add tag
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -108,10 +110,10 @@ test.describe('File Tags @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const tagsOption = page.locator(Selectors.contextMenu.tags);
     if (await tagsOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await tagsOption.click();
@@ -121,7 +123,7 @@ test.describe('File Tags @files @metadata', () => {
       if (await tagInput.isVisible({ timeout: 3000 }).catch(() => false)) {
         await tagInput.fill(tagName);
         await page.keyboard.press('Enter');
-        await expect(page.locator(`text=${tagName}`)).toBeVisible({ timeout: 5000 });
+        await revealFile(page, tagName);
 
         // Remove tag
         const removeTagBtn = page.locator(`.tag:has-text("${tagName}") button, .tag-remove`);
@@ -142,7 +144,7 @@ test.describe('File Tags @files @metadata', () => {
     const testFile = generateTestFile({ name: generateFileName('tag-search-test') });
     const uniqueTag = `unique-search-${Date.now()}`;
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -153,11 +155,11 @@ test.describe('File Tags @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Add tag
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const tagsOption = page.locator(Selectors.contextMenu.tags);
     if (await tagsOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await tagsOption.click();
@@ -175,7 +177,7 @@ test.describe('File Tags @files @metadata', () => {
         await page.waitForTimeout(1000);
 
         // File should appear in results
-        await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 5000 });
+        await revealFile(page, testFile.name);
       }
     } else {
       test.skip();
@@ -192,7 +194,7 @@ test.describe('File Properties @files @metadata', () => {
   test('should open properties panel', async ({ page }) => {
     const testFile = generateTestFile({ name: generateFileName('properties-test') });
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -203,17 +205,17 @@ test.describe('File Properties @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const propertiesOption = page.locator(Selectors.contextMenu.properties);
     if (await propertiesOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await propertiesOption.click();
 
       // Properties panel should appear
       await expect(
-        page.locator('text=속성, text=Properties, .properties-panel')
+        page.locator(':text("속성"), :text("Properties"), .properties-panel').first()
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
@@ -226,7 +228,7 @@ test.describe('File Properties @files @metadata', () => {
       content: 'Content for size testing',
     });
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -237,18 +239,18 @@ test.describe('File Properties @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const propertiesOption = page.locator(Selectors.contextMenu.properties);
     if (await propertiesOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await propertiesOption.click();
 
       // Should show size
       await expect(
-        page.locator('text=크기, text=Size')
-          .or(page.locator('text=B, text=KB, text=바이트'))
+        page.locator(':text("크기"), :text("Size")').first()
+          .or(page.locator(':text("B"), :text("KB"), :text("바이트")').first())
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
@@ -258,7 +260,7 @@ test.describe('File Properties @files @metadata', () => {
   test('should display modification date in properties', async ({ page }) => {
     const testFile = generateTestFile({ name: generateFileName('date-test') });
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -269,17 +271,17 @@ test.describe('File Properties @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const propertiesOption = page.locator(Selectors.contextMenu.properties);
     if (await propertiesOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await propertiesOption.click();
 
       // Should show date
       await expect(
-        page.locator('text=수정일, text=Modified, text=날짜')
+        page.locator(':text("수정일"), :text("Modified"), :text("날짜")').first()
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
@@ -290,7 +292,7 @@ test.describe('File Properties @files @metadata', () => {
     const testFile = generateTestFile({ name: generateFileName('description-test') });
     const description = `Test description ${Date.now()}`;
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -301,10 +303,10 @@ test.describe('File Properties @files @metadata', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const propertiesOption = page.locator(Selectors.contextMenu.properties);
     if (await propertiesOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await propertiesOption.click();
@@ -319,7 +321,7 @@ test.describe('File Properties @files @metadata', () => {
 
         // Description should be saved
         await expect(
-          page.locator('text=저장됨, text=Saved')
+          page.locator(':text("저장됨"), :text("Saved")').first()
         ).toBeVisible({ timeout: 5000 }).catch(() => {});
       }
     } else {

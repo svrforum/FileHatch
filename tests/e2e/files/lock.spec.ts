@@ -10,6 +10,8 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { revealFile } from '../helpers/file-list';
+import { openUploadDialog } from '../helpers/navigate';
 
 test.describe('File Locking @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -21,7 +23,7 @@ test.describe('File Locking @files', () => {
     const testFile = generateTestFile({ name: generateFileName('lock-test') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -32,11 +34,11 @@ test.describe('File Locking @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open context menu
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
 
     // Click lock option
@@ -46,11 +48,11 @@ test.describe('File Locking @files', () => {
 
       // File should show locked indicator
       await page.waitForTimeout(1000);
-      const fileRow = page.locator(`text=${testFile.name}`).locator('..');
+      const fileRow = page.locator(`text=${testFile.name}`).first().locator('..');
       const lockIndicator = fileRow.locator('.lock-icon, .locked, svg[data-icon="lock"]');
 
       await expect(
-        lockIndicator.or(page.locator('text=잠금됨, text=Locked'))
+        lockIndicator.or(page.locator(':text("잠금됨"), :text("Locked")').first())
       ).toBeVisible({ timeout: 5000 }).catch(() => {
         // Lock may be indicated differently
       });
@@ -63,7 +65,7 @@ test.describe('File Locking @files', () => {
     const testFile = generateTestFile({ name: generateFileName('unlock-test') });
 
     // Upload and lock file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -74,18 +76,19 @@ test.describe('File Locking @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Lock file
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const lockOption = page.locator(Selectors.contextMenu.lock);
     if (await lockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await lockOption.click();
       await page.waitForTimeout(500);
 
       // Unlock file
-      await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+      await revealFile(page, testFile.name);
+      await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
       const unlockOption = page.locator(Selectors.contextMenu.unlock);
       if (await unlockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
         await unlockOption.click();
@@ -102,7 +105,7 @@ test.describe('File Locking @files', () => {
     const testFile = generateTestFile({ name: generateFileName('prevent-edit') });
 
     // Upload and lock file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -113,18 +116,19 @@ test.describe('File Locking @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Lock file
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const lockOption = page.locator(Selectors.contextMenu.lock);
     if (await lockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await lockOption.click();
       await page.waitForTimeout(500);
 
       // Try to rename
-      await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+      await revealFile(page, testFile.name);
+      await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
       const renameOption = page.locator(Selectors.contextMenu.rename);
 
       // Rename should be disabled or show error when clicked
@@ -137,7 +141,7 @@ test.describe('File Locking @files', () => {
           await renameOption.click();
           // Should show lock error
           await expect(
-            page.locator('text=잠금, text=locked, text=편집 불가')
+            page.locator(':text("잠금"), :text("locked"), :text("편집 불가")').first()
           ).toBeVisible({ timeout: 5000 }).catch(() => {});
         }
       }
@@ -150,7 +154,7 @@ test.describe('File Locking @files', () => {
     const testFile = generateTestFile({ name: generateFileName('prevent-delete') });
 
     // Upload and lock file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -161,18 +165,19 @@ test.describe('File Locking @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Lock file
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const lockOption = page.locator(Selectors.contextMenu.lock);
     if (await lockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await lockOption.click();
       await page.waitForTimeout(500);
 
       // Try to delete
-      await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+      await revealFile(page, testFile.name);
+      await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
       const deleteOption = page.locator(Selectors.contextMenu.delete);
 
       if (await deleteOption.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -183,10 +188,10 @@ test.describe('File Locking @files', () => {
         if (!isDisabled) {
           await deleteOption.click();
           // Should show lock error or file should still exist
-          await page.locator('button:has-text("확인"), button:has-text("삭제")').click().catch(() => {});
+          await page.locator(Selectors.confirmModal.confirmBtn).click().catch(() => {});
 
           // File should still exist if locked properly
-          await expect(page.locator(`text=${testFile.name}`)).toBeVisible({ timeout: 5000 });
+          await revealFile(page, testFile.name);
         }
       }
     } else {
@@ -198,7 +203,7 @@ test.describe('File Locking @files', () => {
     const testFile = generateTestFile({ name: generateFileName('locked-by') });
 
     // Upload and lock file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -209,24 +214,25 @@ test.describe('File Locking @files', () => {
       buffer: testFile.buffer,
     });
 
-    await page.locator(Selectors.uploadModal.startUploadBtn).click();
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+    await revealFile(page, testFile.name);
+    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const lockOption = page.locator(Selectors.contextMenu.lock);
     if (await lockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await lockOption.click();
       await page.waitForTimeout(500);
 
       // Open properties to see lock info
-      await page.locator(`text=${testFile.name}`).click({ button: 'right' });
+      await revealFile(page, testFile.name);
+      await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
       const propertiesOption = page.locator(Selectors.contextMenu.properties);
       if (await propertiesOption.isVisible({ timeout: 2000 }).catch(() => false)) {
         await propertiesOption.click();
 
         // Should show who locked the file
         await expect(
-          page.locator('text=잠금 정보, text=Locked by')
+          page.locator(':text("잠금 정보"), :text("Locked by")').first()
         ).toBeVisible({ timeout: 5000 }).catch(() => {});
       }
     } else {
@@ -253,8 +259,8 @@ test.describe('Lock List @files', () => {
 
       // Should show locked files or empty state
       await expect(
-        page.locator('text=잠긴 파일, text=Locked files')
-          .or(page.locator('text=잠긴 파일 없음, text=No locked files'))
+        page.locator(':text("잠긴 파일"), :text("Locked files")').first()
+          .or(page.locator(':text("잠긴 파일 없음"), :text("No locked files")').first())
       ).toBeVisible({ timeout: 10000 });
     } else {
       // Locked files view may not be a separate page

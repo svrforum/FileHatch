@@ -44,7 +44,7 @@ test.describe('Notification Display @notifications', () => {
     // Check for notification items or empty state
     const notificationItem = page.locator(Selectors.notifications.item);
     const emptyState = page.locator(
-      'text=알림이 없습니다, text=No notifications, text=알림 없음'
+      ':text("알림이 없습니다"), :text("No notifications"), :text("알림 없음")'
     );
 
     await expect(notificationItem.first().or(emptyState)).toBeVisible({ timeout: 5000 });
@@ -137,14 +137,14 @@ test.describe('Notification Actions @notifications', () => {
       await clearAllBtn.click();
 
       // Confirm if needed
-      const confirmBtn = page.locator('button:has-text("확인"), button:has-text("Confirm")');
+      const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
       if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
         await confirmBtn.click();
       }
 
       // Should show empty state
       await expect(
-        page.locator('text=알림이 없습니다, text=No notifications')
+        page.locator(':text("알림이 없습니다"), :text("No notifications")').first()
       ).toBeVisible({ timeout: 5000 });
     }
   });
@@ -217,13 +217,13 @@ test.describe('Notification Preferences @notifications', () => {
 
     // Navigate to profile/settings
     await page.locator(Selectors.header.avatarBtn).click();
-    await page.locator(Selectors.header.profileBtn).click();
+    await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
   });
 
   test('should display notification settings if available', async ({ page }) => {
     // Look for notification settings section
     const notificationSettings = page.locator(
-      'text=알림 설정, text=Notification settings, text=알림 환경설정'
+      ':text("알림 설정"), :text("Notification settings"), :text("알림 환경설정")'
     );
 
     if (await notificationSettings.isVisible({ timeout: 5000 }).catch(() => false)) {
