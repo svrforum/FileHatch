@@ -10,6 +10,7 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { revealFile } from '../helpers/file-list';
 
 test.describe('File Locking @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -35,6 +36,7 @@ test.describe('File Locking @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open context menu
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
 
@@ -76,6 +78,7 @@ test.describe('File Locking @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Lock file
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const lockOption = page.locator(Selectors.contextMenu.lock);
     if (await lockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -83,6 +86,7 @@ test.describe('File Locking @files', () => {
       await page.waitForTimeout(500);
 
       // Unlock file
+      await revealFile(page, testFile.name);
       await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
       const unlockOption = page.locator(Selectors.contextMenu.unlock);
       if (await unlockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -114,6 +118,7 @@ test.describe('File Locking @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Lock file
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const lockOption = page.locator(Selectors.contextMenu.lock);
     if (await lockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -121,6 +126,7 @@ test.describe('File Locking @files', () => {
       await page.waitForTimeout(500);
 
       // Try to rename
+      await revealFile(page, testFile.name);
       await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
       const renameOption = page.locator(Selectors.contextMenu.rename);
 
@@ -161,6 +167,7 @@ test.describe('File Locking @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Lock file
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const lockOption = page.locator(Selectors.contextMenu.lock);
     if (await lockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -168,6 +175,7 @@ test.describe('File Locking @files', () => {
       await page.waitForTimeout(500);
 
       // Try to delete
+      await revealFile(page, testFile.name);
       await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
       const deleteOption = page.locator(Selectors.contextMenu.delete);
 
@@ -182,7 +190,7 @@ test.describe('File Locking @files', () => {
           await page.locator(Selectors.confirmModal.confirmBtn).click().catch(() => {});
 
           // File should still exist if locked properly
-          await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 5000 });
+          await revealFile(page, testFile.name);
         }
       }
     } else {
@@ -207,6 +215,7 @@ test.describe('File Locking @files', () => {
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const lockOption = page.locator(Selectors.contextMenu.lock);
     if (await lockOption.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -214,6 +223,7 @@ test.describe('File Locking @files', () => {
       await page.waitForTimeout(500);
 
       // Open properties to see lock info
+      await revealFile(page, testFile.name);
       await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
       const propertiesOption = page.locator(Selectors.contextMenu.properties);
       if (await propertiesOption.isVisible({ timeout: 2000 }).catch(() => false)) {

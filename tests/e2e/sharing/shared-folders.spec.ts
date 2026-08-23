@@ -149,15 +149,17 @@ test.describe('Shared Drive Operations @sharing', () => {
       const newFolderBtn = page.locator(Selectors.fileList.newFolderBtn);
       if (await newFolderBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await newFolderBtn.click();
-        await page
-          .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
-          .fill(folderName);
-        await page.locator('button:has-text("생성")').click();
+        await page.locator(Selectors.modal.container).locator('input[type="text"]').fill(folderName);
+        await page.locator(Selectors.modal.container).locator('button:has-text("생성")').click();
 
-        // Wait for result
+        /*
+         * Read-only members get a permission error instead of a new folder, so
+         * either outcome is a pass - but the toast is what carries the refusal,
+         * not a bare ":text(권한)" anywhere on the page.
+         */
         await expect(
           page.locator(`text=${folderName}`).first()
-            .or(page.locator(':text("권한"), :text("permission")').first())
+            .or(page.locator(Selectors.toast.container).first())
         ).toBeVisible({ timeout: 15000 });
       } else {
         test.skip();

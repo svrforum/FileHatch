@@ -9,6 +9,7 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile, TestShareTokens } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { revealFile } from '../helpers/file-list';
 
 test.describe('Upload Share Creation @sharing', () => {
   test.beforeEach(async ({ page }) => {
@@ -25,7 +26,7 @@ test.describe('Upload Share Creation @sharing', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Right-click and create upload link
     await page.locator(`text=${folderName}`).first().click({ button: 'right' });
@@ -59,7 +60,7 @@ test.describe('Upload Share Creation @sharing', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Create upload link with password
     await page.locator(`text=${folderName}`).first().click({ button: 'right' });
@@ -99,7 +100,7 @@ test.describe('Upload Share Creation @sharing', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Create upload link with expiration
     await page.locator(`text=${folderName}`).first().click({ button: 'right' });
@@ -139,7 +140,7 @@ test.describe('Upload Share Creation @sharing', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Create upload link
     await page.locator(`text=${folderName}`).first().click({ button: 'right' });
@@ -171,7 +172,7 @@ test.describe('Upload Share Creation @sharing', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Create upload link
     await page.locator(`text=${folderName}`).first().click({ button: 'right' });

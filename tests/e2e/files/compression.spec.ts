@@ -11,6 +11,7 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { revealFile } from '../helpers/file-list';
 
 test.describe('File Compression @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -35,7 +36,7 @@ test.describe('File Compression @files', () => {
     });
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, testFile.name);
 
     // Right-click and compress
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
@@ -70,7 +71,7 @@ test.describe('File Compression @files', () => {
     });
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${file1.name}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, file1.name);
 
     // Upload second file
     await page.locator(Selectors.fileList.uploadBtn).click();
@@ -85,13 +86,15 @@ test.describe('File Compression @files', () => {
     });
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${file2.name}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, file2.name);
 
     // Select both files (Ctrl+click)
+    await revealFile(page, file1.name);
     await page.locator(`text=${file1.name}`).first().click();
     await page.locator(`text=${file2.name}`).first().click({ modifiers: ['Control'] });
 
     // Right-click on one of them and compress
+    await revealFile(page, file1.name);
     await page.locator(`text=${file1.name}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
     await page.locator(Selectors.contextMenu.compress).click();
@@ -116,7 +119,7 @@ test.describe('File Compression @files', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Navigate into folder and upload a file
     await page.locator(`text=${folderName}`).first().dblclick();
@@ -138,7 +141,7 @@ test.describe('File Compression @files', () => {
 
     // Go back to parent
     await page.locator(Selectors.fileList.breadcrumbHome).click();
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 10000 });
+    await revealFile(page, folderName);
 
     // Compress the folder
     await page.locator(`text=${folderName}`).first().click({ button: 'right' });
@@ -181,7 +184,7 @@ test.describe('Archive Extraction @files', () => {
     });
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, testFile.name);
 
     // Compress to create archive
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
@@ -194,9 +197,10 @@ test.describe('Archive Extraction @files', () => {
       await page.locator('button:has-text("압축"), button:has-text("생성")').click();
     }
 
-    await expect(page.locator(`text=${archiveName}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, archiveName);
 
     // Delete original file to make extraction visible
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
     await page.locator(Selectors.contextMenu.delete).click();
@@ -204,6 +208,7 @@ test.describe('Archive Extraction @files', () => {
     await expect(page.locator(`text=${testFile.name}`).first()).not.toBeVisible({ timeout: 5000 });
 
     // Extract the archive
+    await revealFile(page, archiveName);
     await page.locator(`text=${archiveName}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
     await page.locator(Selectors.contextMenu.extract).click();
@@ -235,6 +240,7 @@ test.describe('Archive Extraction @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Compress
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.compress).click();
 
@@ -252,7 +258,7 @@ test.describe('Archive Extraction @files', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
       .fill(extractFolder);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${extractFolder}`).first()).toBeVisible({ timeout: 15000 });
+    await revealFile(page, extractFolder);
 
     // Note: Specific folder extraction UI may vary
   });
@@ -284,6 +290,7 @@ test.describe('ZIP Preview @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Compress
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.compress).click();
 
@@ -293,7 +300,7 @@ test.describe('ZIP Preview @files', () => {
       await page.locator('button:has-text("압축"), button:has-text("생성")').click();
     }
 
-    await expect(page.locator(`text=${archiveName}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, archiveName);
 
     // Double-click to preview (if supported)
     await page.locator(`text=${archiveName}`).first().dblclick();
@@ -326,6 +333,7 @@ test.describe('ZIP Preview @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Compress
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.compress).click();
 
@@ -335,7 +343,7 @@ test.describe('ZIP Preview @files', () => {
       await page.locator('button:has-text("압축"), button:has-text("생성")').click();
     }
 
-    await expect(page.locator(`text=${archiveName}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, archiveName);
 
     // Double-click to preview
     await page.locator(`text=${archiveName}`).first().dblclick();

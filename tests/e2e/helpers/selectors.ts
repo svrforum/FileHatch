@@ -58,6 +58,10 @@ export const Selectors = {
     fileSize: '.file-size',
     fileDate: '.file-date',
     uploadBtn: '.upload-btn',
+    // Folder-scoped filter in the toolbar. The list is virtualised, so this is
+    // the reliable way to bring a specific file into the DOM.
+    localSearchToggle: '.search-toggle-btn',
+    localSearchInput: '.local-search-container input',
     newFolderBtn: '.new-folder-btn',
     breadcrumb: '.breadcrumb, [data-testid="breadcrumb"]',
     breadcrumbHome: '.breadcrumb-home, .breadcrumb >> text=홈',

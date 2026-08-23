@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { Selectors } from '../helpers/selectors';
+import { revealFile } from '../helpers/file-list';
 
 test.describe('Share Links', () => {
   test.beforeEach(async ({ page }) => {
@@ -32,7 +33,7 @@ test.describe('Share Links', () => {
     // Click start upload button
 
     // Wait for file to appear
-    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, fileName);
 
     // Right-click to open context menu
     await page.locator(`text=${fileName}`).first().click({ button: 'right' });
@@ -70,7 +71,7 @@ test.describe('Share Links', () => {
      */
     await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
-    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, fileName);
 
     // Open share modal
     await page.locator(`text=${fileName}`).first().click({ button: 'right' });
@@ -110,7 +111,7 @@ test.describe('Share Links', () => {
      */
     await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
-    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, fileName);
 
     // Open share modal
     await page.locator(`text=${fileName}`).first().click({ button: 'right' });
@@ -150,7 +151,7 @@ test.describe('Share Links', () => {
      */
     await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
-    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, fileName);
 
     // Open share modal
     await page.locator(`text=${fileName}`).first().click({ button: 'right' });
@@ -188,7 +189,7 @@ test.describe('Share Links', () => {
      */
     await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
-    await expect(page.locator(`text=${fileName}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, fileName);
 
     // Open share modal
     await page.locator(`text=${fileName}`).first().click({ button: 'right' });

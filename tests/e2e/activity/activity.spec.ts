@@ -9,6 +9,7 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { revealFile } from '../helpers/file-list';
 
 test.describe('Recent Files @activity', () => {
   test.beforeEach(async ({ page }) => {
@@ -58,7 +59,7 @@ test.describe('Recent Files @activity', () => {
       await page.waitForTimeout(1000);
 
       // File should appear in recent
-      await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 10000 });
+      await revealFile(page, testFile.name);
     } else {
       test.skip();
     }
@@ -126,6 +127,7 @@ test.describe('Favorites @activity', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Right-click and add to favorites
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
 
@@ -139,7 +141,7 @@ test.describe('Favorites @activity', () => {
         await favoritesLink.click();
         await page.waitForTimeout(1000);
 
-        await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 10000 });
+        await revealFile(page, testFile.name);
       }
     } else {
       test.skip();
@@ -164,6 +166,7 @@ test.describe('Favorites @activity', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Add to favorites
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const favoriteOption = page.locator(Selectors.contextMenu.favorite);
     if (await favoriteOption.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -177,6 +180,7 @@ test.describe('Favorites @activity', () => {
         await page.waitForTimeout(1000);
 
         // Remove from favorites
+        await revealFile(page, testFile.name);
         await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
         const removeFavoriteOption = page.locator(
           '.context-menu >> text=즐겨찾기 제거, .context-menu >> text=Remove favorite'
@@ -210,6 +214,7 @@ test.describe('Favorites @activity', () => {
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const favoriteOption = page.locator(Selectors.contextMenu.favorite);
     if (await favoriteOption.isVisible({ timeout: 2000 }).catch(() => false)) {

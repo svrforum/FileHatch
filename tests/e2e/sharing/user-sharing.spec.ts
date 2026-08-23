@@ -11,6 +11,7 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { revealFile } from '../helpers/file-list';
 
 test.describe('User Sharing @sharing', () => {
   test.beforeEach(async ({ page }) => {
@@ -34,7 +35,7 @@ test.describe('User Sharing @sharing', () => {
     });
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, testFile.name);
 
     // Open context menu and click user share option
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
@@ -69,6 +70,7 @@ test.describe('User Sharing @sharing', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open user share modal
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const userShareOption = page.locator(Selectors.contextMenu.userShare);
     if (await userShareOption.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -111,6 +113,7 @@ test.describe('User Sharing @sharing', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open user share modal
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const userShareOption = page.locator(Selectors.contextMenu.userShare);
     if (await userShareOption.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -150,6 +153,7 @@ test.describe('User Sharing @sharing', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Open user share modal
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     const userShareOption = page.locator(Selectors.contextMenu.userShare);
     if (await userShareOption.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -177,7 +181,7 @@ test.describe('User Sharing @sharing', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Open user share modal
     await page.locator(`text=${folderName}`).first().click({ button: 'right' });
@@ -252,10 +256,13 @@ test.describe('Shared Views @sharing', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Create a link share
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.share).click();
     await page.locator(Selectors.linkShareModal.createBtn).click();
-    await expect(page.locator(Selectors.shareModal.shareLink)).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(Selectors.linkShareModal.createdUrl).first()).toHaveValue(/^https?:\/\//, {
+      timeout: 5000,
+    });
 
     // Close modal
     await page.locator(Selectors.modal.closeBtn).click().catch(() => {

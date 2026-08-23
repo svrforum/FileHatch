@@ -11,6 +11,7 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { revealFile } from '../helpers/file-list';
 
 test.describe('Trash Operations @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -34,7 +35,7 @@ test.describe('Trash Operations @files', () => {
     });
 
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 30000 });
+    await revealFile(page, testFile.name);
 
     // Delete (move to trash)
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
@@ -64,6 +65,7 @@ test.describe('Trash Operations @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Delete file
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
     await page.locator(Selectors.confirmModal.confirmBtn).click();
@@ -74,7 +76,7 @@ test.describe('Trash Operations @files', () => {
     await page.waitForTimeout(1000);
 
     // File should be in trash
-    await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 10000 });
+    await revealFile(page, testFile.name);
   });
 
   test('should restore file from trash', async ({ page }) => {
@@ -95,6 +97,7 @@ test.describe('Trash Operations @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Delete file
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
     await page.locator(Selectors.confirmModal.confirmBtn).click();
@@ -105,7 +108,7 @@ test.describe('Trash Operations @files', () => {
     await page.waitForTimeout(1000);
 
     // Find and restore the file
-    await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 10000 });
+    await revealFile(page, testFile.name);
 
     // Right-click to restore or use restore button
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
@@ -114,6 +117,7 @@ test.describe('Trash Operations @files', () => {
       await restoreOption.click();
     } else {
       // Try restore button
+      await revealFile(page, testFile.name);
       await page.locator(`text=${testFile.name}`).first().click();
       await page.locator(Selectors.trash.restoreBtn).click();
     }
@@ -130,7 +134,7 @@ test.describe('Trash Operations @files', () => {
     // Navigate back to home and verify file is restored
     await page.locator(Selectors.sidebar.homeBtn).click();
     await page.waitForTimeout(1000);
-    await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 10000 });
+    await revealFile(page, testFile.name);
   });
 
   test('should permanently delete file from trash', async ({ page }) => {
@@ -151,6 +155,7 @@ test.describe('Trash Operations @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Delete file
+    await revealFile(page, testFile.name);
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
     await page.locator(Selectors.confirmModal.confirmBtn).click();
@@ -160,7 +165,7 @@ test.describe('Trash Operations @files', () => {
     await page.locator(Selectors.sidebar.trash).click();
     await page.waitForTimeout(1000);
 
-    await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 10000 });
+    await revealFile(page, testFile.name);
 
     // Permanently delete
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
@@ -170,6 +175,7 @@ test.describe('Trash Operations @files', () => {
     if (await permanentDeleteOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await permanentDeleteOption.click();
     } else {
+      await revealFile(page, testFile.name);
       await page.locator(`text=${testFile.name}`).first().click();
       await page.locator(Selectors.trash.permanentDeleteBtn).click();
     }
@@ -218,11 +224,13 @@ test.describe('Trash Operations @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Delete both files
+    await revealFile(page, file1.name);
     await page.locator(`text=${file1.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
     await page.locator(Selectors.confirmModal.confirmBtn).click();
     await expect(page.locator(`text=${file1.name}`).first()).not.toBeVisible({ timeout: 5000 });
 
+    await revealFile(page, file2.name);
     await page.locator(`text=${file2.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
     await page.locator(Selectors.confirmModal.confirmBtn).click();
@@ -233,8 +241,8 @@ test.describe('Trash Operations @files', () => {
     await page.waitForTimeout(1000);
 
     // Verify files are in trash
-    await expect(page.locator(`text=${file1.name}`).first()).toBeVisible({ timeout: 10000 });
-    await expect(page.locator(`text=${file2.name}`).first()).toBeVisible({ timeout: 10000 });
+    await revealFile(page, file1.name);
+    await revealFile(page, file2.name);
 
     // Empty trash
     await page.locator(Selectors.trash.emptyTrashBtn).click();
@@ -257,7 +265,7 @@ test.describe('Trash Operations @files', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Delete folder
     await page.locator(`text=${folderName}`).first().click({ button: 'right' });
@@ -270,7 +278,7 @@ test.describe('Trash Operations @files', () => {
     // Navigate to trash and verify
     await page.locator(Selectors.sidebar.trash).click();
     await page.waitForTimeout(1000);
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 10000 });
+    await revealFile(page, folderName);
   });
 
   test('should restore folder from trash', async ({ page }) => {
@@ -282,7 +290,7 @@ test.describe('Trash Operations @files', () => {
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
       .fill(folderName);
     await page.locator('button:has-text("생성")').click();
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 15000 });
+    await revealFile(page, folderName);
 
     // Navigate into folder and upload a file
     await page.locator(`text=${folderName}`).first().dblclick();
@@ -304,7 +312,7 @@ test.describe('Trash Operations @files', () => {
 
     // Go back and delete folder
     await page.locator(Selectors.fileList.breadcrumbHome).click();
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 10000 });
+    await revealFile(page, folderName);
 
     await page.locator(`text=${folderName}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
@@ -316,13 +324,14 @@ test.describe('Trash Operations @files', () => {
     await page.waitForTimeout(1000);
 
     // Restore folder
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 10000 });
+    await revealFile(page, folderName);
     await page.locator(`text=${folderName}`).first().click({ button: 'right' });
 
     const restoreOption = page.locator('.context-menu >> text=복원, .context-menu >> text=Restore');
     if (await restoreOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await restoreOption.click();
     } else {
+      await revealFile(page, folderName);
       await page.locator(`text=${folderName}`).first().click();
       await page.locator(Selectors.trash.restoreBtn).click();
     }
@@ -335,12 +344,12 @@ test.describe('Trash Operations @files', () => {
     // Navigate home and verify folder is restored
     await page.locator(Selectors.sidebar.homeBtn).click();
     await page.waitForTimeout(1000);
-    await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 10000 });
+    await revealFile(page, folderName);
 
     // Verify content is restored
     await page.locator(`text=${folderName}`).first().dblclick();
     await page.waitForTimeout(1000);
-    await expect(page.locator(`text=${testFile.name}`).first()).toBeVisible({ timeout: 10000 });
+    await revealFile(page, testFile.name);
   });
 });
 
@@ -378,7 +387,9 @@ test.describe('Trash Edge Cases @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Select both files
+    await revealFile(page, file1.name);
     await page.locator(`text=${file1.name}`).first().click();
+    await revealFile(page, file2.name);
     await page.locator(`text=${file2.name}`).first().click({ modifiers: ['Control'] });
 
     // Verify multi-select bar
@@ -389,6 +400,7 @@ test.describe('Trash Edge Cases @files', () => {
     if (await multiDeleteBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await multiDeleteBtn.click();
     } else {
+      await revealFile(page, file1.name);
       await page.locator(`text=${file1.name}`).first().click({ button: 'right' });
       await page.locator(Selectors.contextMenu.delete).click();
     }
