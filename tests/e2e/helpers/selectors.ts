@@ -352,6 +352,20 @@ export const Selectors = {
 
   // Trash
   /*
+   * "내 작업" (MyActivity.tsx). Favourites and recent items are two tabs over
+   * the same .file-row table, with their own search box.
+   */
+  activity: {
+    page: '.my-activity',
+    searchInput: '.my-activity-search input',
+    row: '.my-activity .file-row',
+    tab: {
+      favorites: '.my-activity-tab:has-text("즐겨찾기")',
+      recent: '.my-activity-tab:has-text("최근 항목")',
+    },
+  },
+
+  /*
    * Trash actions are icon-only buttons inside each row (title="복원" /
    * "영구 삭제"); there is no page-level restore control to click.
    */

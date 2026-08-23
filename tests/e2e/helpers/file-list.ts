@@ -12,9 +12,11 @@ import { Selectors } from './selectors';
  * matter how much data previous runs left behind.
  */
 async function filterBox(page: Page): Promise<Locator | null> {
-  const trashFilter = page.locator(Selectors.trash.searchInput);
-  if (await trashFilter.isVisible().catch(() => false)) {
-    return trashFilter;
+  for (const candidate of [Selectors.trash.searchInput, Selectors.activity.searchInput]) {
+    const box = page.locator(candidate);
+    if (await box.isVisible().catch(() => false)) {
+      return box;
+    }
   }
 
   const listFilter = page.locator(Selectors.fileList.localSearchInput);
@@ -34,7 +36,9 @@ async function filterBox(page: Page): Promise<Locator | null> {
 
 /** The list currently on screen - trash view or the file browser. */
 function listScope(page: Page): Locator {
-  return page.locator(`${Selectors.trash.container}, ${Selectors.fileList.wrapper}`).first();
+  return page
+    .locator(`${Selectors.trash.container}, ${Selectors.activity.page}, ${Selectors.fileList.wrapper}`)
+    .first();
 }
 
 /** Brings `name` into the DOM and returns once it is visible. */
@@ -84,7 +88,7 @@ export async function expectFileGone(page: Page, name: string): Promise<void> {
      * text-based count never settles at zero even once the row is gone.
      */
     await expect(
-      page.locator(`${Selectors.trash.item}, ${Selectors.fileList.row}`).filter({ hasText: name })
+      listScope(page).locator(`${Selectors.trash.item}, ${Selectors.fileList.row}`).filter({ hasText: name })
     ).toHaveCount(0, { timeout: 3000 });
   }).toPass({ timeout: 30000 });
 }

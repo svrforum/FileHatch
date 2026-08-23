@@ -58,6 +58,10 @@ test.describe('Recent Files @activity', () => {
       await recentFilesLink.click();
       await page.waitForTimeout(1000);
 
+      // 내 작업 opens on 즐겨찾기; recent items live behind their own tab.
+      await page.locator(Selectors.activity.tab.recent).click();
+      await page.waitForTimeout(1000);
+
       // File should appear in recent
       await revealFile(page, testFile.name);
     } else {
@@ -247,10 +251,13 @@ test.describe('Activity Feed @activity', () => {
       await activityLink.click();
       await page.waitForTimeout(1000);
 
-      // Should show activity view
-      await expect(
-        page.locator(':text("활동"), :text("Activity"), :text("내 활동")').first()
-      ).toBeVisible({ timeout: 10000 });
+      /*
+       * The screen is titled 내 작업 and holds 즐겨찾기 / 최근 항목 tabs -
+       * nothing on it is labelled "활동", so the old text lookup could never
+       * resolve.
+       */
+      await expect(page.locator(Selectors.activity.page)).toBeVisible({ timeout: 10000 });
+      await expect(page.locator(Selectors.activity.tab.recent)).toBeVisible({ timeout: 10000 });
     } else {
       test.skip();
     }
@@ -262,11 +269,14 @@ test.describe('Activity Feed @activity', () => {
       await activityLink.click();
       await page.waitForTimeout(1000);
 
-      // Check for activity items or empty state
-      const activityItem = page.locator('.activity-item, .activity-entry');
-      const emptyState = page.locator(':text("활동 없음"), :text("No activity")').first();
+      // Entries render as .file-row inside the tab; an empty tab shows its
+      // own placeholder instead.
+      await page.locator(Selectors.activity.tab.recent).click();
+      await page.waitForTimeout(1000);
 
-      await expect(activityItem.first().or(emptyState)).toBeVisible({ timeout: 10000 });
+      const entry = page.locator(Selectors.activity.row).first();
+      const emptyState = page.locator(Selectors.activity.page).locator('.empty-state').first();
+      await expect(entry.or(emptyState)).toBeVisible({ timeout: 10000 });
     } else {
       test.skip();
     }
