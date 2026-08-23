@@ -14,11 +14,12 @@ import { test, expect } from '@playwright/test'
 import { generateFileName, generateTestFile } from '../helpers/test-data'
 import { Selectors } from '../helpers/selectors'
 import { revealFile } from '../helpers/file-list'
+import { openUploadDialog } from '../helpers/navigate';
 
 const UPLOAD_TIMEOUT = 30_000
 
 async function openUploadModal(page: import('@playwright/test').Page) {
-  await page.locator(Selectors.upload.mainBtn).click()
+  await openUploadDialog(page)
   await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5_000 })
 }
 

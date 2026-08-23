@@ -6,6 +6,7 @@
  */
 import { Page, expect } from '@playwright/test';
 import { Selectors } from '../helpers/selectors';
+import { navigateVia } from '../helpers/navigate';
 
 export interface UserCredentials {
   username: string;
@@ -99,7 +100,7 @@ export class AuthFixture {
    * Navigate to admin mode
    */
   async enterAdminMode(): Promise<void> {
-    await this.page.locator('.admin-btn:has-text("관리자 모드")').click();
+    await navigateVia(this.page, Selectors.header.adminBtn);
     await expect(this.page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
   }
 

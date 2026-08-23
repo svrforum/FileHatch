@@ -12,6 +12,7 @@ import { test, expect } from '@playwright/test';
 import { generateFileName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
 import { revealFile } from '../helpers/file-list';
+import { openUploadDialog } from '../helpers/navigate';
 
 test.describe('File Upload @smoke @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -24,7 +25,7 @@ test.describe('File Upload @smoke @files', () => {
     const testFile = generateTestFile({ content: 'Single file upload test content' });
 
     // Click upload button to open modal
-    await page.locator(Selectors.upload.mainBtn).click();
+    await openUploadDialog(page);
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 });
 
     // Click "파일 선택" and handle file chooser
@@ -55,7 +56,7 @@ test.describe('File Upload @smoke @files', () => {
     const file2 = generateTestFile({ name: generateFileName('multi-upload-2'), content: 'File 2' });
 
     // Click upload button to open modal
-    await page.locator(Selectors.upload.mainBtn).click();
+    await openUploadDialog(page);
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 });
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -118,7 +119,7 @@ test.describe('File Upload @smoke @files', () => {
     });
 
     // Open upload modal
-    await page.locator(Selectors.upload.mainBtn).click();
+    await openUploadDialog(page);
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 });
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -145,7 +146,7 @@ test.describe('File Upload @smoke @files', () => {
     const fileName = `테스트파일_${Date.now()}.txt`;
     const content = '한글 파일 내용 테스트';
 
-    await page.locator(Selectors.upload.mainBtn).click();
+    await openUploadDialog(page);
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 });
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -171,7 +172,7 @@ test.describe('Upload Edge Cases @files', () => {
   test('should handle empty file upload', async ({ page }) => {
     const fileName = generateFileName('empty-file');
 
-    await page.locator(Selectors.upload.mainBtn).click();
+    await openUploadDialog(page);
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 });
 
     const fileChooserPromise = page.waitForEvent('filechooser');

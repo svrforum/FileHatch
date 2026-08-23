@@ -11,6 +11,7 @@ import { test, expect } from '@playwright/test';
 import { generateFileName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
 import { revealFile } from '../helpers/file-list';
+import { openUploadDialog } from '../helpers/navigate';
 
 test.describe('File Locking @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -22,7 +23,7 @@ test.describe('File Locking @files', () => {
     const testFile = generateTestFile({ name: generateFileName('lock-test') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -64,7 +65,7 @@ test.describe('File Locking @files', () => {
     const testFile = generateTestFile({ name: generateFileName('unlock-test') });
 
     // Upload and lock file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -104,7 +105,7 @@ test.describe('File Locking @files', () => {
     const testFile = generateTestFile({ name: generateFileName('prevent-edit') });
 
     // Upload and lock file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -153,7 +154,7 @@ test.describe('File Locking @files', () => {
     const testFile = generateTestFile({ name: generateFileName('prevent-delete') });
 
     // Upload and lock file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -202,7 +203,7 @@ test.describe('File Locking @files', () => {
     const testFile = generateTestFile({ name: generateFileName('locked-by') });
 
     // Upload and lock file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;

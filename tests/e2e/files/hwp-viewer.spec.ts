@@ -18,6 +18,7 @@ import path from 'path'
 import { readFileSync } from 'fs'
 import { Selectors } from '../helpers/selectors'
 import { revealFile } from '../helpers/file-list'
+import { openUploadDialog } from '../helpers/navigate';
 
 const FIXTURE_PATH = path.join(__dirname, '../fixtures/sample.hwp')
 const CORRUPTED_FIXTURE_PATH = path.join(__dirname, '../fixtures/corrupted.hwp')
@@ -37,7 +38,7 @@ test.describe('HWP Viewer @hwp @files', () => {
     const fileName = `e2e-rhwp-sample-${Date.now()}.hwp`
 
     // 1) 업로드
-    await page.locator(Selectors.upload.mainBtn).click()
+    await openUploadDialog(page)
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 })
 
     const fileChooserPromise = page.waitForEvent('filechooser')
@@ -95,7 +96,7 @@ test.describe('HWP Viewer @hwp @files', () => {
     const fileName = `e2e-rhwp-corrupted-${Date.now()}.hwp`
 
     // 업로드
-    await page.locator(Selectors.upload.mainBtn).click()
+    await openUploadDialog(page)
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 })
     const fileChooserPromise = page.waitForEvent('filechooser')
     await page.locator(Selectors.upload.selectFileBtn).click()
@@ -153,7 +154,7 @@ test.describe('HWP Viewer @hwp @files', () => {
     const fileName = `e2e-rhwp-save-${Date.now()}.hwp`
 
     // 업로드
-    await page.locator(Selectors.upload.mainBtn).click()
+    await openUploadDialog(page)
     await expect(page.locator(Selectors.upload.modal)).toBeVisible({ timeout: 5000 })
     const fileChooserPromise = page.waitForEvent('filechooser')
     await page.locator(Selectors.upload.selectFileBtn).click()

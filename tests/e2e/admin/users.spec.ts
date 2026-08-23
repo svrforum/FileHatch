@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { Selectors } from '../helpers/selectors';
+import { navigateVia } from '../helpers/navigate';
 
 test.describe('Admin User Management', () => {
   test.beforeEach(async ({ page }) => {
@@ -7,7 +8,7 @@ test.describe('Admin User Management', () => {
     await page.goto('/');
 
     // Click admin mode button
-    await page.locator('.admin-btn:has-text("관리자 모드")').click();
+    await navigateVia(page, Selectors.header.adminBtn);
 
     // Wait for admin page to load (user cards or admin header)
     await expect(page.locator(Selectors.admin.page)).toBeVisible({
@@ -208,7 +209,7 @@ test.describe('Admin User Management', () => {
 test.describe('Admin System Settings', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.locator('.admin-btn:has-text("관리자 모드")').click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await page.locator('a[href="/fhadmin/settings"], .nav-item:has-text("시스템 설정")').click();
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
   });
@@ -248,8 +249,8 @@ test.describe('Admin System Settings', () => {
 test.describe('Admin Audit Logs', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.locator('.admin-btn:has-text("관리자 모드")').click();
-    await page.locator('a[href="/fhadmin/logs"], .nav-item:has-text("감사 로그")').click();
+    await navigateVia(page, Selectors.header.adminBtn);
+    await navigateVia(page, Selectors.admin.auditLogs);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
     /*
@@ -320,7 +321,7 @@ test.describe('Admin Audit Logs', () => {
 test.describe('Admin Shared Folders', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.locator('.admin-btn:has-text("관리자 모드")').click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await page.locator('a[href="/fhadmin/shared-folders"], .nav-item:has-text("공유 드라이브")').click();
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
   });

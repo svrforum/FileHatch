@@ -9,17 +9,18 @@
  */
 import { test, expect } from '@playwright/test';
 import { Selectors } from '../helpers/selectors';
+import { navigateVia } from '../helpers/navigate';
 
 test.describe('Admin System Settings @admin', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
     // Enter admin mode
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
     // Navigate to system settings
-    await page.locator(Selectors.admin.systemSettings).click();
+    await navigateVia(page, Selectors.admin.systemSettings);
     await page.waitForTimeout(1000);
   });
 
@@ -141,11 +142,11 @@ test.describe('Admin SSO Settings @admin', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
     // Navigate to SSO settings
-    await page.locator(Selectors.admin.ssoSettings).click();
+    await navigateVia(page, Selectors.admin.ssoSettings);
     await page.waitForTimeout(1000);
   });
 
@@ -217,10 +218,10 @@ test.describe('Admin Storage Settings @admin', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
-    await page.locator(Selectors.admin.systemSettings).click();
+    await navigateVia(page, Selectors.admin.systemSettings);
     await page.waitForTimeout(1000);
   });
 
@@ -254,10 +255,10 @@ test.describe('Admin Email Settings @admin', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
-    await page.locator(Selectors.admin.systemSettings).click();
+    await navigateVia(page, Selectors.admin.systemSettings);
     await page.waitForTimeout(1000);
   });
 

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import { Selectors } from '../helpers/selectors';
 import { revealFile, expectFileGone } from '../helpers/file-list';
+import { openUploadDialog, openNewFolderDialog } from '../helpers/navigate';
 
 test.describe('File Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -21,7 +22,7 @@ test.describe('File Operations', () => {
     const folderName = `test-folder-${Date.now()}`;
 
     // Click new folder button
-    await page.locator('.new-folder-btn').click();
+    await openNewFolderDialog(page);
 
     // Fill folder name in modal
     await page.locator(Selectors.createFolderModal.nameInput).fill(folderName);
@@ -37,7 +38,7 @@ test.describe('File Operations', () => {
     const folderName = `nav-folder-${Date.now()}`;
 
     // Create folder first
-    await page.locator('.new-folder-btn').click();
+    await openNewFolderDialog(page);
     await page.locator(Selectors.createFolderModal.nameInput).fill(folderName);
     await page.locator(Selectors.createFolderModal.submit).first().click();
 
@@ -55,7 +56,7 @@ test.describe('File Operations', () => {
     const fileName = `test-file-${Date.now()}.txt`;
 
     // Click upload button to open upload modal
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
 
     // Click "파일 선택" button and handle file chooser
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -88,7 +89,7 @@ test.describe('File Operations', () => {
     const newName = `renamed-${Date.now()}.txt`;
 
     // First upload a file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -135,7 +136,7 @@ test.describe('File Operations', () => {
     const fileName = `delete-test-${Date.now()}.txt`;
 
     // Upload a file first
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -183,7 +184,7 @@ test.describe('File Operations', () => {
     const file2 = `${prefix}-2.txt`;
 
     // Upload first file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     let fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     let fileChooser = await fileChooserPromise;
@@ -201,7 +202,7 @@ test.describe('File Operations', () => {
     await revealFile(page, file1);
 
     // Upload second file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     fileChooser = await fileChooserPromise;
@@ -234,7 +235,7 @@ test.describe('File Operations', () => {
     const fileContent = 'Download test content';
 
     // Upload a file first
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -323,7 +324,7 @@ test.describe('File Search', () => {
     // Create a file with unique name
     const uniqueName = `searchable-${Date.now()}.txt`;
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;

@@ -9,6 +9,7 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { navigateVia } from '../helpers/navigate';
 
 test.describe('Shared Drives Access @sharing', () => {
   test.beforeEach(async ({ page }) => {
@@ -19,9 +20,8 @@ test.describe('Shared Drives Access @sharing', () => {
   test('should navigate to shared drives', async ({ page }) => {
     // Click on "Shared drives" in sidebar
     const sharedDrivesLink = page.locator(Selectors.sidebar.sharedDrives);
-    if (await sharedDrivesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedDrivesLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedDrivesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedDrives);
 
       // Should show shared drives view
       await expect(
@@ -41,9 +41,8 @@ test.describe('Shared Drives Access @sharing', () => {
 
   test('should display shared drive list', async ({ page }) => {
     const sharedDrivesLink = page.locator(Selectors.sidebar.sharedDrives);
-    if (await sharedDrivesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedDrivesLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedDrivesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedDrives);
 
       // Check for shared drive items or empty state
       // The wrapper is always present; what varies is whether it holds rows
@@ -60,9 +59,8 @@ test.describe('Shared Drives Access @sharing', () => {
 
   test('should enter shared drive', async ({ page }) => {
     const sharedDrivesLink = page.locator(Selectors.sidebar.sharedDrives);
-    if (await sharedDrivesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedDrivesLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedDrivesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedDrives);
 
       // Find a shared drive to enter
       const sharedDrive = page.locator(Selectors.sharedViews.row).first();
@@ -90,9 +88,8 @@ test.describe('Shared Drive Operations @sharing', () => {
 
     // Navigate to shared drives
     const sharedDrivesLink = page.locator(Selectors.sidebar.sharedDrives);
-    if (await sharedDrivesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedDrivesLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedDrivesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedDrives);
     }
   });
 
@@ -229,9 +226,8 @@ test.describe('Shared Drive Permissions @sharing', () => {
 
   test('should show permission level in shared drive list', async ({ page }) => {
     const sharedDrivesLink = page.locator(Selectors.sidebar.sharedDrives);
-    if (await sharedDrivesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedDrivesLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedDrivesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedDrives);
 
       // Check for permission indicators
       const permissionBadge = page.locator(
@@ -248,9 +244,8 @@ test.describe('Shared Drive Permissions @sharing', () => {
 
   test('should prevent delete operation with read-only access', async ({ page }) => {
     const sharedDrivesLink = page.locator(Selectors.sidebar.sharedDrives);
-    if (await sharedDrivesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedDrivesLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedDrivesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedDrives);
 
       // Find read-only drive
       const readOnlyDrive = page.locator(

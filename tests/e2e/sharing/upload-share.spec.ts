@@ -10,6 +10,7 @@ import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile, TestShareTokens } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
 import { revealFile } from '../helpers/file-list';
+import { openNewFolderDialog } from '../helpers/navigate';
 
 test.describe('Upload Share Creation @sharing', () => {
   test.beforeEach(async ({ page }) => {
@@ -21,7 +22,7 @@ test.describe('Upload Share Creation @sharing', () => {
     const folderName = generateFolderName('upload-share-folder');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
       .fill(folderName);
@@ -55,7 +56,7 @@ test.describe('Upload Share Creation @sharing', () => {
     const folderName = generateFolderName('protected-upload-share');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
@@ -95,7 +96,7 @@ test.describe('Upload Share Creation @sharing', () => {
     const folderName = generateFolderName('expiring-upload-share');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
@@ -135,7 +136,7 @@ test.describe('Upload Share Creation @sharing', () => {
     const folderName = generateFolderName('copy-upload-link');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);
@@ -167,7 +168,7 @@ test.describe('Upload Share Creation @sharing', () => {
     const folderName = generateFolderName('delete-upload-share');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"]')
       .fill(folderName);

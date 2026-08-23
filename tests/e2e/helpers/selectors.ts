@@ -9,6 +9,7 @@ export const Selectors = {
   // Header & Navigation
   header: {
     avatarBtn: '.avatar-btn',
+    // Lives inside the sidebar, so mobile needs the drawer open first.
     adminBtn: '.admin-btn:has-text("관리자 모드")',
     notificationBtn: '.notification-btn, [data-testid="notification-btn"]',
     /*
@@ -18,6 +19,8 @@ export const Selectors = {
      * timed out on the second click.
      */
     profileModalTrigger: '.avatar-btn',
+    // Narrow viewports park the sidebar off-screen; this opens the drawer.
+    mobileMenuBtn: '.hamburger-btn',
     logoutBtn: '.user-profile-modal button:has-text("로그아웃")',
     /*
      * The "전체 검색" button is only rendered once the inline box has a query,
@@ -68,6 +71,9 @@ export const Selectors = {
     fileDate: '.file-date',
     row: '.file-row',
     uploadBtn: '.upload-btn',
+    // Narrow viewports replace the sidebar buttons with a floating action button.
+    mobileFab: '.mobile-fab-main',
+    mobileFabAction: '.mobile-fab-action',
     // Folder-scoped filter in the toolbar. The list is virtualised, so this is
     // the reliable way to bring a specific file into the DOM.
     localSearchToggle: '.search-toggle-btn',

@@ -11,17 +11,18 @@
 import { test, expect } from '@playwright/test';
 import { generateFolderName } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { navigateVia } from '../helpers/navigate';
 
 test.describe('Admin Shared Folders @admin @sharing', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
     // Enter admin mode
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
     // Navigate to shared folders
-    await page.locator(Selectors.admin.sharedFolders).click();
+    await navigateVia(page, Selectors.admin.sharedFolders);
     await page.waitForTimeout(1000);
   });
 
@@ -132,10 +133,10 @@ test.describe('Admin Shared Folder Members @admin @sharing', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
-    await page.locator(Selectors.admin.sharedFolders).click();
+    await navigateVia(page, Selectors.admin.sharedFolders);
     await page.waitForTimeout(1000);
   });
 

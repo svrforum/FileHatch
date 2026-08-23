@@ -10,17 +10,18 @@
 import { test, expect } from '@playwright/test';
 import { DateUtils } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+import { navigateVia } from '../helpers/navigate';
 
 test.describe('Admin Audit Logs @admin', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
     // Enter admin mode
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
     // Navigate to audit logs
-    await page.locator(Selectors.admin.auditLogs).click();
+    await navigateVia(page, Selectors.admin.auditLogs);
     await page.waitForTimeout(1000);
 
     /*
@@ -203,10 +204,10 @@ test.describe('Admin Audit Log Export @admin', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
-    await page.locator(Selectors.admin.auditLogs).click();
+    await navigateVia(page, Selectors.admin.auditLogs);
     await page.waitForTimeout(1000);
     /*
      * Default tab "파일 감사 로그" is empty on a fresh install; "접속 이력"
@@ -265,10 +266,10 @@ test.describe('Admin Audit Log Actions @admin', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
-    await page.locator(Selectors.header.adminBtn).click();
+    await navigateVia(page, Selectors.header.adminBtn);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
 
-    await page.locator(Selectors.admin.auditLogs).click();
+    await navigateVia(page, Selectors.admin.auditLogs);
     await page.waitForTimeout(1000);
     /*
      * Default tab "파일 감사 로그" is empty on a fresh install; "접속 이력"

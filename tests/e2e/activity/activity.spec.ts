@@ -10,6 +10,7 @@ import { test, expect } from '@playwright/test';
 import { generateFileName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
 import { revealFile, expectFileGone } from '../helpers/file-list';
+import { navigateVia, openUploadDialog } from '../helpers/navigate';
 
 test.describe('Recent Files @activity', () => {
   test.beforeEach(async ({ page }) => {
@@ -19,9 +20,8 @@ test.describe('Recent Files @activity', () => {
 
   test('should navigate to recent files view', async ({ page }) => {
     const recentFilesLink = page.locator(Selectors.sidebar.recentFiles);
-    if (await recentFilesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await recentFilesLink.click();
-      await page.waitForTimeout(1000);
+    if (await recentFilesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.recentFiles);
 
       // Should show recent files view
       await expect(
@@ -39,7 +39,7 @@ test.describe('Recent Files @activity', () => {
     // First, upload and access a file
     const testFile = generateTestFile({ name: generateFileName('recent-test') });
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -54,9 +54,8 @@ test.describe('Recent Files @activity', () => {
 
     // Navigate to recent files
     const recentFilesLink = page.locator(Selectors.sidebar.recentFiles);
-    if (await recentFilesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await recentFilesLink.click();
-      await page.waitForTimeout(1000);
+    if (await recentFilesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.recentFiles);
 
       // 내 작업 opens on 즐겨찾기; recent items live behind their own tab.
       await page.locator(Selectors.activity.tab.recent).click();
@@ -71,9 +70,8 @@ test.describe('Recent Files @activity', () => {
 
   test('should show recent files sorted by access time', async ({ page }) => {
     const recentFilesLink = page.locator(Selectors.sidebar.recentFiles);
-    if (await recentFilesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await recentFilesLink.click();
-      await page.waitForTimeout(1000);
+    if (await recentFilesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.recentFiles);
 
       // Get list of files
       const fileItems = await page.locator(Selectors.fileList.item).all();
@@ -81,7 +79,8 @@ test.describe('Recent Files @activity', () => {
       // If there are multiple items, verify they have date information
       if (fileItems.length > 1) {
         // Check that date column/info exists
-        const dateColumn = page.locator('.file-date, .access-time, .modified-time');
+        // The table's date column is .col-date; ".file-date" exists nowhere.
+        const dateColumn = page.locator(`${Selectors.activity.row} .col-date`);
         expect(await dateColumn.count()).toBeGreaterThan(0);
       }
     } else {
@@ -98,9 +97,8 @@ test.describe('Favorites @activity', () => {
 
   test('should navigate to favorites view', async ({ page }) => {
     const favoritesLink = page.locator(Selectors.sidebar.favorites);
-    if (await favoritesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await favoritesLink.click();
-      await page.waitForTimeout(1000);
+    if (await favoritesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.favorites);
 
       // Should show favorites view
       await expect(
@@ -117,7 +115,7 @@ test.describe('Favorites @activity', () => {
     const testFile = generateTestFile({ name: generateFileName('favorite-test') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -141,9 +139,8 @@ test.describe('Favorites @activity', () => {
 
       // Navigate to favorites and verify
       const favoritesLink = page.locator(Selectors.sidebar.favorites);
-      if (await favoritesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await favoritesLink.click();
-        await page.waitForTimeout(1000);
+      if (await favoritesLink.count()) {
+        await navigateVia(page, Selectors.sidebar.favorites);
 
         await revealFile(page, testFile.name);
       }
@@ -156,7 +153,7 @@ test.describe('Favorites @activity', () => {
     // First add a file to favorites
     const testFile = generateTestFile({ name: generateFileName('unfavorite-test') });
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -179,9 +176,8 @@ test.describe('Favorites @activity', () => {
 
       // Navigate to favorites
       const favoritesLink = page.locator(Selectors.sidebar.favorites);
-      if (await favoritesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await favoritesLink.click();
-        await page.waitForTimeout(1000);
+      if (await favoritesLink.count()) {
+        await navigateVia(page, Selectors.sidebar.favorites);
 
         // Remove from favorites
         await revealFile(page, testFile.name);
@@ -205,7 +201,7 @@ test.describe('Favorites @activity', () => {
     const testFile = generateTestFile({ name: generateFileName('favorite-indicator') });
 
     // Upload and favorite file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -247,9 +243,8 @@ test.describe('Activity Feed @activity', () => {
 
   test('should navigate to activity view', async ({ page }) => {
     const activityLink = page.locator(Selectors.sidebar.activity);
-    if (await activityLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await activityLink.click();
-      await page.waitForTimeout(1000);
+    if (await activityLink.count()) {
+      await navigateVia(page, Selectors.sidebar.activity);
 
       /*
        * The screen is titled 내 작업 and holds 즐겨찾기 / 최근 항목 tabs -
@@ -265,9 +260,8 @@ test.describe('Activity Feed @activity', () => {
 
   test('should show activity entries', async ({ page }) => {
     const activityLink = page.locator(Selectors.sidebar.activity);
-    if (await activityLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await activityLink.click();
-      await page.waitForTimeout(1000);
+    if (await activityLink.count()) {
+      await navigateVia(page, Selectors.sidebar.activity);
 
       // Entries render as .file-row inside the tab; an empty tab shows its
       // own placeholder instead.
@@ -286,7 +280,7 @@ test.describe('Activity Feed @activity', () => {
     // Upload a file
     const testFile = generateTestFile({ name: generateFileName('activity-upload') });
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -301,9 +295,8 @@ test.describe('Activity Feed @activity', () => {
 
     // Navigate to activity
     const activityLink = page.locator(Selectors.sidebar.activity);
-    if (await activityLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await activityLink.click();
-      await page.waitForTimeout(1000);
+    if (await activityLink.count()) {
+      await navigateVia(page, Selectors.sidebar.activity);
 
       // Should show upload activity
       await expect(
@@ -317,9 +310,8 @@ test.describe('Activity Feed @activity', () => {
 
   test('should filter activity by type', async ({ page }) => {
     const activityLink = page.locator(Selectors.sidebar.activity);
-    if (await activityLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await activityLink.click();
-      await page.waitForTimeout(1000);
+    if (await activityLink.count()) {
+      await navigateVia(page, Selectors.sidebar.activity);
 
       // Look for type filter
       const typeFilter = page.locator(
@@ -336,9 +328,8 @@ test.describe('Activity Feed @activity', () => {
 
   test('should filter activity by date', async ({ page }) => {
     const activityLink = page.locator(Selectors.sidebar.activity);
-    if (await activityLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await activityLink.click();
-      await page.waitForTimeout(1000);
+    if (await activityLink.count()) {
+      await navigateVia(page, Selectors.sidebar.activity);
 
       // Look for date filter
       const dateFilter = page.locator('input[type="date"], .date-filter');

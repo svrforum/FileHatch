@@ -12,6 +12,7 @@ import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
 import { revealFile, expectFileGone, compressSelection } from '../helpers/file-list';
+import { openUploadDialog, openNewFolderDialog } from '../helpers/navigate';
 
 test.describe('File Compression @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -24,7 +25,7 @@ test.describe('File Compression @files', () => {
     const archiveBase = `archive-${Date.now()}`;
 
     // Upload file first
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -59,7 +60,7 @@ test.describe('File Compression @files', () => {
     const file2 = generateTestFile({ name: `multi-compress-${stamp}-b.txt` });
 
     // Upload first file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     let fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     let fileChooser = await fileChooserPromise;
@@ -74,7 +75,7 @@ test.describe('File Compression @files', () => {
     await revealFile(page, file1.name);
 
     // Upload second file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     fileChooser = await fileChooserPromise;
@@ -108,7 +109,7 @@ test.describe('File Compression @files', () => {
     const folderName = generateFolderName('compress-folder');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page.locator(Selectors.createFolderModal.nameInput).fill(folderName);
     await page.locator(Selectors.createFolderModal.submit).first().click();
     await revealFile(page, folderName);
@@ -118,7 +119,7 @@ test.describe('File Compression @files', () => {
     await page.waitForTimeout(1000);
 
     const testFile = generateTestFile({ name: generateFileName('folder-content') });
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -156,7 +157,7 @@ test.describe('Archive Extraction @files', () => {
     const archiveBase = `extract-archive-${Date.now()}`;
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -206,7 +207,7 @@ test.describe('Archive Extraction @files', () => {
     const extractFolder = generateFolderName('extract-destination');
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -227,7 +228,7 @@ test.describe('Archive Extraction @files', () => {
     const archive = await compressSelection(page, `folder-extract-${Date.now()}`);
 
     // Create destination folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page.locator(Selectors.createFolderModal.nameInput).fill(extractFolder);
     await page.locator(Selectors.createFolderModal.submit).first().click();
     await revealFile(page, extractFolder);
@@ -248,7 +249,7 @@ test.describe('ZIP Preview @files', () => {
     const archiveBase = `preview-archive-${Date.now()}`;
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -287,7 +288,7 @@ test.describe('ZIP Preview @files', () => {
     const archiveBase = `download-preview-${Date.now()}`;
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;

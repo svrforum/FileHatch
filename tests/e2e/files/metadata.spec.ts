@@ -11,6 +11,7 @@ import { test, expect } from '@playwright/test';
 import { generateFileName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
 import { revealFile } from '../helpers/file-list';
+import { openUploadDialog } from '../helpers/navigate';
 
 test.describe('File Tags @files @metadata', () => {
   test.beforeEach(async ({ page }) => {
@@ -22,7 +23,7 @@ test.describe('File Tags @files @metadata', () => {
     const testFile = generateTestFile({ name: generateFileName('tags-test') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -56,7 +57,7 @@ test.describe('File Tags @files @metadata', () => {
     const tagName = `tag-${Date.now()}`;
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -98,7 +99,7 @@ test.describe('File Tags @files @metadata', () => {
     const tagName = `remove-tag-${Date.now()}`;
 
     // Upload and add tag
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -143,7 +144,7 @@ test.describe('File Tags @files @metadata', () => {
     const testFile = generateTestFile({ name: generateFileName('tag-search-test') });
     const uniqueTag = `unique-search-${Date.now()}`;
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -193,7 +194,7 @@ test.describe('File Properties @files @metadata', () => {
   test('should open properties panel', async ({ page }) => {
     const testFile = generateTestFile({ name: generateFileName('properties-test') });
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -227,7 +228,7 @@ test.describe('File Properties @files @metadata', () => {
       content: 'Content for size testing',
     });
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -259,7 +260,7 @@ test.describe('File Properties @files @metadata', () => {
   test('should display modification date in properties', async ({ page }) => {
     const testFile = generateTestFile({ name: generateFileName('date-test') });
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -291,7 +292,7 @@ test.describe('File Properties @files @metadata', () => {
     const testFile = generateTestFile({ name: generateFileName('description-test') });
     const description = `Test description ${Date.now()}`;
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { Selectors } from '../helpers/selectors';
 import { revealFile } from '../helpers/file-list';
+import { openUploadDialog } from '../helpers/navigate';
 
 test.describe('Share Links', () => {
   test.beforeEach(async ({ page }) => {
@@ -14,7 +15,7 @@ test.describe('Share Links', () => {
     const fileName = `share-test-${Date.now()}.txt`;
 
     // Upload a file first
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -55,7 +56,7 @@ test.describe('Share Links', () => {
     const fileName = `protected-share-${Date.now()}.txt`;
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -95,7 +96,7 @@ test.describe('Share Links', () => {
     const fileName = `expiring-share-${Date.now()}.txt`;
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -135,7 +136,7 @@ test.describe('Share Links', () => {
     await context.grantPermissions(['clipboard-write', 'clipboard-read']);
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -173,7 +174,7 @@ test.describe('Share Links', () => {
     const fileName = `delete-share-${Date.now()}.txt`;
 
     // Upload file and create share
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;

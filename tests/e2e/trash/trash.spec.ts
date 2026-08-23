@@ -12,6 +12,7 @@ import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
 import { revealFile, expectFileGone, restoreFromTrash, purgeFromTrash } from '../helpers/file-list';
+import { navigateVia, openNewFolderDialog, openUploadDialog } from '../helpers/navigate';
 
 test.describe('Trash Operations @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -23,7 +24,7 @@ test.describe('Trash Operations @files', () => {
     const testFile = generateTestFile({ name: generateFileName('trash-move') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -51,7 +52,7 @@ test.describe('Trash Operations @files', () => {
     // First create and delete a file
     const testFile = generateTestFile({ name: generateFileName('trash-view') });
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -72,7 +73,7 @@ test.describe('Trash Operations @files', () => {
     await expectFileGone(page, testFile.name);
 
     // Navigate to trash
-    await page.locator(Selectors.sidebar.trash).click();
+    await navigateVia(page, Selectors.sidebar.trash);
     await page.waitForTimeout(1000);
 
     // File should be in trash
@@ -83,7 +84,7 @@ test.describe('Trash Operations @files', () => {
     // Create and delete file
     const testFile = generateTestFile({ name: generateFileName('trash-restore') });
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -104,14 +105,14 @@ test.describe('Trash Operations @files', () => {
     await expectFileGone(page, testFile.name);
 
     // Navigate to trash
-    await page.locator(Selectors.sidebar.trash).click();
+    await navigateVia(page, Selectors.sidebar.trash);
     await page.waitForTimeout(1000);
 
     // Restore is the row's own icon button; the trash view has no context menu.
     await restoreFromTrash(page, testFile.name);
 
     // Navigate back to home and verify file is restored
-    await page.locator(Selectors.sidebar.homeBtn).click();
+    await navigateVia(page, Selectors.sidebar.homeBtn);
     await page.waitForTimeout(1000);
     await revealFile(page, testFile.name);
   });
@@ -120,7 +121,7 @@ test.describe('Trash Operations @files', () => {
     // Create and delete file
     const testFile = generateTestFile({ name: generateFileName('trash-permanent') });
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -141,7 +142,7 @@ test.describe('Trash Operations @files', () => {
     await expectFileGone(page, testFile.name);
 
     // Navigate to trash
-    await page.locator(Selectors.sidebar.trash).click();
+    await navigateVia(page, Selectors.sidebar.trash);
     await page.waitForTimeout(1000);
 
     // Permanent delete is the row's own icon button plus its confirmation.
@@ -158,7 +159,7 @@ test.describe('Trash Operations @files', () => {
     const file2 = generateTestFile({ name: generateFileName('empty-trash-2') });
 
     // Upload first file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     let fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     let fileChooser = await fileChooserPromise;
@@ -172,7 +173,7 @@ test.describe('Trash Operations @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Upload second file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     fileChooser = await fileChooserPromise;
@@ -199,7 +200,7 @@ test.describe('Trash Operations @files', () => {
     await expectFileGone(page, file2.name);
 
     // Navigate to trash
-    await page.locator(Selectors.sidebar.trash).click();
+    await navigateVia(page, Selectors.sidebar.trash);
     await page.waitForTimeout(1000);
 
     // Verify files are in trash
@@ -225,7 +226,7 @@ test.describe('Trash Operations @files', () => {
     const folderName = generateFolderName('trash-folder');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page.locator(Selectors.createFolderModal.nameInput).fill(folderName);
     await page.locator(Selectors.createFolderModal.submit).first().click();
     await revealFile(page, folderName);
@@ -239,7 +240,7 @@ test.describe('Trash Operations @files', () => {
     await expectFileGone(page, folderName);
 
     // Navigate to trash and verify
-    await page.locator(Selectors.sidebar.trash).click();
+    await navigateVia(page, Selectors.sidebar.trash);
     await page.waitForTimeout(1000);
     await revealFile(page, folderName);
   });
@@ -248,7 +249,7 @@ test.describe('Trash Operations @files', () => {
     const folderName = generateFolderName('restore-folder');
 
     // Create folder with content
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page.locator(Selectors.createFolderModal.nameInput).fill(folderName);
     await page.locator(Selectors.createFolderModal.submit).first().click();
     await revealFile(page, folderName);
@@ -258,7 +259,7 @@ test.describe('Trash Operations @files', () => {
     await page.waitForTimeout(1000);
 
     const testFile = generateTestFile({ name: generateFileName('folder-content') });
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -281,14 +282,14 @@ test.describe('Trash Operations @files', () => {
     await expectFileGone(page, folderName);
 
     // Navigate to trash
-    await page.locator(Selectors.sidebar.trash).click();
+    await navigateVia(page, Selectors.sidebar.trash);
     await page.waitForTimeout(1000);
 
     // Restore folder
     await restoreFromTrash(page, folderName);
 
     // Navigate home and verify folder is restored
-    await page.locator(Selectors.sidebar.homeBtn).click();
+    await navigateVia(page, Selectors.sidebar.homeBtn);
     await page.waitForTimeout(1000);
     await revealFile(page, folderName);
 
@@ -306,11 +307,13 @@ test.describe('Trash Edge Cases @files', () => {
   });
 
   test('should handle deleting multiple files at once', async ({ page }) => {
-    const file1 = generateTestFile({ name: generateFileName('multi-delete-1') });
-    const file2 = generateTestFile({ name: generateFileName('multi-delete-2') });
+    // Share a prefix so one filter query surfaces both rows.
+    const prefix = `multi-delete-${Date.now()}`;
+    const file1 = generateTestFile({ name: `${prefix}-a.txt` });
+    const file2 = generateTestFile({ name: `${prefix}-b.txt` });
 
     // Upload both files
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     let fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     let fileChooser = await fileChooserPromise;
@@ -321,7 +324,7 @@ test.describe('Trash Edge Cases @files', () => {
     });
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     fileChooser = await fileChooserPromise;
@@ -332,27 +335,27 @@ test.describe('Trash Edge Cases @files', () => {
     });
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
-    // Select both files
-    await revealFile(page, file1.name);
-    await page.locator(`text=${file1.name}`).first().click();
-    await revealFile(page, file2.name);
-    await page.locator(`text=${file2.name}`).first().click({ modifiers: ['Control'] });
+    /*
+     * Filter to the pair first: the list is virtualised, so ctrl-clicking a row
+     * that a single-name filter has hidden selects nothing.
+     */
+    await revealFile(page, prefix);
+    const rows = page.locator(Selectors.fileList.row).filter({ hasText: prefix });
+    await expect(rows).toHaveCount(2, { timeout: 15000 });
+    await rows.nth(0).click();
+    await rows.nth(1).click({ modifiers: ['Control'] });
 
-    // Verify multi-select bar
     await expect(page.locator(Selectors.multiSelect.bar)).toBeVisible({ timeout: 5000 });
 
-    // Delete via multi-select bar or context menu
-    const multiDeleteBtn = page.locator(Selectors.multiSelect.deleteBtn);
-    if (await multiDeleteBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await multiDeleteBtn.click();
-    } else {
-      await revealFile(page, file1.name);
-      await page.locator(`text=${file1.name}`).first().click({ button: 'right' });
-      await page.locator(Selectors.contextMenu.delete).click();
-    }
+    // The batch delete goes through a native confirm(), so the handler has to
+    // be attached before the click.
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.locator(Selectors.multiSelect.deleteBtn).click();
 
-    // Confirm deletion
-    await page.locator(Selectors.confirmModal.confirmBtn).click();
+    const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
+    if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await confirmBtn.click();
+    }
 
     // Both files should be gone
     await expectFileGone(page, file1.name);
@@ -361,7 +364,7 @@ test.describe('Trash Edge Cases @files', () => {
 
   test('should show empty state in trash', async ({ page }) => {
     // First empty the trash if there's anything
-    await page.locator(Selectors.sidebar.trash).click();
+    await navigateVia(page, Selectors.sidebar.trash);
     await page.waitForTimeout(1000);
 
     const emptyTrashBtn = page.locator(Selectors.trash.emptyTrashBtn);

@@ -12,6 +12,7 @@ import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
 import { revealFile } from '../helpers/file-list';
+import { navigateVia, openNewFolderDialog, openUploadDialog } from '../helpers/navigate';
 
 test.describe('User Sharing @sharing', () => {
   test.beforeEach(async ({ page }) => {
@@ -23,7 +24,7 @@ test.describe('User Sharing @sharing', () => {
     const testFile = generateTestFile({ name: generateFileName('user-share-modal') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -56,7 +57,7 @@ test.describe('User Sharing @sharing', () => {
     const testFile = generateTestFile({ name: generateFileName('user-search-share') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -99,7 +100,7 @@ test.describe('User Sharing @sharing', () => {
     const testFile = generateTestFile({ name: generateFileName('read-permission-share') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -139,7 +140,7 @@ test.describe('User Sharing @sharing', () => {
     const testFile = generateTestFile({ name: generateFileName('write-permission-share') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -176,7 +177,7 @@ test.describe('User Sharing @sharing', () => {
     const folderName = generateFolderName('user-share-folder');
 
     // Create folder
-    await page.locator(Selectors.fileList.newFolderBtn).click();
+    await openNewFolderDialog(page);
     await page
       .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
       .fill(folderName);
@@ -206,9 +207,8 @@ test.describe('Shared Views @sharing', () => {
   test('should navigate to shared with me view', async ({ page }) => {
     // Click on "Shared with me" in sidebar
     const sharedWithMeLink = page.locator(Selectors.sidebar.sharedWithMe);
-    if (await sharedWithMeLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sharedWithMeLink.click();
-      await page.waitForTimeout(1000);
+    if (await sharedWithMeLink.count()) {
+      await navigateVia(page, Selectors.sidebar.sharedWithMe);
 
       // Should show shared with me view or empty state
       await expect(
@@ -223,9 +223,8 @@ test.describe('Shared Views @sharing', () => {
   test('should navigate to my shares view', async ({ page }) => {
     // Click on "My shares" in sidebar
     const mySharesLink = page.locator(Selectors.sidebar.myShares);
-    if (await mySharesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await mySharesLink.click();
-      await page.waitForTimeout(1000);
+    if (await mySharesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.myShares);
 
       // Should show my shares view or empty state
       await expect(
@@ -242,7 +241,7 @@ test.describe('Shared Views @sharing', () => {
     const testFile = generateTestFile({ name: generateFileName('my-shares-test') });
 
     // Upload file
-    await page.locator(Selectors.fileList.uploadBtn).click();
+    await openUploadDialog(page);
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.locator(Selectors.uploadModal.selectFileBtn).click();
     const fileChooser = await fileChooserPromise;
@@ -271,9 +270,8 @@ test.describe('Shared Views @sharing', () => {
 
     // Navigate to my shares
     const mySharesLink = page.locator(Selectors.sidebar.myShares);
-    if (await mySharesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await mySharesLink.click();
-      await page.waitForTimeout(1000);
+    if (await mySharesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.myShares);
 
       // Should show the shared file
       // Note: UI may vary - might show file name or share details
@@ -291,9 +289,8 @@ test.describe('Share Management @sharing', () => {
     // This test requires an existing share to modify
     // Navigate to my shares first
     const mySharesLink = page.locator(Selectors.sidebar.myShares);
-    if (await mySharesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await mySharesLink.click();
-      await page.waitForTimeout(1000);
+    if (await mySharesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.myShares);
 
       // Find a share to modify
       const shareItem = page.locator('.share-item, .shared-file-row, .share-card').first();
@@ -319,9 +316,8 @@ test.describe('Share Management @sharing', () => {
   test('should remove user from share', async ({ page }) => {
     // This test requires an existing user share
     const mySharesLink = page.locator(Selectors.sidebar.myShares);
-    if (await mySharesLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await mySharesLink.click();
-      await page.waitForTimeout(1000);
+    if (await mySharesLink.count()) {
+      await navigateVia(page, Selectors.sidebar.myShares);
 
       const shareItem = page.locator('.share-item, .shared-file-row').first();
       if (await shareItem.isVisible({ timeout: 3000 }).catch(() => false)) {
