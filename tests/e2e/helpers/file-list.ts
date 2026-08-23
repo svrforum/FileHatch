@@ -56,19 +56,36 @@ export async function revealFile(page: Page, name: string): Promise<void> {
  */
 export async function expectFileGone(page: Page, name: string): Promise<void> {
   await expect(async () => {
-    const filter = await filterBox(page);
-    if (filter) {
-      await filter.fill('');
-      await filter.fill(name);
-    } else {
-      await page.locator(Selectors.fileList.refreshBtn).click().catch(() => undefined);
+    /*
+     * Best-effort refresh. Emptying the trash removes the filter box along
+     * with the rows, so neither control is guaranteed to still be there - and
+     * a throw here would keep retrying until the deadline even though the
+     * assertion below would already pass.
+     */
+    try {
+      const filter = await filterBox(page);
+      if (filter) {
+        await filter.fill('');
+        await filter.fill(name);
+      } else {
+        await page.locator(Selectors.fileList.refreshBtn).click({ timeout: 2000 });
+      }
+    } catch {
+      // nothing to refresh - fall through to the assertion
     }
     /*
      * Scope to the list: the sidebar's transfer panel and toast both echo the
      * file name after a delete or restore, so a page-wide count never reaches
      * zero even when the row itself is gone.
      */
-    await expect(listScope(page).locator(`text=${name}`)).toHaveCount(0, { timeout: 3000 });
+    /*
+     * Count rows, not text. A trash row repeats the name inside its original
+     * path, and the sidebar transfer panel echoes it after a delete, so a
+     * text-based count never settles at zero even once the row is gone.
+     */
+    await expect(
+      page.locator(`${Selectors.trash.item}, ${Selectors.fileList.row}`).filter({ hasText: name })
+    ).toHaveCount(0, { timeout: 3000 });
   }).toPass({ timeout: 30000 });
 }
 
@@ -116,12 +133,15 @@ export async function restoreFromTrash(page: Page, name: string): Promise<void> 
 /** Permanently deletes `name` from the trash, accepting the confirmation. */
 export async function purgeFromTrash(page: Page, name: string): Promise<void> {
   const row = await trashRow(page, name);
-  await row.locator('button.delete-btn').click();
+  const button = row.locator('button.delete-btn');
+  await expect(button, `permanent-delete button for ${name}`).toBeVisible({ timeout: 5000 });
+  await button.click();
 
+  // Trash.tsx always confirms a permanent delete, so wait for the dialog
+  // rather than treating it as optional and racing past it.
   const confirm = page.locator(Selectors.confirmModal.confirmBtn);
-  if (await confirm.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await confirm.click();
-  }
+  await expect(confirm, 'permanent-delete confirmation').toBeVisible({ timeout: 10000 });
+  await confirm.click();
   await expect(page.locator(Selectors.trash.item, { hasText: name }),
     `${name} should leave the trash after a permanent delete`).toHaveCount(0, { timeout: 20000 });
 }

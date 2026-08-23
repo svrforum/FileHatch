@@ -66,6 +66,7 @@ export const Selectors = {
     fileName: '.file-name',
     fileSize: '.file-size',
     fileDate: '.file-date',
+    row: '.file-row',
     uploadBtn: '.upload-btn',
     // Folder-scoped filter in the toolbar. The list is virtualised, so this is
     // the reliable way to bring a specific file into the DOM.
@@ -74,7 +75,14 @@ export const Selectors = {
     localSearchInput: '.local-search-container input',
     newFolderBtn: '.new-folder-btn',
     breadcrumb: '.breadcrumb, [data-testid="breadcrumb"]',
-    breadcrumbHome: '.breadcrumb-home, .breadcrumb >> text=홈',
+    /*
+     * Inside a folder the breadcrumb shows the folder's own name plus a single
+     * back arrow (title="상위 폴더로 이동"); there is no clickable 홈 crumb.
+     * The sidebar link is what returns to the root from anywhere.
+     */
+    breadcrumbHome: '.nav-menu a.nav-item[href="/files"]',
+    breadcrumbUp: '.breadcrumb button.back-btn',
+    breadcrumbCurrent: '.breadcrumb .current-path',
   },
 
   // Context Menu
@@ -132,10 +140,22 @@ export const Selectors = {
    * in the detail panel behind the overlay, and Playwright then waits out the
    * full timeout on a click the overlay keeps intercepting.
    */
+  /*
+   * Two dialog shapes exist. ConfirmModal.tsx renders .confirm-modal, while
+   * Trash.tsx rolls its own inside .modal-content with a warning icon. The
+   * ":has(.modal-icon.warning)" guard keeps this from matching ordinary
+   * modals whose footer also carries a .btn-primary.
+   */
   confirmModal: {
-    container: '.confirm-modal',
-    confirmBtn: '.confirm-modal .confirm-actions button.btn-danger, .confirm-modal .confirm-actions button.btn-primary',
-    cancelBtn: '.confirm-modal .confirm-actions button.btn-secondary',
+    container: '.confirm-modal, .modal-content:has(.modal-icon.warning)',
+    confirmBtn:
+      '.confirm-modal .confirm-actions button.btn-danger, ' +
+      '.confirm-modal .confirm-actions button.btn-primary, ' +
+      '.modal-content:has(.modal-icon.warning) .modal-actions button.btn-danger, ' +
+      '.modal-content:has(.modal-icon.warning) .modal-actions button.btn-primary',
+    cancelBtn:
+      '.confirm-modal .confirm-actions button.btn-secondary, ' +
+      '.modal-content:has(.modal-icon.warning) .modal-actions button.btn-cancel',
   },
 
   /*

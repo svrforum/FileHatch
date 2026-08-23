@@ -144,24 +144,9 @@ test.describe('Trash Operations @files', () => {
     await page.locator(Selectors.sidebar.trash).click();
     await page.waitForTimeout(1000);
 
-    await revealFile(page, testFile.name);
-
-    // Permanently delete
-    await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
-    const permanentDeleteOption = page.locator(
-      '.context-menu >> text=영구 삭제, .context-menu >> text=Permanent Delete, .context-menu >> .context-menu-item.danger'
-    );
-    if (await permanentDeleteOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await permanentDeleteOption.click();
-    } else {
+    // Permanent delete is the row's own icon button plus its confirmation.
     await purgeFromTrash(page, testFile.name);
-    }
 
-    // Confirm permanent deletion
-    const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
-    if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await confirmBtn.click();
-    }
 
     // File should be permanently deleted
     await expectFileGone(page, testFile.name);
@@ -228,9 +213,12 @@ test.describe('Trash Operations @files', () => {
     const confirmBtn = page.locator(Selectors.confirmModal.confirmBtn);
     await confirmBtn.click();
 
-    // Both files should be gone
-    await expectFileGone(page, file1.name);
-    await expectFileGone(page, file2.name);
+    // Emptying removes every row, so assert the empty state rather than
+    // chasing each name through a list that no longer renders.
+    await expect(page.locator(Selectors.trash.item)).toHaveCount(0, { timeout: 30000 });
+    await expect(page.locator(Selectors.trash.container)).toContainText('휴지통이 비어 있습니다', {
+      timeout: 10000,
+    });
   });
 
   test('should move folder to trash', async ({ page }) => {
