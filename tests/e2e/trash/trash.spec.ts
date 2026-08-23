@@ -12,7 +12,7 @@ import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
 import { revealFile, expectFileGone, restoreFromTrash, purgeFromTrash } from '../helpers/file-list';
-import { navigateVia, openNewFolderDialog, openUploadDialog } from '../helpers/navigate';
+import { navigateVia, openNewFolderDialog, openUploadDialog, selectRows } from '../helpers/navigate';
 
 test.describe('Trash Operations @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -273,7 +273,7 @@ test.describe('Trash Operations @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Go back and delete folder
-    await page.locator(Selectors.fileList.breadcrumbHome).click();
+    await navigateVia(page, Selectors.fileList.breadcrumbHome);
     await revealFile(page, folderName);
 
     await page.locator(`text=${folderName}`).first().click({ button: 'right' });
@@ -342,10 +342,7 @@ test.describe('Trash Edge Cases @files', () => {
     await revealFile(page, prefix);
     const rows = page.locator(Selectors.fileList.row).filter({ hasText: prefix });
     await expect(rows).toHaveCount(2, { timeout: 15000 });
-    await rows.nth(0).click();
-    await rows.nth(1).click({ modifiers: ['Control'] });
-
-    await expect(page.locator(Selectors.multiSelect.bar)).toBeVisible({ timeout: 5000 });
+    await selectRows(page, rows);
 
     // The batch delete goes through a native confirm(), so the handler has to
     // be attached before the click.

@@ -1,4 +1,4 @@
-import { Page, expect } from '@playwright/test';
+import { Page, Locator, expect } from '@playwright/test';
 import { Selectors } from './selectors';
 
 /**
@@ -67,4 +67,35 @@ export async function openNewFolderDialog(page: Page): Promise<void> {
   }
 
   await expect(page.locator(Selectors.createFolderModal.container)).toBeVisible({ timeout: 10000 });
+}
+
+/**
+ * Puts `rows` into a multi-selection, using whichever gesture the layout has.
+ *
+ * Desktop selects with ctrl-click. Phones have no modifier key, so FileList
+ * offers a "선택" entry in the context menu that switches the list into
+ * selection mode; from there a plain tap toggles each row.
+ */
+export async function selectRows(page: Page, rows: Locator): Promise<void> {
+  const count = await rows.count();
+  if (count < 2) {
+    throw new Error(`selectRows needs at least two rows, got ${count}`);
+  }
+
+  const onMobile = await page.locator(Selectors.fileList.mobileFab).isVisible().catch(() => false);
+
+  if (onMobile) {
+    await rows.nth(0).click({ button: 'right' });
+    await page.locator(Selectors.contextMenu.enterSelection).click();
+    for (let i = 1; i < count; i += 1) {
+      await rows.nth(i).click();
+    }
+  } else {
+    await rows.nth(0).click();
+    for (let i = 1; i < count; i += 1) {
+      await rows.nth(i).click({ modifiers: ['Control'] });
+    }
+  }
+
+  await expect(page.locator(Selectors.multiSelect.bar)).toBeVisible({ timeout: 5000 });
 }

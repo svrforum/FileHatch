@@ -12,7 +12,7 @@ import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
 import { revealFile, expectFileGone, compressSelection } from '../helpers/file-list';
-import { openUploadDialog, openNewFolderDialog } from '../helpers/navigate';
+import { navigateVia, openNewFolderDialog, openUploadDialog } from '../helpers/navigate';
 
 test.describe('File Compression @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -133,7 +133,7 @@ test.describe('File Compression @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
 
     // Go back to parent
-    await page.locator(Selectors.fileList.breadcrumbHome).click();
+    await navigateVia(page, Selectors.fileList.breadcrumbHome);
     await revealFile(page, folderName);
 
     // Compress the folder

@@ -116,6 +116,8 @@ export const Selectors = {
     lock: '.context-menu button:has-text("잠금"):not(:has-text("해제"))',
     unlock: '.context-menu button:has-text("잠금 해제")',
     tags: '.context-menu button:has-text("태그")',
+    // Mobile-only: switches the list into selection mode (no modifier keys).
+    enterSelection: '.context-menu button:has-text("선택")',
   },
 
   // Upload - FileHatch opens modal with file/folder selection

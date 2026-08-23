@@ -210,7 +210,7 @@ test.describe('Admin System Settings', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await navigateVia(page, Selectors.header.adminBtn);
-    await page.locator('a[href="/fhadmin/settings"], .nav-item:has-text("시스템 설정")').click();
+    await navigateVia(page, Selectors.admin.systemSettings);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
   });
 
@@ -222,7 +222,7 @@ test.describe('Admin System Settings', () => {
 
   test('should toggle SSO setting', async ({ page }) => {
     // Navigate to SSO settings
-    await page.locator('a[href="/fhadmin/sso"], .nav-item:has-text("SSO 설정")').click();
+    await navigateVia(page, Selectors.admin.ssoSettings);
 
     // Wait for SSO settings page
     await expect(page.locator(':is(h1, h2):has-text("SSO")')).toBeVisible({ timeout: 10000 });
@@ -322,7 +322,7 @@ test.describe('Admin Shared Folders', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await navigateVia(page, Selectors.header.adminBtn);
-    await page.locator('a[href="/fhadmin/shared-folders"], .nav-item:has-text("공유 드라이브")').click();
+    await navigateVia(page, Selectors.admin.sharedFolders);
     await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
   });
 

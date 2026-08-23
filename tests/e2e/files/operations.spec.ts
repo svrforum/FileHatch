@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import { Selectors } from '../helpers/selectors';
 import { revealFile, expectFileGone } from '../helpers/file-list';
-import { openUploadDialog, openNewFolderDialog } from '../helpers/navigate';
+import { openNewFolderDialog, openUploadDialog, selectRows } from '../helpers/navigate';
 
 test.describe('File Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -224,10 +224,7 @@ test.describe('File Operations', () => {
     const rows = page.locator(Selectors.fileList.row).filter({ hasText: prefix });
     await expect(rows).toHaveCount(2, { timeout: 15000 });
 
-    await rows.nth(0).click();
-    await rows.nth(1).click({ modifiers: ['Control'] });
-
-    await expect(page.locator(Selectors.multiSelect.bar)).toBeVisible({ timeout: 5000 });
+    await selectRows(page, rows);
   });
 
   test('should download file', async ({ page }) => {
