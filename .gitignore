@@ -83,3 +83,11 @@ logs/
 tmp/
 *.tmp
 .serena/
+
+# 임시 검증 산출물 — 저장소에 올라갈 이유가 없는 것들
+# (과거에 test-results/, playwright-report/, 내부 작업 문서가 실수로 추적된 적 있음)
+/test-*.docx
+/test-*.xlsx
+/test-*.pptx
+/test-*.hwp
+tests/e2e/screenshot-test*.spec.ts

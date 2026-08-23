@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./File_Hatch_banner.png" alt="FileHatch Banner" width="600">
+  <img src="./ui/public/banner.png" alt="FileHatch Banner" width="600">
 </p>
 
 # FileHatch
