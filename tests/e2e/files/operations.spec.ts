@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import { Selectors } from '../helpers/selectors';
-import { revealFile } from '../helpers/file-list';
+import { revealFile, expectFileGone } from '../helpers/file-list';
 
 test.describe('File Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -168,7 +168,7 @@ test.describe('File Operations', () => {
     await page.locator(Selectors.confirmModal.confirmBtn).click();
 
     // Verify file is gone
-    await expect(page.locator(`text=${fileName}`).first()).not.toBeVisible({ timeout: 5000 });
+    await expectFileGone(page, fileName);
   });
 
   test('should select multiple files', async ({ page }) => {

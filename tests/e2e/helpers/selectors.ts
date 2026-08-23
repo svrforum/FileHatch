@@ -61,6 +61,7 @@ export const Selectors = {
     // Folder-scoped filter in the toolbar. The list is virtualised, so this is
     // the reliable way to bring a specific file into the DOM.
     localSearchToggle: '.search-toggle-btn',
+    refreshBtn: '.view-btn.refresh-btn',
     localSearchInput: '.local-search-container input',
     newFolderBtn: '.new-folder-btn',
     breadcrumb: '.breadcrumb, [data-testid="breadcrumb"]',
@@ -316,7 +317,8 @@ export const Selectors = {
 
   // Trash
   trash: {
-    container: '.trash-page, .trash-container',
+    container: '.trash-container',
+    searchInput: '.trash-search input',
     item: '.trash-item',
     restoreBtn: 'button:has-text("복원"), button:has-text("Restore")',
     permanentDeleteBtn: 'button:has-text("영구 삭제"), button:has-text("Permanent Delete")',

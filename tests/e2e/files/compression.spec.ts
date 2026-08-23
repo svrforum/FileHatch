@@ -11,7 +11,7 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
-import { revealFile } from '../helpers/file-list';
+import { revealFile, expectFileGone } from '../helpers/file-list';
 
 test.describe('File Compression @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -205,7 +205,7 @@ test.describe('Archive Extraction @files', () => {
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
     await page.locator(Selectors.contextMenu.delete).click();
     await page.locator(Selectors.confirmModal.confirmBtn).click();
-    await expect(page.locator(`text=${testFile.name}`).first()).not.toBeVisible({ timeout: 5000 });
+    await expectFileGone(page, testFile.name);
 
     // Extract the archive
     await revealFile(page, archiveName);

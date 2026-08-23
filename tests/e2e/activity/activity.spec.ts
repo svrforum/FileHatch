@@ -9,7 +9,7 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
-import { revealFile } from '../helpers/file-list';
+import { revealFile, expectFileGone } from '../helpers/file-list';
 
 test.describe('Recent Files @activity', () => {
   test.beforeEach(async ({ page }) => {
@@ -189,7 +189,7 @@ test.describe('Favorites @activity', () => {
           await removeFavoriteOption.click();
 
           // File should be gone from favorites
-          await expect(page.locator(`text=${testFile.name}`).first()).not.toBeVisible({ timeout: 5000 });
+          await expectFileGone(page, testFile.name);
         }
       }
     } else {

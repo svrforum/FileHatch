@@ -11,7 +11,7 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
-import { revealFile } from '../helpers/file-list';
+import { revealFile, expectFileGone } from '../helpers/file-list';
 
 test.describe('Trash Operations @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -44,7 +44,7 @@ test.describe('Trash Operations @files', () => {
     await page.locator(Selectors.confirmModal.confirmBtn).click();
 
     // File should be gone from main view
-    await expect(page.locator(`text=${testFile.name}`).first()).not.toBeVisible({ timeout: 5000 });
+    await expectFileGone(page, testFile.name);
   });
 
   test('should view trash contents', async ({ page }) => {
@@ -69,7 +69,7 @@ test.describe('Trash Operations @files', () => {
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
     await page.locator(Selectors.confirmModal.confirmBtn).click();
-    await expect(page.locator(`text=${testFile.name}`).first()).not.toBeVisible({ timeout: 5000 });
+    await expectFileGone(page, testFile.name);
 
     // Navigate to trash
     await page.locator(Selectors.sidebar.trash).click();
@@ -101,7 +101,7 @@ test.describe('Trash Operations @files', () => {
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
     await page.locator(Selectors.confirmModal.confirmBtn).click();
-    await expect(page.locator(`text=${testFile.name}`).first()).not.toBeVisible({ timeout: 5000 });
+    await expectFileGone(page, testFile.name);
 
     // Navigate to trash
     await page.locator(Selectors.sidebar.trash).click();
@@ -129,7 +129,7 @@ test.describe('Trash Operations @files', () => {
     }
 
     // File should be gone from trash
-    await expect(page.locator(`text=${testFile.name}`).first()).not.toBeVisible({ timeout: 10000 });
+    await expectFileGone(page, testFile.name);
 
     // Navigate back to home and verify file is restored
     await page.locator(Selectors.sidebar.homeBtn).click();
@@ -159,7 +159,7 @@ test.describe('Trash Operations @files', () => {
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
     await page.locator(Selectors.confirmModal.confirmBtn).click();
-    await expect(page.locator(`text=${testFile.name}`).first()).not.toBeVisible({ timeout: 5000 });
+    await expectFileGone(page, testFile.name);
 
     // Navigate to trash
     await page.locator(Selectors.sidebar.trash).click();
@@ -187,7 +187,7 @@ test.describe('Trash Operations @files', () => {
     }
 
     // File should be permanently deleted
-    await expect(page.locator(`text=${testFile.name}`).first()).not.toBeVisible({ timeout: 10000 });
+    await expectFileGone(page, testFile.name);
   });
 
   test('should empty trash', async ({ page }) => {
@@ -228,13 +228,13 @@ test.describe('Trash Operations @files', () => {
     await page.locator(`text=${file1.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
     await page.locator(Selectors.confirmModal.confirmBtn).click();
-    await expect(page.locator(`text=${file1.name}`).first()).not.toBeVisible({ timeout: 5000 });
+    await expectFileGone(page, file1.name);
 
     await revealFile(page, file2.name);
     await page.locator(`text=${file2.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
     await page.locator(Selectors.confirmModal.confirmBtn).click();
-    await expect(page.locator(`text=${file2.name}`).first()).not.toBeVisible({ timeout: 5000 });
+    await expectFileGone(page, file2.name);
 
     // Navigate to trash
     await page.locator(Selectors.sidebar.trash).click();
@@ -252,8 +252,8 @@ test.describe('Trash Operations @files', () => {
     await confirmBtn.click();
 
     // Both files should be gone
-    await expect(page.locator(`text=${file1.name}`).first()).not.toBeVisible({ timeout: 10000 });
-    await expect(page.locator(`text=${file2.name}`).first()).not.toBeVisible({ timeout: 10000 });
+    await expectFileGone(page, file1.name);
+    await expectFileGone(page, file2.name);
   });
 
   test('should move folder to trash', async ({ page }) => {
@@ -273,7 +273,7 @@ test.describe('Trash Operations @files', () => {
     await page.locator(Selectors.confirmModal.confirmBtn).click();
 
     // Folder should be gone
-    await expect(page.locator(`text=${folderName}`).first()).not.toBeVisible({ timeout: 5000 });
+    await expectFileGone(page, folderName);
 
     // Navigate to trash and verify
     await page.locator(Selectors.sidebar.trash).click();
@@ -317,7 +317,7 @@ test.describe('Trash Operations @files', () => {
     await page.locator(`text=${folderName}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.delete).click();
     await page.locator(Selectors.confirmModal.confirmBtn).click();
-    await expect(page.locator(`text=${folderName}`).first()).not.toBeVisible({ timeout: 5000 });
+    await expectFileGone(page, folderName);
 
     // Navigate to trash
     await page.locator(Selectors.sidebar.trash).click();
@@ -409,8 +409,8 @@ test.describe('Trash Edge Cases @files', () => {
     await page.locator(Selectors.confirmModal.confirmBtn).click();
 
     // Both files should be gone
-    await expect(page.locator(`text=${file1.name}`).first()).not.toBeVisible({ timeout: 5000 });
-    await expect(page.locator(`text=${file2.name}`).first()).not.toBeVisible({ timeout: 5000 });
+    await expectFileGone(page, file1.name);
+    await expectFileGone(page, file2.name);
   });
 
   test('should show empty state in trash', async ({ page }) => {
