@@ -5,6 +5,7 @@
  * logging out, and handling initial setup scenarios.
  */
 import { Page, expect } from '@playwright/test';
+import { Selectors } from '../helpers/selectors';
 
 export interface UserCredentials {
   username: string;
@@ -99,7 +100,7 @@ export class AuthFixture {
    */
   async enterAdminMode(): Promise<void> {
     await this.page.locator('.admin-btn:has-text("관리자 모드")').click();
-    await expect(this.page.locator('.admin-page')).toBeVisible({ timeout: 10000 });
+    await expect(this.page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
   }
 
   /**
@@ -142,7 +143,7 @@ export class AuthFixture {
     await this.openProfileMenu();
     await this.page.locator('.profile-btn, a:has-text("프로필")').click();
     await expect(
-      this.page.locator('h2:has-text("프로필"), h2:has-text("Profile")')
+      this.page.locator(':is(h1, h2):has-text("프로필"), :is(h1, h2):has-text("Profile")')
     ).toBeVisible({ timeout: 10000 });
   }
 }

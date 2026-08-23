@@ -25,7 +25,7 @@ test.describe('Admin System Settings @admin', () => {
 
   test('should display system settings page', async ({ page }) => {
     await expect(
-      page.locator('h2:has-text("시스템 설정"), h2:has-text("설정"), h2:has-text("Settings")')
+      page.locator(':is(h1, h2):has-text("시스템 설정"), :is(h1, h2):has-text("설정"), :is(h1, h2):has-text("Settings")')
     ).toBeVisible({ timeout: 10000 });
   });
 
@@ -151,7 +151,7 @@ test.describe('Admin SSO Settings @admin', () => {
 
   test('should display SSO settings page', async ({ page }) => {
     await expect(
-      page.locator('h2:has-text("SSO"), h2:has-text("Single Sign-On")')
+      page.locator(':is(h1, h2):has-text("SSO"), :is(h1, h2):has-text("Single Sign-On")')
     ).toBeVisible({ timeout: 10000 });
   });
 

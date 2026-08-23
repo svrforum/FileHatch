@@ -5,6 +5,7 @@
  * including link shares, user shares, and upload shares.
  */
 import { Page, expect } from '@playwright/test';
+import { Selectors } from '../helpers/selectors';
 
 export interface ShareOptions {
   password?: string;
@@ -123,7 +124,7 @@ export class ShareFixture {
     await this.page.locator(`text=${fileName}`).click({ button: 'right' });
     await this.page.locator(':text("사용자와 공유"), :text("사용자에게 공유")').first().click();
 
-    await expect(this.page.locator('.modal, [role="dialog"]')).toBeVisible({ timeout: 5000 });
+    await expect(this.page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
 
     // Search for user
     await this.page
@@ -155,7 +156,7 @@ export class ShareFixture {
     await this.page.locator(`text=${folderName}`).click({ button: 'right' });
     await this.page.locator('text=업로드 링크').first().click();
 
-    await expect(this.page.locator('.modal, [role="dialog"]')).toBeVisible({ timeout: 5000 });
+    await expect(this.page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
 
     // Set password if provided
     if (options.password) {

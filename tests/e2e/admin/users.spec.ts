@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { Selectors } from '../helpers/selectors';
 
 test.describe('Admin User Management', () => {
   test.beforeEach(async ({ page }) => {
@@ -9,7 +10,7 @@ test.describe('Admin User Management', () => {
     await page.locator('.admin-btn:has-text("관리자 모드")').click();
 
     // Wait for admin page to load (user cards or admin header)
-    await expect(page.locator('.admin-page')).toBeVisible({
+    await expect(page.locator(Selectors.admin.page)).toBeVisible({
       timeout: 10000,
     });
 
@@ -19,8 +20,8 @@ test.describe('Admin User Management', () => {
 
   test('should display user list', async ({ page }) => {
     // Verify admin page is visible with user cards
-    await expect(page.locator('.admin-page')).toBeVisible();
-    await expect(page.locator('h2:has-text("사용자 관리")')).toBeVisible();
+    await expect(page.locator(Selectors.admin.page)).toBeVisible();
+    await expect(page.locator(':is(h1, h2):has-text("사용자 관리")')).toBeVisible();
 
     // Should show at least admin user in cards or list
     await expect(page.locator('.user-card:has-text("admin")').first()).toBeVisible({ timeout: 10000 });
@@ -35,7 +36,7 @@ test.describe('Admin User Management', () => {
     await page.locator('.btn-primary:has-text("사용자 추가")').click();
 
     // Wait for modal to appear
-    await expect(page.locator('h2:has-text("새 사용자 추가")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(':is(h1, h2):has-text("새 사용자 추가")')).toBeVisible({ timeout: 5000 });
 
     // Fill user form using placeholders since name attributes might not exist
     await page.locator('input[placeholder*="영문, 숫자"]').fill(newUsername);
@@ -47,7 +48,7 @@ test.describe('Admin User Management', () => {
     await page.locator('button:has-text("사용자 생성")').click();
 
     // Wait for modal to close
-    await expect(page.locator('h2:has-text("새 사용자 추가")')).not.toBeVisible({ timeout: 10000 });
+    await expect(page.locator(':is(h1, h2):has-text("새 사용자 추가")')).not.toBeVisible({ timeout: 10000 });
 
     // Verify user appears in list (card or list view)
     await expect(page.locator(`.user-card:has-text("${newUsername}")`).first()).toBeVisible({ timeout: 10000 });
@@ -55,24 +56,23 @@ test.describe('Admin User Management', () => {
 
   test('should edit user', async ({ page }) => {
     // Find a non-admin user's edit button
-    const userCard = page.locator('.user-card:not(:has-text("나"))').first();
+    const userCard = page.locator(Selectors.adminUsers.otherUserCard).first();
 
     if (await userCard.isVisible({ timeout: 3000 }).catch(() => false)) {
       // Click edit button
-      await userCard.locator('.btn-action.edit, button:has-text("수정")').click();
+      await userCard.locator(Selectors.adminUsers.editBtn).click();
 
       // Wait for edit modal
-      await expect(page.locator('.modal, [role="dialog"]')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
 
-      // Modify user email
-      const newEmail = `edited-${Date.now()}@test.com`;
-      await page.locator('input[name="email"]').fill(newEmail);
+      // The edit dialog exposes no email field - quota is what it can change.
+      await page.locator(Selectors.adminUsers.editDialog.quota).fill('5');
 
       // Save changes
-      await page.locator('button[type="submit"]:has-text("저장"), button[type="submit"]:has-text("수정")').click();
+      await page.locator(Selectors.adminUsers.editDialog.submit).click();
 
       // Wait for modal to close
-      await expect(page.locator('.modal, [role="dialog"]')).not.toBeVisible({ timeout: 5000 });
+      await expect(page.locator(Selectors.modal.container)).not.toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
     }
@@ -80,23 +80,23 @@ test.describe('Admin User Management', () => {
 
   test('should toggle user admin status', async ({ page }) => {
     // Find a non-admin user card
-    const userCard = page.locator('.user-card:not(:has-text("나"))').first();
+    const userCard = page.locator(Selectors.adminUsers.otherUserCard).first();
 
     if (await userCard.isVisible({ timeout: 3000 }).catch(() => false)) {
       // Click edit button
-      await userCard.locator('.btn-action.edit, button:has-text("수정")').click();
+      await userCard.locator(Selectors.adminUsers.editBtn).click();
 
       // Wait for edit modal
-      await expect(page.locator('.modal, [role="dialog"]')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
 
       // Toggle admin checkbox
-      await page.locator('input[name="isAdmin"], label:has-text("관리자") input[type="checkbox"]').click();
+      await page.locator(Selectors.adminUsers.editDialog.isAdminToggle).click();
 
       // Save changes
-      await page.locator('button[type="submit"]').click();
+      await page.locator(Selectors.adminUsers.editDialog.submit).click();
 
       // Wait for modal to close
-      await expect(page.locator('.modal, [role="dialog"]')).not.toBeVisible({ timeout: 5000 });
+      await expect(page.locator(Selectors.modal.container)).not.toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
     }
@@ -104,27 +104,36 @@ test.describe('Admin User Management', () => {
 
   test('should delete user', async ({ page }) => {
     // Create a user to delete first
-    const deleteUsername = `delete-${Date.now()}`;
+    /*
+     * Underscore, not a hyphen: CreateUserModal.tsx sets
+     * pattern="[a-zA-Z0-9_]+" on the username field, so the browser blocks
+     * submission for a hyphenated name with a native tooltip and no request
+     * is ever sent - even though the server's own rule allows hyphens.
+     */
+    const deleteUsername = `delete_${Date.now()}`;
 
-    await page.locator('.btn-primary:has-text("사용자 추가")').click();
-    await expect(page.locator('.modal, [role="dialog"]')).toBeVisible({ timeout: 5000 });
+    await page.locator(Selectors.adminUsers.addUserBtn).first().click();
+    await expect(page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
 
-    await page.locator('input[name="username"]').fill(deleteUsername);
-    await page.locator('input[name="email"]').fill(`${deleteUsername}@test.com`);
-    await page.locator('input[name="password"]').fill('DeleteMe123!');
-    await page.locator('button[type="submit"]').click();
+    await page.locator(Selectors.adminUsers.createDialog.username).fill(deleteUsername);
+    await page.locator(Selectors.adminUsers.createDialog.email).fill(`${deleteUsername}@example.com`);
+    await page.locator(Selectors.adminUsers.createDialog.password).fill('DeleteMe123!');
+    await page.locator(Selectors.adminUsers.createDialog.passwordConfirm).fill('DeleteMe123!');
+    await page.locator(Selectors.adminUsers.createDialog.submit).click();
 
     // Wait for user to appear
     await expect(page.locator(`.user-card:has-text("${deleteUsername}")`)).toBeVisible({ timeout: 10000 });
 
     // Find and click delete button
     const userCard = page.locator(`.user-card:has-text("${deleteUsername}")`);
-    await userCard.locator('.btn-action.delete, button:has-text("삭제")').click();
-
-    // Handle confirmation dialog (browser dialog)
-    page.on('dialog', async (dialog) => {
-      await dialog.accept();
-    });
+    /*
+     * AdminUserList uses a native confirm(). The handler has to be registered
+     * before the click - Playwright auto-dismisses (i.e. cancels) any dialog
+     * that opens with no handler attached, so registering it afterwards meant
+     * the deletion was always declined and the card never disappeared.
+     */
+    page.once('dialog', (dialog) => dialog.accept());
+    await userCard.locator(Selectors.adminUsers.deleteBtn).click();
 
     // Verify user is removed
     await expect(page.locator(`.user-card:has-text("${deleteUsername}")`)).not.toBeVisible({ timeout: 10000 });
@@ -139,7 +148,7 @@ test.describe('Admin User Management', () => {
       await user2FA.locator('.btn-action.edit, button:has-text("수정")').click();
 
       // Wait for edit modal
-      await expect(page.locator('.modal, [role="dialog"]')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
 
       // Look for 2FA reset button
       const reset2FABtn = page.locator('button:has-text("2FA 초기화"), button:has-text("2FA 리셋")');
@@ -163,7 +172,8 @@ test.describe('Admin User Management', () => {
     await page.waitForTimeout(500);
 
     // Verify admin is visible
-    await expect(page.locator('.user-card:has-text("admin"), .user-name:has-text("admin")')).toBeVisible();
+    await expect(page.locator(Selectors.adminUsers.userCard).first()).toBeVisible();
+    await expect(page.locator(Selectors.adminUsers.userName).first()).toContainText('admin');
   });
 
   test('should set user storage quota', async ({ page }) => {
@@ -175,18 +185,19 @@ test.describe('Admin User Management', () => {
       await userCard.locator('.btn-action.edit, button:has-text("수정")').click();
 
       // Wait for edit modal
-      await expect(page.locator('.modal, [role="dialog"]')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
 
       // Set quota (e.g., 10GB)
-      const quotaInput = page.locator('input[name="storageQuota"]');
+      const quotaInput = page.locator(Selectors.adminUsers.editDialog.quota);
       if (await quotaInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await quotaInput.fill('10737418240');
+        // The field takes GB and converts to bytes on change.
+        await quotaInput.fill('10');
 
         // Save changes
-        await page.locator('button[type="submit"]').click();
+        await page.locator(Selectors.adminUsers.editDialog.submit).click();
 
         // Wait for modal to close
-        await expect(page.locator('.modal, [role="dialog"]')).not.toBeVisible({ timeout: 5000 });
+        await expect(page.locator(Selectors.modal.container)).not.toBeVisible({ timeout: 5000 });
       }
     } else {
       test.skip();
@@ -199,11 +210,11 @@ test.describe('Admin System Settings', () => {
     await page.goto('/');
     await page.locator('.admin-btn:has-text("관리자 모드")').click();
     await page.locator('a[href="/fhadmin/settings"], .nav-item:has-text("시스템 설정")').click();
-    await expect(page.locator('.admin-page')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
   });
 
   test('should display system settings', async ({ page }) => {
-    await expect(page.locator('h2:has-text("시스템 설정"), h2:has-text("설정")')).toBeVisible({
+    await expect(page.locator(':is(h1, h2):has-text("시스템 설정"), :is(h1, h2):has-text("설정")')).toBeVisible({
       timeout: 10000,
     });
   });
@@ -213,7 +224,7 @@ test.describe('Admin System Settings', () => {
     await page.locator('a[href="/fhadmin/sso"], .nav-item:has-text("SSO 설정")').click();
 
     // Wait for SSO settings page
-    await expect(page.locator('h2:has-text("SSO")')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(':is(h1, h2):has-text("SSO")')).toBeVisible({ timeout: 10000 });
 
     // Find SSO toggle if present
     const ssoToggle = page.locator('input[type="checkbox"]').first();
@@ -239,24 +250,32 @@ test.describe('Admin Audit Logs', () => {
     await page.goto('/');
     await page.locator('.admin-btn:has-text("관리자 모드")').click();
     await page.locator('a[href="/fhadmin/logs"], .nav-item:has-text("감사 로그")').click();
-    await expect(page.locator('.admin-page')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
+
+    /*
+     * Default tab "파일 감사 로그" is empty on a fresh install; "접속 이력"
+     * always holds this suite's own sign-in, so assertions test the table
+     * rather than the seed data.
+     */
+    await page.locator(Selectors.admin.logsTab.user).click();
+    await page.waitForTimeout(1500);
   });
 
   test('should display audit logs', async ({ page }) => {
     // Wait for audit logs page
-    await expect(page.locator('h2:has-text("감사 로그"), h2:has-text("로그")')).toBeVisible({
+    await expect(page.locator(':is(h1, h2):has-text("감사 로그"), :is(h1, h2):has-text("로그")')).toBeVisible({
       timeout: 10000,
     });
 
     // Check for log entries or table
-    await expect(page.locator('.log-entry, .audit-log-row, table tbody tr, .log-card').first()).toBeVisible({
+    await expect(page.locator('.logs-table tbody tr').first()).toBeVisible({
       timeout: 10000,
     });
   });
 
   test('should filter logs by action type', async ({ page }) => {
     // Wait for logs to load
-    await expect(page.locator('.log-entry, .audit-log-row, table tbody tr, .log-card').first()).toBeVisible({
+    await expect(page.locator('.logs-table tbody tr').first()).toBeVisible({
       timeout: 10000,
     });
 
@@ -272,7 +291,7 @@ test.describe('Admin Audit Logs', () => {
 
   test('should filter logs by date range', async ({ page }) => {
     // Wait for logs to load
-    await expect(page.locator('.log-entry, .audit-log-row, table tbody tr, .log-card').first()).toBeVisible({
+    await expect(page.locator('.logs-table tbody tr').first()).toBeVisible({
       timeout: 10000,
     });
 
@@ -303,11 +322,11 @@ test.describe('Admin Shared Folders', () => {
     await page.goto('/');
     await page.locator('.admin-btn:has-text("관리자 모드")').click();
     await page.locator('a[href="/fhadmin/shared-folders"], .nav-item:has-text("공유 드라이브")').click();
-    await expect(page.locator('.admin-page')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(Selectors.admin.page)).toBeVisible({ timeout: 10000 });
   });
 
   test('should display shared folders list', async ({ page }) => {
-    await expect(page.locator('h2:has-text("공유 드라이브"), h2:has-text("공유 폴더")')).toBeVisible({
+    await expect(page.locator(':is(h1, h2):has-text("공유 드라이브"), :is(h1, h2):has-text("공유 폴더")')).toBeVisible({
       timeout: 10000,
     });
   });
@@ -316,17 +335,16 @@ test.describe('Admin Shared Folders', () => {
     const folderName = `shared-${Date.now()}`;
 
     // Click create button
-    const createBtn = page.locator('button:has-text("추가"), button:has-text("생성"), .btn-primary');
-    await createBtn.click();
+    await page.locator(Selectors.adminSharedFolders.createBtn).first().click();
 
     // Wait for modal
-    await expect(page.locator('.modal, [role="dialog"]')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
 
     // Fill form
-    await page.locator('input[name="name"], input[placeholder*="이름"]').fill(folderName);
+    await page.locator(Selectors.adminSharedFolders.dialog.name).fill(folderName);
 
     // Submit
-    await page.locator('button[type="submit"]').click();
+    await page.locator(Selectors.adminSharedFolders.dialog.submit).click();
 
     // Verify folder appears
     await expect(page.locator(`text=${folderName}`).first()).toBeVisible({ timeout: 10000 });
@@ -343,7 +361,7 @@ test.describe('Admin Shared Folders', () => {
         await membersBtn.click();
 
         // Wait for modal
-        await expect(page.locator('.modal, [role="dialog"]')).toBeVisible({ timeout: 5000 });
+        await expect(page.locator(Selectors.modal.container)).toBeVisible({ timeout: 5000 });
       } else {
         test.skip();
       }

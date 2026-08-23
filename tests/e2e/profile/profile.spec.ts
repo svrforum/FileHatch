@@ -26,7 +26,7 @@ test.describe('Profile Settings @profile', () => {
 
     // Should be on profile page
     await expect(
-      page.locator(':text("프로필"), :text("Profile"), h2:has-text("프로필")').first()
+      page.locator(':text("프로필"), :text("Profile"), :is(h1, h2):has-text("프로필")').first()
     ).toBeVisible({ timeout: 10000 });
   });
 
