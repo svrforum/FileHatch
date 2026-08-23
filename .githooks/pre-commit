@@ -50,10 +50,49 @@ if [ -n "$secret_hits" ]; then
   fail=1
 fi
 
+# ---------------------------------------------------------------------------
+# 3. Commit identity must not carry a personal address
+# ---------------------------------------------------------------------------
+# 133 commits in this public repository's history were authored with a personal
+# Gmail address and 76 more with a machine hostname. Both are permanently
+# visible to anyone who clones it. Nothing stopped that from happening, so the
+# check belongs here rather than in a convention nobody can enforce.
+commit_email=$(git config user.email || true)
+case "$commit_email" in
+  *@users.noreply.github.com) ;;
+  "")
+    note "git user.email 이 설정되어 있지 않습니다."
+    note "  git config user.email '<ID>+<username>@users.noreply.github.com'"
+    fail=1
+    ;;
+  *)
+    note "커밋 이메일이 GitHub noreply 주소가 아닙니다: $commit_email"
+    note "공개 저장소에 개인 주소가 영구히 남습니다. 아래로 설정하세요:"
+    note "  git config user.email '<ID>+<username>@users.noreply.github.com'"
+    fail=1
+    ;;
+esac
+
+# ---------------------------------------------------------------------------
+# 4. PII in the staged content
+# ---------------------------------------------------------------------------
+# Reserved documentation domains (RFC 2606) and GitHub noreply are fine; a real
+# mailbox, a phone number, or a developer's home path is not.
+pii_hits=$(git diff --cached -U0 -- $staged 2>/dev/null | grep -E '^\+' \
+  | grep -oE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|/home/[a-z][a-z0-9_-]*/[A-Za-z]|/Users/[A-Za-z]|\b01[016-9][- ]?[0-9]{3,4}[- ]?[0-9]{4}\b' \
+  | grep -viE '@(example\.(com|org|net)|example\.co\.kr|test\.local|localhost|users\.noreply\.github\.com)|/home/(admin|user|username|me|docs|images|photos|folder|file|relative|shared)/' \
+  || true)
+if [ -n "$pii_hits" ]; then
+  note "스테이징된 변경에 개인정보로 보이는 값이 있습니다:"
+  printf '  %s\n' $pii_hits | sort -u | head -10 >&2
+  note "실제 주소·전화번호·개발자 경로인지 확인하세요. 예시는 example.com 등 예약 도메인을 쓰세요."
+  fail=1
+fi
+
 [ "$fail" -ne 0 ] && exit 1
 
 # ---------------------------------------------------------------------------
-# 3. Tests for whichever layer changed
+# 5. Tests for whichever layer changed
 # ---------------------------------------------------------------------------
 repo_root=$(git rev-parse --show-toplevel)
 
