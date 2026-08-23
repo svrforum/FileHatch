@@ -940,6 +940,32 @@ netstat -an | grep 445
 
 ## Development Guide
 
+### Install the git hooks (once per clone)
+
+```bash
+./scripts/setup-hooks.sh
+```
+
+Hooks have to live in `.git/hooks/`, which is not part of the repository — a
+fresh clone has none of them, and every check below is inert until the script
+above runs.
+
+| Hook | Checks |
+|------|--------|
+| `pre-commit` | Tests for the layer you touched, files that must never be committed (`.env`, auth state, build output, keys), secrets and personal data, commit email |
+| `pre-push` | Author and committer address of every commit being pushed |
+
+Commit with a **GitHub noreply address**. A personal address cannot be taken
+back once it is in a public repository's history.
+
+```bash
+git config user.email '<ID>+<username>@users.noreply.github.com'
+```
+
+You can find yours under GitHub → Settings → Emails. The same check runs in CI
+(`.github/workflows/commit-identity.yml`), so skipping the hooks only defers it
+to the pull request.
+
 ### Local Development Environment
 
 ```bash

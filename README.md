@@ -935,6 +935,32 @@ netstat -an | grep 445
 
 ## 개발 가이드
 
+### Git 훅 설치 (클론 후 1회)
+
+```bash
+./scripts/setup-hooks.sh
+```
+
+훅은 `.git/hooks/` 에 있어야 동작하는데 이 디렉터리는 저장소에 포함되지
+않습니다. 즉 **새로 클론하면 훅이 하나도 걸려 있지 않으며**, 위 스크립트를
+실행하기 전까지는 아래 검사가 전부 무효입니다.
+
+| 훅 | 검사 |
+|----|------|
+| `pre-commit` | 변경된 계층의 테스트, 커밋 금지 파일(`.env`·인증 상태·빌드 산출물·키), 시크릿·개인정보 검출, 커밋 이메일 |
+| `pre-push` | 푸시되는 모든 커밋의 author/committer 주소 |
+
+커밋 이메일은 **GitHub noreply 주소**여야 합니다. 공개 저장소에 개인 주소가
+들어가면 되돌릴 수 없습니다.
+
+```bash
+git config user.email '<ID>+<username>@users.noreply.github.com'
+```
+
+주소는 GitHub → Settings → Emails 에서 확인할 수 있습니다.
+같은 검사가 CI(`.github/workflows/commit-identity.yml`)에서도 돌기 때문에,
+훅을 건너뛰어도 PR 단계에서 걸립니다.
+
 ### 로컬 개발 환경
 
 ```bash

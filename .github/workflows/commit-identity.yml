@@ -1,0 +1,86 @@
+name: Commit Identity
+
+# Personal addresses cannot be taken back once they are pushed. 133 commits in
+# this repository's history carry the maintainer's personal Gmail and 76 more a
+# machine hostname; those stay as they are, but nothing new should join them.
+#
+# The pre-commit and pre-push hooks catch this locally. They can be skipped
+# (--no-verify), they are not installed in a fresh clone until someone runs
+# scripts/setup-hooks.sh, and they do not exist at all for commits made through
+# the GitHub web editor. This job is the backstop that none of that bypasses.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  check:
+    name: Author addresses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Inspect new commits
+        env:
+          # Empty for a brand-new branch, in which case fall back to main.
+          BEFORE: ${{ github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -uo pipefail
+
+          if [ -n "${BASE:-}" ]; then
+            range="$BASE..$HEAD_SHA"
+          elif [ -n "${BEFORE:-}" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+               && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            range="$BEFORE..$HEAD_SHA"
+          else
+            # New branch (or a force-push we cannot anchor): check the tip only.
+            range="$HEAD_SHA~1..$HEAD_SHA"
+            git cat-file -e "$HEAD_SHA~1^{commit}" 2>/dev/null || range="$HEAD_SHA"
+          fi
+
+          echo "Range: $range"
+          fail=0
+
+          while IFS='|' read -r sha an ae cn ce; do
+            [ -z "$sha" ] && continue
+            for pair in "author:$an:$ae" "committer:$cn:$ce"; do
+              role=${pair%%:*}; rest=${pair#*:}
+              name=${rest%%:*}; email=${rest#*:}
+
+              case "$email" in
+                *@users.noreply.github.com) continue ;;
+              esac
+
+              # A hostname in the address leaks the machine, whoever committed.
+              case "$email" in
+                *.localdomain|*@LAPTOP-*|*@DESKTOP-*|root@*|*.local)
+                  echo "::error::$sha $role <$email> — 머신 호스트명이 노출됩니다"
+                  fail=1
+                  continue
+                  ;;
+              esac
+
+              # Outside contributors use their own addresses by choice; only the
+              # maintainer's commits are required to go through noreply.
+              if [ "$name" = "svrforum" ]; then
+                echo "::error::$sha $role <$email> — svrforum 커밋은 GitHub noreply 주소여야 합니다"
+                fail=1
+              else
+                echo "  ok (contributor) $sha $role <$email>"
+              fi
+            done
+          done < <(git log --format='%H|%an|%ae|%cn|%ce' "$range")
+
+          if [ "$fail" -ne 0 ]; then
+            echo
+            echo "고치는 법:"
+            echo "  git config user.email '<ID>+<username>@users.noreply.github.com'"
+            echo "  git rebase -i --exec 'git commit --amend --no-edit --reset-author' <base>"
+            exit 1
+          fi
+          echo "모든 커밋의 작성자 주소가 정상입니다."

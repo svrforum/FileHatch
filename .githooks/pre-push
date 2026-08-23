@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+#
+# Blocks a push that would put a personal address or a machine hostname into
+# this repository's history.
+#
+# pre-commit already checks the configured identity, but it only sees commits
+# made on this machine with hooks enabled — `--no-verify`, a rebase, a
+# cherry-pick or a commit created before the hook was installed all slip past
+# it. This runs over everything actually being sent, which is the last point
+# where it can still be fixed cheaply.
+#
+# Bypass with `git push --no-verify` when you genuinely need to.
+
+set -uo pipefail
+
+note() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
+
+remote_sha_empty=0000000000000000000000000000000000000000
+fail=0
+checked=0
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  # Deleting a ref sends an all-zero local sha; nothing to inspect.
+  [ "$local_sha" = "$remote_sha_empty" ] && continue
+
+  if [ "$remote_sha" = "$remote_sha_empty" ]; then
+    # New branch on the remote: check what it adds on top of origin/main.
+    if git rev-parse --verify --quiet origin/main >/dev/null; then
+      range="origin/main..$local_sha"
+    else
+      range="$local_sha"
+    fi
+  else
+    range="$remote_sha..$local_sha"
+  fi
+
+  while IFS='|' read -r sha an ae cn ce; do
+    [ -z "$sha" ] && continue
+    checked=$((checked + 1))
+    for pair in "author:$an:$ae" "committer:$cn:$ce"; do
+      role=${pair%%:*}; rest=${pair#*:}
+      name=${rest%%:*}; email=${rest#*:}
+
+      case "$email" in
+        *@users.noreply.github.com) continue ;;
+      esac
+
+      case "$email" in
+        *.localdomain|*@LAPTOP-*|*@DESKTOP-*|root@*|*.local)
+          note "머신 호스트명이 노출됩니다: ${sha:0:8} $role <$email>"
+          fail=1
+          continue
+          ;;
+      esac
+
+      # Outside contributors keep their own addresses; only the maintainer's
+      # own commits have to go through noreply.
+      if [ "$name" = "svrforum" ]; then
+        note "noreply 아닌 주소: ${sha:0:8} $role <$email>"
+        fail=1
+      fi
+    done
+  done < <(git log --format='%H|%an|%ae|%cn|%ce' "$range" 2>/dev/null)
+done
+
+if [ "$fail" -ne 0 ]; then
+  note ""
+  note "이 커밋들을 그대로 푸시하면 개인정보가 영구히 남습니다."
+  note "고치는 법:"
+  note "  git config user.email '<ID>+<username>@users.noreply.github.com'"
+  note "  git rebase -i --exec 'git commit --amend --no-edit --reset-author' <base>"
+  exit 1
+fi
+
+[ "$checked" -gt 0 ] && printf '\033[32m커밋 %d개의 작성자 주소 확인 완료\033[0m\n' "$checked"
+exit 0
