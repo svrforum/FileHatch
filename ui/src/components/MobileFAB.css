@@ -11,7 +11,16 @@
     position: fixed;
     right: 16px;
     bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-    z-index: 1000;
+    /*
+     * Below dialogs, above page content.
+     *
+     * This used to be 1000 — the same layer as .modal-overlay — so the FAB
+     * won on DOM order and painted over the bottom sheet. On a phone that put
+     * it squarely on top of the sheet's confirm button: the 압축 / 생성 /
+     * 저장 controls sit bottom-right, exactly where the FAB floats, and the
+     * button could not be pressed at all.
+     */
+    z-index: 900;
   }
 
   /* Overlay when FAB is open */
