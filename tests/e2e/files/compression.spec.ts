@@ -11,7 +11,7 @@
 import { test, expect } from '@playwright/test';
 import { generateFileName, generateFolderName, generateTestFile } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
-import { revealFile, expectFileGone } from '../helpers/file-list';
+import { revealFile, expectFileGone, compressSelection } from '../helpers/file-list';
 
 test.describe('File Compression @files', () => {
   test.beforeEach(async ({ page }) => {
@@ -21,7 +21,7 @@ test.describe('File Compression @files', () => {
 
   test('should compress single file', async ({ page }) => {
     const testFile = generateTestFile({ name: generateFileName('compress-single') });
-    const archiveName = `archive-${Date.now()}.zip`;
+    const archiveBase = `archive-${Date.now()}`;
 
     // Upload file first
     await page.locator(Selectors.fileList.uploadBtn).click();
@@ -44,19 +44,19 @@ test.describe('File Compression @files', () => {
     await page.locator(Selectors.contextMenu.compress).click();
 
     // Fill archive name if modal appears
-    const archiveInput = page.locator('input[placeholder*="압축"], input[name="archiveName"]');
-    if (await archiveInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await archiveInput.fill(archiveName);
-      await page.locator('button:has-text("압축"), button:has-text("생성")').click();
-    }
+    const archive = await compressSelection(page, archiveBase);
 
-    // Wait for archive to appear
-    await expect(page.locator(`text=.zip`).first()).toBeVisible({ timeout: 30000 });
+    // The folder filter still holds the source file's name, so re-query for
+    // the archive we just asked for.
+    await revealFile(page, archive);
   });
 
   test('should compress multiple files', async ({ page }) => {
-    const file1 = generateTestFile({ name: generateFileName('multi-compress-1') });
-    const file2 = generateTestFile({ name: generateFileName('multi-compress-2') });
+    // Share a prefix so one filter query surfaces both rows; the list is
+    // virtualised and filtering to a single name hides the other.
+    const stamp = Date.now();
+    const file1 = generateTestFile({ name: `multi-compress-${stamp}-a.txt` });
+    const file2 = generateTestFile({ name: `multi-compress-${stamp}-b.txt` });
 
     // Upload first file
     await page.locator(Selectors.fileList.uploadBtn).click();
@@ -88,26 +88,20 @@ test.describe('File Compression @files', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).not.toBeVisible({ timeout: 30000 });
     await revealFile(page, file2.name);
 
-    // Select both files (Ctrl+click)
-    await revealFile(page, file1.name);
-    await page.locator(`text=${file1.name}`).first().click();
-    await page.locator(`text=${file2.name}`).first().click({ modifiers: ['Control'] });
+    // Filter to the pair first: the list is virtualised, so ctrl-clicking a row
+    // that a single-name filter has hidden selects nothing.
+    await revealFile(page, `multi-compress-${stamp}`);
+    const rows = page.locator(Selectors.fileList.row).filter({ hasText: `multi-compress-${stamp}` });
+    await expect(rows).toHaveCount(2, { timeout: 15000 });
+    await rows.nth(0).click();
+    await rows.nth(1).click({ modifiers: ['Control'] });
 
     // Right-click on one of them and compress
-    await revealFile(page, file1.name);
-    await page.locator(`text=${file1.name}`).first().click({ button: 'right' });
+    await rows.nth(0).click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
     await page.locator(Selectors.contextMenu.compress).click();
 
-    // Fill archive name if modal appears
-    const archiveInput = page.locator('input[placeholder*="압축"], input[name="archiveName"]');
-    if (await archiveInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await archiveInput.fill(`multi-archive-${Date.now()}.zip`);
-      await page.locator('button:has-text("압축"), button:has-text("생성")').click();
-    }
-
-    // Wait for archive to appear
-    await expect(page.locator(`text=.zip`).first()).toBeVisible({ timeout: 30000 });
+    const archive = await compressSelection(page, `multi-archive-${Date.now()}`);
   });
 
   test('should compress folder', async ({ page }) => {
@@ -115,10 +109,8 @@ test.describe('File Compression @files', () => {
 
     // Create folder
     await page.locator(Selectors.fileList.newFolderBtn).click();
-    await page
-      .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
-      .fill(folderName);
-    await page.locator('button:has-text("생성")').click();
+    await page.locator(Selectors.createFolderModal.nameInput).fill(folderName);
+    await page.locator(Selectors.createFolderModal.submit).first().click();
     await revealFile(page, folderName);
 
     // Navigate into folder and upload a file
@@ -148,15 +140,7 @@ test.describe('File Compression @files', () => {
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
     await page.locator(Selectors.contextMenu.compress).click();
 
-    // Fill archive name if modal appears
-    const archiveInput = page.locator('input[placeholder*="압축"], input[name="archiveName"]');
-    if (await archiveInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await archiveInput.fill(`${folderName}.zip`);
-      await page.locator('button:has-text("압축"), button:has-text("생성")').click();
-    }
-
-    // Wait for archive to appear
-    await expect(page.locator(`text=${folderName}.zip`).first()).toBeVisible({ timeout: 30000 });
+    const archive = await compressSelection(page, folderName);
   });
 });
 
@@ -169,7 +153,7 @@ test.describe('Archive Extraction @files', () => {
   test('should extract archive', async ({ page }) => {
     // First create an archive by compressing a file
     const testFile = generateTestFile({ name: generateFileName('extract-test') });
-    const archiveName = `extract-archive-${Date.now()}.zip`;
+    const archiveBase = `extract-archive-${Date.now()}`;
 
     // Upload file
     await page.locator(Selectors.fileList.uploadBtn).click();
@@ -191,13 +175,9 @@ test.describe('Archive Extraction @files', () => {
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
     await page.locator(Selectors.contextMenu.compress).click();
 
-    const archiveInput = page.locator('input[placeholder*="압축"], input[name="archiveName"]');
-    if (await archiveInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await archiveInput.fill(archiveName);
-      await page.locator('button:has-text("압축"), button:has-text("생성")').click();
-    }
+    const archive = await compressSelection(page, archiveBase);
 
-    await revealFile(page, archiveName);
+    await revealFile(page, archive);
 
     // Delete original file to make extraction visible
     await revealFile(page, testFile.name);
@@ -208,8 +188,8 @@ test.describe('Archive Extraction @files', () => {
     await expectFileGone(page, testFile.name);
 
     // Extract the archive
-    await revealFile(page, archiveName);
-    await page.locator(`text=${archiveName}`).first().click({ button: 'right' });
+    await revealFile(page, archive);
+    await page.locator(`text=${archive}`).first().click({ button: 'right' });
     await expect(page.locator(Selectors.contextMenu.container)).toBeVisible({ timeout: 5000 });
     await page.locator(Selectors.contextMenu.extract).click();
 
@@ -244,20 +224,12 @@ test.describe('Archive Extraction @files', () => {
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.compress).click();
 
-    const archiveInput = page.locator('input[placeholder*="압축"], input[name="archiveName"]');
-    if (await archiveInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await archiveInput.fill(`folder-extract-${Date.now()}.zip`);
-      await page.locator('button:has-text("압축"), button:has-text("생성")').click();
-    }
-
-    await expect(page.locator(`text=.zip`).first()).toBeVisible({ timeout: 30000 });
+    const archive = await compressSelection(page, `folder-extract-${Date.now()}`);
 
     // Create destination folder
     await page.locator(Selectors.fileList.newFolderBtn).click();
-    await page
-      .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
-      .fill(extractFolder);
-    await page.locator('button:has-text("생성")').click();
+    await page.locator(Selectors.createFolderModal.nameInput).fill(extractFolder);
+    await page.locator(Selectors.createFolderModal.submit).first().click();
     await revealFile(page, extractFolder);
 
     // Note: Specific folder extraction UI may vary
@@ -273,7 +245,7 @@ test.describe('ZIP Preview @files', () => {
   test('should preview ZIP contents', async ({ page }) => {
     // Create a file and compress it
     const testFile = generateTestFile({ name: generateFileName('preview-content') });
-    const archiveName = `preview-archive-${Date.now()}.zip`;
+    const archiveBase = `preview-archive-${Date.now()}`;
 
     // Upload file
     await page.locator(Selectors.fileList.uploadBtn).click();
@@ -294,16 +266,12 @@ test.describe('ZIP Preview @files', () => {
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.compress).click();
 
-    const archiveInput = page.locator('input[placeholder*="압축"], input[name="archiveName"]');
-    if (await archiveInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await archiveInput.fill(archiveName);
-      await page.locator('button:has-text("압축"), button:has-text("생성")').click();
-    }
+    const archive = await compressSelection(page, archiveBase);
 
-    await revealFile(page, archiveName);
+    await revealFile(page, archive);
 
     // Double-click to preview (if supported)
-    await page.locator(`text=${archiveName}`).first().dblclick();
+    await page.locator(`text=${archive}`).first().dblclick();
 
     // Check if preview modal/panel appears with file list
     const previewModal = page.locator('.archive-preview, .zip-preview, .modal:has-text(".txt")');
@@ -316,7 +284,7 @@ test.describe('ZIP Preview @files', () => {
   test('should download file from ZIP preview', async ({ page }) => {
     // Create a file and compress it
     const testFile = generateTestFile({ name: generateFileName('zip-download') });
-    const archiveName = `download-preview-${Date.now()}.zip`;
+    const archiveBase = `download-preview-${Date.now()}`;
 
     // Upload file
     await page.locator(Selectors.fileList.uploadBtn).click();
@@ -337,16 +305,12 @@ test.describe('ZIP Preview @files', () => {
     await page.locator(`text=${testFile.name}`).first().click({ button: 'right' });
     await page.locator(Selectors.contextMenu.compress).click();
 
-    const archiveInput = page.locator('input[placeholder*="압축"], input[name="archiveName"]');
-    if (await archiveInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await archiveInput.fill(archiveName);
-      await page.locator('button:has-text("압축"), button:has-text("생성")').click();
-    }
+    const archive = await compressSelection(page, archiveBase);
 
-    await revealFile(page, archiveName);
+    await revealFile(page, archive);
 
     // Double-click to preview
-    await page.locator(`text=${archiveName}`).first().dblclick();
+    await page.locator(`text=${archive}`).first().dblclick();
 
     // If preview is available, try to download a file from it
     const previewModal = page.locator('.archive-preview, .zip-preview, .modal');

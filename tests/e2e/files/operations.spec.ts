@@ -24,10 +24,10 @@ test.describe('File Operations', () => {
     await page.locator('.new-folder-btn').click();
 
     // Fill folder name in modal
-    await page.locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]').fill(folderName);
+    await page.locator(Selectors.createFolderModal.nameInput).fill(folderName);
 
     // Confirm creation
-    await page.locator('button:has-text("생성")').click();
+    await page.locator(Selectors.createFolderModal.submit).first().click();
 
     // Verify folder appears in list (give time for creation)
     await revealFile(page, folderName);
@@ -38,8 +38,8 @@ test.describe('File Operations', () => {
 
     // Create folder first
     await page.locator('.new-folder-btn').click();
-    await page.locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]').fill(folderName);
-    await page.locator('button:has-text("생성")').click();
+    await page.locator(Selectors.createFolderModal.nameInput).fill(folderName);
+    await page.locator(Selectors.createFolderModal.submit).first().click();
 
     // Wait for folder to appear
     await revealFile(page, folderName);

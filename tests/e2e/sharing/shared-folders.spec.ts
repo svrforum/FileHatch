@@ -149,7 +149,7 @@ test.describe('Shared Drive Operations @sharing', () => {
       const newFolderBtn = page.locator(Selectors.fileList.newFolderBtn);
       if (await newFolderBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await newFolderBtn.click();
-        await page.locator(Selectors.modal.container).locator('input[type="text"]').fill(folderName);
+        await page.locator(Selectors.createFolderModal.nameInput).fill(folderName);
         await page.locator(Selectors.modal.container).locator('button:has-text("생성")').click();
 
         /*

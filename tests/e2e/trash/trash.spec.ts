@@ -226,10 +226,8 @@ test.describe('Trash Operations @files', () => {
 
     // Create folder
     await page.locator(Selectors.fileList.newFolderBtn).click();
-    await page
-      .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
-      .fill(folderName);
-    await page.locator('button:has-text("생성")').click();
+    await page.locator(Selectors.createFolderModal.nameInput).fill(folderName);
+    await page.locator(Selectors.createFolderModal.submit).first().click();
     await revealFile(page, folderName);
 
     // Delete folder
@@ -251,10 +249,8 @@ test.describe('Trash Operations @files', () => {
 
     // Create folder with content
     await page.locator(Selectors.fileList.newFolderBtn).click();
-    await page
-      .locator('input[placeholder*="폴더"], input[placeholder*="folder"], input[name="folderName"]')
-      .fill(folderName);
-    await page.locator('button:has-text("생성")').click();
+    await page.locator(Selectors.createFolderModal.nameInput).fill(folderName);
+    await page.locator(Selectors.createFolderModal.submit).first().click();
     await revealFile(page, folderName);
 
     // Navigate into folder and upload a file

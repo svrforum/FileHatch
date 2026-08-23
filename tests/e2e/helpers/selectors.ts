@@ -100,8 +100,10 @@ export const Selectors = {
     share: '.context-menu button:has-text("링크로 공유")',
     userShare: '.context-menu button:has-text("사용자에게 공유")',
     uploadLink: '.context-menu button:has-text("업로드 링크")',
-    compress: '.context-menu button:has-text("압축"):not(:has-text("해제"))',
-    extract: '.context-menu button:has-text("압축 해제")',
+    // The menu says 압축풀기, not 압축 해제 - and "압축" is a prefix of it, so
+    // the compress entry has to exclude the longer label explicitly.
+    compress: '.context-menu button:has-text("압축"):not(:has-text("풀기"))',
+    extract: '.context-menu button:has-text("압축풀기")',
     delete: '.context-menu button.context-menu-item.danger, .context-menu button:has-text("삭제")',
     favorite: '.context-menu button:has-text("즐겨찾기")',
     properties: '.context-menu button:has-text("속성")',
@@ -178,6 +180,28 @@ export const Selectors = {
     existingSection: '.link-share-modal .existing-links-section',
     existingCopyBtn: '.link-share-modal button.link-copy-btn',
     existingDeleteBtn: '.link-share-modal button.link-delete-btn',
+  },
+
+  /*
+   * "압축 파일 만들기" dialog. The name field carries no placeholder and the
+   * ".zip" suffix is fixed text beside it, so address it by position inside
+   * the dialog.
+   */
+  compressModal: {
+    container: '.modal-overlay:has-text("압축 파일 만들기")',
+    nameInput: '.modal-overlay:has-text("압축 파일 만들기") input[type="text"]',
+    submit: '.modal-overlay:has-text("압축 파일 만들기") button:has-text("압축")',
+  },
+
+  /*
+   * CreateFolderModal.tsx reuses the upload dialog's shell, so its overlay is
+   * .upload-modal-overlay rather than the .modal-overlay every other dialog
+   * uses - a generic modal lookup never finds it.
+   */
+  createFolderModal: {
+    container: '.upload-modal-overlay',
+    nameInput: '.upload-modal-overlay input.form-input',
+    submit: '.upload-modal-overlay button[type="submit"], .upload-modal-overlay button:has-text("생성")',
   },
 
   // Share Modal

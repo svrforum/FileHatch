@@ -159,3 +159,19 @@ export async function purgeFromTrash(page: Page, name: string): Promise<void> {
   await expect(page.locator(Selectors.trash.item, { hasText: name }),
     `${name} should leave the trash after a permanent delete`).toHaveCount(0, { timeout: 20000 });
 }
+
+/**
+ * Compresses the current selection and returns once the archive is listed.
+ *
+ * The dialog pre-fills the name from the selection and appends ".zip" as fixed
+ * text beside the field, so the value must be passed without the extension.
+ */
+export async function compressSelection(page: Page, archiveBaseName: string): Promise<string> {
+  await expect(page.locator(Selectors.compressModal.container)).toBeVisible({ timeout: 5000 });
+  await page.locator(Selectors.compressModal.nameInput).fill(archiveBaseName);
+  await page.locator(Selectors.compressModal.submit).click();
+
+  const archive = `${archiveBaseName}.zip`;
+  await revealFile(page, archive);
+  return archive;
+}

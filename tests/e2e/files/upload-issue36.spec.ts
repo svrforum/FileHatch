@@ -13,6 +13,7 @@
 import { test, expect } from '@playwright/test'
 import { generateFileName, generateTestFile } from '../helpers/test-data'
 import { Selectors } from '../helpers/selectors'
+import { revealFile } from '../helpers/file-list'
 
 const UPLOAD_TIMEOUT = 30_000
 
@@ -38,7 +39,7 @@ async function uploadSingleFile(
   await openUploadModal(page)
   await pickAndSetFiles(page, [file])
   await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: UPLOAD_TIMEOUT })
-  await expect(page.locator(`text=${file.name}`).first()).toBeVisible({ timeout: UPLOAD_TIMEOUT })
+  await revealFile(page, file.name)
 }
 
 test.describe('Issue #36 — duplicate dialog and queue handling @files @regression', () => {
