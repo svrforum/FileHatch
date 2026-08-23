@@ -140,8 +140,12 @@ export async function restoreFromTrash(page: Page, name: string): Promise<void> 
   const button = row.locator('button.restore-btn');
   await expect(button, `restore button for ${name}`).toBeVisible({ timeout: 5000 });
   await button.click();
+  /*
+   * Restoring a folder moves every entry underneath it, so the job can run
+   * well past the 20s a single file needs.
+   */
   await expect(page.locator(Selectors.trash.item, { hasText: name }),
-    `${name} should leave the trash after restore`).toHaveCount(0, { timeout: 20000 });
+    `${name} should leave the trash after restore`).toHaveCount(0, { timeout: 40000 });
 }
 
 /** Permanently deletes `name` from the trash, accepting the confirmation. */
@@ -157,7 +161,7 @@ export async function purgeFromTrash(page: Page, name: string): Promise<void> {
   await expect(confirm, 'permanent-delete confirmation').toBeVisible({ timeout: 10000 });
   await confirm.click();
   await expect(page.locator(Selectors.trash.item, { hasText: name }),
-    `${name} should leave the trash after a permanent delete`).toHaveCount(0, { timeout: 20000 });
+    `${name} should leave the trash after a permanent delete`).toHaveCount(0, { timeout: 40000 });
 }
 
 /**

@@ -211,8 +211,14 @@ test.describe('Shared Views @sharing', () => {
       await navigateVia(page, Selectors.sidebar.sharedWithMe);
 
       // Should show shared with me view or empty state
+      /*
+       * Assert on the view itself, not on stray text: the sidebar link is
+       * also labelled 나에게 공유된 파일, so a page-wide text lookup matched
+       * both it and the empty state and tripped strict mode.
+       */
+      await expect(page).toHaveURL(/\/shared-with-me/, { timeout: 10000 });
       await expect(
-        page.locator(':text("나와 공유된"), :text("Shared with me"), :text("공유된 파일")').first()
+        page.locator(Selectors.sharedViews.row).first()
           .or(page.locator(Selectors.sharedViews.emptyState).first())
       ).toBeVisible({ timeout: 10000 });
     } else {
@@ -227,9 +233,10 @@ test.describe('Shared Views @sharing', () => {
       await navigateVia(page, Selectors.sidebar.myShares);
 
       // Should show my shares view or empty state
+      await expect(page).toHaveURL(/\/shared-by-me/, { timeout: 10000 });
       await expect(
-        page.locator(':text("내가 공유한"), :text("My shares")').first()
-          .or(page.locator(':text("공유한 항목이 없습니다"), :text("No shared items")').first())
+        page.locator(Selectors.sharedViews.row).first()
+          .or(page.locator(Selectors.sharedViews.emptyState).first())
       ).toBeVisible({ timeout: 10000 });
     } else {
       test.skip();
@@ -263,15 +270,15 @@ test.describe('Shared Views @sharing', () => {
       timeout: 5000,
     });
 
-    // Close modal
-    await page.locator(Selectors.modal.closeBtn).click().catch(() => {
-      page.keyboard.press('Escape');
-    });
+    // Close the dialog. Escape is enough and avoids the unawaited promise the
+    // old .catch() fallback left dangling past the end of the test.
+    await page.keyboard.press('Escape');
+    await expect(page.locator(Selectors.linkShareModal.container)).toBeHidden({ timeout: 5000 });
 
-    // Navigate to my shares
-    const mySharesLink = page.locator(Selectors.sidebar.myShares);
+    // A link share lands in 링크로 공유된 파일, not 다른사용자에 공유된 파일.
+    const mySharesLink = page.locator(Selectors.sidebar.sharedViaLink);
     if (await mySharesLink.count()) {
-      await navigateVia(page, Selectors.sidebar.myShares);
+      await navigateVia(page, Selectors.sidebar.sharedViaLink);
 
       // Should show the shared file
       // Note: UI may vary - might show file name or share details
