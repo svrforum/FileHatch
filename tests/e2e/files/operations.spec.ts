@@ -105,9 +105,9 @@ test.describe('File Operations', () => {
     await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
 
-    // Wait for file to appear in file list (use specific selector for file row)
-    const fileRow = page.locator(`.file-list-container >> text=${originalName}`);
-    await expect(fileRow).toBeVisible({ timeout: 30000 });
+    // Wait for file to appear in file list
+    await revealFile(page, originalName);
+    const fileRow = page.locator(Selectors.fileList.row).filter({ hasText: originalName }).first();
 
     // Right-click to open context menu
     await fileRow.click({ button: 'right' });
@@ -119,16 +119,16 @@ test.describe('File Operations', () => {
     await page.locator('.context-menu >> text=이름 변경').click();
 
     // Fill new name
-    await page.locator('input[value*="rename-test"], input[placeholder*="이름"]').fill(newName);
+    // Scope to the rename field: the folder filter also holds the old name,
+    // so a value-based lookup matches both inputs.
+    await page.locator('input.rename-input').fill(newName);
 
     // Confirm rename (button text is "변경" meaning "Change")
-    await page.locator('button:has-text("변경")').click();
+    await page.locator(Selectors.modal.container).locator('button:has-text("변경")').click();
 
-    // Verify new name appears in file list
-    await expect(page.locator(`.file-list-container >> text=${newName}`)).toBeVisible({ timeout: 5000 });
-
-    // Verify old name is gone from file list (use specific selector to avoid matching toast messages)
-    await expect(page.locator(`.file-list-container .file-name:has-text("${originalName}")`)).not.toBeVisible();
+    // The folder filter still holds the old name, so re-query for the new one.
+    await revealFile(page, newName);
+    await expectFileGone(page, originalName);
   });
 
   test('should delete file', async ({ page }) => {
@@ -173,8 +173,14 @@ test.describe('File Operations', () => {
 
   test('should select multiple files', async ({ page }) => {
     // Create two test files
-    const file1 = `multi-select-1-${Date.now()}.txt`;
-    const file2 = `multi-select-2-${Date.now()}.txt`;
+    /*
+     * Share a prefix so a single filter query can surface both rows. The list
+     * is virtualised - filtering to one name at a time hides the other, and
+     * ctrl-clicking a row that is not rendered cannot select anything.
+     */
+    const prefix = `multi-select-${Date.now()}`;
+    const file1 = `${prefix}-1.txt`;
+    const file2 = `${prefix}-2.txt`;
 
     // Upload first file
     await page.locator(Selectors.fileList.uploadBtn).click();
@@ -192,8 +198,6 @@ test.describe('File Operations', () => {
      * file row and the context menu never opens.
      */
     await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
-    // Wait for upload modal to close
-    await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
     await revealFile(page, file1);
 
     // Upload second file
@@ -212,19 +216,17 @@ test.describe('File Operations', () => {
      * file row and the context menu never opens.
      */
     await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
-    // Wait for upload modal to close
-    await expect(page.locator('.upload-modal-overlay')).not.toBeVisible({ timeout: 30000 });
     await revealFile(page, file2);
 
-    // Ctrl+click to select multiple
-    await revealFile(page, file1);
-    await page.locator(`text=${file1}`).first().click();
-    await page.locator(`text=${file2}`).first().click({ modifiers: ['Control'] });
+    // Filter to the pair, then ctrl-click across the two rows.
+    await revealFile(page, prefix);
+    const rows = page.locator(Selectors.fileList.row).filter({ hasText: prefix });
+    await expect(rows).toHaveCount(2, { timeout: 15000 });
 
-    // Verify multi-select bar appears
-    await expect(page.locator('[data-testid="multi-select-bar"], .multi-select-bar, .selection-bar')).toBeVisible({
-      timeout: 5000,
-    });
+    await rows.nth(0).click();
+    await rows.nth(1).click({ modifiers: ['Control'] });
+
+    await expect(page.locator(Selectors.multiSelect.bar)).toBeVisible({ timeout: 5000 });
   });
 
   test('should download file', async ({ page }) => {
@@ -299,6 +301,10 @@ test.describe('Drag and Drop', () => {
 
     // Dispatch drop
     await dropZone.dispatchEvent('drop', { dataTransfer });
+
+    // A drop opens the upload modal too; its overlay blocks the toolbar until
+    // the transfer finishes and the dialog closes itself.
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
 
     // Verify file appears (may take time for upload)
     await revealFile(page, fileName);

@@ -26,6 +26,16 @@ async function filterBox(page: Page): Promise<Locator | null> {
 
   const toggle = page.locator(Selectors.fileList.localSearchToggle);
   if (await toggle.isVisible().catch(() => false)) {
+    /*
+     * Ctrl+F rather than a click: the transfer panel expands over the toolbar
+     * after an upload and swallows the pointer, so clicking the toggle waits
+     * out the full timeout on an element that is visible but unreachable.
+     * The button's own tooltip advertises the shortcut.
+     */
+    await page.keyboard.press('Control+f');
+    if (await listFilter.isVisible({ timeout: 3000 }).catch(() => false)) {
+      return listFilter;
+    }
     await toggle.click();
     await expect(listFilter).toBeVisible({ timeout: 5000 });
     return listFilter;

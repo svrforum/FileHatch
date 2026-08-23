@@ -209,12 +209,11 @@ export const Selectors = {
 
   // Multi-select
   multiSelect: {
-    bar: '[data-testid="multi-select-bar"], .multi-select-bar, .selection-bar',
-    count: '.selection-count',
-    deleteBtn: '.selection-delete-btn',
-    downloadBtn: '.selection-download-btn',
-    shareBtn: '.selection-share-btn',
-    clearBtn: '.selection-clear-btn',
+    bar: '.multi-select-bar',
+    trashBar: '.trash-multi-select-bar',
+    count: '.multi-select-bar .select-count',
+    deleteBtn: '.multi-select-bar .multi-action-btn.danger',
+    actionBtn: '.multi-select-bar .multi-action-btn',
   },
 
   // Notifications

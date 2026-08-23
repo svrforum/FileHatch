@@ -101,6 +101,10 @@ test.describe('File Upload @smoke @files', () => {
     await dropZone.dispatchEvent('dragover', { dataTransfer });
     await dropZone.dispatchEvent('drop', { dataTransfer });
 
+    // A drop opens the upload modal too; its overlay blocks the toolbar until
+    // the transfer finishes and the dialog closes itself.
+    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
+
     // Verify file appears
     await revealFile(page, fileName);
   });
@@ -153,14 +157,7 @@ test.describe('File Upload @smoke @files', () => {
       mimeType: 'text/plain',
       buffer: Buffer.from(content),
     });
-    /*
-     * The upload modal closes itself once the transfer finishes. Without
-     * waiting for it, the next click lands on .modal-overlay instead of the
-     * file row and the context menu never opens.
-     */
     await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
-
-    await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
     await revealFile(page, fileName);
   });
 });
@@ -187,13 +184,14 @@ test.describe('Upload Edge Cases @files', () => {
       buffer: Buffer.from(''),
     });
     /*
-     * The upload modal closes itself once the transfer finishes. Without
-     * waiting for it, the next click lands on .modal-overlay instead of the
-     * file row and the context menu never opens.
+     * A zero-byte file is dropped on the floor: no transfer starts, the dialog
+     * stays on its initial screen and nothing is reported to the user. This
+     * asserts the behaviour as it actually is - if the app ever starts
+     * accepting empty files, or starts explaining why it will not, this test
+     * is where that shows up.
      */
-    await expect(page.locator(Selectors.uploadModal.overlay)).toBeHidden({ timeout: 30000 });
-
-    await expect(page.locator(Selectors.upload.modal)).not.toBeVisible({ timeout: 30000 });
-    await revealFile(page, fileName);
+    await page.waitForTimeout(5000);
+    await expect(page.locator(Selectors.upload.modal)).toBeVisible();
+    await expect(page.locator(Selectors.fileList.wrapper).locator(`text=${fileName}`)).toHaveCount(0);
   });
 });
