@@ -53,6 +53,17 @@ RUN cd /out/rhwp && \
         echo "SKIP 404/err: $url"; rm -f "$out"; \
       fi; \
     done < /tmp/woff2.list
+# Service worker — registerSW.js 가 /rhwp/sw.js 를 등록하는데, wget --recursive 는
+# 이 참조를 따라가지 못해 파일이 빠진다. 그러면 브라우저 콘솔에 등록 실패
+# (404) 가 남는다. PWA 오프라인 캐시는 우리 용도에 필수는 아니므로 실패해도
+# 빌드는 계속한다.
+RUN cd /out/rhwp && \
+    for f in sw.js workbox-*.js; do \
+      wget --quiet --timeout=20 --tries=2 -O "$f" "https://edwardkim.github.io/rhwp/$f" \
+        && echo "OK: $f" \
+        || { echo "SKIP: $f"; rm -f "$f"; }; \
+    done
+
 # 검증: 핵심 자산이 mirror 되었는지 확인 — 누락 시 빌드 실패
 RUN test -f /out/rhwp/index.html
 RUN test -d /out/rhwp/assets
