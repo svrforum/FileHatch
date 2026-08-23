@@ -370,6 +370,14 @@ export const Selectors = {
     disable: '.user-profile-modal button:has-text("2FA 해제")',
     // No <select> for theme - the profile tab carries a toggle button.
     themeSelect: '.user-profile-modal .theme-toggle-btn',
+    twoFactor: {
+      setupPanel: '.user-profile-modal .twofa-setup',
+      qrImage: '.user-profile-modal .qr-code-container img',
+      secret: '.user-profile-modal .secret-code',
+      codeInput: '.user-profile-modal input.verify-code-input',
+      submit: '.user-profile-modal .twofa-setup button[type="submit"]',
+      backupCodes: '.user-profile-modal .backup-codes-display',
+    },
     message: '.user-profile-modal .message, .user-profile-modal .field-error',
   },
 
@@ -386,6 +394,17 @@ export const Selectors = {
       favorites: '.my-activity-tab:has-text("즐겨찾기")',
       recent: '.my-activity-tab:has-text("최근 항목")',
     },
+  },
+
+  /*
+   * The three 공유 views reuse the file browser shell: same .file-list-wrapper,
+   * same rows, and an .empty-state when nothing is shared. There is no
+   * dedicated ".shared-drive-list" anywhere in the app.
+   */
+  sharedViews: {
+    container: '.file-list-wrapper',
+    row: '.file-row',
+    emptyState: '.file-list-wrapper .empty-state',
   },
 
   /*

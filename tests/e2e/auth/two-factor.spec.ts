@@ -32,7 +32,7 @@ test.describe('2FA Setup @auth', () => {
   });
 
   test('should show QR code during 2FA setup', async ({ page }) => {
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
@@ -47,7 +47,7 @@ test.describe('2FA Setup @auth', () => {
   });
 
   test('should display secret key during 2FA setup', async ({ page }) => {
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
@@ -69,7 +69,7 @@ test.describe('2FA Setup @auth', () => {
   });
 
   test('should require verification code to complete setup', async ({ page }) => {
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
@@ -86,7 +86,7 @@ test.describe('2FA Setup @auth', () => {
   });
 
   test('should reject invalid verification code', async ({ page }) => {
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
@@ -112,7 +112,7 @@ test.describe('2FA Setup @auth', () => {
     // This test assumes 2FA is being enabled for the first time
     // It requires actual TOTP code which we can't generate in tests
 
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
@@ -212,7 +212,7 @@ test.describe('2FA Disable @auth', () => {
   });
 
   test('should show disable 2FA option when enabled', async ({ page }) => {
-    const disable2FABtn = page.locator(Selectors.profile.disable2FABtn);
+    const disable2FABtn = page.locator(Selectors.profile.disable);
     if (await disable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       expect(await disable2FABtn.isVisible()).toBe(true);
     } else {
@@ -222,7 +222,7 @@ test.describe('2FA Disable @auth', () => {
   });
 
   test('should require verification to disable 2FA', async ({ page }) => {
-    const disable2FABtn = page.locator(Selectors.profile.disable2FABtn);
+    const disable2FABtn = page.locator(Selectors.profile.disable);
     if (await disable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await disable2FABtn.click();
 
@@ -236,7 +236,7 @@ test.describe('2FA Disable @auth', () => {
   });
 
   test('should show warning before disabling 2FA', async ({ page }) => {
-    const disable2FABtn = page.locator(Selectors.profile.disable2FABtn);
+    const disable2FABtn = page.locator(Selectors.profile.disable);
     if (await disable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await disable2FABtn.click();
 

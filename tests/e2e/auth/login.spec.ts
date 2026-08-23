@@ -35,8 +35,13 @@ test.describe('Login Page', () => {
   test('should login successfully with valid credentials', async ({ page }) => {
     await page.goto('/');
 
-    const username = process.env.TEST_USER || 'admin';
-    const password = process.env.TEST_PASSWORD || 'admin1234';
+    /*
+     * The suite's own setup completes the initial-setup flow, which renames the
+     * shipped account and changes its password. Fall back to what that step
+     * created so this test works on a database a previous run has touched.
+     */
+    const username = process.env.TEST_USER || 'testadmin';
+    const password = process.env.TEST_PASSWORD || 'TestAdmin123!';
 
     // Fill in valid credentials
     await page.locator('input[name="username"], input[type="text"]').first().fill(username);
@@ -68,8 +73,13 @@ test.describe('Login Page', () => {
     // First login
     await page.goto('/');
 
-    const username = process.env.TEST_USER || 'admin';
-    const password = process.env.TEST_PASSWORD || 'admin1234';
+    /*
+     * The suite's own setup completes the initial-setup flow, which renames the
+     * shipped account and changes its password. Fall back to what that step
+     * created so this test works on a database a previous run has touched.
+     */
+    const username = process.env.TEST_USER || 'testadmin';
+    const password = process.env.TEST_PASSWORD || 'TestAdmin123!';
 
     await page.locator('input[name="username"], input[type="text"]').first().fill(username);
     await page.locator('input[name="password"], input[type="password"]').first().fill(password);

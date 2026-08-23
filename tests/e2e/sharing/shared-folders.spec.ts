@@ -29,7 +29,7 @@ test.describe('Shared Drives Access @sharing', () => {
       ).toBeVisible({ timeout: 10000 }).catch(() => {
         // May show empty state
         expect(
-          page.locator(':text("공유 드라이브가 없습니다"), :text("No shared drives")').first()
+          page.locator(Selectors.sharedViews.emptyState).first()
         ).toBeVisible({ timeout: 5000 }).catch(() => {
           // Or a list of drives - any visible content is acceptable
         });
@@ -46,8 +46,10 @@ test.describe('Shared Drives Access @sharing', () => {
       await page.waitForTimeout(1000);
 
       // Check for shared drive items or empty state
-      const driveList = page.locator('.shared-drive-list, .drive-list, .folder-list');
-      const emptyState = page.locator(':text("공유 드라이브가 없습니다"), :text("No shared drives")').first();
+      // The wrapper is always present; what varies is whether it holds rows
+      // or the empty-state placeholder.
+      const driveList = page.locator(Selectors.sharedViews.row).first();
+      const emptyState = page.locator(Selectors.sharedViews.emptyState).first();
 
       // Either should be visible
       await expect(driveList.or(emptyState)).toBeVisible({ timeout: 10000 });
@@ -63,7 +65,7 @@ test.describe('Shared Drives Access @sharing', () => {
       await page.waitForTimeout(1000);
 
       // Find a shared drive to enter
-      const sharedDrive = page.locator('.shared-drive-item, .drive-card, .folder-item').first();
+      const sharedDrive = page.locator(Selectors.sharedViews.row).first();
       if (await sharedDrive.isVisible({ timeout: 3000 }).catch(() => false)) {
         await sharedDrive.dblclick();
         await page.waitForTimeout(1000);
@@ -96,7 +98,7 @@ test.describe('Shared Drive Operations @sharing', () => {
 
   test('should upload file to shared drive (if write access)', async ({ page }) => {
     // Find and enter a shared drive
-    const sharedDrive = page.locator('.shared-drive-item, .drive-card, .folder-item').first();
+    const sharedDrive = page.locator(Selectors.sharedViews.row).first();
     if (await sharedDrive.isVisible({ timeout: 3000 }).catch(() => false)) {
       await sharedDrive.dblclick();
       await page.waitForTimeout(1000);
@@ -139,7 +141,7 @@ test.describe('Shared Drive Operations @sharing', () => {
   });
 
   test('should create folder in shared drive (if write access)', async ({ page }) => {
-    const sharedDrive = page.locator('.shared-drive-item, .drive-card, .folder-item').first();
+    const sharedDrive = page.locator(Selectors.sharedViews.row).first();
     if (await sharedDrive.isVisible({ timeout: 3000 }).catch(() => false)) {
       await sharedDrive.dblclick();
       await page.waitForTimeout(1000);
@@ -170,7 +172,7 @@ test.describe('Shared Drive Operations @sharing', () => {
   });
 
   test('should download file from shared drive (if read access)', async ({ page }) => {
-    const sharedDrive = page.locator('.shared-drive-item, .drive-card, .folder-item').first();
+    const sharedDrive = page.locator(Selectors.sharedViews.row).first();
     if (await sharedDrive.isVisible({ timeout: 3000 }).catch(() => false)) {
       await sharedDrive.dblclick();
       await page.waitForTimeout(1000);

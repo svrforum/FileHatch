@@ -80,44 +80,24 @@ test.describe('Profile Settings @profile', () => {
   });
 
   test('should change display theme', async ({ page }) => {
-    // Navigate to profile
     await page.locator(Selectors.header.avatarBtn).click();
     await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
 
-    await expect(
-      page.locator(':text("프로필"), :text("Profile")').first()
-    ).toBeVisible({ timeout: 10000 });
+    /*
+     * Theme is a toggle button, not a <select> - the old test called
+     * inputValue() on it and failed with "Node is not an <input>". The applied
+     * theme shows up as data-theme on <html>.
+     */
+    const toggle = page.locator(Selectors.profile.themeToggle);
+    await expect(toggle).toBeVisible({ timeout: 5000 });
 
-    // Find theme selector
-    const themeSelect = page.locator(Selectors.profile.themeSelect);
-    if (await themeSelect.isVisible({ timeout: 3000 }).catch(() => false)) {
-      // Get current value
-      const currentTheme = await themeSelect.inputValue();
-
-      // Change to different theme
-      const options = await themeSelect.locator('option').allTextContents();
-      const newThemeIndex = currentTheme === 'dark' ? 0 : 1; // Toggle between first two options
-
-      await themeSelect.selectOption({ index: newThemeIndex });
-
-      // Save if needed
-      const saveBtn = page.locator(Selectors.profile.saveBtn);
-      if (await saveBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await saveBtn.click();
-      }
-
-      // Theme should change (may affect body class or similar)
-      await page.waitForTimeout(1000);
-    } else {
-      // Check for theme toggle buttons instead
-      const themeToggle = page.locator('.theme-toggle, button:has-text("다크"), button:has-text("Dark")');
-      if (await themeToggle.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await themeToggle.click();
-        await page.waitForTimeout(1000);
-      } else {
-        test.skip();
-      }
-    }
+    const before = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+    await toggle.click();
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.getAttribute('data-theme')), {
+        timeout: 5000,
+      })
+      .not.toBe(before);
   });
 
   test('should set SMB password', async ({ page }) => {

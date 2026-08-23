@@ -6,9 +6,15 @@
  * - Two-factor authentication setup
  * - Session management
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { TestPasswords } from '../helpers/test-data';
 import { Selectors } from '../helpers/selectors';
+
+/** The dialog opens on 프로필; password and 2FA live behind their own tabs. */
+async function openTab(page: Page, tab: string) {
+  await page.locator(tab).click();
+  await page.waitForTimeout(500);
+}
 
 test.describe('Password Change @profile @auth', () => {
   test.beforeEach(async ({ page }) => {
@@ -20,12 +26,10 @@ test.describe('Password Change @profile @auth', () => {
     await expect(page.locator(Selectors.profile.container)).toBeVisible({ timeout: 10000 });
   });
 
+
   test('should display password change option', async ({ page }) => {
-    // Look for password change button or section
-    await expect(
-      page.locator(Selectors.profile.changePasswordBtn)
-        .or(page.locator('text=비밀번호 변경'))
-    ).toBeVisible({ timeout: 10000 });
+    await openTab(page, Selectors.profile.tabs.password);
+    await expect(page.locator(Selectors.profile.changePasswordBtn)).toBeVisible({ timeout: 10000 });
   });
 
   test('should open password change form', async ({ page }) => {
@@ -142,6 +146,7 @@ test.describe('Two-Factor Authentication @profile @auth', () => {
   });
 
   test('should display 2FA section', async ({ page }) => {
+    await openTab(page, Selectors.profile.tabs.twoFactor);
     // Look for 2FA section
     await expect(
       page.locator(':text("2FA"), :text("이중 인증"), :text("Two-Factor"), :text("2단계 인증")').first()
@@ -149,22 +154,24 @@ test.describe('Two-Factor Authentication @profile @auth', () => {
   });
 
   test('should show enable 2FA button when disabled', async ({ page }) => {
+    await openTab(page, Selectors.profile.tabs.twoFactor);
     // Look for enable 2FA button
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
-    const disable2FABtn = page.locator(Selectors.profile.disable2FABtn);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
+    const disable2FABtn = page.locator(Selectors.profile.disable);
 
     // One of them should be visible
     await expect(enable2FABtn.or(disable2FABtn)).toBeVisible({ timeout: 5000 });
   });
 
   test('should start 2FA setup process', async ({ page }) => {
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    await openTab(page, Selectors.profile.tabs.twoFactor);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
       // Should show QR code or setup instructions
       await expect(
-        page.locator('img[src*="qr"], .qr-code, canvas, text=QR, text=인증 앱')
+        page.locator(Selectors.profile.twoFactor.qrImage)
       ).toBeVisible({ timeout: 10000 });
 
       // Should show secret key backup
@@ -180,7 +187,8 @@ test.describe('Two-Factor Authentication @profile @auth', () => {
   });
 
   test('should require verification code to enable 2FA', async ({ page }) => {
-    const enable2FABtn = page.locator(Selectors.profile.enable2FABtn);
+    await openTab(page, Selectors.profile.tabs.twoFactor);
+    const enable2FABtn = page.locator(Selectors.profile.enable);
     if (await enable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await enable2FABtn.click();
 
@@ -189,7 +197,7 @@ test.describe('Two-Factor Authentication @profile @auth', () => {
 
       // Should have verification code input
       await expect(
-        page.locator('input[placeholder*="코드"], input[placeholder*="code"], input[name="code"]')
+        page.locator(Selectors.profile.twoFactor.codeInput)
       ).toBeVisible({ timeout: 5000 });
     } else {
       test.skip();
@@ -197,7 +205,8 @@ test.describe('Two-Factor Authentication @profile @auth', () => {
   });
 
   test('should show disable 2FA option when enabled', async ({ page }) => {
-    const disable2FABtn = page.locator(Selectors.profile.disable2FABtn);
+    await openTab(page, Selectors.profile.tabs.twoFactor);
+    const disable2FABtn = page.locator(Selectors.profile.disable);
     if (await disable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       // 2FA is currently enabled
       expect(await disable2FABtn.isVisible()).toBe(true);
@@ -208,7 +217,8 @@ test.describe('Two-Factor Authentication @profile @auth', () => {
   });
 
   test('should require verification to disable 2FA', async ({ page }) => {
-    const disable2FABtn = page.locator(Selectors.profile.disable2FABtn);
+    await openTab(page, Selectors.profile.tabs.twoFactor);
+    const disable2FABtn = page.locator(Selectors.profile.disable);
     if (await disable2FABtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await disable2FABtn.click();
 

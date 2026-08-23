@@ -213,7 +213,7 @@ test.describe('Shared Views @sharing', () => {
       // Should show shared with me view or empty state
       await expect(
         page.locator(':text("나와 공유된"), :text("Shared with me"), :text("공유된 파일")').first()
-          .or(page.locator(':text("공유된 항목이 없습니다"), :text("No items shared")').first())
+          .or(page.locator(Selectors.sharedViews.emptyState).first())
       ).toBeVisible({ timeout: 10000 });
     } else {
       test.skip();
