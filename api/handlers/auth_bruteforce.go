@@ -506,7 +506,7 @@ func (g *BruteForceGuard) logLockEvent(username *string, ip, lockType, reason st
 func (g *BruteForceGuard) AdminUnlockUser(ctx context.Context, username string) (bool, error) {
 	var changed bool
 	err := g.db.QueryRowContext(ctx, `
-		WITH current_user AS (
+		WITH previous_lock AS (
 			SELECT locked_until
 			FROM users
 			WHERE username = $1
@@ -515,9 +515,9 @@ func (g *BruteForceGuard) AdminUnlockUser(ctx context.Context, username string) 
 			UPDATE users
 			SET locked_until = NULL,
 			    failed_login_count = 0
-			FROM current_user
+			FROM previous_lock
 			WHERE users.username = $1
-			RETURNING current_user.locked_until
+			RETURNING previous_lock.locked_until
 		)
 		SELECT locked_until IS NOT NULL AND locked_until > NOW()
 		FROM updated_user

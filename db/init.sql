@@ -337,7 +337,15 @@ INSERT INTO system_settings (key, value, description) VALUES
     ('bruteforce_lock_minutes', '15', '계정 잠금 시간 (분)'),
     ('bruteforce_ip_max_attempts', '20', 'IP별 최대 로그인 시도 횟수'),
     ('bruteforce_ip_lock_minutes', '30', 'IP 잠금 시간 (분)'),
-    ('bruteforce_enabled', 'true', '브루트포스 방어 활성화 여부')
+    ('bruteforce_enabled', 'true', '브루트포스 방어 활성화 여부'),
+    -- Web login password policy settings
+    ('password_min_length', '8', '웹 로그인 비밀번호 최소 문자 수'),
+    ('password_max_length', '72', '웹 로그인 비밀번호 최대 문자 수'),
+    ('password_required_uppercase', 'false', '웹 로그인 비밀번호 대문자 필수 여부'),
+    ('password_required_lowercase', 'false', '웹 로그인 비밀번호 소문자 필수 여부'),
+    ('password_required_number', 'false', '웹 로그인 비밀번호 숫자 필수 여부'),
+    ('password_required_special', 'false', '웹 로그인 비밀번호 특수문자 필수 여부'),
+    ('password_min_character_types', '3', '웹 로그인 비밀번호 최소 문자 종류 수')
 ON CONFLICT (key) DO NOTHING;
 
 -- =============================================================================
@@ -356,6 +364,45 @@ CREATE TABLE IF NOT EXISTS hidden_recent_items (
 CREATE INDEX IF NOT EXISTS idx_hidden_recent_user ON hidden_recent_items(user_id);
 
 -- =============================================================================
+-- User Import Jobs (Migration: 012)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS user_import_jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    file_digest CHAR(64) NOT NULL,
+    policy_revision VARCHAR(128) NOT NULL,
+    idempotency_key_hash CHAR(64) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+    total_rows INT NOT NULL CHECK (total_rows BETWEEN 0 AND 1000),
+    created_count INT NOT NULL DEFAULT 0,
+    warning_count INT NOT NULL DEFAULT 0,
+    failed_count INT NOT NULL DEFAULT 0,
+    skipped_count INT NOT NULL DEFAULT 0,
+    results JSONB NOT NULL DEFAULT '[]'::jsonb,
+    failure_code VARCHAR(64),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '24 hours'),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (admin_id, file_digest, idempotency_key_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_import_jobs_owner_created
+    ON user_import_jobs(admin_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_user_import_jobs_status
+    ON user_import_jobs(status) WHERE status IN ('pending', 'running');
+
+UPDATE user_import_jobs
+SET status = 'failed',
+    failure_code = 'server_restarted',
+    completed_at = NOW(),
+    updated_at = NOW()
+WHERE status IN ('pending', 'running');
+
+-- =============================================================================
 -- Record Initial Migrations
 -- =============================================================================
 INSERT INTO schema_migrations (version, name) VALUES
@@ -368,7 +415,9 @@ INSERT INTO schema_migrations (version, name) VALUES
     ('20240101000007', '007_transfer_jobs'),
     ('20240101000008', '008_transfer_jobs_delete'),
     ('20240101000009', '009_performance_indexes'),
-    ('20240101000010', '010_add_missing_user_columns')
+    ('20240101000010', '010_add_missing_user_columns'),
+    ('20240101000011', '011_password_policy_settings'),
+    ('20240101000012', '012_user_import_jobs')
 ON CONFLICT (version) DO NOTHING;
 
 -- =============================================================================

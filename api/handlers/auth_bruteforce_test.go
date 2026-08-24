@@ -134,7 +134,7 @@ func TestBruteForceGuardUnlockUserContract(t *testing.T) {
 			}
 			defer db.Close()
 
-			expectation := mock.ExpectQuery("WITH current_user AS").WithArgs("alice")
+			expectation := mock.ExpectQuery("WITH previous_lock AS").WithArgs("alice")
 			if tt.dbErr != nil {
 				expectation.WillReturnError(tt.dbErr)
 			} else {
