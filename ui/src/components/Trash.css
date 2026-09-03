@@ -119,7 +119,9 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .trash-item:hover {
@@ -216,7 +218,9 @@
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .restore-btn {
@@ -254,7 +258,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .trash-container .modal-content {
@@ -311,7 +315,9 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .btn-cancel:hover {
@@ -399,7 +405,9 @@
   border-radius: 50%;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .trash-search .search-clear:hover {
@@ -447,7 +455,9 @@
   background: var(--bg-primary);
   color: var(--color-primary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .filter-reset-btn:hover {
@@ -471,7 +481,7 @@
 /* Context Menu */
 .trash-context-menu {
   position: fixed;
-  z-index: 2000;
+  z-index: var(--z-dropdown);
   min-width: 180px;
   background: var(--bg-primary);
   border: 1px solid var(--border-light);
@@ -524,7 +534,7 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
-  z-index: 100;
+  z-index: var(--z-sticky);
   animation: trashSlideUp 0.2s ease;
 }
 
@@ -548,7 +558,9 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .trash-multi-action-btn:hover:not(:disabled) {

@@ -5,7 +5,7 @@
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.7);
-  z-index: 2000;
+  z-index: var(--z-fullscreen);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -141,7 +141,9 @@
   font-size: 12px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
 }
 
 .sort-options button:hover {

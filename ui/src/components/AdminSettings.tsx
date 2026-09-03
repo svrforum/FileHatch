@@ -10,6 +10,13 @@ interface SystemSettings {
   default_storage_quota: string
   max_file_size: string
   session_timeout_hours: string
+  password_min_length: string
+  password_max_length: string
+  password_required_uppercase: string
+  password_required_lowercase: string
+  password_required_number: string
+  password_required_special: string
+  password_min_character_types: string
   // Security Settings
   rate_limit_enabled: string
   rate_limit_rps: string
@@ -23,6 +30,13 @@ interface SystemSettings {
   [key: string]: string
 }
 
+const PASSWORD_CHARACTER_TYPE_OPTIONS = [
+  { key: 'password_required_uppercase', label: '대문자' },
+  { key: 'password_required_lowercase', label: '소문자' },
+  { key: 'password_required_number', label: '숫자' },
+  { key: 'password_required_special', label: '특수문자' },
+] as const
+
 function AdminSettings() {
   const { user: currentUser, token } = useAuthStore()
   const { showSuccess, showError } = useToastStore()
@@ -34,6 +48,13 @@ function AdminSettings() {
     default_storage_quota: '10737418240',
     max_file_size: '10737418240',
     session_timeout_hours: '24',
+    password_min_length: '8',
+    password_max_length: '72',
+    password_required_uppercase: 'false',
+    password_required_lowercase: 'false',
+    password_required_number: 'false',
+    password_required_special: 'false',
+    password_min_character_types: '3',
     // Security Settings
     rate_limit_enabled: 'true',
     rate_limit_rps: '100',
@@ -73,6 +94,13 @@ function AdminSettings() {
           default_storage_quota: '10737418240',
           max_file_size: '10737418240',
           session_timeout_hours: '24',
+          password_min_length: '8',
+          password_max_length: '72',
+          password_required_uppercase: 'false',
+          password_required_lowercase: 'false',
+          password_required_number: 'false',
+          password_required_special: 'false',
+          password_min_character_types: '3',
           // Security Settings
           rate_limit_enabled: 'true',
           rate_limit_rps: '100',
@@ -105,7 +133,37 @@ function AdminSettings() {
     }
   }, [currentUser?.isAdmin, token])
 
+  const handleRequiredCharacterTypeChange = (
+    key: typeof PASSWORD_CHARACTER_TYPE_OPTIONS[number]['key'],
+    checked: boolean,
+  ) => {
+    setSettings((current) => {
+      const next = { ...current, [key]: checked ? 'true' : 'false' }
+      const requiredCount = PASSWORD_CHARACTER_TYPE_OPTIONS.reduce(
+        (count, option) => count + (next[option.key] === 'true' ? 1 : 0),
+        0,
+      )
+      return { ...next, password_min_character_types: String(requiredCount) }
+    })
+  }
+
   const handleSave = async () => {
+    const minLength = Number(settings.password_min_length)
+    const maxLength = Number(settings.password_max_length)
+    const minTypes = Number(settings.password_min_character_types)
+    if (minLength < 8 || maxLength > 72 || minLength > maxLength || minTypes < 0 || minTypes > 4) {
+      showError('비밀번호 정책 범위와 최소·최대 길이를 확인해주세요.')
+      return
+    }
+    const hasRequiredType = [
+      settings.password_required_uppercase,
+      settings.password_required_lowercase,
+      settings.password_required_number,
+      settings.password_required_special,
+    ].includes('true')
+    if (!hasRequiredType && minTypes === 0 && !window.confirm('문자 종류 제한을 모두 해제하면 매우 약한 비밀번호가 허용됩니다. 계속 저장할까요?')) {
+      return
+    }
     setSaving(true)
     try {
       const response = await fetch(`${API_BASE}/admin/settings`, {
@@ -175,6 +233,72 @@ function AdminSettings() {
 
       {/* Settings Content */}
       <div className="as-content">
+        <div className="as-section">
+          <div className="as-section-header">
+            <div className="as-section-icon security" aria-hidden="true">●</div>
+            <div className="as-section-title">
+              <h3>비밀번호 정책</h3>
+              <p>새로 생성하거나 변경하는 웹 로그인 비밀번호에 적용됩니다.</p>
+            </div>
+          </div>
+          <div className="as-section-content">
+            <div className="as-setting-row">
+              <div className="as-setting-info">
+                <label htmlFor="password-min-length">길이 범위</label>
+                <span className="as-setting-desc">UTF-8 기준 72바이트 상한도 서버에서 검사합니다.</span>
+              </div>
+              <div className="as-password-lengths">
+                <label className="as-password-length-field" htmlFor="password-min-length">
+                  <span>최소</span>
+                  <span className="as-setting-input-group">
+                    <input id="password-min-length" type="number" min="8" max="64" step="1" value={settings.password_min_length} onChange={(event) => setSettings((current) => ({ ...current, password_min_length: event.target.value }))} />
+                    <span className="as-input-unit">자</span>
+                  </span>
+                </label>
+                <span className="as-password-length-separator" aria-hidden="true">~</span>
+                <label className="as-password-length-field">
+                  <span>최대</span>
+                  <span className="as-setting-input-group">
+                    <input aria-label="비밀번호 최대 길이" type="number" min="8" max="72" step="1" value={settings.password_max_length} onChange={(event) => setSettings((current) => ({ ...current, password_max_length: event.target.value }))} />
+                    <span className="as-input-unit">자</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+            <div className="as-divider"></div>
+            <div className="as-policy-checks" role="group" aria-label="필수 문자 종류">
+              {PASSWORD_CHARACTER_TYPE_OPTIONS.map(({ key, label }) => (
+                <label key={key} className={`as-policy-check${settings[key] === 'true' ? ' active' : ''}`}>
+                  <input type="checkbox" checked={settings[key] === 'true'} onChange={(event) => handleRequiredCharacterTypeChange(key, event.target.checked)} />
+                  <span>{label} 필수</span>
+                </label>
+              ))}
+            </div>
+            <div className="as-divider"></div>
+            <div className="as-setting-row">
+              <div className="as-setting-info">
+                <span id="password-min-types-label" className="as-setting-label">최소 문자 종류 수</span>
+                <span className="as-setting-desc">대문자·소문자·숫자·특수문자 중 충족할 종류 수입니다. 필수 항목을 클릭하면 선택 개수로 자동 조정됩니다.</span>
+              </div>
+              <div className="as-character-type-count" role="radiogroup" aria-labelledby="password-min-types-label">
+                {[0, 1, 2, 3, 4].map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    role="radio"
+                    aria-checked={settings.password_min_character_types === String(count)}
+                    className={settings.password_min_character_types === String(count) ? 'active' : ''}
+                    onClick={() => setSettings((current) => ({ ...current, password_min_character_types: String(count) }))}
+                  >
+                    {count}종
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="as-policy-note">정책 변경은 기존 비밀번호 해시에는 소급 적용되지 않습니다.</p>
+          </div>
+        </div>
+
         {/* Trash Settings */}
         <div className="as-section">
           <div className="as-section-header">

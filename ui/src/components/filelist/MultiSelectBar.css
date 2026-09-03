@@ -1,0 +1,65 @@
+/* MultiSelectBar owned styles */
+
+/* Multi-select Action Bar */
+.multi-select-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: 12px 20px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-sticky);
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.multi-select-bar .select-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.multi-select-bar .multi-action-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
+}
+
+.multi-select-bar .multi-action-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.multi-select-bar .multi-action-btn.danger {
+  background: var(--color-error-light);
+  color: var(--color-error);
+}
+
+.multi-select-bar .multi-action-btn.danger:hover {
+  background: var(--color-error);
+  color: white;
+}

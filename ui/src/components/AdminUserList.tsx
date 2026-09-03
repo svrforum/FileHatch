@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { listUsers, updateUser, deleteUser, User } from '../api/auth'
+import { listUsers, updateUser, deleteUser, unlockUser, User } from '../api/auth'
 import CreateUserModal from './CreateUserModal'
 import EditUserModal from './EditUserModal'
+import UserImportModal from './UserImportModal'
 import './AdminUserList.css'
 
 type ViewMode = 'card' | 'list'
-type FilterStatus = 'all' | 'active' | 'inactive' | 'admin'
+type FilterStatus = 'all' | 'active' | 'inactive' | 'locked' | 'admin'
 
 function AdminUserList() {
   const { token, user: currentUser } = useAuthStore()
@@ -15,6 +16,7 @@ function AdminUserList() {
   const [error, setError] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [showImportModal, setShowImportModal] = useState(false)
 
   // View and filter state (persist viewMode to localStorage)
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -23,6 +25,9 @@ function AdminUserList() {
   })
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalUsers, setTotalUsers] = useState(0)
+  const pageSize = 50
 
   // Persist viewMode changes
   const handleViewModeChange = (mode: ViewMode) => {
@@ -41,17 +46,24 @@ function AdminUserList() {
 
   useEffect(() => {
     if (token) {
-      loadUsers()
+      const timer = window.setTimeout(() => void loadUsers(), 250)
+      return () => window.clearTimeout(timer)
     }
-  }, [token])
+  }, [token, currentPage, searchQuery, filterStatus])
 
   const loadUsers = async () => {
     if (!token) return
     setLoading(true)
     setError(null)
     try {
-      const data = await listUsers(token)
+      const data = await listUsers(token, {
+        page: currentPage,
+        limit: pageSize,
+        search: searchQuery,
+        status: filterStatus,
+      })
       setUsers(data.users)
+      setTotalUsers(data.total)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users')
     } finally {
@@ -100,6 +112,22 @@ function AdminUserList() {
     }
   }
 
+  const isLocked = (user: User) => Boolean(user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now())
+
+  const handleUnlockUser = async (user: User) => {
+    if (!confirm(`${user.username} 계정의 로그인 잠금을 해제하시겠습니까?`)) return
+    setLoading(true)
+    setError(null)
+    try {
+      await unlockUser(user.username)
+      await loadUsers()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '잠금 해제에 실패했습니다')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const getInitials = (username: string) => {
     return username.slice(0, 2).toUpperCase()
   }
@@ -136,6 +164,7 @@ function AdminUserList() {
       let matchesFilter = true
       if (filterStatus === 'active') matchesFilter = user.isActive
       else if (filterStatus === 'inactive') matchesFilter = !user.isActive
+      else if (filterStatus === 'locked') matchesFilter = isLocked(user)
       else if (filterStatus === 'admin') matchesFilter = user.isAdmin
 
       return matchesSearch && matchesFilter
@@ -144,18 +173,19 @@ function AdminUserList() {
 
   // Stats
   const stats = useMemo(() => ({
-    total: users.length,
+    total: totalUsers,
     active: users.filter(u => u.isActive).length,
     inactive: users.filter(u => !u.isActive).length,
+    locked: users.filter(isLocked).length,
     admins: users.filter(u => u.isAdmin).length,
-  }), [users])
+  }), [totalUsers, users])
 
   if (!currentUser?.isAdmin) {
-    return <div className="admin-page">권한이 없습니다.</div>
+    return <div className="admin-page admin-user-list-page">권한이 없습니다.</div>
   }
 
   return (
-    <div className="admin-page">
+    <div className="admin-page admin-user-list-page">
       <div className="admin-page-header">
         <div className="header-content">
           <h2>사용자 관리</h2>
@@ -168,6 +198,9 @@ function AdminUserList() {
               <path d="M23 20V14H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10M23 14L18.36 18.36A9 9 0 0 1 3.51 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
+          </button>
+          <button className="btn-secondary" onClick={() => setShowImportModal(true)}>
+            CSV 일괄 등록
           </button>
           <button
             className="btn-primary"
@@ -194,19 +227,23 @@ function AdminUserList() {
 
         {/* Stats Cards */}
         <div className="stats-row">
-          <div className={`stat-card ${filterStatus === 'all' ? 'active' : ''}`} onClick={() => setFilterStatus('all')}>
+          <div className={`stat-card ${filterStatus === 'all' ? 'active' : ''}`} onClick={() => { setFilterStatus('all'); setCurrentPage(1) }}>
             <span className="stat-value">{stats.total}</span>
             <span className="stat-label">전체</span>
           </div>
-          <div className={`stat-card ${filterStatus === 'active' ? 'active' : ''}`} onClick={() => setFilterStatus('active')}>
+          <div className={`stat-card ${filterStatus === 'active' ? 'active' : ''}`} onClick={() => { setFilterStatus('active'); setCurrentPage(1) }}>
             <span className="stat-value">{stats.active}</span>
             <span className="stat-label">활성</span>
           </div>
-          <div className={`stat-card ${filterStatus === 'inactive' ? 'active' : ''}`} onClick={() => setFilterStatus('inactive')}>
+          <div className={`stat-card ${filterStatus === 'inactive' ? 'active' : ''}`} onClick={() => { setFilterStatus('inactive'); setCurrentPage(1) }}>
             <span className="stat-value">{stats.inactive}</span>
             <span className="stat-label">비활성</span>
           </div>
-          <div className={`stat-card ${filterStatus === 'admin' ? 'active' : ''}`} onClick={() => setFilterStatus('admin')}>
+          <div className={`stat-card ${filterStatus === 'locked' ? 'active' : ''}`} onClick={() => { setFilterStatus('locked'); setCurrentPage(1) }}>
+            <span className="stat-value">{stats.locked}</span>
+            <span className="stat-label">잠김</span>
+          </div>
+          <div className={`stat-card ${filterStatus === 'admin' ? 'active' : ''}`} onClick={() => { setFilterStatus('admin'); setCurrentPage(1) }}>
             <span className="stat-value">{stats.admins}</span>
             <span className="stat-label">관리자</span>
           </div>
@@ -223,7 +260,7 @@ function AdminUserList() {
               type="text"
               placeholder="이름 또는 이메일로 검색..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1) }}
             />
             {searchQuery && (
               <button className="clear-search" onClick={() => setSearchQuery('')}>
@@ -305,6 +342,11 @@ function AdminUserList() {
                   {!user.isActive && (
                     <span className="badge disabled">비활성</span>
                   )}
+                  {isLocked(user) && (
+                    <span className="badge locked" title={`해제 예정: ${new Date(user.lockedUntil!).toLocaleString('ko-KR')}`}>
+                      잠김 · 실패 {user.failedLoginCount ?? 0}회
+                    </span>
+                  )}
                 </div>
 
                 <div className="user-storage">
@@ -339,6 +381,11 @@ function AdminUserList() {
                 </div>
 
                 <div className="user-actions">
+                  {isLocked(user) && (
+                    <button className="btn-action unlock" onClick={() => handleUnlockUser(user)} disabled={loading}>
+                      잠금 해제
+                    </button>
+                  )}
                   <button
                     className="btn-action edit"
                     onClick={() => setEditingUser(user)}
@@ -424,8 +471,8 @@ function AdminUserList() {
                       </div>
                     </td>
                     <td>
-                      <span className={`status-badge ${user.isActive ? 'active' : 'inactive'}`}>
-                        {user.isActive ? '활성' : '비활성'}
+                      <span className={`status-badge ${isLocked(user) ? 'locked' : user.isActive ? 'active' : 'inactive'}`}>
+                        {isLocked(user) ? `잠김 (${user.failedLoginCount ?? 0}회)` : user.isActive ? '활성' : '비활성'}
                       </span>
                     </td>
                     <td>
@@ -450,6 +497,11 @@ function AdminUserList() {
                     </td>
                     <td>
                       <div className="list-actions">
+                        {isLocked(user) && (
+                          <button className="list-action-btn unlock" onClick={() => handleUnlockUser(user)} disabled={loading} title="로그인 잠금 해제">
+                            잠금 해제
+                          </button>
+                        )}
                         <button
                           className="list-action-btn"
                           onClick={() => setEditingUser(user)}
@@ -501,6 +553,13 @@ function AdminUserList() {
             </table>
           </div>
         )}
+        {totalUsers > pageSize && (
+          <nav className="user-pagination" aria-label="사용자 목록 페이지">
+            <button type="button" disabled={currentPage === 1 || loading} onClick={() => setCurrentPage((page) => page - 1)}>이전</button>
+            <span>{currentPage} / {Math.ceil(totalUsers / pageSize)}</span>
+            <button type="button" disabled={currentPage >= Math.ceil(totalUsers / pageSize) || loading} onClick={() => setCurrentPage((page) => page + 1)}>다음</button>
+          </nav>
+        )}
       </div>
 
       <CreateUserModal
@@ -520,6 +579,12 @@ function AdminUserList() {
           loadUsers()
           setEditingUser(null)
         }}
+      />
+
+      <UserImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onCompleted={() => void loadUsers()}
       />
     </div>
   )

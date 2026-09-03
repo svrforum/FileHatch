@@ -31,7 +31,7 @@ func (h *Handler) GetStorageUsage(c echo.Context) error {
 			"sharedUsed": 0,
 			"trashUsed":  0,
 			"totalUsed":  0,
-			"quota":      int64(10 * 1024 * 1024 * 1024),
+			"quota":      int64(DefaultUserQuota),
 		})
 	}
 
@@ -62,8 +62,8 @@ func (h *Handler) GetStorageUsage(c echo.Context) error {
 	trashUsedVal := trashUsed.Int64
 	totalUsed := homeUsed + trashUsedVal
 
-	// Default quota 10GB, 0 means unlimited
-	quota := int64(10 * 1024 * 1024 * 1024)
+	// DB 값 0은 무제한이며, 그 외에는 공통 기본값을 사용한다.
+	quota := int64(DefaultUserQuota)
 	if storageQuota.Valid {
 		if storageQuota.Int64 == 0 {
 			// 0 means unlimited
@@ -129,7 +129,7 @@ func (h *Handler) getStorageUsageFallback(c echo.Context, claims *JWTClaims) err
 
 	totalUsed := homeSize + trashSize
 
-	totalQuota := int64(10 * 1024 * 1024 * 1024)
+	totalQuota := int64(DefaultUserQuota)
 	var dbQuota sql.NullInt64
 	err := h.db.QueryRow(`SELECT storage_quota FROM users WHERE id = $1`, claims.UserID).Scan(&dbQuota)
 	if err == nil && dbQuota.Valid && dbQuota.Int64 > 0 {

@@ -7,7 +7,7 @@
   background: var(--bg-overlay);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  z-index: 2000;
+  z-index: var(--z-fullscreen);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -59,7 +59,9 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .onlyoffice-close-btn:hover {
@@ -151,6 +153,7 @@
   .onlyoffice-container {
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     border-radius: 0;
   }
 }

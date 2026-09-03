@@ -14,14 +14,12 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/svrforum/FileHatch/api/appconfig"
 )
 
 // getOnlyOfficeInternalURL returns the internal Docker network URL for OnlyOffice
 func getOnlyOfficeInternalURL() string {
-	if url := os.Getenv("ONLYOFFICE_INTERNAL_URL"); url != "" {
-		return strings.TrimSuffix(url, "/")
-	}
-	return "http://onlyoffice"
+	return appconfig.OnlyOfficeInternalURL()
 }
 
 // getOnlyOfficePublicURL returns the public URL for OnlyOffice (for browser access)
@@ -235,7 +233,7 @@ func (h *Handler) GetOnlyOfficeConfig(c echo.Context) error {
 
 	// Build the host URL - use internal Docker network address for OnlyOffice to access
 	// OnlyOffice container needs to reach API via Docker internal network
-	internalBaseURL := "http://api:8080"
+	internalBaseURL := appconfig.APIInternalURL()
 
 	// Also build external URL for browser access (callback display only)
 	scheme := "http"

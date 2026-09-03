@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/svrforum/FileHatch/api/appconfig"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -913,7 +914,7 @@ func (h *ShareHandler) GetShareOnlyOfficeConfig(c echo.Context) error {
 	documentKey := fmt.Sprintf("share_%s_%d", shareToken, modTime.Unix())
 
 	// Build URLs
-	internalBaseURL := "http://api:8080"
+	internalBaseURL := appconfig.APIInternalURL()
 
 	// Get owner info for display
 	var ownerUsername string

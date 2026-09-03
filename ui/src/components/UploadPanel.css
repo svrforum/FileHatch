@@ -5,11 +5,11 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   animation: fadeIn 0.2s ease;
   backdrop-filter: blur(2px);
 }
@@ -49,7 +49,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, #1B64DA 100%);
+  background: var(--color-primary-gradient);
   color: white;
 }
 
@@ -81,7 +81,9 @@
   color: rgba(255, 255, 255, 0.9);
   padding: 6px 12px;
   border-radius: 6px;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   background: rgba(255, 255, 255, 0.15);
   display: flex;
   align-items: center;
@@ -105,7 +107,9 @@
   justify-content: center;
   border-radius: 8px;
   color: rgba(255, 255, 255, 0.8);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .panel-close-btn:hover:not(:disabled) {
@@ -134,7 +138,9 @@
   font-weight: 500;
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   border-bottom: 2px solid transparent;
   display: flex;
   align-items: center;
@@ -162,12 +168,12 @@
 }
 
 .upload-panel-tab.active .tab-badge {
-  background: rgba(49, 130, 246, 0.1);
+  background: var(--color-primary-light);
   color: var(--color-primary);
 }
 
 .upload-panel-tab .tab-badge.error {
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--color-error-light);
   color: var(--color-error);
 }
 
@@ -206,7 +212,9 @@
   font-weight: 600;
   color: var(--text-secondary);
   background: var(--bg-primary);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   cursor: pointer;
 }
 
@@ -246,7 +254,9 @@
   font-weight: 500;
   padding: 5px 12px;
   border-radius: 6px;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -254,7 +264,7 @@
 
 .batch-btn.retry {
   color: var(--color-primary);
-  background: rgba(49, 130, 246, 0.08);
+  background: var(--color-primary-light);
 }
 
 .batch-btn.retry:hover {
@@ -263,7 +273,7 @@
 
 .batch-btn.cancel {
   color: var(--color-error);
-  background: rgba(239, 68, 68, 0.08);
+  background: var(--color-error-light);
 }
 
 .batch-btn.cancel:hover {
@@ -297,9 +307,9 @@
 
 .stat.uploading::before { background: var(--color-primary); }
 .stat.downloading::before { background: #10B981; }
-.stat.transferring::before { background: #F59E0B; }
+.stat.transferring::before { background: var(--color-warning); }
 .stat.compressing::before { background: #9C27B0; }
-.stat.deleting::before { background: #F44336; }
+.stat.deleting::before { background: var(--color-error); }
 .stat.pending::before { background: var(--text-tertiary); }
 .stat.completed::before { background: var(--color-success); }
 .stat.error::before { background: var(--color-error); }
@@ -308,7 +318,7 @@
 .stat.downloading { color: #10B981; }
 .stat.transferring { color: var(--color-warning); }
 .stat.compressing { color: #9C27B0; }
-.stat.deleting { color: #F44336; }
+.stat.deleting { color: var(--color-error); }
 .stat.pending { color: var(--text-tertiary); }
 .stat.completed { color: var(--color-success); }
 .stat.error { color: var(--color-error); }
@@ -359,7 +369,9 @@
   background: var(--bg-secondary);
   border-radius: 12px;
   border: 1px solid var(--border-light);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .upload-panel-item:hover {
@@ -413,7 +425,7 @@
 .spinner-small.transfer { border-top-color: var(--color-warning); }
 .spinner-small.compress { border-top-color: #9C27B0; }
 .spinner-small.download { border-top-color: #10B981; }
-.spinner-small.delete { border-top-color: #F44336; }
+.spinner-small.delete { border-top-color: var(--color-error); }
 
 .item-details {
   flex: 1;
@@ -434,7 +446,7 @@
 
 .server-badge {
   font-size: 10px;
-  background: #3182F6;
+  background: var(--color-primary);
   color: white;
   padding: 1px 5px;
   border-radius: 4px;
@@ -450,14 +462,14 @@
   bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
-  background: var(--text-primary, #191F28);
+  background: var(--text-primary);
   color: white;
   padding: 6px 10px;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 400;
   white-space: nowrap;
-  z-index: 10;
+  z-index: var(--z-local-overlay);
   pointer-events: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
@@ -515,7 +527,7 @@
   color: var(--color-primary);
   font-weight: 600;
   padding: 2px 8px;
-  background: rgba(49, 130, 246, 0.1);
+  background: var(--color-primary-light);
   border-radius: 4px;
 }
 
@@ -553,7 +565,7 @@
 }
 
 .error-path-goto:hover {
-  background: rgba(49, 130, 246, 0.1);
+  background: var(--color-primary-light);
   color: var(--color-primary);
 }
 
@@ -588,7 +600,9 @@
   justify-content: center;
   border-radius: 6px;
   color: var(--text-tertiary);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 .item-btn:hover {
@@ -597,7 +611,7 @@
 }
 
 .item-btn.remove:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--color-error-light);
   color: var(--color-error);
 }
 
@@ -606,7 +620,7 @@
 }
 
 .item-btn.retry:hover {
-  background: rgba(49, 130, 246, 0.1);
+  background: var(--color-primary-light);
   color: var(--color-primary);
 }
 
@@ -615,20 +629,20 @@
 }
 
 .item-btn.goto:hover {
-  background: rgba(34, 197, 94, 0.1);
+  background: var(--color-success-light);
   color: var(--color-success);
 }
 
 /* Transfer (move/copy) specific styles */
 .upload-panel-item.transfer {
-  border-left: 4px solid #F59E0B;
+  border-left: 4px solid var(--color-warning);
   padding-left: 12px;
 }
 
 .upload-panel-item.transfer.move { border-left-color: var(--color-warning); }
 .upload-panel-item.transfer.copy { border-left-color: var(--color-admin-purple); }
 .upload-panel-item.transfer.compress { border-left-color: #9C27B0; }
-.upload-panel-item.transfer.delete { border-left-color: #F44336; }
+.upload-panel-item.transfer.delete { border-left-color: var(--color-error); }
 .upload-panel-item.transfer.completed { border-left-color: var(--color-success); }
 .upload-panel-item.transfer.error { border-left-color: var(--color-error); }
 
@@ -654,7 +668,7 @@
 }
 
 .upload-panel-item.delete .transfer-type-icon {
-  color: #F44336;
+  color: var(--color-error);
 }
 
 .item-dest {
@@ -692,12 +706,12 @@
 }
 
 .speed-text.move {
-  background: rgba(245, 158, 11, 0.1);
+  background: var(--color-warning-light);
   color: var(--color-warning);
 }
 
 .speed-text.copy {
-  background: rgba(139, 92, 246, 0.1);
+  background: var(--color-admin-purple-light);
   color: var(--color-admin-purple);
 }
 

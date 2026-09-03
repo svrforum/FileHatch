@@ -1,5 +1,6 @@
 .login-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -109,7 +110,9 @@
   border: 1.5px solid var(--border-light);
   border-radius: var(--radius-md);
   font-size: 16px; /* Prevent iOS zoom */
-  transition: all var(--duration-fast, 0.15s) var(--ease-out-expo, ease);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast, 0.15s);
+  transition-timing-function: var(--ease-out-expo, ease);
   background: var(--bg-primary);
   color: var(--text-primary);
   box-sizing: border-box;
@@ -123,6 +126,30 @@
 
 .login-form .form-group input:not([type="checkbox"])::placeholder {
   color: var(--text-tertiary);
+}
+
+.login-form .password-field {
+  gap: 0;
+}
+
+.login-form .password-field-control input:not([type="checkbox"]) {
+  padding-right: 5.5rem;
+}
+
+.login-form .password-visibility-button {
+  min-width: 4rem;
+  min-height: 44px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.login-form .password-visibility-button:hover,
+.login-form .password-visibility-button:focus-visible {
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }
 
 /* Remember Me Checkbox */
@@ -149,7 +176,9 @@
   appearance: none;
   -webkit-appearance: none;
   background: var(--bg-primary);
-  transition: all 0.15s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
   position: relative;
   display: flex;
   align-items: center;
@@ -189,7 +218,9 @@
   font-weight: var(--font-weight-semibold);
   letter-spacing: var(--letter-spacing-normal, -0.01em);
   cursor: pointer;
-  transition: all var(--duration-fast, 0.15s) var(--ease-out-expo, ease);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast, 0.15s);
+  transition-timing-function: var(--ease-out-expo, ease);
   box-shadow: var(--shadow-primary);
   margin-top: 16px;
 }
@@ -254,7 +285,9 @@
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   margin-top: 12px;
 }
 
@@ -287,7 +320,9 @@
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
   background: var(--bg-primary);
   color: var(--text-primary);
 }

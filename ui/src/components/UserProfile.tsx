@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { updateProfile, setSMBPassword, get2FAStatus, setup2FA, enable2FA, disable2FA, regenerateBackupCodes, TwoFASetupResponse } from '../api/auth'
+import { updateProfile, setSMBPassword, get2FAStatus, setup2FA, enable2FA, disable2FA, regenerateBackupCodes, getPasswordPolicy, PasswordPolicy, TwoFASetupResponse } from '../api/auth'
 import { usePreferencesStore, DEFAULT_SIDEBAR_ORDER } from '../stores/preferencesStore'
 import { useExternalStorages } from '../hooks/useExternalStorages'
 import { useTheme } from '../contexts/ThemeContext'
 import './AuthModal.css'
 import './UserProfile.css'
+import PasswordField from './PasswordField'
 
 interface UserProfileProps {
   isOpen: boolean
@@ -25,6 +26,7 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicy | null>(null)
 
   // Application password state (for SMB/WebDAV)
   const [appPassword, setAppPasswordVal] = useState('')
@@ -51,6 +53,12 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [showConnectionInfo, setShowConnectionInfo] = useState(false)
+
+  useEffect(() => {
+    if (isOpen && activeTab === 'password') {
+      void getPasswordPolicy().then(setPasswordPolicy).catch(() => setPasswordPolicy(null))
+    }
+  }, [activeTab, isOpen])
 
   // Fetch 2FA status when tab changes
   useEffect(() => {
@@ -442,40 +450,48 @@ function UserProfile({ isOpen, onClose }: UserProfileProps) {
           {activeTab === 'password' && (
             <form onSubmit={handleChangePassword}>
               <div className="form-group">
-                <label>현재 비밀번호</label>
-                <input
-                  type="password"
+                <PasswordField
+                  label="현재 비밀번호"
                   value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  onChange={setCurrentPassword}
                   placeholder="현재 비밀번호를 입력하세요"
                   required
+                  autoComplete="current-password"
                 />
               </div>
 
               <div className="form-group">
-                <label>새 비밀번호</label>
-                <input
-                  type="password"
+                <PasswordField
+                  label="새 비밀번호"
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={setNewPassword}
                   placeholder="새 비밀번호를 입력하세요"
                   required
+                  minLength={passwordPolicy?.minLength}
+                  maxLength={passwordPolicy?.maxLength}
                 />
               </div>
 
               <div className="form-group">
-                <label>새 비밀번호 확인</label>
-                <input
-                  type="password"
+                <PasswordField
+                  label="새 비밀번호 확인"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={setConfirmPassword}
                   placeholder="새 비밀번호를 다시 입력하세요"
                   required
+                  minLength={passwordPolicy?.minLength}
+                  maxLength={passwordPolicy?.maxLength}
                 />
                 {newPassword !== confirmPassword && confirmPassword && (
                   <span className="field-error">비밀번호가 일치하지 않습니다</span>
                 )}
               </div>
+
+              {passwordPolicy && (
+                <p className="form-hint">
+                  {passwordPolicy.minLength}~{passwordPolicy.maxLength}자, 문자 종류 {passwordPolicy.minCharacterTypes}종 이상
+                </p>
+              )}
 
               <div className="form-actions">
                 <button type="submit" className="primary-btn" disabled={loading || newPassword !== confirmPassword}>

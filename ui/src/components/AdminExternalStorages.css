@@ -63,7 +63,9 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .admin-external-storages-page .create-btn:hover {
@@ -87,11 +89,13 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .admin-external-storages-page .stat-card:hover {
-  border-color: var(--border-default);
+  border-color: var(--border-medium);
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
@@ -168,7 +172,9 @@
   border: 2px solid var(--border-light);
   border-radius: 12px;
   max-width: 400px;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .admin-external-storages-page .search-box:focus-within {
@@ -191,6 +197,7 @@
 
 .admin-external-storages-page .search-box input:focus {
   outline: none;
+  box-shadow: none;
 }
 
 .admin-external-storages-page .search-box input::placeholder {
@@ -204,7 +211,9 @@
   cursor: pointer;
   color: var(--text-tertiary);
   border-radius: 6px;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .admin-external-storages-page .clear-search:hover {
@@ -287,11 +296,13 @@
   border: 1px solid var(--border-light);
   border-radius: 20px;
   padding: 24px;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .admin-external-storages-page .es-card:hover {
-  border-color: var(--border-default);
+  border-color: var(--border-medium);
   box-shadow: var(--shadow-lg);
 }
 
@@ -452,7 +463,9 @@
   font-weight: 500;
   color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   opacity: 1;
   white-space: nowrap;
 }
@@ -557,7 +570,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   padding: 20px;
   animation: esFadeIn 0.2s ease-out;
 }
@@ -659,7 +672,9 @@
   border-radius: 10px;
   cursor: pointer;
   color: var(--text-secondary);
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .admin-external-storages-page .close-btn:hover {
@@ -712,7 +727,9 @@
   font-size: 14px;
   color: var(--text-primary);
   background: var(--bg-primary);
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   box-sizing: border-box;
 }
 
@@ -790,7 +807,9 @@
   border: 2px solid var(--border-light);
   border-radius: 12px;
   overflow: hidden;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .admin-external-storages-page .mount-path-input:focus-within {
@@ -843,7 +862,9 @@
   height: 32px;
   background: var(--bg-tertiary);
   border-radius: 16px;
-  transition: all 0.3s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.3s;
+  transition-timing-function: ease;
   flex-shrink: 0;
 }
 
@@ -865,7 +886,9 @@
   height: 24px;
   background: white;
   border-radius: 12px;
-  transition: all 0.3s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.3s;
+  transition-timing-function: ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -887,7 +910,9 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .admin-external-storages-page .btn-primary:hover:not(:disabled) {
@@ -910,7 +935,9 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .admin-external-storages-page .btn-secondary:hover {
@@ -927,7 +954,9 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .admin-external-storages-page .btn-danger:hover:not(:disabled) {
@@ -1033,13 +1062,15 @@
   padding: 4px 6px;
   background: var(--bg-secondary);
   border-radius: 16px;
-  transition: all 0.15s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
   border: 1px solid var(--border-light);
 }
 
 .admin-external-storages-page .available-user-item:hover {
   background: var(--bg-tertiary);
-  border-color: var(--border-default);
+  border-color: var(--border-medium);
 }
 
 .admin-external-storages-page .available-user-item .user-info {
@@ -1088,7 +1119,9 @@
   border-radius: 12px;
   font-size: 0;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
 }
 
 .admin-external-storages-page .add-btn svg {
@@ -1214,7 +1247,9 @@
   border-radius: 10px;
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .admin-external-storages-page .remove-member-btn:hover {
@@ -1395,7 +1430,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .admin-external-storages-page .header-icon {
     width: 48px;
     height: 48px;

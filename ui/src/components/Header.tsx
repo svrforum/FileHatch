@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { searchFiles, FileInfo, formatFileSize } from '../api/files'
 import { useSharedFolders } from '../hooks/useSharedFolders'
@@ -111,7 +111,7 @@ function Header({ onProfileClick, onNavigate, onFileSelect, currentPath = '/', i
   }, [])
 
   // Build breadcrumb items
-  const getBreadcrumbs = useCallback(() => {
+  const breadcrumbs = useMemo(() => {
     if (!currentPath || currentPath === '/') return []
 
     const parts = currentPath.split('/').filter(Boolean)
@@ -142,8 +142,8 @@ function Header({ onProfileClick, onNavigate, onFileSelect, currentPath = '/', i
 
     return items
   }, [currentPath, sharedFolders])
-
-  const breadcrumbs = getBreadcrumbs()
+  const visibleBreadcrumbs = breadcrumbs.slice(-3)
+  const hiddenBreadcrumbs = breadcrumbs.slice(0, -visibleBreadcrumbs.length)
 
   return (
     <header className="header">
@@ -160,18 +160,32 @@ function Header({ onProfileClick, onNavigate, onFileSelect, currentPath = '/', i
           <img src="/icons/icon-72x72.png" alt="FileHatch" width="40" height="40" />
           <span className="logo-text">FileHatch</span>
         </div>
-        {breadcrumbs.length > 0 && (
-          <nav className="header-breadcrumb">
+        {visibleBreadcrumbs.length > 0 && (
+          <nav className="header-breadcrumb" aria-label="현재 폴더 경로">
             <span className="breadcrumb-separator">/</span>
-            {breadcrumbs.map((item, index) => (
+            {hiddenBreadcrumbs.length > 0 && (
+              <span
+                className="breadcrumb-overflow"
+                title={`생략된 상위 경로: ${hiddenBreadcrumbs.map(item => item.label).join(' / ')}`}
+                aria-hidden="true"
+              >
+                …
+              </span>
+            )}
+            {hiddenBreadcrumbs.length > 0 && (
+              <span className="breadcrumb-separator">/</span>
+            )}
+            {visibleBreadcrumbs.map((item, index) => (
               <span key={item.path} className="breadcrumb-item-wrapper">
                 <button
-                  className={`breadcrumb-link ${index === breadcrumbs.length - 1 ? 'current' : ''}`}
+                  className={`breadcrumb-link ${index === visibleBreadcrumbs.length - 1 ? 'current' : ''}`}
                   onClick={() => onNavigate?.(item.path)}
+                  title={`${item.label} 폴더로 이동 (${item.path})`}
+                  aria-label={`${item.label} 폴더로 이동`}
                 >
                   {item.label}
                 </button>
-                {index < breadcrumbs.length - 1 && (
+                {index < visibleBreadcrumbs.length - 1 && (
                   <span className="breadcrumb-separator">/</span>
                 )}
               </span>

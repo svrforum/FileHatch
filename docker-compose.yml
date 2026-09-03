@@ -8,39 +8,36 @@
 #
 # For development (with local builds):
 #   docker compose -f docker-compose-dev.yaml up -d
+#
+# Required production credentials and encryption keys must be set in .env.
 
 services:
   # 1. Main Backend (Go)
   api:
     container_name: fh-api
-    image: svrforum/filehatch-api:${IMAGE_TAG:-latest}
+    image: svrforum/filehatch-api:${IMAGE_TAG:?IMAGE_TAG is required for production}
     restart: unless-stopped
     extra_hosts:
       - "localhost:host-gateway"
     environment:
       - TZ=${TZ:-Asia/Seoul}
-      # The API gates its production hardening on FH_ENV: without it the JWT
-      # secret silently falls back to a public development string, WebSocket
-      # origin checks are skipped and the SMB encryption key is optional.
-      # Nothing set this, so every documented deployment ran in dev mode.
-      - FH_ENV=${FH_ENV:-production}
+      - FH_ENV=production
       - DB_HOST=${DB_HOST:-db}
       - DB_PORT=${DB_PORT:-5432}
-      - DB_USER=${DB_USER:-fh_user}
-      - DB_PASS=${DB_PASS:-fh_password}
-      - DB_NAME=${DB_NAME:-fh_main}
+      - DB_USER=${DB_USER:?DB_USER is required for production}
+      - DB_PASS=${DB_PASS:?DB_PASS is required for production}
+      - DB_NAME=${DB_NAME:?DB_NAME is required for production}
       - VALKEY_HOST=${VALKEY_HOST:-valkey}
       - VALKEY_PORT=${VALKEY_PORT:-6379}
       - JWT_SECRET=${JWT_SECRET:-}
-      # ENCRYPTION_KEY was documented but never read by the API; the code
-      # looks for these three names and otherwise falls back to keys that are
-      # hardcoded in the source.
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:?INITIAL_ADMIN_PASSWORD is required for production}
+      # 비워 두면 config 볼륨에 임의 키가 생성되어 보존됩니다.
       - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:-}
       - SMB_ENCRYPTION_KEY=${SMB_ENCRYPTION_KEY:-}
       - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:-}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-*}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
-      - ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_URL:-http://onlyoffice}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+      - API_INTERNAL_URL=${API_INTERNAL_URL:-http://api:8080}
+      - ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_INTERNAL_URL:-http://onlyoffice}
       - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - EXTERNAL_URL=${EXTERNAL_URL:-}
@@ -64,14 +61,14 @@ services:
   # 2. Frontend (React + Express)
   ui:
     container_name: fh-ui
-    image: svrforum/filehatch-ui:${IMAGE_TAG:-latest}
+    image: svrforum/filehatch-ui:${IMAGE_TAG:?IMAGE_TAG is required for production}
     restart: unless-stopped
     ports:
       - "${UI_PORT:-3080}:3000"
     environment:
       - TZ=${TZ:-Asia/Seoul}
       - API_URL=http://api:8080
-      - ONLYOFFICE_URL=${ONLYOFFICE_URL:-http://onlyoffice}
+      - ONLYOFFICE_URL=${ONLYOFFICE_INTERNAL_URL:-http://onlyoffice}
       - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}
       - EXTERNAL_URL=${EXTERNAL_URL:-}
     depends_on:
@@ -87,7 +84,7 @@ services:
   # 3. SMB Service (Sidecar)
   samba:
     container_name: fh-samba
-    image: svrforum/filehatch-samba:${IMAGE_TAG:-latest}
+    image: svrforum/filehatch-samba:${IMAGE_TAG:?IMAGE_TAG is required for production}
     restart: unless-stopped
     network_mode: host
     environment:
@@ -111,9 +108,9 @@ services:
     restart: unless-stopped
     environment:
       - TZ=${TZ:-Asia/Seoul}
-      - POSTGRES_USER=${DB_USER:-fh_user}
-      - POSTGRES_PASSWORD=${DB_PASS:-fh_password}
-      - POSTGRES_DB=${DB_NAME:-fh_main}
+      - POSTGRES_USER=${DB_USER:?DB_USER is required for production}
+      - POSTGRES_PASSWORD=${DB_PASS:?DB_PASS is required for production}
+      - POSTGRES_DB=${DB_NAME:?DB_NAME is required for production}
     command:
       - "postgres"
       - "-c"
@@ -127,7 +124,7 @@ services:
     volumes:
       - ${DATABASE_PATH:-./database}:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-fh_user} -d ${DB_NAME:-fh_main}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:?DB_USER is required for production} -d ${DB_NAME:?DB_NAME is required for production}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -181,8 +178,9 @@ services:
       - "${KEYCLOAK_PORT:-8180}:8080"
     environment:
       - TZ=${TZ:-Asia/Seoul}
-      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN:-admin}
-      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin123}
+      # 비활성 profile도 interpolation되므로 필수 검증은 docker-compose-sso.yaml에서 수행합니다.
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN:-}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-}
       - KC_HTTP_RELATIVE_PATH=/auth
       - KC_HOSTNAME=${KEYCLOAK_HOSTNAME:-localhost}
       - KC_HOSTNAME_PORT=${KEYCLOAK_PORT:-8180}

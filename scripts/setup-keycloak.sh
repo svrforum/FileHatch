@@ -12,11 +12,31 @@
 #
 # Usage:
 #   ./scripts/setup-keycloak.sh
+#   ./scripts/setup-keycloak.sh --show-secrets  # 명시적으로 평문 secret 출력
 #
 # The script will auto-detect HOST_IP if not set.
 #
 
 set -e
+
+SHOW_SECRETS=false
+for arg in "$@"; do
+    case "$arg" in
+        --show-secrets)
+            SHOW_SECRETS=true
+            ;;
+        -h|--help)
+            echo "Usage: $0 [--show-secrets]"
+            echo "  --show-secrets  완료 요약에 비밀번호와 client secret을 평문으로 표시합니다."
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $arg" >&2
+            echo "Usage: $0 [--show-secrets]" >&2
+            exit 2
+            ;;
+    esac
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -35,19 +55,33 @@ fi
 FH_URL="${FH_URL:-http://localhost:3080}"
 KEYCLOAK_URL="http://${HOST_IP}:8080"
 KEYCLOAK_ADMIN="${KEYCLOAK_ADMIN:-admin}"
-KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin123}"
+KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-}"
 REALM_NAME="${REALM_NAME:-filehatch}"
 CLIENT_ID="${CLIENT_ID:-filehatch}"
 CLIENT_SECRET="${CLIENT_SECRET:-}"
 TEST_USER="${TEST_USER:-testuser}"
-TEST_PASSWORD="${TEST_PASSWORD:-test1234}"
+TEST_PASSWORD="${TEST_PASSWORD:-}"
 TEST_EMAIL="${TEST_EMAIL:-testuser@example.com}"
 FH_ADMIN="${FH_ADMIN:-admin}"
-FH_PASSWORD="${FH_PASSWORD:-admin1234}"
+FH_PASSWORD="${FH_PASSWORD:-}"
+
+if [ -z "$KEYCLOAK_ADMIN_PASSWORD" ]; then
+    echo -e "${RED}ERROR: KEYCLOAK_ADMIN_PASSWORD is required and must match the running Keycloak container.${NC}" >&2
+    exit 1
+fi
+
+if [ -z "$FH_PASSWORD" ]; then
+    echo -e "${RED}ERROR: FH_PASSWORD is required for the existing FileHatch admin account.${NC}" >&2
+    exit 1
+fi
 
 # Generate client secret if not provided
 if [ -z "$CLIENT_SECRET" ]; then
     CLIENT_SECRET="fh-$(openssl rand -hex 16)"
+fi
+
+if [ -z "$TEST_PASSWORD" ]; then
+    TEST_PASSWORD="$(openssl rand -base64 24 | tr -d '\n')"
 fi
 
 echo -e "${BLUE}======================================${NC}"
@@ -317,16 +351,28 @@ echo ""
 echo -e "${YELLOW}Keycloak Admin Console:${NC}"
 echo "  URL:      ${KEYCLOAK_URL}/auth/admin"
 echo "  Username: ${KEYCLOAK_ADMIN}"
-echo "  Password: ${KEYCLOAK_ADMIN_PASSWORD}"
+if [ "$SHOW_SECRETS" = true ]; then
+    echo "  Password: ${KEYCLOAK_ADMIN_PASSWORD}"
+else
+    echo "  Password: ******** (use --show-secrets to display)"
+fi
 echo ""
 echo -e "${YELLOW}Keycloak Realm:${NC}"
 echo "  Realm:    ${REALM_NAME}"
 echo "  Client:   ${CLIENT_ID}"
-echo "  Secret:   ${CLIENT_SECRET}"
+if [ "$SHOW_SECRETS" = true ]; then
+    echo "  Secret:   ${CLIENT_SECRET}"
+else
+    echo "  Secret:   ******** (use --show-secrets to display)"
+fi
 echo ""
 echo -e "${YELLOW}Test User (for SSO login):${NC}"
 echo "  Username: ${TEST_USER}"
-echo "  Password: ${TEST_PASSWORD}"
+if [ "$SHOW_SECRETS" = true ]; then
+    echo "  Password: ${TEST_PASSWORD}"
+else
+    echo "  Password: ******** (use --show-secrets to display)"
+fi
 echo "  Email:    ${TEST_EMAIL}"
 echo ""
 echo -e "${YELLOW}FileHatch:${NC}"

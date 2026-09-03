@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/svrforum/FileHatch/api/appconfig"
 )
 
 // PreviewCache handles caching of file previews
@@ -31,7 +33,7 @@ type PreviewCacheConfig struct {
 // DefaultPreviewCacheConfig returns default cache configuration
 func DefaultPreviewCacheConfig() PreviewCacheConfig {
 	return PreviewCacheConfig{
-		CacheDir: "/data/.cache/previews",
+		CacheDir: filepath.Join(appconfig.DataRoot(), ".cache", "previews"),
 		MaxAge:   24 * time.Hour,
 	}
 }

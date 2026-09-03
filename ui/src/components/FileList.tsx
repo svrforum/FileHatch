@@ -36,11 +36,16 @@ import {
   MultiSelectBar, ContextMenu, FileInfoPanel,
   FileListHeader, RenameModal, NewFileModal, CompressModal, DownloadOptionsModal,
   VirtualizedFileTable, VirtualizedFileGrid
-} from './filelist'
+} from './filelist/index'
 import { getFileIcon } from '../utils/fileIcons'
 import { formatRelativeDate, formatFullDateTime } from '../utils/dateUtils'
 import MobileFAB from './MobileFAB'
 import './FileList.css'
+import './filelist/ContextMenu.css'
+import './filelist/FileModals.css'
+import './filelist/FileInfoPanel.css'
+import './filelist/MultiSelectBar.css'
+import './filelist/FileListResponsive.css'
 
 interface FileListProps {
   currentPath: string

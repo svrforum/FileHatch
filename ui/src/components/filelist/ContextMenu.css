@@ -1,0 +1,108 @@
+/* ContextMenu owned styles */
+
+/* Context Menu */
+.context-menu {
+  position: fixed;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--spacing-xs);
+  min-width: 160px;
+  z-index: var(--z-dropdown);
+  animation: fadeIn 0.15s ease;
+}
+
+.context-menu .context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
+}
+
+.context-menu .context-menu-item:hover {
+  background: var(--bg-secondary);
+}
+
+.context-menu .context-menu-item.danger {
+  color: var(--color-error);
+}
+
+.context-menu .context-menu-item.danger:hover {
+  background: rgba(244, 67, 54, 0.1);
+}
+
+.context-menu .context-menu-item.has-submenu {
+  position: relative;
+  justify-content: space-between;
+}
+
+.context-menu .context-menu-item .submenu-arrow {
+  margin-left: auto;
+  opacity: 0.5;
+  transition: transform 0.15s ease;
+}
+
+.context-menu .context-menu-item .submenu-arrow.flipped {
+  transform: rotate(180deg);
+}
+
+.context-menu .context-submenu {
+  position: absolute;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--spacing-xs);
+  min-width: 180px;
+  z-index: calc(var(--z-dropdown) + 1);
+  animation: fadeIn 0.15s ease;
+}
+
+.context-menu .context-submenu .context-menu-item {
+  white-space: nowrap;
+}
+
+.context-menu .input-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.context-menu .input-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: var(--spacing-sm);
+}
+
+.context-menu .input-warning {
+  font-size: 13px;
+  color: #b15607;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: var(--spacing-sm);
+  margin-bottom: 0;
+  line-height: 1.4;
+}
+
+.context-menu .new-file-modal .modal-body {
+  padding: var(--spacing-lg);
+}
+
+/* Context Menu Divider */
+.context-menu .context-menu-divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 4px 8px;
+}

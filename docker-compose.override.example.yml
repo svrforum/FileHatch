@@ -16,8 +16,12 @@ services:
   api:
     environment:
       # 프로덕션 환경 변수 (필수 - .env에서 설정)
-      - JWT_SECRET=${JWT_SECRET}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - FH_ENV=production
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required for production}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:?INITIAL_ADMIN_PASSWORD is required for production}
+      - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:?STORAGE_ENCRYPTION_KEY is required for production}
+      - SMB_ENCRYPTION_KEY=${SMB_ENCRYPTION_KEY:?SMB_ENCRYPTION_KEY is required for production}
+      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:?TOTP_ENCRYPTION_KEY is required for production}
       # CORS 제한 (실제 도메인으로 변경)
       - CORS_ALLOWED_ORIGINS=https://vault.example.com
       # 로그 레벨

@@ -63,6 +63,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit CSS boundaries
+        run: npm run css:audit
+
       - name: Run tests
         run: npm run test:coverage
 

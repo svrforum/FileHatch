@@ -133,9 +133,9 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
 
   return (
     <>
-      <div className="modal-overlay" onClick={handleClose}>
-        <div className="modal-content upload-modal" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
+      <div className="fh-modal-overlay modal-overlay" onClick={handleClose}>
+        <div className="fh-modal modal-content upload-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="fh-modal__header modal-header">
             <h2>파일 업로드</h2>
             <button className="close-btn" onClick={handleClose}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -231,7 +231,7 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
                   handleFilesSelected(e.target.files, false)
                   e.target.value = ''
                 }}
-                style={{ display: 'none' }}
+                hidden
               />
               <input
                 ref={folderInputRef}
@@ -243,7 +243,7 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
                   handleFilesSelected(e.target.files, true)
                   e.target.value = ''
                 }}
-                style={{ display: 'none' }}
+                hidden
               />
             </div>
           )}
@@ -298,7 +298,7 @@ function UploadModal({ isOpen, onClose, currentPath, onUploadComplete }: UploadM
 
       {/* Duplicate File Modal */}
       {duplicateFile && (
-        <div className="modal-overlay" style={{ zIndex: 1001 }} onClick={() => handleDuplicateAction('cancel')}>
+        <div className="modal-overlay duplicate-modal-overlay" onClick={() => handleDuplicateAction('cancel')}>
           <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="confirm-icon warning">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none">

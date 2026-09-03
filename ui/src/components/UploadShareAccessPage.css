@@ -1,5 +1,6 @@
 .upload-share-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -141,7 +142,9 @@
   border: 2px solid var(--border-light);
   border-radius: 14px;
   outline: none;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   box-sizing: border-box;
   text-align: center;
   font-weight: 500;
@@ -170,7 +173,9 @@
   border: none;
   border-radius: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .upload-share-btn-primary:hover:not(:disabled) {
@@ -192,7 +197,9 @@
   border: none;
   border-radius: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .upload-share-btn-secondary:hover {
@@ -277,7 +284,9 @@
   border-radius: 16px;
   padding: 40px 24px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   margin-bottom: 24px;
 }
 
@@ -369,7 +378,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .remove-btn:hover {
@@ -437,7 +448,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   flex-shrink: 0;
 }
 

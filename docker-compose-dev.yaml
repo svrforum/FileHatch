@@ -21,6 +21,8 @@ services:
       - "localhost:host-gateway"
     environment:
       - TZ=${TZ:-Asia/Seoul}
+      # 개발 전용 기본값입니다. 운영은 docker-compose.yml의 필수 값을 사용합니다.
+      - FH_ENV=development
       - DB_HOST=${DB_HOST:-db}
       - DB_PORT=${DB_PORT:-5432}
       - DB_USER=${DB_USER:-fh_user}
@@ -28,15 +30,14 @@ services:
       - DB_NAME=${DB_NAME:-fh_main}
       - VALKEY_HOST=${VALKEY_HOST:-valkey}
       - VALKEY_PORT=${VALKEY_PORT:-6379}
-      - JWT_SECRET=${JWT_SECRET:-}
-      # ENCRYPTION_KEY was documented but never read by the API; the code
-      # looks for these three names and otherwise falls back to keys that are
-      # hardcoded in the source.
-      - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:-}
-      - SMB_ENCRYPTION_KEY=${SMB_ENCRYPTION_KEY:-}
-      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:-}
+      - JWT_SECRET=${JWT_SECRET:-dev-only-jwt-secret-change-before-production}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-admin1234}
+      - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:-1111111111111111111111111111111111111111111111111111111111111111}
+      - SMB_ENCRYPTION_KEY=${SMB_ENCRYPTION_KEY:-2222222222222222222222222222222222222222222222222222222222222222}
+      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:-3333333333333333333333333333333333333333333333333333333333333333}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-*}
-      - ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_URL:-http://onlyoffice}
+      - API_INTERNAL_URL=${API_INTERNAL_URL:-http://api:8080}
+      - ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_INTERNAL_URL:-http://onlyoffice}
       - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - EXTERNAL_URL=${EXTERNAL_URL:-}
@@ -46,9 +47,7 @@ services:
       - ${CONFIG_PATH:-./config}:/etc/filehatch
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # 외부 스토리지 테스트용 마운트 (필요 시 활성화)
-      # 주석 상태를 유지할 것: 활성화된 채로 커밋하면 /tmp/filehatch-test-mount 가
-      # 없는 환경(신규 머신, CI 러너)에서 api 컨테이너가 뜨지 않는다.
-      # - /tmp/filehatch-test-mount:/mnt/test-storage
+      - /tmp/filehatch-test-mount:/mnt/test-storage
     depends_on:
       db:
         condition: service_healthy
@@ -73,7 +72,7 @@ services:
     environment:
       - TZ=${TZ:-Asia/Seoul}
       - API_URL=http://api:8080
-      - ONLYOFFICE_URL=${ONLYOFFICE_URL:-http://onlyoffice}
+      - ONLYOFFICE_URL=${ONLYOFFICE_INTERNAL_URL:-http://onlyoffice}
       - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL:-}
     depends_on:
       api:
@@ -99,7 +98,6 @@ services:
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${CONFIG_PATH:-./config}:/etc/filehatch
-      - ${CONFIG_PATH:-./config}/smb.conf:/etc/samba/smb.conf
     healthcheck:
       test: ["CMD-SHELL", "pgrep -x smbd > /dev/null && pgrep -x nmbd > /dev/null"]
       interval: 15s
@@ -174,8 +172,8 @@ services:
       - "${KEYCLOAK_PORT:-8180}:8080"
     environment:
       - TZ=${TZ:-Asia/Seoul}
-      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN:-admin}
-      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin123}
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN:-dev-admin}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-dev-only-keycloak-password}
       - KC_HTTP_RELATIVE_PATH=/auth
       - KC_HOSTNAME=${KEYCLOAK_HOSTNAME:-localhost}
       - KC_HOSTNAME_PORT=${KEYCLOAK_PORT:-8180}

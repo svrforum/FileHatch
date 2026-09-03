@@ -145,6 +145,8 @@
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-spring: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --transition-interactive-properties: color, background-color, border-color, box-shadow, opacity, transform, filter, visibility;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Animation Curves */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
@@ -179,6 +181,25 @@
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.65;
 
+  --font-family-mono: 'SF Mono', Monaco, Consolas, 'Courier New', monospace;
+
+  /* Semantic layer scale */
+  --z-behind: -1;
+  --z-content: 0;
+  --z-content-raised: 1;
+  --z-local-overlay: 10;
+  --z-local-popover: 20;
+  --z-sticky: 100;
+  --z-fab: 900;
+  --z-header: 1100;
+  --z-drawer-backdrop: 1150;
+  --z-drawer: 1200;
+  --z-dropdown: 1300;
+  --z-modal: 2000;
+  --z-fullscreen: 3000;
+  --z-toast: 4000;
+  --z-critical: 10000;
+
   /* Letter Spacing */
   --letter-spacing-tight: -0.03em;
   --letter-spacing-normal: -0.01em;
@@ -203,6 +224,8 @@
   --color-warning-light: rgba(251, 191, 36, 0.15);
   --color-info: #60A5FA;
   --color-danger: #F87171;
+  --color-error-border: rgba(248, 113, 113, 0.35);
+  --color-warning-dark: #FBBF24;
 
   /* Extended Colors - for component compatibility */
   --color-admin-purple: #A78BFA;
@@ -307,13 +330,9 @@ button {
   cursor: pointer;
   border: none;
   background: none;
-  outline: none;
-  transition: all var(--transition-fast);
-}
-
-button:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 button:disabled {
@@ -327,21 +346,17 @@ a {
   transition: color var(--transition-fast);
 }
 
-a:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
 /* Form Elements */
 input, textarea, select {
   font-family: inherit;
   font-size: inherit;
-  outline: none;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
   background: var(--bg-primary);
   color: var(--text-primary);
-  transition: all var(--transition-fast);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 input:focus, textarea:focus, select:focus {
@@ -386,9 +401,10 @@ input::placeholder, textarea::placeholder {
   color: var(--text-on-primary);
 }
 
-/* Focus states */
-:focus {
-  outline: none;
+/* 모든 키보드 포커스에 컴포넌트 스타일보다 우선하는 접근성 fallback을 제공한다. */
+:focus-visible:not(input, textarea, select) {
+  outline: 2px solid var(--color-primary) !important;
+  outline-offset: 2px !important;
 }
 
 /* Utility classes */
@@ -502,85 +518,6 @@ input::placeholder, textarea::placeholder {
 @media (min-width: 769px) {
   .hide-desktop {
     display: none;
-  }
-}
-
-/* Modal Overlay - Common styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--bg-overlay);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.2s var(--ease-out-expo);
-}
-
-/* Modal content base */
-.modal-content {
-  background: var(--bg-primary);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-modal);
-  max-width: 520px;
-  width: 90%;
-  max-height: 85vh;
-  overflow: hidden;
-  animation: modalEnter var(--duration-spring) var(--spring);
-}
-
-@keyframes modalEnter {
-  from {
-    opacity: 0;
-    transform: scale(0.96) translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-@keyframes bottomSheetEnter {
-  from {
-    opacity: 0;
-    transform: translateY(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Mobile bottom sheet alignment */
-@media (max-width: 480px) {
-  .modal-overlay {
-    align-items: flex-end;
-  }
-
-  .modal-content {
-    width: 100%;
-    max-width: none;
-    max-height: 90vh;
-    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
-    animation: bottomSheetEnter var(--duration-spring) var(--ease-out-expo);
-  }
-
-  /* Bottom sheet handle indicator */
-  .modal-content::before {
-    content: '';
-    position: absolute;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 36px;
-    height: 4px;
-    background: var(--border-medium);
-    border-radius: 2px;
   }
 }
 

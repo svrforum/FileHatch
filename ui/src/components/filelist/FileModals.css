@@ -1,0 +1,231 @@
+/* FileModals owned styles */
+
+/* Compress Modal */
+.file-list-modal.compress-modal .modal-body {
+  padding: var(--spacing-lg);
+}
+
+.file-list-modal .compress-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.file-list-modal .compress-input-wrapper .rename-input {
+  flex: 1;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.file-list-modal .compress-extension {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--spacing-md);
+  height: 36px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-left: none;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-family: var(--font-family-mono);
+}
+
+/* Rename Modal */
+.file-list-modal.rename-modal {
+  width: 400px;
+}
+
+.file-list-modal .rename-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 14px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast);
+}
+
+.file-list-modal .rename-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.file-list-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.file-list-modal {
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+}
+
+.file-list-modal .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.file-list-modal .modal-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.file-list-modal .modal-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  color: var(--text-tertiary);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
+}
+
+.file-list-modal .modal-close:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.file-list-modal .modal-body {
+  padding: var(--spacing-lg);
+}
+
+.file-list-modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  border-top: 1px solid var(--border-light);
+}
+
+.file-list-modal .btn-cancel {
+  padding: 10px 20px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
+}
+
+.file-list-modal .btn-cancel:hover {
+  background: var(--bg-tertiary);
+}
+
+.file-list-modal .btn-confirm {
+  padding: 10px 20px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--color-primary);
+  color: white;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
+}
+
+.file-list-modal .btn-confirm:hover {
+  background: var(--color-primary-dark);
+}
+
+.file-list-modal .btn-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Download Options Modal */
+.file-list-modal.download-options-modal {
+  max-width: 450px;
+}
+
+.file-list-modal .download-info {
+  text-align: center;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-lg);
+}
+
+.file-list-modal .download-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.file-list-modal .download-option-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--bg-tertiary);
+  border: 2px solid transparent;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
+  text-align: left;
+}
+
+.file-list-modal .download-option-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--color-primary);
+}
+
+.file-list-modal .download-option-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.file-list-modal .download-option-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.file-list-modal .download-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.file-list-modal .download-option-text strong {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.file-list-modal .download-option-text span {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.file-list-modal .spinner.small {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+  flex-shrink: 0;
+}

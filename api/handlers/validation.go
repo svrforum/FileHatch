@@ -1,13 +1,17 @@
 package handlers
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"mime"
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/labstack/echo/v4"
 )
@@ -26,12 +30,157 @@ type ValidationResult struct {
 
 // Username validation constants
 const (
-	UsernameMinLength = 3
-	UsernameMaxLength = 50
-	PasswordMinLength = 8
-	PasswordMaxLength = 128
-	FilenameMaxLength = 255
+	UsernameMinLength      = 3
+	UsernameMaxLength      = 50
+	FilenameMaxLength      = 255
+	BcryptMaxPasswordBytes = 72
 )
+
+const (
+	PasswordPolicyMinLength = 8
+	PasswordPolicyMaxLength = 72
+)
+
+var passwordPolicyKeys = []string{
+	"password_min_length",
+	"password_max_length",
+	"password_required_uppercase",
+	"password_required_lowercase",
+	"password_required_number",
+	"password_required_special",
+	"password_min_character_types",
+}
+
+// PasswordPolicy contains the policy applied only to web login passwords.
+type PasswordPolicy struct {
+	MinLength         int    `json:"minLength"`
+	MaxLength         int    `json:"maxLength"`
+	RequireUppercase  bool   `json:"requireUppercase"`
+	RequireLowercase  bool   `json:"requireLowercase"`
+	RequireNumber     bool   `json:"requireNumber"`
+	RequireSpecial    bool   `json:"requireSpecial"`
+	MinCharacterTypes int    `json:"minCharacterTypes"`
+	Revision          string `json:"revision"`
+}
+
+// PasswordPolicyProvider supplies an immutable password policy snapshot.
+type PasswordPolicyProvider interface {
+	GetPasswordPolicy(ctx context.Context) (PasswordPolicy, error)
+}
+
+// DefaultPasswordPolicy preserves the previous three-character-type policy.
+func DefaultPasswordPolicy() PasswordPolicy {
+	return PasswordPolicy{
+		MinLength:         8,
+		MaxLength:         72,
+		RequireUppercase:  false,
+		RequireLowercase:  false,
+		RequireNumber:     false,
+		RequireSpecial:    false,
+		MinCharacterTypes: 3,
+		Revision:          "default",
+	}
+}
+
+type staticPasswordPolicyProvider struct {
+	policy PasswordPolicy
+}
+
+func (p staticPasswordPolicyProvider) GetPasswordPolicy(context.Context) (PasswordPolicy, error) {
+	return p.policy, nil
+}
+
+func loadPasswordPolicy(ctx context.Context, db *sql.DB) (PasswordPolicy, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT key, value, COALESCE(updated_at::text, '')
+		FROM system_settings
+		WHERE key LIKE 'password_%'
+	`)
+	if err != nil {
+		return PasswordPolicy{}, fmt.Errorf("load password policy: %w", err)
+	}
+	defer rows.Close()
+
+	values := make(map[string]string, len(passwordPolicyKeys))
+	revision := "default"
+	for rows.Next() {
+		var key, value, updatedAt string
+		if err := rows.Scan(&key, &value, &updatedAt); err != nil {
+			return PasswordPolicy{}, fmt.Errorf("scan password policy: %w", err)
+		}
+		values[key] = value
+		if updatedAt > revision {
+			revision = updatedAt
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return PasswordPolicy{}, fmt.Errorf("iterate password policy: %w", err)
+	}
+
+	policy := DefaultPasswordPolicy()
+	policy.Revision = revision
+	if err := applyPasswordPolicyValues(&policy, values); err != nil {
+		return PasswordPolicy{}, err
+	}
+	if err := ValidatePasswordPolicy(policy); err != nil {
+		return PasswordPolicy{}, fmt.Errorf("invalid stored password policy: %w", err)
+	}
+	return policy, nil
+}
+
+func applyPasswordPolicyValues(policy *PasswordPolicy, values map[string]string) error {
+	integerKeys := map[string]*int{
+		"password_min_length":          &policy.MinLength,
+		"password_max_length":          &policy.MaxLength,
+		"password_min_character_types": &policy.MinCharacterTypes,
+	}
+	for key, destination := range integerKeys {
+		value, ok := values[key]
+		if !ok {
+			continue
+		}
+		parsed, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("%s must be an integer", key)
+		}
+		*destination = parsed
+	}
+
+	booleanKeys := map[string]*bool{
+		"password_required_uppercase": &policy.RequireUppercase,
+		"password_required_lowercase": &policy.RequireLowercase,
+		"password_required_number":    &policy.RequireNumber,
+		"password_required_special":   &policy.RequireSpecial,
+	}
+	for key, destination := range booleanKeys {
+		value, ok := values[key]
+		if !ok {
+			continue
+		}
+		if value != "true" && value != "false" {
+			return fmt.Errorf("%s must be true or false", key)
+		}
+		*destination = value == "true"
+	}
+	return nil
+}
+
+// ValidatePasswordPolicy validates supported ranges and cross-field constraints.
+func ValidatePasswordPolicy(policy PasswordPolicy) error {
+	if policy.MinLength < PasswordPolicyMinLength || policy.MinLength > PasswordPolicyMaxLength {
+		return fmt.Errorf("password_min_length must be between %d and %d", PasswordPolicyMinLength, PasswordPolicyMaxLength)
+	}
+	if policy.MaxLength < PasswordPolicyMinLength || policy.MaxLength > PasswordPolicyMaxLength {
+		return fmt.Errorf("password_max_length must be between %d and %d", PasswordPolicyMinLength, PasswordPolicyMaxLength)
+	}
+	if policy.MaxLength < policy.MinLength {
+		return fmt.Errorf("password_max_length must be greater than or equal to password_min_length")
+	}
+	if policy.MinCharacterTypes < 0 || policy.MinCharacterTypes > 4 {
+		return fmt.Errorf("password_min_character_types must be between 0 and 4")
+	}
+	return nil
+}
 
 // Regex patterns for validation
 var (
@@ -77,19 +226,19 @@ var allowedExtensions = map[string]bool{
 
 // Dangerous MIME types that should be blocked
 var dangerousMimeTypes = map[string]bool{
-	"application/x-executable":     true,
-	"application/x-msdos-program":  true,
-	"application/x-msdownload":     true,
-	"application/x-sh":             true,
-	"application/x-shellscript":    true,
-	"application/x-php":            true,
-	"application/x-httpd-php":      true,
-	"application/x-perl":           true,
-	"application/x-python":         true,
-	"application/x-ruby":           true,
-	"application/java-archive":     true,
-	"application/x-java-class":     true,
-	"application/x-dosexec":        true,
+	"application/x-executable":                      true,
+	"application/x-msdos-program":                   true,
+	"application/x-msdownload":                      true,
+	"application/x-sh":                              true,
+	"application/x-shellscript":                     true,
+	"application/x-php":                             true,
+	"application/x-httpd-php":                       true,
+	"application/x-perl":                            true,
+	"application/x-python":                          true,
+	"application/x-ruby":                            true,
+	"application/java-archive":                      true,
+	"application/x-java-class":                      true,
+	"application/x-dosexec":                         true,
 	"application/vnd.microsoft.portable-executable": true,
 }
 
@@ -129,13 +278,29 @@ func ValidateEmail(email string) error {
 	return nil
 }
 
-// ValidatePassword validates a password
+// ValidatePassword validates a password with the default web login policy.
 func ValidatePassword(password string) error {
-	if len(password) < PasswordMinLength {
-		return fmt.Errorf("password must be at least %d characters", PasswordMinLength)
+	return ValidatePasswordWithPolicy(password, DefaultPasswordPolicy())
+}
+
+// ValidatePasswordWithPolicy validates a web login password against a policy snapshot.
+func ValidatePasswordWithPolicy(password string, policy PasswordPolicy) error {
+	if err := ValidatePasswordPolicy(policy); err != nil {
+		return err
 	}
-	if len(password) > PasswordMaxLength {
-		return fmt.Errorf("password must be at most %d characters", PasswordMaxLength)
+	if !utf8.ValidString(password) {
+		return fmt.Errorf("password must be valid UTF-8")
+	}
+
+	runeCount := utf8.RuneCountInString(password)
+	if runeCount < policy.MinLength {
+		return fmt.Errorf("password must be at least %d characters", policy.MinLength)
+	}
+	if runeCount > policy.MaxLength {
+		return fmt.Errorf("password must be at most %d characters", policy.MaxLength)
+	}
+	if len([]byte(password)) > BcryptMaxPasswordBytes {
+		return fmt.Errorf("password must be at most %d bytes when encoded as UTF-8", BcryptMaxPasswordBytes)
 	}
 
 	var (
@@ -146,6 +311,9 @@ func ValidatePassword(password string) error {
 	)
 
 	for _, char := range password {
+		if unicode.IsControl(char) {
+			return fmt.Errorf("password must not contain control characters")
+		}
 		switch {
 		case unicode.IsUpper(char):
 			hasUpper = true
@@ -158,7 +326,6 @@ func ValidatePassword(password string) error {
 		}
 	}
 
-	// Require at least 3 of 4 character types
 	count := 0
 	if hasUpper {
 		count++
@@ -173,8 +340,23 @@ func ValidatePassword(password string) error {
 		count++
 	}
 
-	if count < 3 {
-		return fmt.Errorf("password must contain at least 3 of: uppercase, lowercase, number, special character")
+	if policy.RequireUppercase && !hasUpper {
+		return fmt.Errorf("password must contain an uppercase letter")
+	}
+	if policy.RequireLowercase && !hasLower {
+		return fmt.Errorf("password must contain a lowercase letter")
+	}
+	if policy.RequireNumber && !hasNumber {
+		return fmt.Errorf("password must contain a number")
+	}
+	if policy.RequireSpecial && !hasSpecial {
+		return fmt.Errorf("password must contain a special character")
+	}
+	if count < policy.MinCharacterTypes {
+		return fmt.Errorf(
+			"password must contain at least %d of: uppercase, lowercase, number, special character",
+			policy.MinCharacterTypes,
+		)
 	}
 
 	return nil

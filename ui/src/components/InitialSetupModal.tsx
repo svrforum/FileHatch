@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
+import { getPasswordPolicy, PasswordPolicy } from '../api/auth'
+import PasswordField from './PasswordField'
 import './InitialSetupModal.css'
 
 // Password strength calculation
@@ -24,11 +26,16 @@ function InitialSetupModal() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [email, setEmail] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicy | null>(null)
 
   const { completeSetup, isLoading, error, clearError } = useAuthStore()
 
   const passwordStrength = getPasswordStrength(newPassword)
   const passwordsMatch = newPassword === confirmPassword
+
+  useEffect(() => {
+    void getPasswordPolicy().then(setPasswordPolicy).catch(() => setPasswordPolicy(null))
+  }, [])
 
   // Clear errors when inputs change
   useEffect(() => {
@@ -47,14 +54,13 @@ function InitialSetupModal() {
     }
 
     // Validate password
-    if (newPassword.length < 8) {
-      setValidationError('비밀번호는 최소 8자 이상이어야 합니다')
+    if (passwordPolicy && newPassword.length < passwordPolicy.minLength) {
+      setValidationError(`비밀번호는 최소 ${passwordPolicy.minLength}자 이상이어야 합니다`)
       return
     }
 
-    // Check password complexity
-    if (passwordStrength.score < 3) {
-      setValidationError('비밀번호는 대문자, 소문자, 숫자, 특수문자를 조합하여 사용해주세요')
+    if (passwordPolicy && newPassword.length > passwordPolicy.maxLength) {
+      setValidationError(`비밀번호는 최대 ${passwordPolicy.maxLength}자까지 사용할 수 있습니다`)
       return
     }
 
@@ -124,16 +130,15 @@ function InitialSetupModal() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="newPassword">새 비밀번호 *</label>
-            <input
-              id="newPassword"
-              type="password"
+            <PasswordField
+              label="새 비밀번호 *"
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              onChange={setNewPassword}
               placeholder="새 비밀번호 입력"
               required
               autoComplete="new-password"
-              minLength={8}
+              minLength={passwordPolicy?.minLength}
+              maxLength={passwordPolicy?.maxLength}
             />
             {newPassword && (
               <div className="password-strength">
@@ -151,19 +156,23 @@ function InitialSetupModal() {
                 </span>
               </div>
             )}
-            <span className="form-hint">최소 8자, 대소문자/숫자/특수문자 조합 권장</span>
+            <span className="form-hint">
+              {passwordPolicy
+                ? `${passwordPolicy.minLength}~${passwordPolicy.maxLength}자, 문자 종류 ${passwordPolicy.minCharacterTypes}종 이상`
+                : '서버 비밀번호 정책을 확인한 뒤 최종 검증합니다.'}
+            </span>
           </div>
 
           <div className="form-group">
-            <label htmlFor="confirmPassword">비밀번호 확인 *</label>
-            <input
-              id="confirmPassword"
-              type="password"
+            <PasswordField
+              label="비밀번호 확인 *"
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={setConfirmPassword}
               placeholder="비밀번호 다시 입력"
               required
               autoComplete="new-password"
+              minLength={passwordPolicy?.minLength}
+              maxLength={passwordPolicy?.maxLength}
             />
             {confirmPassword && !passwordsMatch && (
               <span className="form-error">비밀번호가 일치하지 않습니다</span>

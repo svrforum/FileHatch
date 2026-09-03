@@ -42,7 +42,6 @@ export function useFileDragMove({
     const dragImage = document.createElement('div')
     dragImage.className = 'drag-ghost'
     dragImage.textContent = files.length > 1 ? `${files.length}개 항목` : file.name
-    dragImage.style.cssText = 'position: absolute; top: -1000px; padding: 8px 16px; background: var(--bg-primary); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-size: 14px;'
     document.body.appendChild(dragImage)
     e.dataTransfer.setDragImage(dragImage, 0, 0)
     setTimeout(() => document.body.removeChild(dragImage), 0)

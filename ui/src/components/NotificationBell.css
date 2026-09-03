@@ -13,12 +13,14 @@
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: 8px;
-  transition: all 0.2s;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   position: relative;
 }
 
 .notification-bell__button:hover {
-  background: var(--hover-bg);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
@@ -49,7 +51,7 @@
   border: 1px solid var(--border-light);
   border-radius: 12px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
-  z-index: 2000;
+  z-index: var(--z-dropdown);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -97,11 +99,13 @@
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: 6px;
-  transition: all 0.2s;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }
 
 .notification-dropdown__actions button:hover:not(:disabled) {
-  background: var(--hover-bg);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
@@ -252,7 +256,9 @@
   color: var(--text-tertiary);
   cursor: pointer;
   opacity: 0;
-  transition: all 0.2s;
+  transition-property: var(--transition-interactive-properties);
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
   margin: 8px 8px 8px 0;
   border-radius: 6px;
   flex-shrink: 0;
@@ -263,8 +269,8 @@
 }
 
 .notification-item__delete:hover {
-  background: var(--error-bg);
-  color: var(--error-color);
+  background: var(--color-error-light);
+  color: var(--color-error);
 }
 
 /* Footer */
@@ -328,5 +334,6 @@
     left: 8px;
     width: auto;
     max-height: calc(100vh - 80px);
+    max-height: calc(100dvh - 80px);
   }
 }

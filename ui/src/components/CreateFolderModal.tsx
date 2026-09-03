@@ -61,9 +61,9 @@ function CreateFolderModal({ isOpen, onClose, currentPath, onCreated }: CreateFo
   if (!isOpen) return null
 
   return (
-    <div className="upload-modal-overlay" onClick={handleClose}>
-      <div className="upload-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
-        <div className="modal-header">
+    <div className="fh-modal-overlay upload-modal-overlay" onClick={handleClose}>
+      <div className="fh-modal upload-modal create-folder-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="fh-modal__header modal-header">
           <h2>새 폴더</h2>
           <button className="close-btn" onClick={handleClose}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -73,15 +73,15 @@ function CreateFolderModal({ isOpen, onClose, currentPath, onCreated }: CreateFo
         </div>
 
         <form onSubmit={handleSubmit} className="create-folder-form">
-          <div className="form-group">
-            <label className="form-label">폴더 이름</label>
+          <div className="fh-form-field form-group">
+            <label className="fh-form-field__label form-label">폴더 이름</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="새 폴더"
               autoFocus
-              className="form-input"
+              className="fh-form-field__control form-input"
             />
           </div>
 
@@ -90,10 +90,10 @@ function CreateFolderModal({ isOpen, onClose, currentPath, onCreated }: CreateFo
           )}
 
           <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={handleClose}>
+            <button type="button" className="fh-button fh-button--secondary btn-secondary" onClick={handleClose}>
               취소
             </button>
-            <button type="submit" className="btn-primary" disabled={loading}>
+            <button type="submit" className="fh-button fh-button--primary btn-primary" disabled={loading}>
               {loading ? '생성 중...' : '생성'}
             </button>
           </div>
