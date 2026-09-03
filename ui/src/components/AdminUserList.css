@@ -1159,18 +1159,18 @@
     padding: 10px 12px;
   }
 }
-.badge.locked,
-.status-badge.locked {
-  color: #991b1b;
-  background: #fee2e2;
+.admin-user-list-page .badge.locked,
+.admin-user-list-page .status-badge.locked {
+  color: var(--color-error-dark);
+  background: var(--color-error-lighter);
 }
 
-.btn-action.unlock,
-.list-action-btn.unlock {
-  color: #92400e;
-  border-color: #f59e0b;
+.admin-user-list-page .btn-action.unlock,
+.admin-user-list-page .list-action-btn.unlock {
+  color: var(--color-warning-dark);
+  border-color: var(--color-warning);
 }
-.user-pagination {
+.admin-user-list-page .user-pagination {
   display: flex;
   align-items: center;
   justify-content: center;

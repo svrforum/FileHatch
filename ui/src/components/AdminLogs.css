@@ -435,7 +435,7 @@
  * then stopped participating in border-collapse and its bottom border rode up
  * above the row's. Raising specificity to (0,2,1) wins regardless of load order.
  */
-.logs-table td.user-cell {
+.admin-logs-page .logs-table td.user-cell {
   display: table-cell;
 }
 

@@ -20,7 +20,7 @@
      * 저장 controls sit bottom-right, exactly where the FAB floats, and the
      * button could not be pressed at all.
      */
-    z-index: 900;
+    z-index: var(--z-fab);
   }
 
   /* Overlay when FAB is open */

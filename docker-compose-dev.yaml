@@ -25,17 +25,16 @@ services:
       - FH_ENV=development
       - DB_HOST=${DB_HOST:-db}
       - DB_PORT=${DB_PORT:-5432}
-      - DB_USER=${DB_USER:-fh_dev_user}
-      - DB_PASS=${DB_PASS:-fh_dev_password}
-      - DB_NAME=${DB_NAME:-fh_dev}
+      - DB_USER=${DB_USER:-fh_user}
+      - DB_PASS=${DB_PASS:-fh_password}
+      - DB_NAME=${DB_NAME:-fh_main}
       - VALKEY_HOST=${VALKEY_HOST:-valkey}
       - VALKEY_PORT=${VALKEY_PORT:-6379}
-      - JWT_SECRET=${JWT_SECRET:-}
+      - JWT_SECRET=${JWT_SECRET:-dev-only-jwt-secret-change-before-production}
       - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-admin1234}
-      # 비워 두면 개발용 config 볼륨에 임의 키가 생성되어 보존됩니다.
-      - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:-}
-      - SMB_ENCRYPTION_KEY=${SMB_ENCRYPTION_KEY:-}
-      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:-}
+      - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:-1111111111111111111111111111111111111111111111111111111111111111}
+      - SMB_ENCRYPTION_KEY=${SMB_ENCRYPTION_KEY:-2222222222222222222222222222222222222222222222222222222222222222}
+      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:-3333333333333333333333333333333333333333333333333333333333333333}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-*}
       - API_INTERNAL_URL=${API_INTERNAL_URL:-http://api:8080}
       - ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_INTERNAL_URL:-http://onlyoffice}
@@ -48,9 +47,7 @@ services:
       - ${CONFIG_PATH:-./config}:/etc/filehatch
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # 외부 스토리지 테스트용 마운트 (필요 시 활성화)
-      # 주석 상태를 유지할 것: 활성화된 채로 커밋하면 /tmp/filehatch-test-mount 가
-      # 없는 환경(신규 머신, CI 러너)에서 api 컨테이너가 뜨지 않는다.
-      # - /tmp/filehatch-test-mount:/mnt/test-storage
+      - /tmp/filehatch-test-mount:/mnt/test-storage
     depends_on:
       db:
         condition: service_healthy
@@ -101,7 +98,6 @@ services:
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${CONFIG_PATH:-./config}:/etc/filehatch
-      - ${CONFIG_PATH:-./config}/smb.conf:/etc/samba/smb.conf
     healthcheck:
       test: ["CMD-SHELL", "pgrep -x smbd > /dev/null && pgrep -x nmbd > /dev/null"]
       interval: 15s
@@ -116,13 +112,13 @@ services:
     restart: unless-stopped
     environment:
       - TZ=${TZ:-Asia/Seoul}
-      - POSTGRES_USER=${DB_USER:-fh_dev_user}
-      - POSTGRES_PASSWORD=${DB_PASS:-fh_dev_password}
-      - POSTGRES_DB=${DB_NAME:-fh_dev}
+      - POSTGRES_USER=${DB_USER:-fh_user}
+      - POSTGRES_PASSWORD=${DB_PASS:-fh_password}
+      - POSTGRES_DB=${DB_NAME:-fh_main}
     volumes:
       - ${DATABASE_PATH:-./database}:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-fh_dev_user} -d ${DB_NAME:-fh_dev}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-fh_user} -d ${DB_NAME:-fh_main}"]
       interval: 5s
       timeout: 5s
       retries: 5

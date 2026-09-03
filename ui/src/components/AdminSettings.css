@@ -1224,7 +1224,7 @@
   font-size: 0.875rem;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .as-password-lengths {
     width: 100%;
     align-items: flex-end;

@@ -92,3 +92,6 @@ tmp/
 /test-*.pptx
 /test-*.hwp
 tests/e2e/screenshot-test*.spec.ts
+
+# Local-only documentation
+/docs/local/

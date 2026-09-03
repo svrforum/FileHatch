@@ -9,9 +9,10 @@
   -webkit-backdrop-filter: blur(20px);
   border-bottom: none;
   box-shadow: 0 1px 0 var(--border-light);
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 480px) minmax(0, 1fr);
+  column-gap: var(--spacing-xl);
   align-items: center;
-  justify-content: space-between;
   padding: 0 var(--spacing-lg);
   z-index: var(--z-header);
 }
@@ -23,6 +24,9 @@
 .header-left {
   display: flex;
   align-items: center;
+  grid-column: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* Hamburger menu button - mobile only */
@@ -61,9 +65,10 @@
 }
 
 .header-center {
-  flex: 1;
+  position: relative;
+  grid-column: 2;
+  width: 100%;
   max-width: 480px;
-  margin: 0 var(--spacing-xl);
 }
 
 .header .search-box {
@@ -128,7 +133,9 @@
 .header-right {
   display: flex;
   align-items: center;
+  grid-column: 3;
   gap: var(--spacing-sm);
+  justify-self: end;
 }
 
 /* Theme Toggle Button */
@@ -239,10 +246,6 @@
 }
 
 /* Search Results */
-.header-center {
-  position: relative;
-}
-
 .search-spinner {
   position: absolute;
   right: 12px;
@@ -392,11 +395,14 @@
   align-items: center;
   margin-left: var(--spacing-md);
   font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .breadcrumb-item-wrapper {
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .breadcrumb-separator {
@@ -419,6 +425,13 @@
   text-overflow: ellipsis;
 }
 
+.breadcrumb-overflow {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  font-weight: 600;
+  padding: 4px 2px;
+}
+
 .breadcrumb-link:hover {
   color: var(--color-primary);
   background: var(--bg-secondary);
@@ -433,11 +446,33 @@
   color: var(--color-primary);
 }
 
+/* Responsive - Compact desktop/tablet */
+@media (min-width: 769px) and (max-width: 1280px) {
+  .header {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px) minmax(0, 1fr);
+    column-gap: var(--spacing-md);
+  }
+
+  .header-breadcrumb .breadcrumb-overflow,
+  .header-breadcrumb .breadcrumb-overflow + .breadcrumb-separator,
+  .header-breadcrumb .breadcrumb-item-wrapper:not(:last-child) {
+    display: none;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 850px) {
+  .logo-text {
+    display: none;
+  }
+}
+
 /* Responsive - Mobile */
 @media (max-width: 768px) {
   .header {
     height: 56px;
     padding: 0 var(--spacing-sm);
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: var(--spacing-sm);
   }
 
   .header-breadcrumb {
@@ -454,9 +489,7 @@
   }
 
   .header-center {
-    margin: 0 var(--spacing-sm);
     max-width: none;
-    flex: 1;
   }
 
   .search-input {

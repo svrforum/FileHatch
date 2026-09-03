@@ -10,7 +10,7 @@ RUN mkdir -p /etc/rsyslog.d && \
 # Copy config template and sync script
 COPY smb.conf.template /smb.conf.template
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Override the default entrypoint
 ENTRYPOINT ["/entrypoint.sh"]
